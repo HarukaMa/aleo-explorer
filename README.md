@@ -11,4 +11,4 @@ The code smells rusty as I'm recreating all types from Rust code.
 *Maybe I should separate the node part as it's complicated enough*
 
 ## License
-GPL-3.0-or-later
+AGPL-3.0-or-later
