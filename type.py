@@ -3,6 +3,8 @@ from abc import ABCMeta, abstractmethod
 from enum import IntEnum, EnumMeta
 from types import NoneType
 
+import aleo
+
 from thirdparty import bech32
 
 
@@ -56,35 +58,8 @@ class Int(Sized, Serialize, Deserialize, int, metaclass=ABCMeta):
         return int.__new__(cls, value)
 
     @abstractmethod
-    def __init__(self, value):
-        self._value = 0
-
-    def __int__(self):
-        return self._value
-
-    # def __le__(self, other):
-    #     return self._value <= other
-    #
-    # def __lt__(self, other):
-    #     return self < other
-    #
-    # def __eq__(self, other):
-    #     return self._value == other
-    #
-    # def __ne__(self, other):
-    #     return self._value != other
-    #
-    # def __gt__(self, other):
-    #     return self._value > other
-    #
-    # def __ge__(self, other):
-    #     return self._value >= other
-
-    # def __str__(self):
-    #     return str(self._value)
-    #
-    # def __repr__(self):
-    #     return self.__class__.__name__ + "(" + str(self) + ")"
+    def __init__(self, _):
+        raise NotImplementedError
 
 
 # Basic types
@@ -133,15 +108,13 @@ class u16(Int):
             raise TypeError("value must be int")
         if value < 0 or value > 65535:
             raise ValueError("value must be between 0 and 65535")
-        self._value = value
 
     def dump(self) -> bytes:
-        return struct.pack("<H", self._value)
+        return struct.pack("<H", self)
 
     @classmethod
     def load(cls, data: bytearray):
-        self = cls()
-        self._value = struct.unpack("<H", data[:2])[0]
+        self = cls(struct.unpack("<H", data[:2])[0])
         del data[:2]
         return self
 
@@ -266,7 +239,7 @@ class Generic(metaclass=ABCMeta):
         return cls(item)
 
 
-class Vec(Generic, Deserialize):
+class Vec(Generic, Serialize, Deserialize):
 
     def __init__(self, types):
         if len(types) != 2:
@@ -284,6 +257,14 @@ class Vec(Generic, Deserialize):
         self._list = []
         return self
 
+    def dump(self) -> bytes:
+        res = b""
+        if hasattr(self, "size_type"):
+            res += self.size_type.dump(self.size)
+        for item in self._list:
+            res += self.type.dump(item)
+        return res
+
     def load(self, data: bytearray):
         if not issubclass(self.type, Deserialize):
             raise TypeError(f"{self.type.__name__} must be Deserialize")
@@ -294,11 +275,9 @@ class Vec(Generic, Deserialize):
             if len(data) < self.size_type.size:
                 raise ValueError("data is too short")
             # noinspection PyArgumentList
-            size = self.size_type.load(data)
-        else:
-            size = self.size
+            self.size = self.size_type.load(data)
         self._list = []
-        for i in range(size):
+        for i in range(self.size):
             # noinspection PyArgumentList
             self._list.append(self.type.load(data))
         return self
@@ -676,8 +655,6 @@ class Transition(Serialize, Deserialize):
 
 class Transaction(Serialize, Deserialize):
 
-    # TODO: add TransactionID
-
     def __init__(self):
         self.transaction_id = None
         self.inner_circuit_id = None
@@ -700,7 +677,7 @@ class Transaction(Serialize, Deserialize):
         return self
 
     def dump(self) -> bytes:
-        return self.transaction_id.dump() + self.inner_circuit_id.dump() + self.ledger_root.dump() + self.transitions.dump()
+        return self.inner_circuit_id.dump() + self.ledger_root.dump() + self.transitions.dump()
 
     # noinspection PyArgumentList
     @classmethod
@@ -711,6 +688,7 @@ class Transaction(Serialize, Deserialize):
         self.inner_circuit_id = InnerCircuitID.load(data)
         self.ledger_root = LedgerRoot.load(data)
         self.transitions = Vec[Transition, u16].load(data)
+        self.transaction_id = TransactionID.load(bytearray(aleo.get_transaction_id(self.dump())))
         return self
 
 
@@ -824,6 +802,7 @@ class BlockHeader(Serialize, Deserialize):
             self.proof = DeprecatedPoSWProof.load(data)
         else:
             self.proof = PoSWProof.load(data)
+            del data[:80]
         return self
 
     def __eq__(self, other):
@@ -973,9 +952,6 @@ class BlockLocators(Serialize, Deserialize):
             header_exists = bool_.load(data)
             if header_exists:
                 header = BlockHeader.load(data)
-                if header.metadata.height >= 100000:
-                    # TODO: Testnet2 only
-                    del data[:80]
             else:
                 header = None
             self.block_locators[height] = (block_hash, header)

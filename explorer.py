@@ -1,11 +1,10 @@
 import asyncio
-from enum import IntEnum
 
 from node import Node
+from type import *
 
 
 class ExplorerMessage:
-
     class Type(IntEnum):
         ConnectTimeout = 0
         ConnectError = 1
@@ -15,6 +14,7 @@ class ExplorerMessage:
     def __init__(self, type_: Type, data: any):
         self.type = type_
         self.data = data
+
 
 class Explorer:
 
@@ -43,3 +43,6 @@ class Explorer:
                     print("connected")
                 case ExplorerMessage.Type.Disconnected:
                     print("disconnected")
+
+    async def add_block(self, block: Block):
+        pass

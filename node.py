@@ -12,6 +12,7 @@ class Testnet2:
 
     genesis_block = Block.load(bytearray(open("testnet2/block.genesis", "rb").read()))
 
+
 class Node:
     def __init__(self, explorer):
         self.reader, self.writer = None, None
@@ -104,6 +105,12 @@ class Node:
                     block_header=Testnet2.genesis_block.header,
                 )
                 await self.send_message(ping)
+
+            case Message.Type.Ping:
+                if self.handshake_state != 1:
+                    raise Exception("handshake is not done")
+                msg: Ping = frame.message
+                peer_height = msg.block_header.metadata.height
 
             case _:
                 print("unhandled message type:", frame.type)
