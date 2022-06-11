@@ -1,8 +1,30 @@
 import struct
 from abc import ABCMeta, abstractmethod
 from enum import IntEnum, EnumMeta
+from types import NoneType
 
 from thirdparty import bech32
+
+
+# Metaclass Helper
+
+class ABCEnumMeta(ABCMeta, EnumMeta):
+    # https://stackoverflow.com/questions/56131308/create-an-abstract-enum-class/56135108#56135108
+    def __new__(mcls, *args, **kw):
+        abstract_enum_cls = super().__new__(mcls, *args, **kw)
+        # Only check abstractions if members were defined.
+        if abstract_enum_cls._member_map_:
+            try:  # Handle existence of undefined abstract methods.
+                absmethods = list(abstract_enum_cls.__abstractmethods__)
+                if absmethods:
+                    missing = ', '.join(f'{method!r}' for method in absmethods)
+                    plural = 's' if len(absmethods) > 1 else ''
+                    raise TypeError(
+                        f"cannot instantiate abstract class {abstract_enum_cls.__name__!r}"
+                        f" with abstract method{plural} {missing}")
+            except AttributeError:
+                pass
+        return abstract_enum_cls
 
 
 # Traits (kind of)
@@ -28,38 +50,41 @@ class Sized(metaclass=ABCMeta):
         raise NotImplementedError
 
 
-class Int(Sized, Serialize, Deserialize, metaclass=ABCMeta):
+class Int(Sized, Serialize, Deserialize, int, metaclass=ABCMeta):
+
+    def __new__(cls, value=0):
+        return int.__new__(cls, value)
 
     @abstractmethod
-    def __init__(self):
+    def __init__(self, value):
         self._value = 0
 
     def __int__(self):
         return self._value
 
-    def __le__(self, other):
-        return self._value <= other
+    # def __le__(self, other):
+    #     return self._value <= other
+    #
+    # def __lt__(self, other):
+    #     return self < other
+    #
+    # def __eq__(self, other):
+    #     return self._value == other
+    #
+    # def __ne__(self, other):
+    #     return self._value != other
+    #
+    # def __gt__(self, other):
+    #     return self._value > other
+    #
+    # def __ge__(self, other):
+    #     return self._value >= other
 
-    def __lt__(self, other):
-        return self._value < other
-
-    def __eq__(self, other):
-        return self._value == other
-
-    def __ne__(self, other):
-        return self._value != other
-
-    def __gt__(self, other):
-        return self._value > other
-
-    def __ge__(self, other):
-        return self._value >= other
-
-    def __str__(self):
-        return str(self._value)
-
-    def __repr__(self):
-        return self.__class__.__name__ + "(" + str(self) + ")"
+    # def __str__(self):
+    #     return str(self._value)
+    #
+    # def __repr__(self):
+    #     return self.__class__.__name__ + "(" + str(self) + ")"
 
 
 # Basic types
@@ -89,15 +114,13 @@ class u8(Int):
             raise TypeError("value must be int")
         if value < 0 or value > 255:
             raise ValueError("value must be between 0 and 255")
-        self._value = value
 
     def dump(self) -> bytes:
-        return struct.pack("<B", self._value)
+        return struct.pack("<B", self)
 
     @classmethod
     def load(cls, data: bytearray):
-        self = cls()
-        self._value = struct.unpack("<B", data[:1])[0]
+        self = cls(struct.unpack("<B", data[:1])[0])
         del data[0]
         return self
 
@@ -131,15 +154,13 @@ class u32(Int):
             raise TypeError("value must be int")
         if value < 0 or value > 4294967295:
             raise ValueError("value must be between 0 and 4294967295")
-        self._value = value
 
     def dump(self) -> bytes:
-        return struct.pack("<I", self._value)
+        return struct.pack("<I", self)
 
     @classmethod
     def load(cls, data: bytearray):
-        self = cls()
-        self._value = struct.unpack("<I", data[:4])[0]
+        self = cls(struct.unpack("<I", data[:4])[0])
         del data[:4]
         return self
 
@@ -152,15 +173,13 @@ class u64(Int):
             raise TypeError("value must be int")
         if value < 0 or value > 18446744073709551615:
             raise ValueError("value must be between 0 and 18446744073709551615")
-        self._value = value
 
     def dump(self) -> bytes:
-        return struct.pack("<Q", self._value)
+        return struct.pack("<Q", self)
 
     @classmethod
     def load(cls, data: bytearray):
-        self = cls()
-        self._value = struct.unpack("<Q", data[:8])[0]
+        self = cls(struct.unpack("<Q", data[:8])[0])
         del data[:8]
         return self
 
@@ -173,16 +192,14 @@ class u128(Int):
             raise TypeError("value must be int")
         if value < 0 or value > 2 ** 128 - 1:
             raise ValueError("value must be between 0 and 2 ** 128 - 1")
-        self._value = value
 
     def dump(self) -> bytes:
-        return struct.pack("<QQ", self._value >> 64, self._value & 0xFFFF_FFFF_FFFF_FFFF)
+        return struct.pack("<QQ", self >> 64, self & 0xFFFF_FFFF_FFFF_FFFF)
 
     @classmethod
     def load(cls, data: bytearray):
-        self = cls()
         lo, hi = struct.unpack("<QQ", data[:16])
-        self._value = (hi << 64) | lo
+        self = cls((hi << 64) | lo)
         del data[:16]
         return self
 
@@ -195,16 +212,41 @@ class i64(Int):
             raise TypeError("value must be int")
         if value < -9223372036854775808 or value > 9223372036854775807:
             raise ValueError("value must be between -9223372036854775808 and 9223372036854775807")
-        self._value = value
 
     def dump(self) -> bytes:
-        return struct.pack("<q", self._value)
+        return struct.pack("<q", self)
 
     @classmethod
     def load(cls, data: bytearray):
-        self = cls()
-        self._value = struct.unpack("<q", data[:8])[0]
+        self = cls(struct.unpack("<q", data[:8])[0])
         del data[:8]
+        return self
+
+
+class bool_(Int):
+    # Really don't want to make a proper bool, reusing Int is good enough for most usages
+
+    size = 1
+
+    def __init__(self, value=False):
+        if not isinstance(value, bool):
+            raise TypeError("value must be bool")
+
+    def dump(self) -> bytes:
+        return struct.pack("<B", self)
+
+    @classmethod
+    def load(cls, data: bytearray):
+        value = struct.unpack("<B", data[:1])[0]
+        if value == 0:
+            value = False
+        elif value == 1:
+            value = True
+        else:
+            breakpoint()
+            raise ValueError("invalid value for bool")
+        self = cls(value)
+        del data[:1]
         return self
 
 
@@ -252,7 +294,7 @@ class Vec(Generic, Deserialize):
             if len(data) < self.size_type.size:
                 raise ValueError("data is too short")
             # noinspection PyArgumentList
-            size = int(self.size_type.load(data))
+            size = self.size_type.load(data)
         else:
             size = self.size
         self._list = []
@@ -264,7 +306,7 @@ class Vec(Generic, Deserialize):
 
 # snarkVM types
 
-class Locator(Sized, Deserialize, metaclass=ABCMeta):
+class Locator(Sized, Serialize, Deserialize, metaclass=ABCMeta):
     size = 32
 
     def __init__(self):
@@ -291,6 +333,9 @@ class Locator(Sized, Deserialize, metaclass=ABCMeta):
         self._locator_data = value
         self._bech32m = Bech32m(value, self._locator_prefix)
 
+    def dump(self) -> bytes:
+        return self._locator_data
+
     @classmethod
     def load(cls, data: bytearray):
         if not isinstance(data, bytearray):
@@ -308,8 +353,13 @@ class Locator(Sized, Deserialize, metaclass=ABCMeta):
     def __repr__(self):
         return self.__class__.__name__ + "(" + str(self) + ")"
 
+    def __eq__(self, other):
+        if not isinstance(other, Locator):
+            return False
+        return self.data == other.data
 
-class Object(Sized, Deserialize, metaclass=ABCMeta):
+
+class Object(Sized, Serialize, Deserialize, metaclass=ABCMeta):
     def __init__(self):
         if not isinstance(self._object_prefix, str):
             raise TypeError("object_prefix must be str")
@@ -341,6 +391,9 @@ class Object(Sized, Deserialize, metaclass=ABCMeta):
         self._data = value
         self._bech32m = Bech32m(value, self._object_prefix)
 
+    def dump(self) -> bytes:
+        return self._data
+
     @classmethod
     def load(cls, data: bytearray):
         if not isinstance(data, bytearray):
@@ -357,6 +410,11 @@ class Object(Sized, Deserialize, metaclass=ABCMeta):
 
     def __repr__(self):
         return self.__class__.__name__ + "(" + str(self) + ")"
+
+    def __eq__(self, other):
+        if not isinstance(other, Object):
+            return False
+        return self.data == other.data
 
 
 class LedgerRoot(Locator):
@@ -768,6 +826,15 @@ class BlockHeader(Serialize, Deserialize):
             self.proof = PoSWProof.load(data)
         return self
 
+    def __eq__(self, other):
+        if not isinstance(other, BlockHeader):
+            return False
+        return self.previous_ledger_root == other.previous_ledger_root and \
+               self.transactions_root == other.transactions_root and \
+               self.metadata == other.metadata and \
+               self.nonce == other.nonce and \
+               self.proof == other.proof
+
 
 class BlockHeaderMetadata(Serialize, Deserialize):
 
@@ -808,26 +875,16 @@ class BlockHeaderMetadata(Serialize, Deserialize):
         self.cumulative_weight = u128.load(data)
         return self
 
+    def __eq__(self, other):
+        if not isinstance(other, BlockHeaderMetadata):
+            return False
+        return self.height == other.height and \
+               self.timestamp == other.timestamp and \
+               self.difficulty_target == other.difficulty_target and \
+               self.cumulative_weight == other.cumulative_weight
+
 
 # snarkOS types
-
-class ABCEnumMeta(ABCMeta, EnumMeta):
-    # https://stackoverflow.com/questions/56131308/create-an-abstract-enum-class/56135108#56135108
-    def __new__(mcls, *args, **kw):
-        abstract_enum_cls = super().__new__(mcls, *args, **kw)
-        # Only check abstractions if members were defined.
-        if abstract_enum_cls._member_map_:
-            try:  # Handle existence of undefined abstract methods.
-                absmethods = list(abstract_enum_cls.__abstractmethods__)
-                if absmethods:
-                    missing = ', '.join(f'{method!r}' for method in absmethods)
-                    plural = 's' if len(absmethods) > 1 else ''
-                    raise TypeError(
-                        f"cannot instantiate abstract class {abstract_enum_cls.__name__!r}"
-                        f" with abstract method{plural} {missing}")
-            except AttributeError:
-                pass
-        return abstract_enum_cls
 
 
 class IntEnumSerialize(Serialize, Deserialize, IntEnum, metaclass=ABCEnumMeta):
@@ -877,6 +934,54 @@ class Status(IntEnumSerialize):
         return self.name
 
 
+class BlockLocators(Serialize, Deserialize):
+
+    def __init__(self):
+        self.block_locators = None
+
+    @classmethod
+    def init(cls, *, block_locators: dict[u32, (BlockHash, BlockHeader | NoneType)]):
+        if not isinstance(block_locators, dict):
+            raise TypeError("block_locators must be dict")
+        self = cls()
+        self.block_locators = block_locators
+        return self
+
+    def dump(self) -> bytes:
+        res = u32(len(self.block_locators)).dump()
+        for height, (block_hash, header) in self.block_locators.items():
+            res += height.dump() + block_hash.dump()
+            if header is None:
+                res += bool_().dump()
+            else:
+                res += bool_(True).dump()
+                res += header.dump()
+        return res
+
+    @classmethod
+    def load(cls, data: bytearray):
+        if not isinstance(data, bytearray):
+            raise TypeError("data must be bytearray")
+        num_locators = u32.load(data)
+        if num_locators == 0 or num_locators > 96:
+            raise ValueError("incorrect number of locators")
+        self = cls()
+        self.block_locators = {}
+        for _ in range(num_locators):
+            height = u32.load(data)
+            block_hash = BlockHash.load(data)
+            header_exists = bool_.load(data)
+            if header_exists:
+                header = BlockHeader.load(data)
+                if header.metadata.height >= 100000:
+                    # TODO: Testnet2 only
+                    del data[:80]
+            else:
+                header = None
+            self.block_locators[height] = (block_hash, header)
+        return self
+
+
 class Message(Serialize, Deserialize, metaclass=ABCMeta):
     class Type(IntEnumSerialize):
         BlockRequest = 0
@@ -888,9 +993,9 @@ class Message(Serialize, Deserialize, metaclass=ABCMeta):
         PeerResponse = 6
         Ping = 7
         Pong = 8
-        UnconfirmedBlockRequest = 9
-        UnconfirmedTransactionRequest = 10
-        PoolRegisterRequest = 11
+        UnconfirmedBlock = 9
+        UnconfirmedTransaction = 10
+        PoolRegister = 11
         PoolRequest = 12
         PoolResponse = 13
         NewBlockTemplate = 100
@@ -987,7 +1092,181 @@ class ChallengeResponse(Message):
     type = Message.Type.ChallengeResponse
 
     def __init__(self):
-        pass
+        self.block_header = None
+
+    @classmethod
+    def init(cls, *, block_header: BlockHeader):
+        if not isinstance(block_header, BlockHeader):
+            raise TypeError("block_header must be BlockHeader")
+        self = cls()
+        self.block_header = block_header
+        return self
+
+    def dump(self) -> bytes:
+        return self.block_header.dump()
+
+    @classmethod
+    def load(cls, data: bytearray):
+        self = cls()
+        if not isinstance(data, bytearray):
+            raise TypeError("data must be bytearray")
+        self.block_header = BlockHeader.load(data)
+        return self
+
+
+class Ping(Message):
+    type = Message.Type.Ping
+
+    def __init__(self):
+        self.version = None
+        self.fork_depth = None
+        self.node_type = None
+        self.status = None
+        self.block_hash = None
+        self.block_header = None
+
+    @classmethod
+    def init(cls, *, version: u32, fork_depth: u32, node_type: NodeType, status: Status,
+             block_hash: BlockHash, block_header: BlockHeader):
+        if not isinstance(version, u32):
+            raise TypeError("version must be u32")
+        if not isinstance(fork_depth, u32):
+            raise TypeError("fork_depth must be u32")
+        if not isinstance(node_type, NodeType):
+            raise TypeError("node_type must be NodeType")
+        if not isinstance(status, Status):
+            raise TypeError("status must be Status")
+        if not isinstance(block_hash, BlockHash):
+            raise TypeError("block_hash must be BlockHash")
+        if not isinstance(block_header, BlockHeader):
+            raise TypeError("block_header must be BlockHeader")
+        self = cls()
+        self.version = version
+        self.fork_depth = fork_depth
+        self.node_type = node_type
+        self.status = status
+        self.block_hash = block_hash
+        self.block_header = block_header
+        return self
+
+    def dump(self) -> bytes:
+        return b"".join([
+            self.version.dump(),
+            self.fork_depth.dump(),
+            self.node_type.dump(),
+            self.status.dump(),
+            self.block_hash.dump(),
+            self.block_header.dump(),
+        ])
+
+    @classmethod
+    def load(cls, data: bytearray):
+        if not isinstance(data, bytearray):
+            raise TypeError("data must be bytearray")
+        self = cls()
+        self.version = u32.load(data)
+        self.fork_depth = u32.load(data)
+        self.node_type = NodeType.load(data)
+        self.status = Status.load(data)
+        self.block_hash = BlockHash.load(data)
+        self.block_header = BlockHeader.load(data)
+        return self
+
+
+class Pong(Message):
+    type = Message.Type.Pong
+
+    def __init__(self):
+        self.is_fork = None
+        self.block_locators = None
+
+    @classmethod
+    def init(cls, *, is_fork: bool_ | NoneType, block_locators: BlockLocators):
+        if not isinstance(is_fork, bool_ | NoneType):
+            raise TypeError("is_fork must be bool_ | None")
+        if not isinstance(block_locators, BlockLocators):
+            raise TypeError("block_locators must be BlockLocators")
+        self = cls()
+        self.is_fork = is_fork
+        self.block_locators = block_locators
+        return self
+
+    def dump(self) -> bytes:
+        match self.is_fork:
+            case None:
+                res = u8()
+            case True:
+                res = u8(1)
+            case False:
+                res = u8(2)
+            case _:
+                raise ValueError("is_fork is not bool_ | None")
+        return b"".join([
+            res.dump(),
+            self.block_locators.dump(),
+        ])
+
+    @classmethod
+    def load(cls, data: bytearray):
+        if not isinstance(data, bytearray):
+            raise TypeError("data must be bytearray")
+        self = cls()
+        fork_flag = u8.load(data)
+        match fork_flag:
+            case 0:
+                self.is_fork = None
+            case 1:
+                self.is_fork = True
+            case 2:
+                self.is_fork = False
+            case _:
+                raise ValueError("fork_flag is not 0, 1, or 2")
+        # deferred Data type ignored
+        del data[:8]
+        self.block_locators = BlockLocators.load(data)
+        return self
+
+
+class UnconfirmedBlock(Message):
+    type = Message.Type.UnconfirmedBlock
+
+    def __init__(self):
+        self.block_height = None
+        self.block_hash = None
+        self.block = None
+
+    @classmethod
+    def init(cls, *, block_height: u32, block_hash: BlockHash, block: Block):
+        if not isinstance(block_height, u32):
+            raise TypeError("block_height must be u32")
+        if not isinstance(block_hash, BlockHash):
+            raise TypeError("block_hash must be BlockHash")
+        if not isinstance(block, Block):
+            raise TypeError("block must be Block")
+        self = cls()
+        self.block_height = block_height
+        self.block_hash = block_hash
+        self.block = block
+        return self
+
+    def dump(self) -> bytes:
+        return b"".join([
+            self.block_height.dump(),
+            self.block_hash.dump(),
+            self.block.dump(),
+        ])
+
+    @classmethod
+    def load(cls, data: bytearray):
+        if not isinstance(data, bytearray):
+            raise TypeError("data must be bytearray")
+        self = cls()
+        self.block_height = u32.load(data)
+        self.block_hash = BlockHash.load(data)
+        # deferred Data type ignored
+        del data[:8]
+        self.block = Block.load(data)
+        return self
 
 
 class Frame(Serialize, Deserialize):
@@ -1022,8 +1301,16 @@ class Frame(Serialize, Deserialize):
         match self.type:
             case Message.Type.ChallengeRequest:
                 self.message = ChallengeRequest.load(data)
+            case Message.Type.ChallengeResponse:
+                self.message = ChallengeResponse.load(data)
+            case Message.Type.Ping:
+                self.message = Ping.load(data)
+            case Message.Type.Pong:
+                self.message = Pong.load(data)
+            case Message.Type.UnconfirmedBlock:
+                self.message = UnconfirmedBlock.load(data)
             case _:
-                raise NotImplementedError
+                raise ValueError("unknown message type")
 
         return self
 

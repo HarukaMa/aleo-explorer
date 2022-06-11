@@ -3,12 +3,12 @@ import random
 import traceback
 
 from buffer import Buffer
-from type import * # too many types
+from type import *  # too many types
 
 
 class Testnet2:
-    version = 12
-    fork_depth = 4096
+    version = u32(12)
+    fork_depth = u32(4096)
 
     genesis_block = Block.load(bytearray(open("testnet2/block.genesis", "rb").read()))
 
@@ -21,7 +21,9 @@ class Node:
 
         # states
         self.handshake_state = 0
+        # noinspection PyArgumentList
         self.peer_nonce = random.randint(0, 2 ** 64 - 1)
+        self.status = Status.Peering
 
     def connect(self, ip: str, port: int):
         self.worker_task = asyncio.create_task(self.worker(ip, port))
@@ -39,10 +41,10 @@ class Node:
         await self.explorer.message(ExplorerMessage(ExplorerMessage.Type.Connected, None))
         try:
             challenge_request = ChallengeRequest.init(
-                version=u32(Testnet2.version),
-                fork_depth=u32(Testnet2.fork_depth),
+                version=Testnet2.version,
+                fork_depth=Testnet2.fork_depth,
                 node_type=NodeType.Client,
-                peer_status=Status.Syncing,
+                peer_status=self.status,
                 listener_port=u16(),
                 peer_nonce=u64(self.peer_nonce),
                 peer_cumulative_weight=u128(),
@@ -80,8 +82,31 @@ class Node:
                     raise ValueError("peer is outdated")
                 if msg.fork_depth != Testnet2.fork_depth:
                     raise ValueError("peer has wrong fork depth")
+                response = ChallengeResponse.init(
+                    block_header=Testnet2.genesis_block.header,
+                )
+                await self.send_message(response)
 
+            case Message.Type.ChallengeResponse:
+                if self.handshake_state != 0:
+                    raise Exception("handshake is already done")
+                msg: ChallengeResponse = frame.message
+                if msg.block_header != Testnet2.genesis_block.header:
+                    raise ValueError("peer has wrong genesis block")
+                self.handshake_state = 1
+                self.status = Status.Syncing
+                ping = Ping.init(
+                    version=Testnet2.version,
+                    fork_depth=Testnet2.fork_depth,
+                    node_type=NodeType.Client,
+                    status=self.status,
+                    block_hash=Testnet2.genesis_block.block_hash,
+                    block_header=Testnet2.genesis_block.header,
+                )
+                await self.send_message(ping)
 
+            case _:
+                print("unhandled message type:", frame.type)
 
     async def send_message(self, message: Message):
         if not issubclass(type(message), Message):
@@ -95,3 +120,9 @@ class Node:
     async def close(self):
         self.writer.close()
         await self.writer.wait_closed()
+
+    async def get_block(self, height: int):
+        request = GetBlockRequest.init(
+            height=u32(height),
+        )
+        await self.send_message(request)
