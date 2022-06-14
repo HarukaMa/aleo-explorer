@@ -36,6 +36,10 @@ class Explorer:
                 if height is None:
                     await self.node_request(Request.ProcessBlock(Testnet2.genesis_block))
                 return height
+            case Request.GetLatestWeight:
+                weight = await self.db.get_latest_weight()
+                print("get latest weight:", weight)
+                return weight
             case Request.ProcessBlock:
                 await self.add_block(request.block)
             case Request.GetBlockHashByHeight:
@@ -71,7 +75,7 @@ class Explorer:
                 case Message.Type.DatabaseBlockAdded:
                     print("database block added:", msg.data)
                 case _:
-                    raise ValueError("unhandled message type")
+                    raise ValueError("unhandled explorer message type")
 
     async def add_block(self, block: Block):
         if block is Testnet2.genesis_block:

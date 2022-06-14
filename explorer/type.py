@@ -28,6 +28,9 @@ class Request:
     class GetLatestHeight:
         pass
 
+    class GetLatestWeight:
+        pass
+
     class GetLatestBlock:
         pass
 
@@ -40,6 +43,10 @@ class Request:
             self.height = height
 
     class GetBlockHeaderByHeight:
+        def __init__(self, height: int):
+            self.height = height
+
+    class RevertToBlock:
         def __init__(self, height: int):
             self.height = height
 

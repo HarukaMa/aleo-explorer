@@ -1,3 +1,24 @@
+# Copyright (C) 2019-2022 Aleo Systems Inc.
+# This file is part of the snarkOS library.
+#
+# The snarkOS library is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# The snarkOS library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with the snarkOS library. If not, see <https://www.gnu.org/licenses/>.
+#
+# -----------------------------------------------------------------------------
+#
+# This file contains rewritten code of snarkOS.
+#
+
 import asyncio
 import random
 import traceback
@@ -25,6 +46,11 @@ class Node:
         # noinspection PyArgumentList
         self.peer_nonce = random.randint(0, 2 ** 64 - 1)
         self.status = Status.Peering
+        self.peer_block_height = 0
+        self.peer_cumulative_weight = 0
+        self.is_fork = False
+        self.peer_block_locators = OrderedDict()
+        self.block_requests = []
 
     def connect(self, ip: str, port: int):
         self.worker_task = asyncio.create_task(self.worker(ip, port))
@@ -73,6 +99,16 @@ class Node:
         if not isinstance(frame, Frame):
             raise TypeError("frame must be instance of Frame")
         match frame.type:
+            case Message.Type.BlockResponse:
+                if self.handshake_state != 1:
+                    raise Exception("handshake is not done")
+                msg: BlockResponse = frame.message
+                block = msg.block
+                self.block_requests.remove(block.header.metadata.height)
+                await self.explorer_request(explorer.Request.ProcessBlock(block))
+                if not self.block_requests:
+                    await self._sync()
+
             case Message.Type.ChallengeRequest:
                 if self.handshake_state != 0:
                     raise Exception("handshake is already done")
@@ -93,7 +129,7 @@ class Node:
                 if msg.block_header != Testnet2.genesis_block.header:
                     raise ValueError("peer has wrong genesis block")
                 self.handshake_state = 1
-                self.status = Status.Syncing
+                self.status = Status.Ready
                 await self.send_ping()
 
             case Message.Type.Ping:
@@ -143,7 +179,7 @@ class Node:
 
                 num_linear_block_headers = min(Testnet2.maximum_linear_block_locators, len(msg.block_locators) - 1)
                 num_quadratic_block_headers = len(msg.block_locators) - 1 - num_linear_block_headers
-                last_block_height = max(msg.block_locators.keys())
+                self.peer_block_height = last_block_height = max(msg.block_locators.keys())
                 block_locators = OrderedDict(sorted(msg.block_locators.items(), key=lambda k: k[0], reverse=True))
                 linear_block_locators = take(num_linear_block_headers, block_locators.items())
                 block_header: BlockHeader | None
@@ -170,8 +206,8 @@ class Node:
 
                 common_ancestor = 0
                 latest_block_height_of_peer = 0
-                block_locators = OrderedDict(sorted(msg.block_locators.items(), key=lambda k: k[0]))
-                for block_height, (block_hash, _) in block_locators.items():
+                self.peer_block_locators = OrderedDict(sorted(msg.block_locators.items(), key=lambda k: k[0]))
+                for block_height, (block_hash, _) in self.peer_block_locators.items():
                     expected_block_hash = await self.explorer_request(
                         explorer.Request.GetBlockHashByHeight(block_height))
                     if expected_block_hash is not None:
@@ -183,24 +219,89 @@ class Node:
                         latest_block_height_of_peer = block_height
 
                 if msg.is_fork is not None:
-                    is_fork = msg.is_fork
+                    self.is_fork = msg.is_fork
                 elif common_ancestor == latest_block_height_of_peer or common_ancestor == await self.explorer_request(
                         explorer.Request.GetLatestHeight()):
-                    is_fork = bool_()
+                    self.is_fork = False
                 else:
-                    is_fork = None
+                    self.is_fork = None
+
+                self.peer_cumulative_weight = self.peer_block_locators[latest_block_height_of_peer][
+                    1].metadata.cumulative_weight
 
                 print(
-                    f"Peer is at block {latest_block_height_of_peer} (is_fork = {is_fork}, cumulative_weight = {block_locators[latest_block_height_of_peer][1].metadata.cumulative_weight}, common_ancestor = {common_ancestor})")
+                    f"Peer is at block {latest_block_height_of_peer} (is_fork = {self.is_fork}, cumulative_weight = {self.peer_cumulative_weight}, common_ancestor = {common_ancestor})")
 
-                async def task():
+                async def ping_task():
                     await asyncio.sleep(60)
                     await self.send_ping()
 
-                asyncio.create_task(task())
+                asyncio.create_task(ping_task())
+                asyncio.create_task(self._sync())
 
             case _:
                 print("unhandled message type:", frame.type)
+
+    async def _sync(self):
+        if self.status != Status.Syncing:
+            common_ancestor = 0
+            first_deviating_locator = None
+            for block_height, (block_hash, _) in self.peer_block_locators.items():
+                expected_block_hash = await self.explorer_request(
+                    explorer.Request.GetBlockHashByHeight(block_height))
+                if expected_block_hash is not None:
+                    if block_hash != expected_block_hash:
+                        if first_deviating_locator is None:
+                            first_deviating_locator = block_height
+                        else:
+                            if block_height < first_deviating_locator:
+                                first_deviating_locator = block_height
+                    if block_height > common_ancestor:
+                        common_ancestor = block_height
+            latest_block_height = await self.explorer_request(explorer.Request.GetLatestHeight())
+            latest_cumulative_weight = await self.explorer_request(explorer.Request.GetLatestWeight())
+            if latest_cumulative_weight >= self.peer_cumulative_weight:
+                return
+            if latest_block_height < common_ancestor:
+                return
+            if not self.is_fork:
+                ledger_is_on_fork = False
+                if first_deviating_locator is None:
+                    latest_common_ancestor = common_ancestor
+                else:
+                    latest_common_ancestor = latest_block_height
+            else:
+                if latest_block_height - common_ancestor <= Testnet2.fork_depth:
+                    print(
+                        f"Discovered a canonical chain with common ancestor {common_ancestor} and cumulative weight {self.peer_cumulative_weight}")
+                    latest_common_ancestor = common_ancestor
+                    ledger_is_on_fork = latest_block_height != common_ancestor
+                elif first_deviating_locator is not None:
+                    if latest_block_height - first_deviating_locator > Testnet2.fork_depth:
+                        print("Peer exceeded the permitted fork range")
+                        return
+                    else:
+                        print(
+                            f"Discovered a potentially better canonical chain with common ancestor {common_ancestor} and cumulative weight {self.peer_cumulative_weight}")
+                        latest_common_ancestor = common_ancestor
+                        ledger_is_on_fork = True
+                else:
+                    print("Peer is missing first deviating locator")
+                    return
+            self.status = Status.Syncing
+
+            if ledger_is_on_fork:
+                print(f"Reverting to common ancestor {latest_common_ancestor}")
+                await self.explorer_request(explorer.Request.RevertToBlock(common_ancestor))
+
+            number_of_block_requests = min(self.peer_block_height - latest_common_ancestor, 1)
+            start_block_height = latest_common_ancestor + 1
+            end_block_height = start_block_height + number_of_block_requests - 1
+            print(f"Synchronizing from block {start_block_height} to {end_block_height}")
+
+            self.block_requests.extend(range(start_block_height, end_block_height + 1))
+            msg = BlockRequest(start_block_height=u32(start_block_height), end_block_height=u32(end_block_height))
+            await self.send_message(msg)
 
     async def send_ping(self):
         latest_height = await self.explorer_request(explorer.Request.GetLatestHeight())

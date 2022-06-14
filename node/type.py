@@ -1243,6 +1243,50 @@ class Message(Serialize, Deserialize, metaclass=ABCMeta):
         raise NotImplementedError
 
 
+class BlockRequest(Message):
+    type = Message.Type.BlockRequest
+
+    def __init__(self, *, start_block_height: u32, end_block_height: u32):
+        if not isinstance(start_block_height, u32):
+            raise TypeError("start_block_height must be u32")
+        if not isinstance(end_block_height, u32):
+            raise TypeError("end_block_height must be u32")
+        self.start_block_height = start_block_height
+        self.end_block_height = end_block_height
+
+    def dump(self) -> bytes:
+        return self.start_block_height.dump() + self.end_block_height.dump()
+
+    @classmethod
+    def load(cls, data: bytearray):
+        if not isinstance(data, bytearray):
+            raise TypeError("data must be bytearray")
+        start_block_height = u32.load(data)
+        end_block_height = u32.load(data)
+        return cls(start_block_height=start_block_height, end_block_height=end_block_height)
+
+
+class BlockResponse(Message):
+    type = Message.Type.BlockResponse
+
+    def __init__(self, *, block: Block):
+        if not isinstance(block, Block):
+            raise TypeError("block must be Block")
+        self.block = block
+
+    def dump(self) -> bytes:
+        data = self.block.dump()
+        return u64(len(data)).dump() + data
+
+    @classmethod
+    def load(cls, data: bytearray):
+        if not isinstance(data, bytearray):
+            raise TypeError("data must be bytearray")
+        del data[:8]
+        block = Block.load(data)
+        return cls(block=block)
+
+
 class ChallengeRequest(Message):
     type = Message.Type.ChallengeRequest
 
@@ -1471,6 +1515,10 @@ class Frame(Serialize, Deserialize):
         type_ = Message.Type(struct.unpack("<H", data[:2])[0])
         del data[:2]
         match type_:
+            case Message.Type.BlockRequest:
+                message = BlockRequest.load(data)
+            case Message.Type.BlockResponse:
+                message = BlockResponse.load(data)
             case Message.Type.ChallengeRequest:
                 message = ChallengeRequest.load(data)
             case Message.Type.ChallengeResponse:

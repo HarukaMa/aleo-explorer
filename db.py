@@ -38,7 +38,20 @@ class Database:
                 return result['height']
             except Exception as e:
                 await self.explorer_message(Message(Message.Type.DatabaseError, e))
-                return
+                raise
+
+    async def get_latest_weight(self):
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                result = await conn.fetchrow(
+                    "SELECT cumulative_weight FROM block WHERE is_canonical = true ORDER BY height DESC LIMIT 1")
+                if result is None:
+                    return None
+                return result['cumulative_weight']
+            except Exception as e:
+                await self.explorer_message(Message(Message.Type.DatabaseError, e))
+                raise
 
     async def save_canonical_block(self, block: Block):
         async with self.pool.acquire() as conn:
