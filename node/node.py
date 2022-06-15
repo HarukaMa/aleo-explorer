@@ -52,8 +52,43 @@ class Node:
         self.peer_block_locators = OrderedDict()
         self.block_requests = []
 
-    def connect(self, ip: str, port: int):
+    async def connect(self, ip: str, port: int):
         self.worker_task = asyncio.create_task(self.worker(ip, port))
+        await asyncio.start_server(self.listen_worker, host="0.0.0.0", port=14132)
+
+    async def listen_worker(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+        print(f"Connected from {writer.get_extra_info('peername')}")
+        buffer = Buffer()
+        while True:
+            data = await reader.read(4096)
+            if not data:
+                break
+            buffer.write(data)
+            while buffer.count():
+                if buffer.count() >= 4:
+                    size = int.from_bytes(buffer.peek(4), byteorder="little")
+                    if buffer.count() < size + 4:
+                        break
+                    buffer.read(4)
+                    frame = Frame.load(buffer.read(size))
+                    if frame.type != Message.Type.ChallengeRequest:
+                        writer.close()
+                        await writer.wait_closed()
+                    if self.handshake_state != 0:
+                        raise Exception("handshake is already done")
+                    msg: ChallengeRequest = frame.message
+                    if msg.version < Testnet2.version:
+                        raise ValueError("peer is outdated")
+                    if msg.fork_depth != Testnet2.fork_depth:
+                        raise ValueError("peer has wrong fork depth")
+                    response = ChallengeResponse(
+                        block_header=Testnet2.genesis_block.header,
+                    )
+                    frame = Frame(type_=response.type, message=response)
+                    data = frame.dump()
+                    size = len(data)
+                    writer.write(size.to_bytes(4, "little") + data)
+                    await writer.drain()
 
     async def worker(self, host: str, port: int):
         try:
@@ -71,7 +106,7 @@ class Node:
                 fork_depth=Testnet2.fork_depth,
                 node_type=NodeType.Client,
                 peer_status=self.status,
-                listener_port=u16(),
+                listener_port=u16(14132),
                 peer_nonce=u64(self.peer_nonce),
                 peer_cumulative_weight=u128(),
             )
@@ -295,7 +330,7 @@ class Node:
                 print(f"Reverting to common ancestor {latest_common_ancestor}")
                 await self.explorer_request(explorer.Request.RevertToBlock(common_ancestor))
 
-            number_of_block_requests = min(self.peer_block_height - latest_common_ancestor, 100)
+            number_of_block_requests = min(self.peer_block_height - latest_common_ancestor, 250)
             start_block_height = latest_common_ancestor + 1
             end_block_height = start_block_height + number_of_block_requests - 1
             print(f"Synchronizing from block {start_block_height} to {end_block_height}")

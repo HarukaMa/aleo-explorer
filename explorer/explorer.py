@@ -65,7 +65,7 @@ class Explorer:
             self.latest_height = await self.db.get_latest_height()
             self.latest_block_hash = await self.db.get_block_hash_by_height(self.latest_height)
             self.node = Node(explorer_message=self.message, explorer_request=self.node_request)
-            self.node.connect("127.0.0.1", 4132)
+            await self.node.connect(os.environ.get("NODE_HOST", "127.0.0.1"), int(os.environ.get("NODE_PORT", "4132")))
             while True:
                 msg = await self.message_queue.get()
                 match msg.type:
