@@ -28,9 +28,9 @@ from typing import Callable
 from more_itertools.recipes import take
 
 import explorer
-from node.type import *  # too many types
 from util.buffer import Buffer
 from .testnet2.param import Testnet2
+from .type import *  # too many types
 
 
 class Node:
@@ -107,6 +107,7 @@ class Node:
                 self.block_requests.remove(block.header.metadata.height)
                 await self.explorer_request(explorer.Request.ProcessBlock(block))
                 if not self.block_requests:
+                    self.status = Status.Ready
                     await self._sync()
 
             case Message.Type.ChallengeRequest:
@@ -249,13 +250,13 @@ class Node:
             for block_height, (block_hash, _) in self.peer_block_locators.items():
                 expected_block_hash = await self.explorer_request(
                     explorer.Request.GetBlockHashByHeight(block_height))
-                if expected_block_hash is not None:
-                    if block_hash != expected_block_hash:
-                        if first_deviating_locator is None:
+                if block_hash != expected_block_hash:
+                    if first_deviating_locator is None:
+                        first_deviating_locator = block_height
+                    else:
+                        if block_height < first_deviating_locator:
                             first_deviating_locator = block_height
-                        else:
-                            if block_height < first_deviating_locator:
-                                first_deviating_locator = block_height
+                else:
                     if block_height > common_ancestor:
                         common_ancestor = block_height
             latest_block_height = await self.explorer_request(explorer.Request.GetLatestHeight())
@@ -294,7 +295,7 @@ class Node:
                 print(f"Reverting to common ancestor {latest_common_ancestor}")
                 await self.explorer_request(explorer.Request.RevertToBlock(common_ancestor))
 
-            number_of_block_requests = min(self.peer_block_height - latest_common_ancestor, 1)
+            number_of_block_requests = min(self.peer_block_height - latest_common_ancestor, 100)
             start_block_height = latest_common_ancestor + 1
             end_block_height = start_block_height + number_of_block_requests - 1
             print(f"Synchronizing from block {start_block_height} to {end_block_height}")

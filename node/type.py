@@ -222,7 +222,7 @@ class u128(Int):
             raise ValueError("value must be between 0 and 2 ** 128 - 1")
 
     def dump(self) -> bytes:
-        return struct.pack("<QQ", self >> 64, self & 0xFFFF_FFFF_FFFF_FFFF)
+        return struct.pack("<QQ", self & 0xFFFF_FFFF_FFFF_FFFF, self >> 64)
 
     @classmethod
     def load(cls, data: bytearray):
@@ -327,6 +327,7 @@ class Vec(Generic, Serialize, Deserialize, Iterable):
         self._list = value
         if hasattr(self, "size_type"):
             self.size = len(value)
+        return self
 
     def dump(self) -> bytes:
         res = b""
@@ -518,6 +519,21 @@ class PoSWProof(Object):
     def __init__(self, data):
         Object.__init__(self, data)
 
+    def dump(self) -> bytes:
+        return self._data + bytes(b"\x00" * 80)
+
+    @classmethod
+    def load(cls, data: bytearray):
+        if not isinstance(data, bytearray):
+            raise TypeError("data must be bytearray")
+        size = cls.size
+        # noinspection PyTypeChecker
+        if len(data) < size:
+            raise ValueError("incorrect length")
+        self = cls(bytes(data[:size]))
+        del data[:size + 80]
+        return self
+
 
 class DeprecatedPoSWProof(Object):
     _object_prefix = "hzkp"
@@ -611,6 +627,21 @@ class FunctionID(Locator):
         Locator.__init__(self, data)
 
 
+class ProgramID(Locator):
+    _locator_prefix = "ap"
+    size = 48
+
+    def __init__(self, data):
+        Locator.__init__(self, data)
+
+
+class RecordRandomizer(Locator):
+    _locator_prefix = "rr"
+
+    def __init__(self, data):
+        Locator.__init__(self, data)
+
+
 class AleoAmount(i64):
     pass
 
@@ -664,9 +695,7 @@ class NoopOperation(Serialize, Deserialize):
         return b""
 
     @classmethod
-    def load(cls, data: bytearray):
-        if not isinstance(data, bytearray):
-            raise TypeError("data must be bytearray")
+    def load(cls, _):
         return cls()
 
 
@@ -1021,6 +1050,9 @@ class Block(Serialize, Deserialize):
         return cls(block_hash=block_hash, previous_block_hash=previous_block_hash, header=header,
                    transactions=transactions)
 
+    def __str__(self):
+        return f"Block {self.header.metadata.height} ({str(self.block_hash)[:16]}...)"
+
 
 class BlockHeader(Serialize, Deserialize):
 
@@ -1061,7 +1093,6 @@ class BlockHeader(Serialize, Deserialize):
             proof = DeprecatedPoSWProof.load(data)
         else:
             proof = PoSWProof.load(data)
-            del data[:80]
         return cls(previous_ledger_root=previous_ledger_root, transactions_root=transactions_root,
                    metadata=metadata, nonce=nonce, proof=proof)
 
@@ -1112,6 +1143,47 @@ class BlockHeaderMetadata(Serialize, Deserialize):
                self.timestamp == other.timestamp and \
                self.difficulty_target == other.difficulty_target and \
                self.cumulative_weight == other.cumulative_weight
+
+
+class Record(Serialize, Deserialize):
+
+    def __init__(self, *, owner: Address, value: AleoAmount, payload: Payload, program_id: ProgramID,
+                 randomizer: RecordRandomizer, record_view_key: RecordViewKey):
+        if not isinstance(owner, Address):
+            raise TypeError("owner must be Address")
+        if not isinstance(value, AleoAmount):
+            raise TypeError("value must be AleoAmount")
+        if not isinstance(payload, Payload):
+            raise TypeError("payload must be Payload")
+        if not isinstance(program_id, ProgramID):
+            raise TypeError("program_id must be ProgramID")
+        if not isinstance(randomizer, RecordRandomizer):
+            raise TypeError("randomizer must be RecordRandomizer")
+        if not isinstance(record_view_key, RecordViewKey):
+            raise TypeError("record_view_key must be RecordViewKey")
+        self.owner = owner
+        self.value = value
+        self.payload = payload
+        self.program_id = program_id
+        self.randomizer = randomizer
+        self.record_view_key = record_view_key
+        self.commitment = Commitment.load(bytearray(aleo.get_record_commitment(self.dump())))
+
+    def dump(self) -> bytes:
+        return self.owner.dump() + self.value.dump() + self.payload.dump() + self.program_id.dump() + self.randomizer.dump() + self.record_view_key.dump()
+
+    @classmethod
+    def load(cls, data: bytearray):
+        if not isinstance(data, bytearray):
+            raise TypeError("data must be bytearray")
+        owner = Address.load(data)
+        value = AleoAmount.load(data)
+        payload = Payload.load(data)
+        program_id = ProgramID.load(data)
+        randomizer = RecordRandomizer.load(data)
+        record_view_key = RecordViewKey.load(data)
+        return cls(owner=owner, value=value, payload=payload, program_id=program_id, randomizer=randomizer,
+                   record_view_key=record_view_key)
 
 
 # snarkOS types
