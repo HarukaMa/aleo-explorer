@@ -124,6 +124,9 @@ class Node:
                         self.buffer.read(4)
                         frame = self.buffer.read(size)
                         await self.parse_message(Frame.load(frame))
+                    else:
+                        print(f"buffer.count() < 4: {self.buffer.count()}")
+                        break
         except Exception:
             traceback.print_exc()
             await self.explorer_message(explorer.Message(explorer.Message.Type.NodeDisconnected, None))
@@ -275,6 +278,11 @@ class Node:
                 asyncio.create_task(ping_task())
                 asyncio.create_task(self._sync())
 
+            case Message.Type.UnconfirmedBlock:
+                if self.handshake_state != 1:
+                    raise Exception("handshake is not done")
+                msg: UnconfirmedBlock = frame.message
+                await self.explorer_request(explorer.Request.ProcessBlock(msg.block))
             case _:
                 print("unhandled message type:", frame.type)
 
@@ -363,9 +371,3 @@ class Node:
     async def close(self):
         self.writer.close()
         await self.writer.wait_closed()
-
-    async def get_block(self, height: int):
-        request = GetBlockRequest.init(
-            height=u32(height),
-        )
-        await self.send_message(request)

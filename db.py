@@ -152,10 +152,44 @@ class Database:
                     await self.explorer_message(Message(Message.Type.DatabaseError, e))
                     raise
 
+    async def _set_canonical_block(self, block: Block) -> None:
+        async with self.pool.acquire() as conn:
+            try:
+                await conn.execute("UPDATE block SET is_canonical = FALSE WHERE height = $1",
+                                   block.header.metadata.height)
+                await conn.execute("UPDATE block SET is_canonical = TRUE WHERE block_hash = $1", str(block.block_hash))
+            except Exception as e:
+                await self.explorer_message(Message(Message.Type.DatabaseError, e))
+                raise
+
+    async def _set_non_canonical_block(self, block: Block) -> None:
+        async with self.pool.acquire() as conn:
+            try:
+                await conn.execute("UPDATE block SET is_canonical = FALSE WHERE block_hash = $1", str(block.block_hash))
+            except Exception as e:
+                await self.explorer_message(Message(Message.Type.DatabaseError, e))
+                raise
+
     async def save_canonical_block(self, block: Block):
+        if existing_block := await self.get_block_by_hash(block.block_hash) is not None:
+            if existing_block.header.metadata.height == block.header.metadata.height:
+                await self._set_canonical_block(block)
+                return
+        async with self.pool.acquire() as conn:
+            try:
+                await conn.execute("UPDATE block SET is_canonical = FALSE WHERE height = $1",
+                                   block.header.metadata.height)
+            except Exception as e:
+                await self.explorer_message(Message(Message.Type.DatabaseError, e))
+                raise
         await self._save_block(block, True)
 
     async def save_non_canonical_block(self, block: Block):
+        if existing_block := await self.get_block_by_hash(block.block_hash) is not None:
+            if existing_block.header.metadata.height == block.header.metadata.height:
+                # could this ever happen?
+                await self._set_non_canonical_block(block)
+                return
         await self._save_block(block, False)
 
     @staticmethod
@@ -273,7 +307,7 @@ class Database:
             )
         )
 
-    async def get_latest_block(self):
+    async def get_latest_canonical_block(self):
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
             try:
@@ -286,7 +320,7 @@ class Database:
                 await self.explorer_message(Message(Message.Type.DatabaseError, e))
                 raise
 
-    async def get_block_by_height(self, height: u32):
+    async def get_canonical_block_by_height(self, height: u32):
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
             try:
@@ -299,7 +333,7 @@ class Database:
                 await self.explorer_message(Message(Message.Type.DatabaseError, e))
                 raise
 
-    async def get_block_hash_by_height(self, height: u32):
+    async def get_canonical_block_hash_by_height(self, height: u32):
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
             try:
@@ -312,7 +346,7 @@ class Database:
                 await self.explorer_message(Message(Message.Type.DatabaseError, e))
                 raise
 
-    async def get_block_header_by_height(self, height: u32):
+    async def get_canonical_block_header_by_height(self, height: u32):
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
             try:
@@ -321,6 +355,19 @@ class Database:
                 if block is None:
                     return None
                 return self._get_block_header(block)
+            except Exception as e:
+                await self.explorer_message(Message(Message.Type.DatabaseError, e))
+                raise
+
+    async def get_block_by_hash(self, block_hash: BlockHash) -> Block | None:
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                block = await conn.fetchrow(
+                    "SELECT * FROM block WHERE block_hash = $1", str(block_hash))
+                if block is None:
+                    return None
+                return await self._get_full_block(block, conn)
             except Exception as e:
                 await self.explorer_message(Message(Message.Type.DatabaseError, e))
                 raise

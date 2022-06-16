@@ -50,9 +50,9 @@ class Explorer:
                 case Request.GetBlockHashByHeight:
                     if request.height == self.latest_height:
                         return self.latest_block_hash
-                    return await self.db.get_block_hash_by_height(request.height)
+                    return await self.db.get_canonical_block_hash_by_height(request.height)
                 case Request.GetBlockHeaderByHeight:
-                    return await self.db.get_block_header_by_height(request.height)
+                    return await self.db.get_canonical_block_header_by_height(request.height)
                 case _:
                     print("unhandled explorer request")
         finally:
@@ -63,7 +63,7 @@ class Explorer:
             await self.db.connect()
             await self.node_request(Request.GetLatestHeight())
             self.latest_height = await self.db.get_latest_height()
-            self.latest_block_hash = await self.db.get_block_hash_by_height(self.latest_height)
+            self.latest_block_hash = await self.db.get_canonical_block_hash_by_height(self.latest_height)
             self.node = Node(explorer_message=self.message, explorer_request=self.node_request)
             await self.node.connect(os.environ.get("NODE_HOST", "127.0.0.1"), int(os.environ.get("NODE_PORT", "4132")))
             while True:
@@ -96,7 +96,7 @@ class Explorer:
         if block is Testnet2.genesis_block:
             await self.db.save_canonical_block(block)
             return
-        last_block = await self.db.get_latest_block()
+        last_block = await self.db.get_latest_canonical_block()
         if block.previous_block_hash != last_block.block_hash:
             print(f"adding non-canonical block {block}")
             await self.db.save_non_canonical_block(block)
@@ -107,4 +107,4 @@ class Explorer:
             self.latest_block_hash = block.block_hash
 
     async def get_latest_block(self):
-        return await self.db.get_latest_block()
+        return await self.db.get_latest_canonical_block()
