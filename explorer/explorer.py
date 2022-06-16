@@ -42,7 +42,7 @@ class Explorer:
                     #     await self.node_request(Request.ProcessBlock(Testnet2.genesis_block))
                     # return height
                 case Request.GetLatestWeight:
-                    weight = await self.db.get_latest_weight()
+                    weight = await self.db.get_latest_canonical_weight()
                     print("get latest weight:", weight)
                     return weight
                 case Request.ProcessBlock:
@@ -53,6 +53,8 @@ class Explorer:
                     return await self.db.get_canonical_block_hash_by_height(request.height)
                 case Request.GetBlockHeaderByHeight:
                     return await self.db.get_canonical_block_header_by_height(request.height)
+                case Request.RevertToBlock:
+                    await self.revert_to_block(request.height)
                 case _:
                     print("unhandled explorer request")
         finally:
@@ -62,7 +64,7 @@ class Explorer:
         try:
             await self.db.connect()
             await self.node_request(Request.GetLatestHeight())
-            self.latest_height = await self.db.get_latest_height()
+            self.latest_height = await self.db.get_latest_canonical_height()
             self.latest_block_hash = await self.db.get_canonical_block_hash_by_height(self.latest_height)
             self.node = Node(explorer_message=self.message, explorer_request=self.node_request)
             await self.node.connect(os.environ.get("NODE_HOST", "127.0.0.1"), int(os.environ.get("NODE_PORT", "4132")))
@@ -96,8 +98,7 @@ class Explorer:
         if block is Testnet2.genesis_block:
             await self.db.save_canonical_block(block)
             return
-        last_block = await self.db.get_latest_canonical_block()
-        if block.previous_block_hash != last_block.block_hash:
+        if block.previous_block_hash != self.latest_block_hash:
             if await self.db.is_block_hash_canonical(block.block_hash):
                 # should only cancel canonical state during revertion
                 return
@@ -108,6 +109,11 @@ class Explorer:
             await self.db.save_canonical_block(block)
             self.latest_height = block.header.metadata.height
             self.latest_block_hash = block.block_hash
+
+    async def revert_to_block(self, height):
+        await self.db.revert_to_block(height)
+        self.latest_height = height
+        self.latest_block_hash = await self.db.get_canonical_block_hash_by_height(height)
 
     async def get_latest_block(self):
         return await self.db.get_latest_canonical_block()

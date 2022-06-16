@@ -181,9 +181,9 @@ class Node:
                 if block_hash is None:
                     is_fork = None
                 elif block_hash == msg.block_hash:
-                    is_fork = False
+                    is_fork = bool_()
                 else:
-                    is_fork = True
+                    is_fork = bool_(True)
                 latest_height = await self.explorer_request(explorer.Request.GetLatestHeight())
                 num_block_headers = min(Testnet2.maximum_linear_block_locators, latest_height)
                 locators = {}

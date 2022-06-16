@@ -31,31 +31,6 @@ class Database:
             return
         await self.explorer_message(Message(Message.Type.DatabaseConnected, None))
 
-    async def get_latest_height(self):
-        async with self.pool.acquire() as conn:
-            try:
-                result = await conn.fetchrow(
-                    "SELECT height FROM block WHERE is_canonical = true ORDER BY height DESC LIMIT 1")
-                if result is None:
-                    return None
-                return result['height']
-            except Exception as e:
-                await self.explorer_message(Message(Message.Type.DatabaseError, e))
-                raise
-
-    async def get_latest_weight(self):
-        conn: asyncpg.Connection
-        async with self.pool.acquire() as conn:
-            try:
-                result = await conn.fetchrow(
-                    "SELECT cumulative_weight FROM block WHERE is_canonical = true ORDER BY height DESC LIMIT 1")
-                if result is None:
-                    return None
-                return result['cumulative_weight']
-            except Exception as e:
-                await self.explorer_message(Message(Message.Type.DatabaseError, e))
-                raise
-
     async def _save_block(self, block: Block, is_canonical: bool):
         async with self.pool.acquire() as conn:
             async with conn.transaction():
@@ -193,6 +168,14 @@ class Database:
                 return
         await self._save_block(block, False)
 
+    async def revert_to_block(self, height: int) -> None:
+        async with self.pool.acquire() as conn:
+            try:
+                await conn.execute("UPDATE block SET is_canonical = FALSE WHERE height > $1", height)
+            except Exception as e:
+                await self.explorer_message(Message(Message.Type.DatabaseError, e))
+                raise
+
     @staticmethod
     def _get_block_header(block: dict):
         if block["height"] < 100000:
@@ -307,6 +290,31 @@ class Database:
                 transactions=Vec[Transaction, u16](txs)
             )
         )
+
+    async def get_latest_canonical_height(self):
+        async with self.pool.acquire() as conn:
+            try:
+                result = await conn.fetchrow(
+                    "SELECT height FROM block WHERE is_canonical = true ORDER BY height DESC LIMIT 1")
+                if result is None:
+                    return None
+                return result['height']
+            except Exception as e:
+                await self.explorer_message(Message(Message.Type.DatabaseError, e))
+                raise
+
+    async def get_latest_canonical_weight(self):
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                result = await conn.fetchrow(
+                    "SELECT cumulative_weight FROM block WHERE is_canonical = true ORDER BY height DESC LIMIT 1")
+                if result is None:
+                    return None
+                return result['cumulative_weight']
+            except Exception as e:
+                await self.explorer_message(Message(Message.Type.DatabaseError, e))
+                raise
 
     async def get_latest_canonical_block(self):
         conn: asyncpg.Connection

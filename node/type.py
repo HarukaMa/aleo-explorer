@@ -343,11 +343,11 @@ class Vec(Generic, Serialize, Deserialize, Iterable):
         if not isinstance(data, bytearray):
             raise TypeError("data must be bytearray")
         if hasattr(self, "size_type"):
-            # noinspection PyTypeChecker
             if len(data) < self.size_type.size:
                 raise ValueError("data is too short")
             # noinspection PyArgumentList
             self.size = self.size_type.load(data)
+        # noinspection PyAttributeOutsideInit
         self._list = []
         for i in range(self.size):
             # noinspection PyArgumentList
@@ -1506,9 +1506,9 @@ class Pong(Message):
         match self.is_fork:
             case None:
                 res = u8()
-            case True:
+            case bool_(True):
                 res = u8(1)
-            case False:
+            case bool_():
                 res = u8(2)
             case _:
                 raise ValueError("is_fork is not bool_ | None")
