@@ -122,7 +122,7 @@ class Database:
                                                     event.event.operation.operation.function_type.name,
                                                     str(event.event.operation.operation.function_inputs.caller),
                                                     str(event.event.operation.operation.function_inputs.recipient),
-                                                    str(event.event.operation.operation.function_inputs.amount),
+                                                    event.event.operation.operation.function_inputs.amount,
                                                     event.event.operation.operation.function_inputs.record_payload.dump())
 
                             for i, ct in enumerate(transition.ciphertexts):
@@ -212,7 +212,8 @@ class Database:
                                 record_view_key=RecordViewKey.loads(rvk['record_view_key']), index=u8(rvk['index']))))
                         case Event.Type.Operation:
                             op = await conn.fetchrow("SELECT * FROM operation_event WHERE event_id = $1", event['id'])
-                            match Operation.Type(op['operation_type']):
+                            # noinspection PyUnresolvedReferences
+                            match Operation.Type[op['operation_type']]:
                                 case Operation.Type.Noop:
                                     operation = Operation(type_=Operation.Type.Noop, operation=NoopOperation())
                                 case Operation.Type.Coinbase:
@@ -231,16 +232,17 @@ class Database:
                                 case Operation.Type.Evaluate:
                                     evaluate = await conn.fetchrow(
                                         "SELECT * FROM evaluate_operation WHERE operation_event_id = $1", op['id'])
+                                    # noinspection PyUnresolvedReferences
                                     operation = Operation(
                                         type_=Operation.Type.Evaluate,
                                         operation=EvaluateOperation(
                                             function_id=FunctionID.loads(evaluate['function_id']),
-                                            function_type=FunctionType(evaluate['function_type']),
+                                            function_type=FunctionType[evaluate['function_type']],
                                             function_inputs=FunctionInputs(
                                                 caller=Address.loads(evaluate['caller']),
                                                 recipient=Address.loads(evaluate['recipient']),
                                                 amount=AleoAmount(evaluate['amount']),
-                                                record_payload=Payload.load(evaluate['record_payload']),
+                                                record_payload=Payload.load(bytearray(evaluate['record_payload'])),
                                             )
                                         )
                                     )

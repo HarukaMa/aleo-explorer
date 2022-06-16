@@ -622,6 +622,7 @@ class Address(Object):
 
 class FunctionID(Locator):
     _locator_prefix = "fn"
+    size = 48
 
     def __init__(self, data):
         Locator.__init__(self, data)
@@ -925,6 +926,8 @@ class Event(Serialize, Deserialize):
                 event = CustomEvent.load(data)
             case Event.Type.RecordViewKey:
                 event = RecordViewKeyEvent.load(data)
+            case Event.Type.Operation:
+                event = OperationEvent.load(data)
             case _:
                 raise ValueError("unknown event type")
         return cls(type_, event)
