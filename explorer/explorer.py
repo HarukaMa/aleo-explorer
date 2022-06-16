@@ -98,6 +98,9 @@ class Explorer:
             return
         last_block = await self.db.get_latest_canonical_block()
         if block.previous_block_hash != last_block.block_hash:
+            if await self.db.is_block_hash_canonical(block.block_hash):
+                # should only cancel canonical state during revertion
+                return
             print(f"adding non-canonical block {block}")
             await self.db.save_non_canonical_block(block)
         else:
