@@ -154,13 +154,15 @@ class Database:
 
     async def _set_canonical_block(self, block: Block) -> None:
         async with self.pool.acquire() as conn:
-            try:
-                await conn.execute("UPDATE block SET is_canonical = FALSE WHERE height = $1",
-                                   block.header.metadata.height)
-                await conn.execute("UPDATE block SET is_canonical = TRUE WHERE block_hash = $1", str(block.block_hash))
-            except Exception as e:
-                await self.explorer_message(Message(Message.Type.DatabaseError, e))
-                raise
+            async with conn.transaction():
+                try:
+                    await conn.execute("UPDATE block SET is_canonical = FALSE WHERE height = $1",
+                                       block.header.metadata.height)
+                    await conn.execute("UPDATE block SET is_canonical = TRUE WHERE block_hash = $1",
+                                       str(block.block_hash))
+                except Exception as e:
+                    await self.explorer_message(Message(Message.Type.DatabaseError, e))
+                    raise
 
     async def _set_non_canonical_block(self, block: Block) -> None:
         async with self.pool.acquire() as conn:
