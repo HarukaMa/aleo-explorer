@@ -21,6 +21,7 @@
 
 import asyncio
 import random
+import time
 import traceback
 from collections import OrderedDict
 from typing import Callable
@@ -51,6 +52,7 @@ class Node:
         self.is_fork = False
         self.peer_block_locators = OrderedDict()
         self.block_requests = []
+        self.block_requests_deadline = float('inf')
 
     async def connect(self, ip: str, port: int):
         self.worker_task = asyncio.create_task(self.worker(ip, port))
@@ -146,6 +148,7 @@ class Node:
                 await self.explorer_request(explorer.Request.ProcessBlock(block))
                 if not self.block_requests:
                     self.status = Status.Ready
+                    self.block_requests_deadline = float('inf')
                     await self._sync()
 
             case Message.Type.ChallengeRequest:
@@ -287,6 +290,10 @@ class Node:
                 print("unhandled message type:", frame.type)
 
     async def _sync(self):
+        if self.block_requests_deadline < time.time():
+            self.block_requests.clear()
+            self.block_requests_deadline = float("inf")
+            self.status = Status.Ready
         if self.status != Status.Syncing:
             common_ancestor = 0
             first_deviating_locator = None
@@ -344,6 +351,7 @@ class Node:
             print(f"Synchronizing from block {start_block_height} to {end_block_height}")
 
             self.block_requests.extend(range(start_block_height, end_block_height + 1))
+            self.block_requests_deadline = time.time() + 30
             msg = BlockRequest(start_block_height=u32(start_block_height), end_block_height=u32(end_block_height))
             await self.send_message(msg)
 

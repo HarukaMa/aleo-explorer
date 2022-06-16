@@ -86,7 +86,8 @@ class Explorer:
                     case Message.Type.DatabaseError:
                         print("database error:", msg.data)
                     case Message.Type.DatabaseBlockAdded:
-                        print("database block added:", msg.data)
+                        # maybe do something later?
+                        pass
                     case _:
                         raise ValueError("unhandled explorer message type")
         except Exception as e:
