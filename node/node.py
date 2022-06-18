@@ -261,7 +261,7 @@ class Node:
                         latest_block_height_of_peer = block_height
 
                 if msg.is_fork is not None:
-                    self.is_fork = msg.is_fork
+                    self.is_fork = msg.is_fork == True  # convert back to bool
                 elif common_ancestor == latest_block_height_of_peer or common_ancestor == await self.explorer_request(
                         explorer.Request.GetLatestHeight()):
                     self.is_fork = False
