@@ -12,10 +12,21 @@
     {#    </style>#}
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/foundation-sites@6.7.4/dist/css/foundation.min.css"
           crossorigin="anonymous">
+    <style>
+        .footer {
+            max-width: 80%;
+            margin: auto;
+            padding: 8px;
+        }
+    </style>
     {% block head %}{% endblock %}
 </head>
 <body>
 {% block content %}{% endblock %}
+<div class="footer">
+    Footer!
+</div>
+<script src="https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/foundation-sites@6.7.4/dist/js/foundation.min.js"
         crossorigin="anonymous"></script>
 <script>

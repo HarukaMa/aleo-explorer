@@ -3,13 +3,66 @@
 {% block title %}Haruka's Aleo Explorer{% endblock %}
 
 {% block head %}
+    <style>
+        .content {
+            max-width: 80%;
+            margin: auto;
+            padding: 8px;
+        }
+
+        #search {
+            width: 100%;
+        }
+
+        .top-bar-left {
+            margin-left: 10%;
+        }
+
+        .top-bar-right {
+            width: 30%;
+            margin-right: 10%;
+        }
+
+        .menu .menu-text {
+            padding-left: 0;
+        }
+
+        .top-bar input {
+            max-width: 100%;
+        }
+
+        .input-group {
+            margin-bottom: 0;
+        }
+
+    </style>
 {% endblock %}
 
 {% block content %}
-    <h1>
-        Haruka's Aleo Explorer
-    </h1>
+    <div class="top-bar">
+        <div class="top-bar-left">
+            <ul class="menu">
+                <li class="menu-text">Haruka's Aleo Explorer</li>
+                <li><a href="/">Home</a></li>
+            </ul>
+        </div>
+        <div class="top-bar-right">
+            <ul class="menu">
+                <!--suppress HtmlUnknownTag -->
+                <form id="search" action="/search">
+                    <div class="input-group">
+                        <input class="input-group-field" type="search" name="query" placeholder="Search">
+                        <div class="input-group-button">
+                            <button type="submit" class="button">Search</button>
+                        </div>
+                    </div>
+                </form>
+            </ul>
+        </div>
+    </div>
 
-    Test content!
+    <div class="content">
+
+    </div>
 
 {% endblock %}
