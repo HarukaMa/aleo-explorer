@@ -60,10 +60,15 @@ class Explorer:
         finally:
             self.db_lock.release()
 
+    async def check_genesis(self):
+        height = await self.db.get_latest_canonical_height()
+        if height is None:
+            await self.node_request(Request.ProcessBlock(Testnet2.genesis_block))
+
     async def main_loop(self):
         try:
             await self.db.connect()
-            await self.node_request(Request.GetLatestHeight())
+            await self.check_genesis()
             self.latest_height = await self.db.get_latest_canonical_height()
             self.latest_block_hash = await self.db.get_canonical_block_hash_by_height(self.latest_height)
             print(f"latest height: {self.latest_height}")
