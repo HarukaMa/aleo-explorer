@@ -63,13 +63,11 @@ async def block_route(request: Request):
     if height is None and block_hash is None:
         raise HTTPException(status_code=400, detail="Missing height or block hash")
     if height is not None:
-        cache = 60
         block = await db.get_canonical_block_by_height(u32(int(height)))
         if block is None:
             raise HTTPException(status_code=404, detail="Block not found")
         is_canonical = True
     else:
-        cache = 3600
         block = await db.get_block_by_hash(block_hash)
         if block is None:
             raise HTTPException(status_code=404, detail="Block not found")
@@ -95,7 +93,7 @@ async def block_route(request: Request):
         "owner": await db.get_miner_from_block_hash(block.block_hash),
         "testnet2_bug": testnet2_bug,
     }
-    return templates.TemplateResponse('block.jinja2', ctx, headers={'Cache-Control': f'public, max-age={cache}'})
+    return templates.TemplateResponse('block.jinja2', ctx, headers={'Cache-Control': 'public, max-age=30'})
 
 
 async def not_found(request: Request, exc: HTTPException):
