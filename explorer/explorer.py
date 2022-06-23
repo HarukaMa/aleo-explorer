@@ -6,7 +6,7 @@ import webui
 from db import Database
 from node import Node
 from node.testnet2 import Testnet2
-from node.type import Block
+from node.type import Block, Transaction
 from .type import Request, Message
 
 
@@ -101,7 +101,14 @@ class Explorer:
         if block is Testnet2.genesis_block:
             await self.db.save_canonical_block(block)
             return
-        if block.previous_block_hash != self.latest_block_hash:
+        # testnet2 bug check
+        testnet2_bug = False
+        for tx in block.transactions.transactions:
+            tx: Transaction
+            if str(tx.ledger_root) == "al1gesxhq6vwwa2xx3uh8w5pcfsg7zh942c3tlqhdn5c8wt8lh5tvqqpu882x":
+                testnet2_bug = True
+                break
+        if block.previous_block_hash != self.latest_block_hash or testnet2_bug:
             if await self.db.is_block_hash_canonical(block.block_hash):
                 # should only cancel canonical state during revertion
                 return
