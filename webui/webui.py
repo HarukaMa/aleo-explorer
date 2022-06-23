@@ -54,7 +54,7 @@ async def index_route(request: Request):
         "request": request,
         "recent_blocks": data,
     }
-    return templates.TemplateResponse('index.jinja2', ctx, headers={'Cache-Control': 'max-age=10'})
+    return templates.TemplateResponse('index.jinja2', ctx, headers={'Cache-Control': 'public, max-age=10'})
 
 
 async def block_route(request: Request):
@@ -95,7 +95,7 @@ async def block_route(request: Request):
         "owner": await db.get_miner_from_block_hash(block.block_hash),
         "testnet2_bug": testnet2_bug,
     }
-    return templates.TemplateResponse('block.jinja2', ctx, headers={'Cache-Control': f'max-age={cache}'})
+    return templates.TemplateResponse('block.jinja2', ctx, headers={'Cache-Control': f'public, max-age={cache}'})
 
 
 async def not_found(request: Request, exc: HTTPException):
