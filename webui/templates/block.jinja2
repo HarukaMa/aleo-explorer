@@ -1,0 +1,165 @@
+{% extends "base.jinja2" %}
+
+{% block title %}Block {{ block.header.metadata.height }} - Haruka's Aleo Explorer{% endblock %}
+
+{% block head %}
+    <style>
+
+        #block-data {
+            margin: 20px 8px;
+        }
+
+        .block-data-line {
+            padding: 10px 0;
+            border-bottom: 1px solid #ccc;
+        }
+
+        .block-data-line-value {
+            overflow-wrap: break-word;
+        }
+
+        .tooltip {
+            max-width: 250px;
+        }
+
+        .text-alert {
+            color: #cc4b37;
+        }
+
+    </style>
+{% endblock %}
+
+{% block content %}
+
+    <div class="content">
+
+        <div id="header">
+            <h3>Block {{ block.header.metadata.height }}</h3>
+        </div>
+
+        {% if testnet2_bug %}
+            <div class="callout warning">
+                <p>This block is affected by <a href="https://github.com/AleoHQ/snarkOS/issues/1800">a snarkOS bug.</a>
+                </p>
+                <p><em>If you are the miner:</em> You should restart your operator / miner node to clear the mempool.
+                </p>
+            </div>
+        {% endif %}
+
+        <div id="block-data">
+            <!-- Keeping this verbose but need a way to simplify it -->
+            <div class="block-data-line grid-x grid-padding-x">
+                <div class="cell small-3 block-data-line-label">
+                    Timestamp
+                </div>
+                <div class="cell auto block-data-line-value">
+                    {{ block.header.metadata.timestamp }}
+                </div>
+            </div>
+            <div class="block-data-line grid-x grid-padding-x">
+                <div class="cell small-3 block-data-line-label">
+                    Confirmations
+                </div>
+                <div class="cell auto block-data-line-value">
+                    {% if is_canonical %}
+                        {{ confirmations }}
+                    {% else %}
+                        <span class="text-alert">Orphaned</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="block-data-line grid-x grid-padding-x">
+                <div class="cell small-3 block-data-line-label">
+                    Difficulty target
+                </div>
+                <div class="cell auto block-data-line-value">
+                    {{ block.header.metadata.difficulty_target }}
+                </div>
+            </div>
+            <div class="block-data-line grid-x grid-padding-x">
+                <div class="cell small-3 block-data-line-label">
+                    Cumulative weight
+                </div>
+                <div class="cell auto block-data-line-value">
+                    {{ block.header.metadata.cumulative_weight }}
+                </div>
+            </div>
+            <div class="block-data-line grid-x grid-padding-x">
+                <div class="cell small-3 block-data-line-label">
+                    Miner
+                </div>
+                <div class="cell auto block-data-line-value">
+                    <a href="/address?q={{ owner }}"><span class="mono">{{ owner }}</span></a>
+                </div>
+            </div>
+            <div class="block-data-line grid-x grid-padding-x">
+                <div class="cell small-3 block-data-line-label">
+                    Block hash
+                </div>
+                <div class="cell auto block-data-line-value">
+                    <span class="mono">{{ block.block_hash }}</span>
+                </div>
+            </div>
+            <div class="block-data-line grid-x grid-padding-x">
+                <div class="cell small-3 block-data-line-label">
+                    Transactions root
+                </div>
+                <div class="cell auto block-data-line-value">
+                    <span class="mono">{{ block.header.transactions_root }}</span>
+                </div>
+            </div>
+            <div class="block-data-line grid-x grid-padding-x">
+                <div class="cell small-3 block-data-line-label">
+                    Ledger root
+                </div>
+                <div class="cell auto block-data-line-value">
+                    {% if ledger_root %}
+                        <span class="mono">{{ ledger_root }}</span>
+                    {% else %}
+                        Unknown<span data-tooltip
+                                     title="This explorer is not actively calculating the ledger root for every possible block due to various reasons.">?</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="block-data-line grid-x grid-padding-x">
+                <div class="cell small-3 block-data-line-label">
+                    Previous block hash
+                </div>
+                <div class="cell auto block-data-line-value">
+                    <a href="/block?bh={{ block.previous_block_hash }}"><span
+                            class="mono">{{ block.previous_block_hash }}</span></a>
+                </div>
+            </div>
+            <div class="block-data-line grid-x grid-padding-x">
+                <div class="cell small-3 block-data-line-label">
+                    Previous ledger root
+                </div>
+                <div class="cell auto block-data-line-value">
+                    <span class="mono">{{ block.header.previous_ledger_root }}</span>
+                </div>
+            </div>
+            <div class="block-data-line grid-x grid-padding-x">
+                <div class="cell small-3 block-data-line-label">
+                    Nonce
+                </div>
+                <div class="cell auto block-data-line-value">
+                    <span class="mono">{{ block.header.nonce }}</span>
+                </div>
+            </div>
+            <div class="block-data-line grid-x grid-padding-x">
+                <div class="cell small-3 block-data-line-label">
+                    Proof
+                </div>
+                <div class="cell auto block-data-line-value">
+                    <span class="mono">{{ block.header.proof }}</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="transactions">
+
+        </div>
+
+    </div>
+
+{% endblock %}

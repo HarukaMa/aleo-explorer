@@ -1,0 +1,13 @@
+{% extends "base.jinja2" %}
+
+{% block title %}404 - Haruka's Aleo Explorer{% endblock %}
+
+{% block content %}
+
+    <div class="content">
+        <h1>404</h1>
+        <p>can't find what you are looking for</p>
+        <pre>{{ exc.detail }}</pre>
+    </div>
+
+{% endblock %}

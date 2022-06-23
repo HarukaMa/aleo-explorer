@@ -4,40 +4,6 @@
 
 {% block head %}
     <style>
-        .content {
-            max-width: 1280px;
-            margin: auto;
-            padding: 8px;
-            font-size: 0.875rem;
-        }
-
-        #search {
-            width: 100%;
-        }
-
-        .menubar {
-            max-width: 1280px;
-            flex: 1 1 auto;
-            margin: auto;
-            display: flex;
-            padding: 0 8px;
-        }
-
-        .top-bar-right {
-            width: 30%;
-        }
-
-        .menu .menu-text {
-            padding-left: 0;
-        }
-
-        .top-bar input {
-            max-width: 100%;
-        }
-
-        .input-group {
-            margin-bottom: 0;
-        }
 
         #ticker {
             margin-top: 20px;
@@ -62,39 +28,17 @@
             max-width: 250px;
         }
 
-        .mono {
-            font-family: monospace;
+        .has-tip {
+            height: 20px;
         }
 
     </style>
 {% endblock %}
 
 {% block content %}
-    <div class="top-bar">
-        <div class="menubar">
-            <div class="top-bar-left">
-                <ul class="menu">
-                    <li class="menu-text">Haruka's Aleo Explorer</li>
-                    <li><a href="/">Home</a></li>
-                </ul>
-            </div>
-            <div class="top-bar-right">
-                <ul class="menu">
-                    <!--suppress HtmlUnknownTag -->
-                    <form id="search" action="/search">
-                        <div class="input-group">
-                            <input class="input-group-field" type="search" name="q" placeholder="Search">
-                            <div class="input-group-button">
-                                <button type="submit" class="button">Search</button>
-                            </div>
-                        </div>
-                    </form>
-                </ul>
-            </div>
-        </div>
-    </div>
 
     <div class="content">
+
         <div id="ticker">
             <div class="grid-x grid-padding-x">
                 <div class="cell large-auto ticker-cell">
@@ -141,11 +85,11 @@
                 <tbody>
                 {% for block in recent_blocks %}
                     <tr>
-                        <td><a href="/block?h={{ block.height }}">{{ block.height }}</a></td>
+                        <td><a href="/block?bh={{ block.block_hash }}">{{ block.height }}</a></td>
                         <td class="mono">{{ block.timestamp }}</td>
                         <td>{{ block.transactions }}</td>
                         <td>{{ block.transitions }}</td>
-                        <td class="mono"><a href="/address?q={{ block.owner }}">{{ block.owner }}</a></td>
+                        <td><a href="/address?q={{ block.owner }}">{{ block.owner }}</a></td>
                     </tr>
                 {% endfor %}
                 </tbody>

@@ -8,7 +8,7 @@ from node.type import Block, Transaction, Transition, SerialNumber, RecordCipher
     AleoAmount, OuterProof, InnerCircuitID, LedgerRoot, BlockHash, BlockHeader, TransactionsRoot, BlockHeaderMetadata, \
     u32, i64, u64, u128, PoSWNonce, PoSWProof, Transactions, DeprecatedPoSWProof, RecordViewKeyEvent, Record, Operation, \
     CustomEvent, RecordViewKey, u8, NoopOperation, CoinbaseOperation, Address, TransferOperation, EvaluateOperation, \
-    FunctionID, FunctionType, FunctionInputs, Payload, OperationEvent
+    FunctionID, FunctionType, FunctionInputs, Payload, OperationEvent, ProgramID, RecordRandomizer
 
 
 class Database:
@@ -458,6 +458,41 @@ class Database:
                     "JOIN explorer.block b ON tx.block_id = b.id "
                     "WHERE ts.value_balance < 0 AND r.value > 0 AND b.block_hash = $1",
                     str(block_hash)
+                )
+            except Exception as e:
+                await self.message_callback(Message(Message.Type.DatabaseError, e))
+                raise
+
+    async def get_ledger_root_from_block_hash(self, block_hash: BlockHash) -> LedgerRoot | None:
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                return await conn.fetchval(
+                    "SELECT previous_ledger_root FROM block WHERE previous_block_hash = $1",
+                    str(block_hash)
+                )
+            except Exception as e:
+                await self.message_callback(Message(Message.Type.DatabaseError, e))
+                raise
+
+    async def get_record_from_transition(self, transition_id: TransitionID) -> Record | None:
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                record = await conn.fetchrow(
+                    "SELECT * FROM explorer.record WHERE output_transition_id = $1", str(transition_id)
+                )
+                if record is None:
+                    return None
+                record_view_key = await conn.fetchval("SELECT record_view_key FROM record_view_key_event WHERE id = $1",
+                                                      record['record_view_key_event_id'])
+                return Record(
+                    owner=Address.loads(record['owner']),
+                    value=AleoAmount(record['value']),
+                    payload=Payload.load(record['payload']),
+                    program_id=ProgramID.loads(record['program_id']),
+                    randomizer=RecordRandomizer.loads(record['randomizer']),
+                    record_view_key=RecordViewKey.loads(record_view_key),
                 )
             except Exception as e:
                 await self.message_callback(Message(Message.Type.DatabaseError, e))
