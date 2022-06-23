@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import os
 import threading
 import time
 
@@ -9,10 +10,11 @@ from starlette.requests import Request
 from starlette.routing import Route
 from starlette.templating import Jinja2Templates
 
+from db import Database
 
-# https://stackoverflow.com/a/64521239
 
 class Server(uvicorn.Server):
+    # https://stackoverflow.com/a/64521239
     def install_signal_handlers(self):
         pass
 
@@ -32,8 +34,24 @@ class Server(uvicorn.Server):
 templates = Jinja2Templates(directory='webui/templates')
 
 
-def index(request: Request):
-    return templates.TemplateResponse('index.jinja2', {'request': request})
+async def index(request: Request):
+    recent_blocks = await db.get_recent_canonical_blocks_fast()
+    data = []
+    for block in recent_blocks:
+        b = {
+            "timestamp": block["timestamp"],
+            "height": block["height"],
+            "transactions": block["transaction_count"],
+            "transitions": block["transition_count"],
+            "owner": await db.get_miner_from_block_hash(block["block_hash"])
+        }
+        data.append(b)
+    ctx = {
+        "latest_block": await db.get_latest_canonical_block_fast(),
+        "request": request,
+        "recent_blocks": data,
+    }
+    return templates.TemplateResponse('index.jinja2', ctx)
 
 
 routes = [
@@ -42,7 +60,20 @@ routes = [
     # Route("/calc", calc),
 ]
 
-app = Starlette(debug=True, routes=routes)
+
+async def startup():
+    async def noop(_): pass
+
+    global db
+    # different thread so need to get a new database instance
+    db = Database(server=os.environ["DB_HOST"], user=os.environ["DB_USER"], password=os.environ["DB_PASS"],
+                  database=os.environ["DB_DATABASE"], schema=os.environ["DB_SCHEMA"],
+                  message_callback=noop)
+    await db.connect()
+
+
+app = Starlette(debug=True, routes=routes, on_startup=[startup])
+db: Database
 
 
 async def run():

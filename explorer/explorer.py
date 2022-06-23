@@ -18,7 +18,7 @@ class Explorer:
         self.node = None
         self.db = Database(server=os.environ["DB_HOST"], user=os.environ["DB_USER"], password=os.environ["DB_PASS"],
                            database=os.environ["DB_DATABASE"], schema=os.environ["DB_SCHEMA"],
-                           explorer_message=self.message)
+                           message_callback=self.message)
 
         # states
         self.latest_height = 0
@@ -37,11 +37,6 @@ class Explorer:
             match type(request):
                 case Request.GetLatestHeight:
                     return self.latest_height
-                    # height = await self.db.get_latest_height()
-                    # print("get latest height:", height)
-                    # if height is None:
-                    #     await self.node_request(Request.ProcessBlock(Testnet2.genesis_block))
-                    # return height
                 case Request.GetLatestWeight:
                     weight = await self.db.get_latest_canonical_weight()
                     return weight

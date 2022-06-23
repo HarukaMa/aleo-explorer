@@ -5,22 +5,26 @@
 {% block head %}
     <style>
         .content {
-            max-width: 80%;
+            max-width: 1280px;
             margin: auto;
             padding: 8px;
+            font-size: 0.875rem;
         }
 
         #search {
             width: 100%;
         }
 
-        .top-bar-left {
-            margin-left: 10%;
+        .menubar {
+            max-width: 1280px;
+            flex: 1 1 auto;
+            margin: auto;
+            display: flex;
+            padding: 0 8px;
         }
 
         .top-bar-right {
             width: 30%;
-            margin-right: 10%;
         }
 
         .menu .menu-text {
@@ -35,34 +39,118 @@
             margin-bottom: 0;
         }
 
+        #ticker {
+            margin-top: 20px;
+        }
+
+        #recent-blocks {
+            margin-top: 20px;
+        }
+
+        .ticker-cell-content {
+            height: 64px;
+            margin: 8px 0;
+        }
+
+        .ticker-cell-data {
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+        }
+
+        .tooltip {
+            max-width: 250px;
+        }
+
+        .mono {
+            font-family: monospace;
+        }
+
     </style>
 {% endblock %}
 
 {% block content %}
     <div class="top-bar">
-        <div class="top-bar-left">
-            <ul class="menu">
-                <li class="menu-text">Haruka's Aleo Explorer</li>
-                <li><a href="/">Home</a></li>
-            </ul>
-        </div>
-        <div class="top-bar-right">
-            <ul class="menu">
-                <!--suppress HtmlUnknownTag -->
-                <form id="search" action="/search">
-                    <div class="input-group">
-                        <input class="input-group-field" type="search" name="query" placeholder="Search">
-                        <div class="input-group-button">
-                            <button type="submit" class="button">Search</button>
+        <div class="menubar">
+            <div class="top-bar-left">
+                <ul class="menu">
+                    <li class="menu-text">Haruka's Aleo Explorer</li>
+                    <li><a href="/">Home</a></li>
+                </ul>
+            </div>
+            <div class="top-bar-right">
+                <ul class="menu">
+                    <!--suppress HtmlUnknownTag -->
+                    <form id="search" action="/search">
+                        <div class="input-group">
+                            <input class="input-group-field" type="search" name="q" placeholder="Search">
+                            <div class="input-group-button">
+                                <button type="submit" class="button">Search</button>
+                            </div>
                         </div>
-                    </div>
-                </form>
-            </ul>
+                    </form>
+                </ul>
+            </div>
         </div>
     </div>
 
     <div class="content">
+        <div id="ticker">
+            <div class="grid-x grid-padding-x">
+                <div class="cell large-auto ticker-cell">
+                    <div class="grid-y ticker-cell-content">
+                        <div class="cell ticker-cell-title">Latest block</div>
+                        <div class="cell auto ticker-cell-data">{{ latest_block.header.metadata.height }}</div>
+                    </div>
+                </div>
+                <div class="cell large-auto ticker-cell">
+                    <div class="grid-y ticker-cell-content">
+                        <div class="cell ticker-cell-title">Timestamp</div>
+                        <div class="cell auto ticker-cell-data">{{ latest_block.header.metadata.timestamp }}</div>
+                    </div>
+                </div>
+                <div class="cell large-auto ticker-cell">
+                    <div class="grid-y ticker-cell-content">
+                        <div class="cell ticker-cell-title">Cumulative Weight</div>
+                        <div class="cell auto ticker-cell-data">{{ latest_block.header.metadata.cumulative_weight }}</div>
+                    </div>
+                </div>
+                <div class="cell large-auto ticker-cell">
+                    <div class="grid-y ticker-cell-content">
+                        <div class="cell ticker-cell-title">Block Weight <span data-tooltip
+                                                                               title="(2 ^ 64 - 1) / difficulty_target"><i
+                                class="fi-info"></i></span></div>
+                        <div class="cell auto ticker-cell-data">{{ (2 ** 64 - 1) / latest_block.header.metadata.difficulty_target }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
 
+        <div id="recent-blocks">
+            <h4>Recent Blocks</h4>
+            <table class="unstriped">
+                <thead>
+                <tr>
+                    <th>Height</th>
+                    <th>Timestamp</th>
+                    <th>Transactions</th>
+                    <th>Transitions</th>
+                    <th>Miner</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for block in recent_blocks %}
+                    <tr>
+                        <td><a href="/block?h={{ block.height }}">{{ block.height }}</a></td>
+                        <td class="mono">{{ block.timestamp }}</td>
+                        <td>{{ block.transactions }}</td>
+                        <td>{{ block.transitions }}</td>
+                        <td class="mono"><a href="/address?q={{ block.owner }}">{{ block.owner }}</a></td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 
 {% endblock %}

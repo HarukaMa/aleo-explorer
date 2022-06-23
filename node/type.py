@@ -329,6 +329,9 @@ class Vec(Generic, Serialize, Deserialize, Iterable):
             self.size = len(value)
         return self
 
+    def __len__(self):
+        return len(self._list)
+
     def dump(self) -> bytes:
         res = b""
         if hasattr(self, "size_type"):
@@ -980,7 +983,7 @@ class Transition(Serialize, Deserialize):
 class Transaction(Serialize, Deserialize):
 
     def __init__(self, *, inner_circuit_id: InnerCircuitID, ledger_root: LedgerRoot,
-                 transitions: Vec[Transition, u16]):
+                 transitions: Vec[Transition, u16], fast=False):
         if not isinstance(inner_circuit_id, InnerCircuitID):
             raise TypeError("inner_circuit_id must be InnerCircuitID")
         if not isinstance(ledger_root, LedgerRoot):
@@ -990,20 +993,27 @@ class Transaction(Serialize, Deserialize):
         self.inner_circuit_id = inner_circuit_id
         self.ledger_root = ledger_root
         self.transitions = transitions
-        self.transaction_id = TransactionID.load(bytearray(aleo.get_transaction_id(self.dump())))
+        if fast:
+            self.transaction_id = None
+        else:
+            self.transaction_id = TransactionID.load(bytearray(aleo.get_transaction_id(self.dump())))
 
     def dump(self) -> bytes:
         return self.inner_circuit_id.dump() + self.ledger_root.dump() + self.transitions.dump()
 
     # noinspection PyArgumentList
     @classmethod
-    def load(cls, data: bytearray):
+    def load(cls, data: bytearray, fast=False):
         if not isinstance(data, bytearray):
             raise TypeError("data must be bytearray")
         inner_circuit_id = InnerCircuitID.load(data)
         ledger_root = LedgerRoot.load(data)
         transitions = Vec[Transition, u16].load(data)
-        return cls(inner_circuit_id=inner_circuit_id, ledger_root=ledger_root, transitions=transitions)
+        return cls(inner_circuit_id=inner_circuit_id, ledger_root=ledger_root, transitions=transitions, fast=fast)
+
+    @classmethod
+    def load_fast(cls, data: bytearray):
+        return cls.load(data, fast=True)
 
 
 class Transactions(Serialize, Deserialize):

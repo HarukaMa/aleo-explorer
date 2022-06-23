@@ -1,3 +1,5 @@
+import time
+
 import aleo
 import asyncpg
 
@@ -12,13 +14,13 @@ from node.type import Block, Transaction, Transition, SerialNumber, RecordCipher
 class Database:
 
     def __init__(self, *, server: str, user: str, password: str, database: str, schema: str,
-                 explorer_message: callable):
+                 message_callback: callable):
         self.server = server
         self.user = user
         self.password = password
         self.database = database
         self.schema = schema
-        self.explorer_message = explorer_message
+        self.message_callback = message_callback
         self.pool = None
 
     async def connect(self):
@@ -27,9 +29,9 @@ class Database:
                                                   database=self.database, server_settings={'search_path': self.schema},
                                                   min_size=1, max_size=4)
         except Exception as e:
-            await self.explorer_message(Message(Message.Type.DatabaseConnectError, e))
+            await self.message_callback(Message(Message.Type.DatabaseConnectError, e))
             return
-        await self.explorer_message(Message(Message.Type.DatabaseConnected, None))
+        await self.message_callback(Message(Message.Type.DatabaseConnected, None))
 
     async def _save_block(self, block: Block, is_canonical: bool):
         async with self.pool.acquire() as conn:
@@ -122,9 +124,9 @@ class Database:
                                                 transition_db_id, event_db_id, ciphertext_db_id, str(record.owner),
                                                 record.value, record.payload.dump(), str(record.program_id),
                                                 str(record.randomizer), str(record.commitment))
-                    await self.explorer_message(Message(Message.Type.DatabaseBlockAdded, block.header.metadata.height))
+                    await self.message_callback(Message(Message.Type.DatabaseBlockAdded, block.header.metadata.height))
                 except Exception as e:
-                    await self.explorer_message(Message(Message.Type.DatabaseError, e))
+                    await self.message_callback(Message(Message.Type.DatabaseError, e))
                     raise
 
     async def _set_canonical_block(self, block: Block) -> None:
@@ -136,7 +138,7 @@ class Database:
                     await conn.execute("UPDATE block SET is_canonical = TRUE WHERE block_hash = $1",
                                        str(block.block_hash))
                 except Exception as e:
-                    await self.explorer_message(Message(Message.Type.DatabaseError, e))
+                    await self.message_callback(Message(Message.Type.DatabaseError, e))
                     raise
 
     async def _set_non_canonical_block(self, block: Block) -> None:
@@ -144,7 +146,7 @@ class Database:
             try:
                 await conn.execute("UPDATE block SET is_canonical = FALSE WHERE block_hash = $1", str(block.block_hash))
             except Exception as e:
-                await self.explorer_message(Message(Message.Type.DatabaseError, e))
+                await self.message_callback(Message(Message.Type.DatabaseError, e))
                 raise
 
     async def save_canonical_block(self, block: Block):
@@ -157,7 +159,7 @@ class Database:
                 await conn.execute("UPDATE block SET is_canonical = FALSE WHERE height = $1",
                                    block.header.metadata.height)
             except Exception as e:
-                await self.explorer_message(Message(Message.Type.DatabaseError, e))
+                await self.message_callback(Message(Message.Type.DatabaseError, e))
                 raise
         await self._save_block(block, True)
 
@@ -173,7 +175,7 @@ class Database:
             try:
                 await conn.execute("UPDATE block SET is_canonical = FALSE WHERE height > $1", height)
             except Exception as e:
-                await self.explorer_message(Message(Message.Type.DatabaseError, e))
+                await self.message_callback(Message(Message.Type.DatabaseError, e))
                 raise
 
     @staticmethod
@@ -196,7 +198,8 @@ class Database:
         )
 
     @staticmethod
-    async def _get_full_block(block: dict, conn: asyncpg.Connection):
+    async def _get_full_block(block: dict, conn: asyncpg.Connection, fast=False):
+        t = time.perf_counter_ns()
         transactions = await conn.fetch("SELECT * FROM transaction WHERE block_id = $1", block['id'])
         txs = []
         for transaction in transactions:
@@ -280,7 +283,8 @@ class Database:
             txs.append(Transaction(
                 inner_circuit_id=InnerCircuitID.loads(transaction['inner_circuit_id']),
                 ledger_root=LedgerRoot.loads(transaction['ledger_root']),
-                transitions=Vec[Transition, u16](tss)
+                transitions=Vec[Transition, u16](tss),
+                fast=fast
             ))
         return Block(
             block_hash=BlockHash.loads(block['block_hash']),
@@ -300,7 +304,7 @@ class Database:
                     return None
                 return result['height']
             except Exception as e:
-                await self.explorer_message(Message(Message.Type.DatabaseError, e))
+                await self.message_callback(Message(Message.Type.DatabaseError, e))
                 raise
 
     async def get_latest_canonical_weight(self):
@@ -313,7 +317,7 @@ class Database:
                     return None
                 return result['cumulative_weight']
             except Exception as e:
-                await self.explorer_message(Message(Message.Type.DatabaseError, e))
+                await self.message_callback(Message(Message.Type.DatabaseError, e))
                 raise
 
     async def get_latest_canonical_block(self):
@@ -326,7 +330,20 @@ class Database:
                     return None
                 return await self._get_full_block(block, conn)
             except Exception as e:
-                await self.explorer_message(Message(Message.Type.DatabaseError, e))
+                await self.message_callback(Message(Message.Type.DatabaseError, e))
+                raise
+
+    async def get_latest_canonical_block_fast(self):
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                block = await conn.fetchrow(
+                    "SELECT * FROM block WHERE is_canonical = true ORDER BY height DESC LIMIT 1")
+                if block is None:
+                    return None
+                return await self._get_full_block(block, conn, fast=True)
+            except Exception as e:
+                await self.message_callback(Message(Message.Type.DatabaseError, e))
                 raise
 
     async def get_canonical_block_by_height(self, height: u32):
@@ -339,7 +356,7 @@ class Database:
                     return None
                 return await self._get_full_block(block, conn)
             except Exception as e:
-                await self.explorer_message(Message(Message.Type.DatabaseError, e))
+                await self.message_callback(Message(Message.Type.DatabaseError, e))
                 raise
 
     async def get_canonical_block_hash_by_height(self, height: u32):
@@ -352,7 +369,7 @@ class Database:
                     return None
                 return BlockHash.loads(block['block_hash'])
             except Exception as e:
-                await self.explorer_message(Message(Message.Type.DatabaseError, e))
+                await self.message_callback(Message(Message.Type.DatabaseError, e))
                 raise
 
     async def get_canonical_block_header_by_height(self, height: u32):
@@ -365,7 +382,7 @@ class Database:
                     return None
                 return self._get_block_header(block)
             except Exception as e:
-                await self.explorer_message(Message(Message.Type.DatabaseError, e))
+                await self.message_callback(Message(Message.Type.DatabaseError, e))
                 raise
 
     async def get_block_by_hash(self, block_hash: BlockHash) -> Block | None:
@@ -378,7 +395,7 @@ class Database:
                     return None
                 return await self._get_full_block(block, conn)
             except Exception as e:
-                await self.explorer_message(Message(Message.Type.DatabaseError, e))
+                await self.message_callback(Message(Message.Type.DatabaseError, e))
                 raise
 
     async def get_block_header_by_hash(self, block_hash: BlockHash) -> BlockHeader | None:
@@ -391,7 +408,7 @@ class Database:
                     return None
                 return self._get_block_header(block)
             except Exception as e:
-                await self.explorer_message(Message(Message.Type.DatabaseError, e))
+                await self.message_callback(Message(Message.Type.DatabaseError, e))
                 raise
 
     async def is_block_hash_canonical(self, block_hash: BlockHash) -> bool:
@@ -404,5 +421,44 @@ class Database:
                     return False
                 return block['is_canonical']
             except Exception as e:
-                await self.explorer_message(Message(Message.Type.DatabaseError, e))
+                await self.message_callback(Message(Message.Type.DatabaseError, e))
+                raise
+
+    async def get_recent_canonical_blocks_fast(self):
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                blocks = await conn.fetch(
+                    "SELECT * FROM block WHERE is_canonical = true ORDER BY height DESC LIMIT 20")
+                res = []
+                for block in blocks:
+                    b = {**block}
+                    txs = await conn.fetch("SELECT * FROM transaction WHERE block_id = $1", block['id'])
+                    b["transaction_count"] = len(txs)
+                    ts_count = 0
+                    for tx in txs:
+                        ts_count += await conn.fetchval("SELECT COUNT(*) FROM transition WHERE transaction_id = $1",
+                                                        tx['id'])
+                    b["transition_count"] = ts_count
+                    res.append(b)
+                return res
+            except Exception as e:
+                await self.message_callback(Message(Message.Type.DatabaseError, e))
+                raise
+
+    async def get_miner_from_block_hash(self, block_hash: BlockHash) -> Address | None:
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                return await conn.fetchval(
+                    "SELECT owner "
+                    "FROM explorer.record r "
+                    "JOIN explorer.transition ts ON r.output_transition_id = ts.id "
+                    "JOIN explorer.transaction tx ON ts.transaction_id = tx.id "
+                    "JOIN explorer.block b ON tx.block_id = b.id "
+                    "WHERE ts.value_balance < 0 AND r.value > 0 AND b.block_hash = $1",
+                    str(block_hash)
+                )
+            except Exception as e:
+                await self.message_callback(Message(Message.Type.DatabaseError, e))
                 raise
