@@ -86,10 +86,10 @@
                 {% for block in recent_blocks %}
                     <tr>
                         <td><a href="/block?bh={{ block.block_hash }}">{{ block.height }}</a></td>
-                        <td class="mono">{{ block.timestamp }}</td>
+                        <td>{{ block.timestamp }}</td>
                         <td>{{ block.transactions }}</td>
                         <td>{{ block.transitions }}</td>
-                        <td><a href="/address?q={{ block.owner }}">{{ block.owner }}</a></td>
+                        <td class="mono"><a href="/address?q={{ block.owner }}">{{ block.owner }}</a></td>
                     </tr>
                 {% endfor %}
                 </tbody>
