@@ -21,7 +21,6 @@
 
 import asyncio
 import random
-import time
 import traceback
 from collections import OrderedDict
 from typing import Callable
@@ -42,6 +41,9 @@ class Node:
         self.explorer_message = explorer_message
         self.explorer_request = explorer_request
 
+        self.node_ip = None
+        self.node_port = None
+
         # states
         self.handshake_state = 0
         # noinspection PyArgumentList
@@ -55,6 +57,8 @@ class Node:
         self.block_requests_deadline = float('inf')
 
     async def connect(self, ip: str, port: int):
+        self.node_port = port
+        self.node_ip = ip
         self.worker_task = asyncio.create_task(self.worker(ip, port))
         await asyncio.start_server(self.listen_worker, host="0.0.0.0", port=14132)
 
@@ -116,7 +120,7 @@ class Node:
             while True:
                 data = await self.reader.read(4096)
                 if not data:
-                    break
+                    raise Exception("connection closed")
                 self.buffer.write(data)
                 while self.buffer.count():
                     if self.buffer.count() >= 4:
@@ -379,3 +383,5 @@ class Node:
     async def close(self):
         self.writer.close()
         await self.writer.wait_closed()
+        await asyncio.sleep(5)
+        self.worker_task = asyncio.create_task(self.worker(self.node_ip, self.node_port))
