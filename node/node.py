@@ -384,5 +384,16 @@ class Node:
     async def close(self):
         self.writer.close()
         await self.writer.wait_closed()
+        # reset states
+        self.handshake_state = 0
+        # noinspection PyArgumentList
+        self.peer_nonce = random.randint(0, 2 ** 64 - 1)
+        self.status = Status.Peering
+        self.peer_block_height = 0
+        self.peer_cumulative_weight = 0
+        self.is_fork = False
+        self.peer_block_locators = OrderedDict()
+        self.block_requests = []
+        self.block_requests_deadline = float('inf')
         await asyncio.sleep(5)
         self.worker_task = asyncio.create_task(self.worker(self.node_ip, self.node_port))
