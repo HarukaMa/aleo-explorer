@@ -56,6 +56,7 @@ class Node:
         self.peer_block_locators = OrderedDict()
         self.block_requests = []
         self.block_requests_deadline = float('inf')
+        self.ping_task = None
 
     async def connect(self, ip: str, port: int):
         self.node_port = port
@@ -283,7 +284,7 @@ class Node:
                     await asyncio.sleep(60)
                     await self.send_ping()
 
-                asyncio.create_task(ping_task())
+                self.ping_task = asyncio.create_task(ping_task())
                 asyncio.create_task(self._sync())
 
             case Message.Type.UnconfirmedBlock:
@@ -396,5 +397,6 @@ class Node:
         self.peer_block_locators = OrderedDict()
         self.block_requests = []
         self.block_requests_deadline = float('inf')
+        self.ping_task.cancel()
         await asyncio.sleep(5)
         self.worker_task = asyncio.create_task(self.worker(self.node_ip, self.node_port))
