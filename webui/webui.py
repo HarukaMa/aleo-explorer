@@ -8,6 +8,7 @@ import uvicorn
 from starlette.applications import Starlette
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
+from starlette.responses import RedirectResponse
 from starlette.routing import Route
 from starlette.templating import Jinja2Templates
 
@@ -185,8 +186,79 @@ async def transition_route(request: Request):
         "public_record": public_record,
         "records": records,
         "is_dummy": is_dummy,
+        "noop_program_id": Testnet2.noop_program_id,
     }
     return templates.TemplateResponse('transition.jinja2', ctx, headers={'Cache-Control': 'public, max-age=900'})
+
+
+async def search_route(request: Request):
+    query = request.query_params.get("q")
+    if query is None:
+        raise HTTPException(status_code=400, detail="Missing query")
+    query = query.lower()
+    try:
+        height = int(query)
+        return RedirectResponse(f"/block?h={height}", status_code=302)
+    except ValueError:
+        pass
+    if query.startswith("ab1"):
+        # block hash
+        blocks = await db.search_block_hash(query)
+        if not blocks:
+            raise HTTPException(status_code=404, detail="Block not found")
+        if len(blocks) == 1:
+            return RedirectResponse(f"/block?bh={blocks[0]}", status_code=302)
+        too_many = False
+        if len(blocks) > 50:
+            blocks = blocks[:50]
+            too_many = True
+        ctx = {
+            "request": request,
+            "query": query,
+            "type": "block",
+            "blocks": blocks,
+            "too_many": too_many,
+        }
+        return templates.TemplateResponse('search_result.jinja2', ctx, headers={'Cache-Control': 'public, max-age=30'})
+    elif query.startswith("at1"):
+        # transaction id
+        transactions = await db.search_transaction_id(query)
+        if not transactions:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        if len(transactions) == 1:
+            return RedirectResponse(f"/transaction?id={transactions[0]}", status_code=302)
+        too_many = False
+        if len(transactions) > 50:
+            transactions = transactions[:50]
+            too_many = True
+        ctx = {
+            "request": request,
+            "query": query,
+            "type": "transaction",
+            "transactions": transactions,
+            "too_many": too_many,
+        }
+        return templates.TemplateResponse('search_result.jinja2', ctx, headers={'Cache-Control': 'public, max-age=30'})
+    elif query.startswith("as1"):
+        # transition id
+        transitions = await db.search_transition_id(query)
+        if not transitions:
+            raise HTTPException(status_code=404, detail="Transition not found")
+        if len(transitions) == 1:
+            return RedirectResponse(f"/transition?id={transitions[0]}", status_code=302)
+        too_many = False
+        if len(transitions) > 50:
+            transitions = transitions[:50]
+            too_many = True
+        ctx = {
+            "request": request,
+            "query": query,
+            "type": "transition",
+            "transitions": transitions,
+            "too_many": too_many,
+        }
+        return templates.TemplateResponse('search_result.jinja2', ctx, headers={'Cache-Control': 'public, max-age=30'})
+    raise HTTPException(status_code=404, detail="Unknown object type or searching is not supported")
 
 
 async def bad_request(request: Request, exc: HTTPException):
@@ -206,6 +278,7 @@ routes = [
     Route("/block", block_route),
     Route("/transaction", transaction_route),
     Route("/transition", transition_route),
+    Route("/search", search_route),
     # Route("/miner", miner_stats),
     # Route("/calc", calc),
 ]

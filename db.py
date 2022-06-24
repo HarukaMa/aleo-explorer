@@ -534,3 +534,45 @@ class Database:
             except Exception as e:
                 await self.message_callback(Message(Message.Type.DatabaseError, e))
                 raise
+
+    async def search_block_hash(self, block_hash: str) -> [str]:
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                result = await conn.fetch(
+                    "SELECT block_hash FROM block WHERE block_hash LIKE $1", f"{block_hash}%"
+                )
+                if result is None:
+                    return []
+                return list(map(lambda x: x['block_hash'], result))
+            except Exception as e:
+                await self.message_callback(Message(Message.Type.DatabaseError, e))
+                raise
+
+    async def search_transaction_id(self, transaction_id: str) -> [str]:
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                result = await conn.fetch(
+                    "SELECT transaction_id FROM transaction WHERE transaction_id LIKE $1", f"{transaction_id}%"
+                )
+                if result is None:
+                    return []
+                return list(map(lambda x: x['transaction_id'], result))
+            except Exception as e:
+                await self.message_callback(Message(Message.Type.DatabaseError, e))
+                raise
+
+    async def search_transition_id(self, transition_id: str) -> [str]:
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                result = await conn.fetch(
+                    "SELECT transition_id FROM transition WHERE transition_id LIKE $1", f"{transition_id}%"
+                )
+                if result is None:
+                    return []
+                return list(map(lambda x: x['transition_id'], result))
+            except Exception as e:
+                await self.message_callback(Message(Message.Type.DatabaseError, e))
+                raise

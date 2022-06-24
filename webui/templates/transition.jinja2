@@ -130,10 +130,14 @@
                             Payload
                         </div>
                         <div class="cell auto data-line-value">
-                            <span class="mono">0x{{ record.payload.buffer.dump().hex() }}</span>
-                            <br>
-                            Decoded:
-                            <span class="mono">{{ record.payload.buffer.dump().decode("iso-8859-1") }}</span>
+                            {% if record.payload.is_empty() %}
+                                (empty)
+                            {% else %}
+                                <span class="mono">0x{{ record.payload.buffer.dump().hex() }}</span>
+                                <br>
+                                Decoded:
+                                <span class="mono">{{ record.payload.buffer.dump().decode("iso-8859-1") }}</span>
+                            {% endif %}
                         </div>
                     </div>
                     <div class="data-line grid-x grid-padding-x">
@@ -141,7 +145,11 @@
                             Program ID
                         </div>
                         <div class="cell auto data-line-value">
-                            <span class="mono">{{ record.program_id }}</span>
+                            {% if record.program_id == noop_program_id %}
+                                (noop program ID)
+                            {% else %}
+                                <span class="mono">{{ record.program_id }}</span>
+                            {% endif %}
                         </div>
                     </div>
                     <div class="data-line grid-x grid-padding-x">

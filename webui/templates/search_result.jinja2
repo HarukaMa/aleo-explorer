@@ -1,0 +1,45 @@
+{% extends "base.jinja2" %}
+
+{% block title %}Search Result - Haruka's Aleo Explorer{% endblock %}
+
+{% block head %}
+    <style>
+
+    </style>
+{% endblock %}
+
+{% block content %}
+
+    <div class="content">
+
+        <div class="header">
+            <h3>Search result</h3>
+        </div>
+
+        {% if too_many %}
+            <div class="callout warning">
+                Your search has returned too many results. Showing only 50 results below.
+            </div>
+        {% endif %}
+
+        Found multiple results for {{ type }} <span class="mono">{{ query }}</span>:
+        <ul>
+            {% for block in blocks %}
+                <li>
+                    <a href="/block?bh={{ block }}">{{ block }}</a>
+                </li>
+            {% endfor %}
+            {% for transaction_id in transactions %}
+                <li>
+                    <a href="/transaction?id={{ transaction_id }}">{{ transaction_id }}</a>
+                </li>
+            {% endfor %}
+            {% for transition_id in transitions %}
+                <li>
+                    <a href="/transition?id={{ transition_id }}">{{ transition_id }}</a>
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+
+{% endblock %}
