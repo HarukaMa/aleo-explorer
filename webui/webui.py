@@ -143,7 +143,6 @@ async def transaction_route(request: Request):
     }
     return templates.TemplateResponse('transaction.jinja2', ctx, headers={'Cache-Control': 'public, max-age=30'})
 
-
 async def transition_route(request: Request):
     ts_id = request.query_params.get("id")
     if ts_id is None:

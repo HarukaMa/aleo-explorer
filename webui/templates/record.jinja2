@@ -52,8 +52,7 @@
                 </div>
                 <div class="cell auto data-line-value">
                     {% if is_canonical %}
-                        <a href="/block?h={{ block.header.metadata.height }}">{{ block.header.metadata.height }}</a> (
-                        {{ confirmations }} confirmations)
+                        <a href="/block?h={{ block.header.metadata.height }}">{{ block.header.metadata.height }}</a> ({{ confirmations }} confirmations)
                     {% else %}
                         <span class="mono"><a href="/block?bh={{ block.block_hash }}">{{ block.block_hash }}</a> (<span
                                 class="text-alert">Non-canonical block</span>)</span>
