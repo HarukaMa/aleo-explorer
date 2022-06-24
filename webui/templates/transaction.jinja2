@@ -1,0 +1,103 @@
+{% extends "base.jinja2" %}
+
+{% block title %}Transaction {{ tx_id_trunc }} - Haruka's Aleo Explorer{% endblock %}
+
+{% block head %}
+
+    <style>
+
+        #data {
+            margin: 20px 4px;
+        }
+
+        .data-line {
+            padding: 10px 0;
+            border-bottom: 1px solid #ccc;
+        }
+
+        .data-line-value {
+            overflow-wrap: break-word;
+        }
+
+        .text-alert {
+            color: #cc4b37;
+        }
+
+    </style>
+
+{% endblock %}
+
+{% block content %}
+
+    <div class="content">
+        <div class="header">
+            <h3>Transaction {{ tx_id_trunc }}</h3>
+        </div>
+
+        <div id="data">
+            <div class="data-line grid-x grid-padding-x">
+                <div class="cell small-3 block-data-line-label">
+                    Transaction ID
+                </div>
+                <div class="cell auto data-line-value">
+                    <span class="mono">{{ tx_id }}</span>
+                </div>
+            </div>
+            <div class="data-line grid-x grid-padding-x">
+                <div class="cell small-3 block-data-line-label">
+                    Block
+                </div>
+                <div class="cell auto data-line-value">
+                    {% if is_canonical %}
+                        <a href="/block?h={{ block.header.metadata.height }}">{{ block.header.metadata.height }}</a> (
+                        {{ confirmations }} confirmations)
+                    {% else %}
+                        <span class="mono"><a href="/block?bh={{ block.block_hash }}">{{ block.block_hash }}</a> (<span
+                                class="text-alert">Non-canonical block</span>)</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="data-line grid-x grid-padding-x">
+                <div class="cell small-3 block-data-line-label">
+                    Inner circuit ID
+                </div>
+                <div class="cell auto data-line-value">
+                    <span class="mono">{{ transaction.inner_circuit_id }}</span>
+                </div>
+            </div>
+            <div class="data-line grid-x grid-padding-x">
+                <div class="cell small-3 block-data-line-label">
+                    Ledger root
+                </div>
+                <div class="cell auto data-line-value">
+                    <span class="mono">{{ transaction.ledger_root }}</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="transitions">
+            <h4>Transitions</h4>
+            <table id="transitions-table">
+                <thead>
+                <tr>
+                    <td>Transition ID</td>
+                    <td>Value balance</td>
+                    <td>Events</td>
+                </tr>
+                </thead>
+                <tbody>
+                {% for transition in transaction.transitions %}
+                    <tr>
+                        <td><span class="mono"><a
+                                href="/transition?id={{ transition.transition_id }}">{{ transition.transition_id }}</a></span>
+                        </td>
+                        <td>{{ "%.6f" % transition.value_balance.credit() }}</td>
+                        <td>{{ transition.events | length }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+{% endblock %}

@@ -332,6 +332,11 @@ class Vec(Generic, Serialize, Deserialize, Iterable):
     def __len__(self):
         return len(self._list)
 
+    def __getitem__(self, index):
+        if not isinstance(index, int):
+            raise TypeError("index must be int")
+        return self._list[index]
+
     def dump(self) -> bytes:
         res = b""
         if hasattr(self, "size_type"):
@@ -596,6 +601,9 @@ class RecordCiphertext(Object):
     def __init__(self, data):
         Object.__init__(self, data)
 
+    def get_commitment(self):
+        return aleo.get_record_ciphertext_commitment(self.data)
+
 
 class OuterProof(Object):
     _object_prefix = "ozkp"
@@ -788,6 +796,9 @@ class Payload(Serialize, Deserialize):
         # noinspection PyArgumentList
         return cls(buffer=Vec[u8, 128].load(data))
 
+    def is_empty(self):
+        return self.buffer.dump() == b"\x00" * 128
+
 
 class FunctionInputs(Serialize, Deserialize):
 
@@ -966,6 +977,8 @@ class Transition(Serialize, Deserialize):
         self.value_balance = value_balance
         self.events = events
         self.proof = proof
+        commitments = [Commitment.load(bytearray(ciphertext.get_commitment())) for ciphertext in ciphertexts]
+        self.commitments = Vec[Commitment, 2](commitments)
 
     def dump(self) -> bytes:
         return self.transition_id.dump() + self.serial_numbers.dump() + self.ciphertexts.dump() + \

@@ -1,6 +1,6 @@
 import os
 
-from ..type import u32, Block
+from ..type import u32, Block, ProgramID
 
 
 class Testnet2:
@@ -11,3 +11,6 @@ class Testnet2:
 
     maximum_linear_block_locators = 64
     maximum_quadratic_block_locators = 32
+
+    noop_program_id = ProgramID.loads(
+        "ap1lhj3g5uzervu3km7rl0rsd0u5j6pj9ujum6yxrvms4mx8r2qhew88ga849hnjypghswxceh02frszs45qmd")

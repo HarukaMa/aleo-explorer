@@ -12,7 +12,8 @@ from starlette.routing import Route
 from starlette.templating import Jinja2Templates
 
 from db import Database
-from node.type import u32, Block, Transaction, Transition
+from node.testnet2 import Testnet2
+from node.type import u32, Transaction, Transition, Event
 
 
 class Server(uvicorn.Server):
@@ -72,9 +73,8 @@ async def block_route(request: Request):
         if block is None:
             raise HTTPException(status_code=404, detail="Block not found")
         is_canonical = await db.is_block_hash_canonical(block.block_hash)
-    block: Block
     latest_block_height = await db.get_latest_canonical_height()
-    confirmations = latest_block_height - block.header.metadata.height
+    confirmations = latest_block_height - block.header.metadata.height + 1
     ledger_root = await db.get_ledger_root_from_block_hash(block.block_hash)
 
     testnet2_bug = False
@@ -111,17 +111,102 @@ async def block_route(request: Request):
     return templates.TemplateResponse('block.jinja2', ctx, headers={'Cache-Control': 'public, max-age=30'})
 
 
-async def not_found(request: Request, exc: HTTPException):
-    return templates.TemplateResponse('404.jinja2', {'request': request, "exc": exc}, status_code=404)
+async def transaction_route(request: Request):
+    tx_id = request.query_params.get("id")
+    if tx_id is None:
+        raise HTTPException(status_code=400, detail="Missing transaction id")
+    block = await db.get_best_block_from_transaction_id(tx_id)
+    if block is None:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    is_canonical = await db.is_block_hash_canonical(block.block_hash)
+
+    latest_block_height = await db.get_latest_canonical_height()
+    confirmations = latest_block_height - block.header.metadata.height + 1
+
+    transaction = None
+    for tx in block.transactions.transactions:
+        tx: Transaction
+        if str(tx.transaction_id) == tx_id:
+            transaction = tx
+            break
+    if transaction is None:
+        raise HTTPException(status_code=550, detail="Transaction not found in block")
+
+    ctx = {
+        "request": request,
+        "tx_id": tx_id,
+        "tx_id_trunc": str(tx_id)[:9] + "..." + str(tx_id)[-6:],
+        "block": block,
+        "is_canonical": is_canonical,
+        "confirmations": confirmations,
+        "transaction": transaction,
+    }
+    return templates.TemplateResponse('transaction.jinja2', ctx, headers={'Cache-Control': 'public, max-age=30'})
+
+
+async def transition_route(request: Request):
+    ts_id = request.query_params.get("id")
+    if ts_id is None:
+        raise HTTPException(status_code=400, detail="Missing transition id")
+    block = await db.get_best_block_from_transition_id(ts_id)
+    if block is None:
+        raise HTTPException(status_code=404, detail="Transition not found")
+
+    transaction_id = None
+    transition = None
+    for tx in block.transactions.transactions:
+        tx: Transaction
+        for ts in tx.transitions:
+            ts: Transition
+            if str(ts.transition_id) == ts_id:
+                transition = ts
+                transaction_id = tx.transaction_id
+                break
+    if transaction_id is None:
+        raise HTTPException(status_code=550, detail="Transition not found in block")
+
+    public_record = [False, False]
+    records = [None, None]
+    is_dummy = [False, False]
+    for event in transition.events:
+        event: Event
+        if event.type == Event.Type.RecordViewKey:
+            public_record[event.event.index] = True
+            record = await db.get_record_from_commitment(transition.commitments[event.event.index])
+            if record.value == 0 and record.payload.is_empty() and record.program_id == Testnet2.noop_program_id:
+                is_dummy[event.event.index] = True
+            records[event.event.index] = record
+
+    ctx = {
+        "request": request,
+        "ts_id": ts_id,
+        "ts_id_trunc": str(ts_id)[:9] + "..." + str(ts_id)[-6:],
+        "transaction_id": transaction_id,
+        "transition": transition,
+        "public_record": public_record,
+        "records": records,
+        "is_dummy": is_dummy,
+    }
+    return templates.TemplateResponse('transition.jinja2', ctx, headers={'Cache-Control': 'public, max-age=900'})
 
 
 async def bad_request(request: Request, exc: HTTPException):
     return templates.TemplateResponse('400.jinja2', {'request': request, "exc": exc}, status_code=400)
 
 
+async def not_found(request: Request, exc: HTTPException):
+    return templates.TemplateResponse('404.jinja2', {'request': request, "exc": exc}, status_code=404)
+
+
+async def internal_error(request: Request, exc: HTTPException):
+    return templates.TemplateResponse('500.jinja2', {'request': request, "exc": exc}, status_code=500)
+
+
 routes = [
     Route("/", index_route),
     Route("/block", block_route),
+    Route("/transaction", transaction_route),
+    Route("/transition", transition_route),
     # Route("/miner", miner_stats),
     # Route("/calc", calc),
 ]
@@ -129,6 +214,7 @@ routes = [
 exc_handlers = {
     400: bad_request,
     404: not_found,
+    550: internal_error,
 }
 
 async def startup():

@@ -1,0 +1,365 @@
+{% extends "base.jinja2" %}
+
+{% block title %}Transition {{ ts_id_trunc }} - Haruka's Aleo Explorer{% endblock %}
+
+{% block head %}
+
+    <style>
+
+        .data {
+            margin: 20px 4px;
+        }
+
+        .data-line {
+            padding: 10px 0;
+            border-bottom: 1px solid #ccc;
+        }
+
+        .data-line-value {
+            overflow-wrap: break-word;
+        }
+
+        .text-alert {
+            color: #cc4b37;
+        }
+
+    </style>
+
+{% endblock %}
+
+{% block content %}
+
+    <div class="content">
+        <div class="header">
+            <h3>Transition {{ ts_id_trunc }}</h3>
+        </div>
+
+        <div class="data">
+            <div class="data-line grid-x grid-padding-x">
+                <div class="cell small-3 block-data-line-label">
+                    Transition ID
+                </div>
+                <div class="cell auto data-line-value">
+                    <span class="mono">{{ ts_id }}</span>
+                </div>
+            </div>
+            <div class="data-line grid-x grid-padding-x">
+                <div class="cell small-3 block-data-line-label">
+                    Transaction
+                </div>
+                <div class="cell auto data-line-value">
+                    <span class="mono"><a href="/transaction?id={{ transaction_id }}">{{ transaction_id }}</a></span>
+                </div>
+            </div>
+            <div class="data-line grid-x grid-padding-x">
+                <div class="cell small-3 block-data-line-label">
+                    Value balance
+                </div>
+                <div class="cell auto data-line-value">
+                    {{ "%.6f" % transition.value_balance.credit() }} Aleo Credits
+                </div>
+            </div>
+            <div class="data-line grid-x grid-padding-x">
+                <div class="cell small-3 block-data-line-label">
+                    Proof
+                </div>
+                <div class="cell auto data-line-value">
+                    <span class="mono">{{ transition.proof }}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="data">
+            <h4>Inputs</h4>
+            <div class="data-line grid-x grid-padding-x">
+                <div class="cell small-3 block-data-line-label">
+                    Serial numbers
+                </div>
+                <div class="cell auto data-line-value">
+                    {% for sn in transition.serial_numbers %}
+                        <span class="mono">{{ sn }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div class="data">
+            <h4>Outputs</h4>
+            {% for i in range(2) %}
+                <h5>Output record {{ loop.index }}</h5>
+                <div class="data-line grid-x grid-padding-x">
+                    <div class="cell small-3 block-data-line-label">
+                        Commitment
+                    </div>
+                    <div class="cell auto data-line-value">
+                        <span class="mono">{{ (transition.commitments | list)[loop.index0] }}</span>
+                    </div>
+                </div>
+                <div class="data-line grid-x grid-padding-x">
+                    <div class="cell small-3 block-data-line-label">
+                        Record is public?
+                    </div>
+                    <div class="cell auto data-line-value">
+                        {% if public_record[loop.index0] %}
+                            Yes{% if is_dummy[loop.index0] %}, dummy record{% endif %}
+                        {% else %}
+                            No
+                        {% endif %}
+                    </div>
+                </div>
+                {% if public_record[loop.index0] and not is_dummy[loop.index0] %}
+                    {% set record = records[loop.index0] %}
+                    <div class="data-line grid-x grid-padding-x">
+                        <div class="cell small-3 block-data-line-label">
+                            Owner
+                        </div>
+                        <div class="cell auto data-line-value">
+                            <span class="mono"><a href="/address?a={{ record.owner }}">{{ record.owner }}</a></span>
+                        </div>
+                    </div>
+                    <div class="data-line grid-x grid-padding-x">
+                        <div class="cell small-3 block-data-line-label">
+                            Value
+                        </div>
+                        <div class="cell auto data-line-value">
+                            {{ "%.6f" % record.value.credit() }} Aleo Credits
+                        </div>
+                    </div>
+                    <div class="data-line grid-x grid-padding-x">
+                        <div class="cell small-3 block-data-line-label">
+                            Payload
+                        </div>
+                        <div class="cell auto data-line-value">
+                            <span class="mono">0x{{ record.payload.buffer.dump().hex() }}</span>
+                            <br>
+                            Decoded:
+                            <span class="mono">{{ record.payload.buffer.dump().decode("iso-8859-1") }}</span>
+                        </div>
+                    </div>
+                    <div class="data-line grid-x grid-padding-x">
+                        <div class="cell small-3 block-data-line-label">
+                            Program ID
+                        </div>
+                        <div class="cell auto data-line-value">
+                            <span class="mono">{{ record.program_id }}</span>
+                        </div>
+                    </div>
+                    <div class="data-line grid-x grid-padding-x">
+                        <div class="cell small-3 block-data-line-label">
+                            Randomizer
+                        </div>
+                        <div class="cell auto data-line-value">
+                            <span class="mono">{{ record.randomizer }}</span>
+                        </div>
+                    </div>
+                {% endif %}
+                <div class="data-line grid-x grid-padding-x">
+                    <div class="cell small-3 block-data-line-label">
+                        Record ciphertext
+                    </div>
+                    <div class="cell auto data-line-value">
+                        <span class="mono">{{ (transition.ciphertexts | list)[loop.index0] }}</span>
+                    </div>
+                </div>
+                {% if not loop.last %}
+                    <br>
+                {% endif %}
+            {% endfor %}
+        </div>
+
+        <div class="data">
+            <h4>Events</h4>
+            {% for event in transition.events %}
+                <h5>Event {{ loop.index }}</h5>
+                {% if event.type == 0 %}
+                    <div class="data-line grid-x grid-padding-x">
+                        <div class="cell small-3 block-data-line-label">
+                            Event Type
+                        </div>
+                        <div class="cell auto data-line-value">
+                            Custom event
+                        </div>
+                    </div>
+                    <div class="data-line grid-x grid-padding-x">
+                        <div class="cell small-3 block-data-line-label">
+                            Custom event data
+                        </div>
+                        <div class="cell auto data-line-value">
+                            <span class="mono">{{ event.event.bytes }}</span>
+                        </div>
+                    </div>
+                {% elif event.type == 1 %}
+                    <div class="data-line grid-x grid-padding-x">
+                        <div class="cell small-3 block-data-line-label">
+                            Event Type
+                        </div>
+                        <div class="cell auto data-line-value">
+                            Record view key event
+                        </div>
+                    </div>
+                    <div class="data-line grid-x grid-padding-x">
+                        <div class="cell small-3 block-data-line-label">
+                            Record index
+                        </div>
+                        <div class="cell auto data-line-value">
+                            {{ event.event.index }}
+                        </div>
+                    </div>
+                    <div class="data-line grid-x grid-padding-x">
+                        <div class="cell small-3 block-data-line-label">
+                            Record view key
+                        </div>
+                        <div class="cell auto data-line-value">
+                            <span class="mono">{{ event.event.record_view_key }}</span>
+                        </div>
+                    </div>
+                {% elif event.type == 2 %}
+                    {% set operation = event.event.operation.operation %}
+                    <div class="data-line grid-x grid-padding-x">
+                        <div class="cell small-3 block-data-line-label">
+                            Event type
+                        </div>
+                        <div class="cell auto data-line-value">
+                            Operation event
+                        </div>
+                    </div>
+                    {% if event.event.operation.type == 0 %}
+                        <div class="data-line grid-x grid-padding-x">
+                            <div class="cell small-3 block-data-line-label">
+                                Operation type
+                            </div>
+                            <div class="cell auto data-line-value">
+                                Noop operation
+                            </div>
+                        </div>
+                    {% elif event.event.operation.type == 1 %}
+                        <div class="data-line grid-x grid-padding-x">
+                            <div class="cell small-3 block-data-line-label">
+                                Operation type
+                            </div>
+                            <div class="cell auto data-line-value">
+                                Coinbase operation
+                            </div>
+                        </div>
+                        <div class="data-line grid-x grid-padding-x">
+                            <div class="cell small-3 block-data-line-label">
+                                Recipient
+                            </div>
+                            <div class="cell auto data-line-value">
+                                <span class="mono"><a
+                                        href="/address?a={{ operation.recipient }}">{{ operation.recipient }}</a></span>
+                            </div>
+                        </div>
+                        <div class="data-line grid-x grid-padding-x">
+                            <div class="cell small-3 block-data-line-label">
+                                Amount
+                            </div>
+                            <div class="cell auto data-line-value">
+                                {{ "%.6f" % operation.amount.credit() }} Aleo Credits
+                            </div>
+                        </div>
+                    {% elif event.event.operation.type == 2 %}
+                        <div class="data-line grid-x grid-padding-x">
+                            <div class="cell small-3 block-data-line-label">
+                                Operation type
+                            </div>
+                            <div class="cell auto data-line-value">
+                                Transfer operation
+                            </div>
+                        </div>
+                        <div class="data-line grid-x grid-padding-x">
+                            <div class="cell small-3 block-data-line-label">
+                                Caller
+                            </div>
+                            <div class="cell auto data-line-value">
+                                <span class="mono"><a
+                                        href="/address?a={{ operation.caller }}">{{ operation.caller }}</a></span>
+                            </div>
+                        </div>
+                        <div class="data-line grid-x grid-padding-x">
+                            <div class="cell small-3 block-data-line-label">
+                                Recipient
+                            </div>
+                            <div class="cell auto data-line-value">
+                                <span class="mono"><a
+                                        href="/address?a={{ operation.recipient }}">{{ operation.recipient }}</a></span>
+                            </div>
+                        </div>
+                        <div class="data-line grid-x grid-padding-x">
+                            <div class="cell small-3 block-data-line-label">
+                                Amount
+                            </div>
+                            <div class="cell auto data-line-value">
+                                {{ "%.6f" % operation.amount.credit() }} Aleo Credits
+                            </div>
+                        </div>
+                    {% elif event.event.operation.type == 3 %}
+                        <div class="data-line grid-x grid-padding-x">
+                            <div class="cell small-3 block-data-line-label">
+                                Operation type
+                            </div>
+                            <div class="cell auto data-line-value">
+                                Evaluate operation
+                            </div>
+                        </div>
+                        <div class="data-line grid-x grid-padding-x">
+                            <div class="cell small-3 block-data-line-label">
+                                Function ID
+                            </div>
+                            <div class="cell auto data-line-value">
+                                <span class="mono">{{ operation.function_id }}</span>
+                            </div>
+                        </div>
+                        <div class="data-line grid-x grid-padding-x">
+                            <div class="cell small-3 block-data-line-label">
+                                Function type
+                            </div>
+                            <div class="cell auto data-line-value">
+                                <span class="mono">{{ operation.function_type }}</span>
+                            </div>
+                        </div>
+                        <div class="data-line grid-x grid-padding-x">
+                            <div class="cell small-3 block-data-line-label">
+                                Caller
+                            </div>
+                            <div class="cell auto data-line-value">
+                                <span class="mono"><a
+                                        href="/address?a={{ operation.function_inputs.caller }}">{{ operation.function_inputs.caller }}</a></span>
+                            </div>
+                        </div>
+                        <div class="data-line grid-x grid-padding-x">
+                            <div class="cell small-3 block-data-line-label">
+                                Recipient
+                            </div>
+                            <div class="cell auto data-line-value">
+                                <span class="mono"><a
+                                        href="/address?a={{ operation.function_inputs.recipient }}">{{ operation.function_inputs.recipient }}</a></span>
+                            </div>
+                        </div>
+                        <div class="data-line grid-x grid-padding-x">
+                            <div class="cell small-3 block-data-line-label">
+                                Amount
+                            </div>
+                            <div class="cell auto data-line-value">
+                                {{ "%.6f" % operation.function_inputs.amount.credit() }} Aleo Credits
+                            </div>
+                        </div>
+                        <div class="data-line grid-x grid-padding-x">
+                            <div class="cell small-3 block-data-line-label">
+                                Payload
+                            </div>
+                            <div class="cell auto data-line-value">
+                                <span class="mono">0x{{ operation.function_inputs.record_payload.buffer.dump().hex() }}</span>
+                                <br>
+                                Decoded:
+                                <span class="mono">{{ operation.function_inputs.record_payload.buffer.dump().decode("iso-8859-1") }}</span>
+                            </div>
+                        </div>
+                    {% endif %}
+                {% endif %}
+                <br>
+            {% endfor %}
+        </div>
+    </div>
+
+{% endblock %}

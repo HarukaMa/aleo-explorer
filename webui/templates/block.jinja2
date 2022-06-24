@@ -5,16 +5,16 @@
 {% block head %}
     <style>
 
-        #block-data {
-            margin: 20px 8px;
+        #data {
+            margin: 20px 4px;
         }
 
-        .block-data-line {
+        .data-line {
             padding: 10px 0;
             border-bottom: 1px solid #ccc;
         }
 
-        .block-data-line-value {
+        .data-line-value {
             overflow-wrap: break-word;
         }
 
@@ -46,21 +46,21 @@
             </div>
         {% endif %}
 
-        <div id="block-data">
+        <div id="data">
             <!-- Keeping this verbose but need a way to simplify it -->
-            <div class="block-data-line grid-x grid-padding-x">
+            <div class="data-line grid-x grid-padding-x">
                 <div class="cell small-3 block-data-line-label">
                     Timestamp
                 </div>
-                <div class="cell auto block-data-line-value">
+                <div class="cell auto data-line-value">
                     {{ block.header.metadata.timestamp }}
                 </div>
             </div>
-            <div class="block-data-line grid-x grid-padding-x">
+            <div class="data-line grid-x grid-padding-x">
                 <div class="cell small-3 block-data-line-label">
                     Confirmations
                 </div>
-                <div class="cell auto block-data-line-value">
+                <div class="cell auto data-line-value">
                     {% if is_canonical %}
                         {{ confirmations }}
                     {% else %}
@@ -68,59 +68,59 @@
                     {% endif %}
                 </div>
             </div>
-            <div class="block-data-line grid-x grid-padding-x">
+            <div class="data-line grid-x grid-padding-x">
                 <div class="cell small-3 block-data-line-label">
                     Difficulty target
                 </div>
-                <div class="cell auto block-data-line-value">
+                <div class="cell auto data-line-value">
                     {{ block.header.metadata.difficulty_target }}
                 </div>
             </div>
-            <div class="block-data-line grid-x grid-padding-x">
+            <div class="data-line grid-x grid-padding-x">
                 <div class="cell small-3 block-data-line-label">
                     Cumulative weight
                 </div>
-                <div class="cell auto block-data-line-value">
+                <div class="cell auto data-line-value">
                     {{ block.header.metadata.cumulative_weight }}
                 </div>
             </div>
-            <div class="block-data-line grid-x grid-padding-x">
+            <div class="data-line grid-x grid-padding-x">
                 <div class="cell small-3 block-data-line-label">
                     Miner
                 </div>
-                <div class="cell auto block-data-line-value">
-                    <a href="/address?q={{ owner }}"><span class="mono">{{ owner }}</span></a>
+                <div class="cell auto data-line-value">
+                    <a href="/address?a={{ owner }}"><span class="mono">{{ owner }}</span></a>
                 </div>
             </div>
-            <div class="block-data-line grid-x grid-padding-x">
+            <div class="data-line grid-x grid-padding-x">
                 <div class="cell small-3 block-data-line-label">
                     Mining reward
                 </div>
-                <div class="cell auto block-data-line-value">
+                <div class="cell auto data-line-value">
                     {{ mining_reward }} Aleo Credits
                 </div>
             </div>
-            <div class="block-data-line grid-x grid-padding-x">
+            <div class="data-line grid-x grid-padding-x">
                 <div class="cell small-3 block-data-line-label">
                     Block hash
                 </div>
-                <div class="cell auto block-data-line-value">
+                <div class="cell auto data-line-value">
                     <span class="mono">{{ block.block_hash }}</span>
                 </div>
             </div>
-            <div class="block-data-line grid-x grid-padding-x">
+            <div class="data-line grid-x grid-padding-x">
                 <div class="cell small-3 block-data-line-label">
                     Transactions root
                 </div>
-                <div class="cell auto block-data-line-value">
+                <div class="cell auto data-line-value">
                     <span class="mono">{{ block.header.transactions_root }}</span>
                 </div>
             </div>
-            <div class="block-data-line grid-x grid-padding-x">
+            <div class="data-line grid-x grid-padding-x">
                 <div class="cell small-3 block-data-line-label">
                     Ledger root
                 </div>
-                <div class="cell auto block-data-line-value">
+                <div class="cell auto data-line-value">
                     {% if ledger_root %}
                         <span class="mono">{{ ledger_root }}</span>
                     {% else %}
@@ -129,36 +129,36 @@
                     {% endif %}
                 </div>
             </div>
-            <div class="block-data-line grid-x grid-padding-x">
+            <div class="data-line grid-x grid-padding-x">
                 <div class="cell small-3 block-data-line-label">
                     Previous block hash
                 </div>
-                <div class="cell auto block-data-line-value">
+                <div class="cell auto data-line-value">
                     <a href="/block?bh={{ block.previous_block_hash }}"><span
                             class="mono">{{ block.previous_block_hash }}</span></a>
                 </div>
             </div>
-            <div class="block-data-line grid-x grid-padding-x">
+            <div class="data-line grid-x grid-padding-x">
                 <div class="cell small-3 block-data-line-label">
                     Previous ledger root
                 </div>
-                <div class="cell auto block-data-line-value">
+                <div class="cell auto data-line-value">
                     <span class="mono">{{ block.header.previous_ledger_root }}</span>
                 </div>
             </div>
-            <div class="block-data-line grid-x grid-padding-x">
+            <div class="data-line grid-x grid-padding-x">
                 <div class="cell small-3 block-data-line-label">
                     Nonce
                 </div>
-                <div class="cell auto block-data-line-value">
+                <div class="cell auto data-line-value">
                     <span class="mono">{{ block.header.nonce }}</span>
                 </div>
             </div>
-            <div class="block-data-line grid-x grid-padding-x">
+            <div class="data-line grid-x grid-padding-x">
                 <div class="cell small-3 block-data-line-label">
                     Proof
                 </div>
-                <div class="cell auto block-data-line-value">
+                <div class="cell auto data-line-value">
                     <span class="mono">{{ block.header.proof }}</span>
                 </div>
             </div>
@@ -166,7 +166,7 @@
 
         <div id="transactions">
             <h4>Transactions</h4>
-            <table id="transactions">
+            <table id="transactions-table" class="unstriped">
                 <thead>
                 <tr>
                     <td>Transaction ID</td>
@@ -179,7 +179,7 @@
                     <tr>
                         <td class="mono"><a href="/transaction?id={{ tx.tx_id }}">{{ tx.tx_id }}</a></td>
                         <td>{{ tx.transitions }}</td>
-                        <td>{{ tx.balance }}</td>
+                        <td>{{ "%.6f" % tx.balance }}</td>
                     </tr>
                 {% endfor %}
                 </tbody>
