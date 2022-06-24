@@ -647,7 +647,15 @@ class RecordRandomizer(Locator):
 
 
 class AleoAmount(i64):
-    pass
+
+    def byte(self):
+        return int(self)
+
+    def gate(self):
+        return self / 1000
+
+    def credit(self):
+        return self / 1000000
 
 
 class CustomEvent(Serialize, Deserialize):

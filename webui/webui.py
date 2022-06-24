@@ -12,7 +12,7 @@ from starlette.routing import Route
 from starlette.templating import Jinja2Templates
 
 from db import Database
-from node.type import u32, Block, Transaction
+from node.type import u32, Block, Transaction, Transition
 
 
 class Server(uvicorn.Server):
@@ -78,11 +78,24 @@ async def block_route(request: Request):
     ledger_root = await db.get_ledger_root_from_block_hash(block.block_hash)
 
     testnet2_bug = False
+    mining_reward = 0
+    txs = []
     for tx in block.transactions.transactions:
         tx: Transaction
         if str(tx.ledger_root) == "al1gesxhq6vwwa2xx3uh8w5pcfsg7zh942c3tlqhdn5c8wt8lh5tvqqpu882x":
             testnet2_bug = True
-            break
+        t = {
+            "tx_id": tx.transaction_id,
+            "transitions": len(tx.transitions),
+        }
+        balance = 0
+        for ts in tx.transitions:
+            ts: Transition
+            balance += ts.value_balance.credit()
+            if ts.value_balance < 0:
+                mining_reward = ts.value_balance.credit()
+        t["balance"] = balance
+        txs.append(t)
 
     ctx = {
         "request": request,
@@ -92,6 +105,8 @@ async def block_route(request: Request):
         "ledger_root": ledger_root,
         "owner": await db.get_miner_from_block_hash(block.block_hash),
         "testnet2_bug": testnet2_bug,
+        "mining_reward": "%.6f" % -mining_reward,
+        "transactions": txs,
     }
     return templates.TemplateResponse('block.jinja2', ctx, headers={'Cache-Control': 'public, max-age=30'})
 
@@ -127,6 +142,7 @@ async def startup():
     await db.connect()
 
 
+# noinspection PyTypeChecker
 app = Starlette(debug=True, routes=routes, on_startup=[startup], exception_handlers=exc_handlers)
 db: Database
 

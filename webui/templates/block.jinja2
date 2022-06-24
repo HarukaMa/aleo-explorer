@@ -94,6 +94,14 @@
             </div>
             <div class="block-data-line grid-x grid-padding-x">
                 <div class="cell small-3 block-data-line-label">
+                    Mining reward
+                </div>
+                <div class="cell auto block-data-line-value">
+                    {{ mining_reward }} Aleo Credits
+                </div>
+            </div>
+            <div class="block-data-line grid-x grid-padding-x">
+                <div class="cell small-3 block-data-line-label">
                     Block hash
                 </div>
                 <div class="cell auto block-data-line-value">
@@ -157,7 +165,25 @@
         </div>
 
         <div id="transactions">
-
+            <h4>Transactions</h4>
+            <table id="transactions">
+                <thead>
+                <tr>
+                    <td>Transaction ID</td>
+                    <td>Transitions</td>
+                    <td>Value balance</td>
+                </tr>
+                </thead>
+                <tbody>
+                {% for tx in transactions %}
+                    <tr>
+                        <td class="mono"><a href="/transaction?id={{ tx.tx_id }}">{{ tx.tx_id }}</a></td>
+                        <td>{{ tx.transitions }}</td>
+                        <td>{{ tx.balance }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
         </div>
 
     </div>
