@@ -5,8 +5,6 @@
 -- Dumped from database version 14.3
 -- Dumped by pg_dump version 14.2
 
--- Started on 2022-06-16 17:05:10 JST
-
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
@@ -19,7 +17,6 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 --
--- TOC entry 4 (class 2615 OID 16386)
 -- Name: explorer; Type: SCHEMA; Schema: -; Owner: -
 --
 
@@ -27,7 +24,6 @@ CREATE SCHEMA explorer;
 
 
 --
--- TOC entry 871 (class 1247 OID 17090)
 -- Name: event_type; Type: TYPE; Schema: explorer; Owner: -
 --
 
@@ -39,7 +35,6 @@ CREATE TYPE explorer.event_type AS ENUM (
 
 
 --
--- TOC entry 889 (class 1247 OID 17128)
 -- Name: function_type; Type: TYPE; Schema: explorer; Owner: -
 --
 
@@ -57,7 +52,6 @@ CREATE TYPE explorer.function_type AS ENUM (
 
 
 --
--- TOC entry 868 (class 1247 OID 17081)
 -- Name: operation_type; Type: TYPE; Schema: explorer; Owner: -
 --
 
@@ -74,7 +68,6 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
--- TOC entry 210 (class 1259 OID 16387)
 -- Name: block; Type: TABLE; Schema: explorer; Owner: -
 --
 
@@ -96,7 +89,6 @@ CREATE TABLE explorer.block
 
 
 --
--- TOC entry 211 (class 1259 OID 16392)
 -- Name: blocks_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
 --
 
@@ -110,8 +102,6 @@ CREATE SEQUENCE explorer.blocks_id_seq
 
 
 --
--- TOC entry 3719 (class 0 OID 0)
--- Dependencies: 211
 -- Name: blocks_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
 --
 
@@ -119,7 +109,6 @@ ALTER SEQUENCE explorer.blocks_id_seq OWNED BY explorer.block.id;
 
 
 --
--- TOC entry 219 (class 1259 OID 16485)
 -- Name: ciphertext; Type: TABLE; Schema: explorer; Owner: -
 --
 
@@ -133,7 +122,6 @@ CREATE TABLE explorer.ciphertext
 
 
 --
--- TOC entry 218 (class 1259 OID 16484)
 -- Name: ciphertext_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
 --
 
@@ -147,8 +135,6 @@ CREATE SEQUENCE explorer.ciphertext_id_seq
 
 
 --
--- TOC entry 3720 (class 0 OID 0)
--- Dependencies: 218
 -- Name: ciphertext_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
 --
 
@@ -156,7 +142,6 @@ ALTER SEQUENCE explorer.ciphertext_id_seq OWNED BY explorer.ciphertext.id;
 
 
 --
--- TOC entry 229 (class 1259 OID 17098)
 -- Name: coinbase_operation; Type: TABLE; Schema: explorer; Owner: -
 --
 
@@ -170,7 +155,6 @@ CREATE TABLE explorer.coinbase_operation
 
 
 --
--- TOC entry 228 (class 1259 OID 17097)
 -- Name: coinbase_operation_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
 --
 
@@ -184,8 +168,6 @@ CREATE SEQUENCE explorer.coinbase_operation_id_seq
 
 
 --
--- TOC entry 3721 (class 0 OID 0)
--- Dependencies: 228
 -- Name: coinbase_operation_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
 --
 
@@ -193,7 +175,6 @@ ALTER SEQUENCE explorer.coinbase_operation_id_seq OWNED BY explorer.coinbase_ope
 
 
 --
--- TOC entry 223 (class 1259 OID 17019)
 -- Name: custom_event; Type: TABLE; Schema: explorer; Owner: -
 --
 
@@ -206,7 +187,6 @@ CREATE TABLE explorer.custom_event
 
 
 --
--- TOC entry 222 (class 1259 OID 17018)
 -- Name: custom_event_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
 --
 
@@ -220,8 +200,6 @@ CREATE SEQUENCE explorer.custom_event_id_seq
 
 
 --
--- TOC entry 3722 (class 0 OID 0)
--- Dependencies: 222
 -- Name: custom_event_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
 --
 
@@ -229,7 +207,6 @@ ALTER SEQUENCE explorer.custom_event_id_seq OWNED BY explorer.custom_event.id;
 
 
 --
--- TOC entry 233 (class 1259 OID 17148)
 -- Name: evaluate_operation; Type: TABLE; Schema: explorer; Owner: -
 --
 
@@ -247,7 +224,6 @@ CREATE TABLE explorer.evaluate_operation
 
 
 --
--- TOC entry 232 (class 1259 OID 17147)
 -- Name: evaluate_operation_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
 --
 
@@ -261,8 +237,6 @@ CREATE SEQUENCE explorer.evaluate_operation_id_seq
 
 
 --
--- TOC entry 3723 (class 0 OID 0)
--- Dependencies: 232
 -- Name: evaluate_operation_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
 --
 
@@ -270,7 +244,6 @@ ALTER SEQUENCE explorer.evaluate_operation_id_seq OWNED BY explorer.evaluate_ope
 
 
 --
--- TOC entry 221 (class 1259 OID 16508)
 -- Name: event; Type: TABLE; Schema: explorer; Owner: -
 --
 
@@ -284,7 +257,6 @@ CREATE TABLE explorer.event
 
 
 --
--- TOC entry 220 (class 1259 OID 16507)
 -- Name: event_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
 --
 
@@ -298,8 +270,6 @@ CREATE SEQUENCE explorer.event_id_seq
 
 
 --
--- TOC entry 3724 (class 0 OID 0)
--- Dependencies: 220
 -- Name: event_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
 --
 
@@ -307,7 +277,6 @@ ALTER SEQUENCE explorer.event_id_seq OWNED BY explorer.event.id;
 
 
 --
--- TOC entry 227 (class 1259 OID 17068)
 -- Name: operation_event; Type: TABLE; Schema: explorer; Owner: -
 --
 
@@ -320,7 +289,6 @@ CREATE TABLE explorer.operation_event
 
 
 --
--- TOC entry 226 (class 1259 OID 17067)
 -- Name: operation_event_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
 --
 
@@ -334,8 +302,6 @@ CREATE SEQUENCE explorer.operation_event_id_seq
 
 
 --
--- TOC entry 3725 (class 0 OID 0)
--- Dependencies: 226
 -- Name: operation_event_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
 --
 
@@ -343,7 +309,6 @@ ALTER SEQUENCE explorer.operation_event_id_seq OWNED BY explorer.operation_event
 
 
 --
--- TOC entry 235 (class 1259 OID 17166)
 -- Name: record; Type: TABLE; Schema: explorer; Owner: -
 --
 
@@ -363,7 +328,6 @@ CREATE TABLE explorer.record
 
 
 --
--- TOC entry 234 (class 1259 OID 17165)
 -- Name: record_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
 --
 
@@ -377,8 +341,6 @@ CREATE SEQUENCE explorer.record_id_seq
 
 
 --
--- TOC entry 3726 (class 0 OID 0)
--- Dependencies: 234
 -- Name: record_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
 --
 
@@ -386,7 +348,6 @@ ALTER SEQUENCE explorer.record_id_seq OWNED BY explorer.record.id;
 
 
 --
--- TOC entry 225 (class 1259 OID 17034)
 -- Name: record_view_key_event; Type: TABLE; Schema: explorer; Owner: -
 --
 
@@ -400,7 +361,6 @@ CREATE TABLE explorer.record_view_key_event
 
 
 --
--- TOC entry 224 (class 1259 OID 17033)
 -- Name: record_view_key_event_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
 --
 
@@ -414,8 +374,6 @@ CREATE SEQUENCE explorer.record_view_key_event_id_seq
 
 
 --
--- TOC entry 3727 (class 0 OID 0)
--- Dependencies: 224
 -- Name: record_view_key_event_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
 --
 
@@ -423,7 +381,6 @@ ALTER SEQUENCE explorer.record_view_key_event_id_seq OWNED BY explorer.record_vi
 
 
 --
--- TOC entry 217 (class 1259 OID 16469)
 -- Name: serial_number; Type: TABLE; Schema: explorer; Owner: -
 --
 
@@ -437,7 +394,6 @@ CREATE TABLE explorer.serial_number
 
 
 --
--- TOC entry 216 (class 1259 OID 16468)
 -- Name: serial_number_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
 --
 
@@ -451,8 +407,6 @@ CREATE SEQUENCE explorer.serial_number_id_seq
 
 
 --
--- TOC entry 3728 (class 0 OID 0)
--- Dependencies: 216
 -- Name: serial_number_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
 --
 
@@ -460,7 +414,6 @@ ALTER SEQUENCE explorer.serial_number_id_seq OWNED BY explorer.serial_number.id;
 
 
 --
--- TOC entry 213 (class 1259 OID 16406)
 -- Name: transaction; Type: TABLE; Schema: explorer; Owner: -
 --
 
@@ -475,7 +428,6 @@ CREATE TABLE explorer.transaction
 
 
 --
--- TOC entry 212 (class 1259 OID 16405)
 -- Name: transaction_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
 --
 
@@ -489,8 +441,6 @@ CREATE SEQUENCE explorer.transaction_id_seq
 
 
 --
--- TOC entry 3729 (class 0 OID 0)
--- Dependencies: 212
 -- Name: transaction_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
 --
 
@@ -498,7 +448,6 @@ ALTER SEQUENCE explorer.transaction_id_seq OWNED BY explorer.transaction.id;
 
 
 --
--- TOC entry 231 (class 1259 OID 17113)
 -- Name: transfer_operation; Type: TABLE; Schema: explorer; Owner: -
 --
 
@@ -513,7 +462,6 @@ CREATE TABLE explorer.transfer_operation
 
 
 --
--- TOC entry 230 (class 1259 OID 17112)
 -- Name: transfer_operation_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
 --
 
@@ -527,8 +475,6 @@ CREATE SEQUENCE explorer.transfer_operation_id_seq
 
 
 --
--- TOC entry 3730 (class 0 OID 0)
--- Dependencies: 230
 -- Name: transfer_operation_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
 --
 
@@ -536,7 +482,6 @@ ALTER SEQUENCE explorer.transfer_operation_id_seq OWNED BY explorer.transfer_ope
 
 
 --
--- TOC entry 214 (class 1259 OID 16442)
 -- Name: transition_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
 --
 
@@ -550,7 +495,6 @@ CREATE SEQUENCE explorer.transition_id_seq
 
 
 --
--- TOC entry 215 (class 1259 OID 16443)
 -- Name: transition; Type: TABLE; Schema: explorer; Owner: -
 --
 
@@ -565,7 +509,6 @@ CREATE TABLE explorer.transition
 
 
 --
--- TOC entry 3501 (class 2604 OID 16393)
 -- Name: block id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -574,7 +517,6 @@ ALTER TABLE ONLY explorer.block
 
 
 --
--- TOC entry 3506 (class 2604 OID 16488)
 -- Name: ciphertext id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -583,7 +525,6 @@ ALTER TABLE ONLY explorer.ciphertext
 
 
 --
--- TOC entry 3511 (class 2604 OID 17101)
 -- Name: coinbase_operation id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -592,7 +533,6 @@ ALTER TABLE ONLY explorer.coinbase_operation
 
 
 --
--- TOC entry 3508 (class 2604 OID 17022)
 -- Name: custom_event id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -601,7 +541,6 @@ ALTER TABLE ONLY explorer.custom_event
 
 
 --
--- TOC entry 3513 (class 2604 OID 17151)
 -- Name: evaluate_operation id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -610,7 +549,6 @@ ALTER TABLE ONLY explorer.evaluate_operation
 
 
 --
--- TOC entry 3507 (class 2604 OID 16511)
 -- Name: event id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -619,7 +557,6 @@ ALTER TABLE ONLY explorer.event
 
 
 --
--- TOC entry 3510 (class 2604 OID 17071)
 -- Name: operation_event id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -628,7 +565,6 @@ ALTER TABLE ONLY explorer.operation_event
 
 
 --
--- TOC entry 3514 (class 2604 OID 17169)
 -- Name: record id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -637,7 +573,6 @@ ALTER TABLE ONLY explorer.record
 
 
 --
--- TOC entry 3509 (class 2604 OID 17037)
 -- Name: record_view_key_event id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -646,7 +581,6 @@ ALTER TABLE ONLY explorer.record_view_key_event
 
 
 --
--- TOC entry 3505 (class 2604 OID 16472)
 -- Name: serial_number id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -655,7 +589,6 @@ ALTER TABLE ONLY explorer.serial_number
 
 
 --
--- TOC entry 3503 (class 2604 OID 16409)
 -- Name: transaction id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -664,7 +597,6 @@ ALTER TABLE ONLY explorer.transaction
 
 
 --
--- TOC entry 3512 (class 2604 OID 17116)
 -- Name: transfer_operation id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -673,7 +605,6 @@ ALTER TABLE ONLY explorer.transfer_operation
 
 
 --
--- TOC entry 3519 (class 2606 OID 16451)
 -- Name: block block_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -682,7 +613,6 @@ ALTER TABLE ONLY explorer.block
 
 
 --
--- TOC entry 3533 (class 2606 OID 16493)
 -- Name: ciphertext ciphertext_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -691,7 +621,6 @@ ALTER TABLE ONLY explorer.ciphertext
 
 
 --
--- TOC entry 3549 (class 2606 OID 17105)
 -- Name: coinbase_operation coinbase_operation_pkey; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -700,7 +629,6 @@ ALTER TABLE ONLY explorer.coinbase_operation
 
 
 --
--- TOC entry 3540 (class 2606 OID 17026)
 -- Name: custom_event custom_event_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -709,7 +637,6 @@ ALTER TABLE ONLY explorer.custom_event
 
 
 --
--- TOC entry 3555 (class 2606 OID 17155)
 -- Name: evaluate_operation evaluate_operation_pkey; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -718,7 +645,6 @@ ALTER TABLE ONLY explorer.evaluate_operation
 
 
 --
--- TOC entry 3536 (class 2606 OID 16516)
 -- Name: event event_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -727,7 +653,6 @@ ALTER TABLE ONLY explorer.event
 
 
 --
--- TOC entry 3546 (class 2606 OID 17073)
 -- Name: operation_event operation_event_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -736,7 +661,6 @@ ALTER TABLE ONLY explorer.operation_event
 
 
 --
--- TOC entry 3559 (class 2606 OID 17173)
 -- Name: record record_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -745,7 +669,6 @@ ALTER TABLE ONLY explorer.record
 
 
 --
--- TOC entry 3543 (class 2606 OID 17041)
 -- Name: record_view_key_event record_view_key_event_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -754,7 +677,6 @@ ALTER TABLE ONLY explorer.record_view_key_event
 
 
 --
--- TOC entry 3529 (class 2606 OID 16478)
 -- Name: serial_number serial_number_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -763,7 +685,6 @@ ALTER TABLE ONLY explorer.serial_number
 
 
 --
--- TOC entry 3522 (class 2606 OID 16441)
 -- Name: transaction transaction_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -772,7 +693,6 @@ ALTER TABLE ONLY explorer.transaction
 
 
 --
--- TOC entry 3552 (class 2606 OID 17120)
 -- Name: transfer_operation transfer_operation_pkey; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -781,7 +701,6 @@ ALTER TABLE ONLY explorer.transfer_operation
 
 
 --
--- TOC entry 3525 (class 2606 OID 16461)
 -- Name: transition transition_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -790,15 +709,13 @@ ALTER TABLE ONLY explorer.transition
 
 
 --
--- TOC entry 3515 (class 1259 OID 16452)
 -- Name: block_block_hash_uindex; Type: INDEX; Schema: explorer; Owner: -
 --
 
-CREATE UNIQUE INDEX block_block_hash_uindex ON explorer.block USING btree (block_hash);
+CREATE UNIQUE INDEX block_block_hash_uindex ON explorer.block USING btree (block_hash text_pattern_ops);
 
 
 --
--- TOC entry 3516 (class 1259 OID 16449)
 -- Name: block_height_block_hash_uindex; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -806,7 +723,6 @@ CREATE UNIQUE INDEX block_height_block_hash_uindex ON explorer.block USING btree
 
 
 --
--- TOC entry 3517 (class 1259 OID 18035)
 -- Name: block_height_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -814,7 +730,6 @@ CREATE INDEX block_height_index ON explorer.block USING btree (height DESC);
 
 
 --
--- TOC entry 3534 (class 1259 OID 16491)
 -- Name: ciphertext_transition_id_index_uindex; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -822,7 +737,6 @@ CREATE UNIQUE INDEX ciphertext_transition_id_index_uindex ON explorer.ciphertext
 
 
 --
--- TOC entry 3547 (class 1259 OID 17106)
 -- Name: coinbase_operation_operation_event_id_uindex; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -830,7 +744,6 @@ CREATE UNIQUE INDEX coinbase_operation_operation_event_id_uindex ON explorer.coi
 
 
 --
--- TOC entry 3538 (class 1259 OID 17032)
 -- Name: custom_event_event_id_uindex; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -838,7 +751,6 @@ CREATE UNIQUE INDEX custom_event_event_id_uindex ON explorer.custom_event USING 
 
 
 --
--- TOC entry 3553 (class 1259 OID 17156)
 -- Name: evaluate_operation_operation_event_id_uindex; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -846,7 +758,6 @@ CREATE UNIQUE INDEX evaluate_operation_operation_event_id_uindex ON explorer.eva
 
 
 --
--- TOC entry 3537 (class 1259 OID 16514)
 -- Name: event_transition_id_index_uindex; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -854,7 +765,6 @@ CREATE UNIQUE INDEX event_transition_id_index_uindex ON explorer.event USING btr
 
 
 --
--- TOC entry 3544 (class 1259 OID 17074)
 -- Name: operation_event_event_id_uindex; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -862,7 +772,6 @@ CREATE UNIQUE INDEX operation_event_event_id_uindex ON explorer.operation_event 
 
 
 --
--- TOC entry 3556 (class 1259 OID 17189)
 -- Name: record_output_transition_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -870,15 +779,13 @@ CREATE INDEX record_output_transition_id_index ON explorer.record USING btree (o
 
 
 --
--- TOC entry 3557 (class 1259 OID 18024)
 -- Name: record_owner_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-CREATE INDEX record_owner_index ON explorer.record USING btree (owner);
+CREATE INDEX record_owner_index ON explorer.record USING btree (owner text_pattern_ops);
 
 
 --
--- TOC entry 3560 (class 1259 OID 17190)
 -- Name: record_record_view_key_event_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -886,7 +793,6 @@ CREATE INDEX record_record_view_key_event_id_index ON explorer.record USING btre
 
 
 --
--- TOC entry 3541 (class 1259 OID 17047)
 -- Name: record_view_key_event_event_id_uindex; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -894,15 +800,13 @@ CREATE UNIQUE INDEX record_view_key_event_event_id_uindex ON explorer.record_vie
 
 
 --
--- TOC entry 3530 (class 1259 OID 18044)
 -- Name: serial_number_serial_number_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-CREATE INDEX serial_number_serial_number_index ON explorer.serial_number USING btree (serial_number);
+CREATE INDEX serial_number_serial_number_index ON explorer.serial_number USING btree (serial_number text_pattern_ops);
 
 
 --
--- TOC entry 3531 (class 1259 OID 16476)
 -- Name: serial_number_transition_id_index_uindex; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -910,7 +814,6 @@ CREATE UNIQUE INDEX serial_number_transition_id_index_uindex ON explorer.serial_
 
 
 --
--- TOC entry 3520 (class 1259 OID 17346)
 -- Name: transaction_block_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -918,15 +821,13 @@ CREATE INDEX transaction_block_id_index ON explorer.transaction USING btree (blo
 
 
 --
--- TOC entry 3523 (class 1259 OID 18041)
 -- Name: transaction_transaction_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-CREATE INDEX transaction_transaction_id_index ON explorer.transaction USING btree (transaction_id);
+CREATE INDEX transaction_transaction_id_index ON explorer.transaction USING btree (transaction_id text_pattern_ops);
 
 
 --
--- TOC entry 3550 (class 1259 OID 17121)
 -- Name: transfer_operation_operation_event_id_uindex; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -934,7 +835,6 @@ CREATE UNIQUE INDEX transfer_operation_operation_event_id_uindex ON explorer.tra
 
 
 --
--- TOC entry 3526 (class 1259 OID 17345)
 -- Name: transition_transaction_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -942,15 +842,13 @@ CREATE INDEX transition_transaction_id_index ON explorer.transition USING btree 
 
 
 --
--- TOC entry 3527 (class 1259 OID 18043)
 -- Name: transition_transition_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-CREATE INDEX transition_transition_id_index ON explorer.transition USING btree (transition_id);
+CREATE INDEX transition_transition_id_index ON explorer.transition USING btree (transition_id text_pattern_ops);
 
 
 --
--- TOC entry 3564 (class 2606 OID 16494)
 -- Name: ciphertext ciphertext_transition_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -959,7 +857,6 @@ ALTER TABLE ONLY explorer.ciphertext
 
 
 --
--- TOC entry 3569 (class 2606 OID 17107)
 -- Name: coinbase_operation coinbase_operation_operation_event_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -968,7 +865,6 @@ ALTER TABLE ONLY explorer.coinbase_operation
 
 
 --
--- TOC entry 3566 (class 2606 OID 17027)
 -- Name: custom_event custom_event_event_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -977,7 +873,6 @@ ALTER TABLE ONLY explorer.custom_event
 
 
 --
--- TOC entry 3571 (class 2606 OID 17157)
 -- Name: evaluate_operation evaluate_operation_operation_event_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -986,7 +881,6 @@ ALTER TABLE ONLY explorer.evaluate_operation
 
 
 --
--- TOC entry 3565 (class 2606 OID 16517)
 -- Name: event event_transition_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -995,7 +889,6 @@ ALTER TABLE ONLY explorer.event
 
 
 --
--- TOC entry 3568 (class 2606 OID 17075)
 -- Name: operation_event operation_event_event_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -1004,7 +897,6 @@ ALTER TABLE ONLY explorer.operation_event
 
 
 --
--- TOC entry 3572 (class 2606 OID 17174)
 -- Name: record record_ciphertext_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -1013,7 +905,6 @@ ALTER TABLE ONLY explorer.record
 
 
 --
--- TOC entry 3573 (class 2606 OID 17179)
 -- Name: record record_event_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -1022,7 +913,6 @@ ALTER TABLE ONLY explorer.record
 
 
 --
--- TOC entry 3574 (class 2606 OID 17184)
 -- Name: record record_transition_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -1031,7 +921,6 @@ ALTER TABLE ONLY explorer.record
 
 
 --
--- TOC entry 3567 (class 2606 OID 17042)
 -- Name: record_view_key_event record_view_key_event_event_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -1040,7 +929,6 @@ ALTER TABLE ONLY explorer.record_view_key_event
 
 
 --
--- TOC entry 3563 (class 2606 OID 16479)
 -- Name: serial_number serial_number_transition_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -1049,7 +937,6 @@ ALTER TABLE ONLY explorer.serial_number
 
 
 --
--- TOC entry 3561 (class 2606 OID 16454)
 -- Name: transaction transaction_block_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -1058,7 +945,6 @@ ALTER TABLE ONLY explorer.transaction
 
 
 --
--- TOC entry 3570 (class 2606 OID 17122)
 -- Name: transfer_operation transfer_operation_operation_event_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -1067,15 +953,12 @@ ALTER TABLE ONLY explorer.transfer_operation
 
 
 --
--- TOC entry 3562 (class 2606 OID 16462)
 -- Name: transition transition_transaction_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
 ALTER TABLE ONLY explorer.transition
     ADD CONSTRAINT transition_transaction_id_fk FOREIGN KEY (transaction_id) REFERENCES explorer.transaction (id);
 
-
--- Completed on 2022-06-16 17:05:11 JST
 
 --
 -- PostgreSQL database dump complete
