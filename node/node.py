@@ -382,8 +382,9 @@ class Node:
         await self.writer.drain()
 
     async def close(self):
-        self.writer.close()
-        await self.writer.wait_closed()
+        if not self.writer.is_closing():
+            self.writer.close()
+            await self.writer.wait_closed()
         # reset states
         self.handshake_state = 0
         # noinspection PyArgumentList
