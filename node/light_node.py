@@ -1,6 +1,7 @@
 import asyncio
 import random
 import time
+from collections import OrderedDict
 
 import requests
 
@@ -35,6 +36,13 @@ class LightNodeState:
         if key in self.states:
             self.states[key]["node_type"] = node_type
             self.states[key]["status"] = status
+            self.states[key]["height"] = height
+            self.states[key]["cumulative_weight"] = cumulative_weight
+            self.states[key]["last_ping"] = time.time()
+
+    def node_pong(self, ip: str, port: int, height: int, cumulative_weight: int):
+        key = ":".join([ip, str(port)])
+        if key in self.states:
             self.states[key]["height"] = height
             self.states[key]["cumulative_weight"] = cumulative_weight
             self.states[key]["last_ping"] = time.time()
@@ -121,6 +129,13 @@ class LightNode:
                     raise ValueError("peer has wrong genesis block")
                 await self.send_ping()
 
+                async def ping_task():
+                    while True:
+                        await asyncio.sleep(60)
+                        await self.send_ping()
+
+                self.ping_task = asyncio.create_task(ping_task())
+
             case Message.Type.Ping:
                 msg: Ping = frame.message
                 height = msg.block_header.metadata.height
@@ -139,11 +154,16 @@ class LightNode:
                 await self.send_message(PeerRequest())
 
             case Message.Type.Pong:
-                async def ping_task():
-                    await asyncio.sleep(60)
-                    await self.send_ping()
+                msg: Pong = frame.message
 
-                self.ping_task = asyncio.create_task(ping_task())
+                latest_block_height_of_peer = 0
+                peer_block_locators = OrderedDict(sorted(msg.block_locators.items(), key=lambda k: k[0]))
+                for block_height, (block_hash, _) in peer_block_locators.items():
+                    if block_height > latest_block_height_of_peer:
+                        latest_block_height_of_peer = block_height
+
+                peer_cumulative_weight = peer_block_locators[latest_block_height_of_peer][1].metadata.cumulative_weight
+                self.state.node_pong(self.ip, self.port, latest_block_height_of_peer, peer_cumulative_weight)
 
             case Message.Type.PeerResponse:
                 msg: PeerResponse = frame.message
@@ -178,7 +198,9 @@ class LightNode:
             await self.close()
 
     async def close(self):
+        self.state.disconnected(self.ip, self.port)
+        if self.ping_task is not None:
+            self.ping_task.cancel()
         if self.writer is not None and not self.writer.is_closing():
             self.writer.close()
             await self.writer.wait_closed()
-        self.state.disconnected(self.ip, self.port)
