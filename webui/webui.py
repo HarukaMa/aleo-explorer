@@ -263,18 +263,34 @@ async def search_route(request: Request):
     raise HTTPException(status_code=404, detail="Unknown object type or searching is not supported")
 
 
+def get_relative_time(timestamp):
+    now = time.time()
+    delta = now - timestamp
+    if delta < 60:
+        return f"{int(delta)} seconds ago"
+    delta = delta // 60
+    if delta < 60:
+        return f"{int(delta)} minutes ago"
+    delta = delta // 60
+    return f"{int(delta)} hours ago"
+
+
 async def nodes_route(request: Request):
     nodes = copy.deepcopy(lns.states)
-    nodes = {k: v for k, v in nodes.items() if "status" in v}
+    res = {}
+    for k, v in nodes.items():
+        if "status" in v:
+            res[k] = v
+            res[k]["last_ping"] = get_relative_time(v["last_ping"])
     latest_height = await db.get_latest_canonical_height()
     latest_weight = await db.get_latest_canonical_weight()
     ctx = {
         "request": request,
-        "nodes": nodes,
+        "nodes": res,
         "latest_height": latest_height,
         "latest_weight": latest_weight,
     }
-    return templates.TemplateResponse('nodes.jinja2', ctx, headers={'Cache-Control': 'public, max-age=30'})
+    return templates.TemplateResponse('nodes.jinja2', ctx, headers={'Cache-Control': 'no-cache'})
 
 
 async def bad_request(request: Request, exc: HTTPException):
