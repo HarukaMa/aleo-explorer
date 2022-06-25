@@ -124,8 +124,8 @@
                     {% if ledger_root %}
                         <span class="mono">{{ ledger_root }}</span>
                     {% else %}
-                        Unknown&nbsp;<span data-tooltip
-                            title="This explorer is not actively calculating the ledger root for every possible block due to various reasons.">?</span>
+                        Unknown&nbsp;
+                        <span data-tooltip title="This explorer is not actively calculating the ledger root for every possible block due to various reasons.">?</span>
                     {% endif %}
                 </div>
             </div>
@@ -134,8 +134,7 @@
                     Previous block hash
                 </div>
                 <div class="cell auto data-line-value">
-                    <a href="/block?bh={{ block.previous_block_hash }}"><span
-                            class="mono">{{ block.previous_block_hash }}</span></a>
+                    <a href="/block?bh={{ block.previous_block_hash }}"><span class="mono">{{ block.previous_block_hash }}</span></a>
                 </div>
             </div>
             <div class="data-line grid-x grid-padding-x">

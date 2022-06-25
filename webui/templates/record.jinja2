@@ -54,8 +54,7 @@
                     {% if is_canonical %}
                         <a href="/block?h={{ block.header.metadata.height }}">{{ block.header.metadata.height }}</a> ({{ confirmations }} confirmations)
                     {% else %}
-                        <span class="mono"><a href="/block?bh={{ block.block_hash }}">{{ block.block_hash }}</a> (<span
-                                class="text-alert">Non-canonical block</span>)</span>
+                        <span class="mono"><a href="/block?bh={{ block.block_hash }}">{{ block.block_hash }}</a> (<span class="text-alert">Non-canonical block</span>)</span>
                     {% endif %}
                 </div>
             </div>
@@ -90,8 +89,8 @@
                 <tbody>
                 {% for transition in transaction.transitions %}
                     <tr>
-                        <td><span class="mono"><a
-                                href="/transition?id={{ transition.transition_id }}">{{ transition.transition_id }}</a></span>
+                        <td>
+                            <span class="mono"><a href="/transition?id={{ transition.transition_id }}">{{ transition.transition_id }}</a></span>
                         </td>
                         <td>{{ "%.6f" % transition.value_balance.credit() }}</td>
                         <td>{{ transition.events | length }}</td>
