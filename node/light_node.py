@@ -2,6 +2,8 @@ import asyncio
 import random
 import time
 
+import requests
+
 from node.testnet2 import Testnet2
 from node.type import ChallengeRequest, NodeType, Status, u16, u64, u128, Frame, Message, ChallengeResponse, \
     PeerRequest, Ping, PeerResponse, SocketAddr, u32, Pong, bool_, BlockLocators
@@ -13,8 +15,14 @@ class LightNodeState:
         self.states: dict[str, dict] = {}
         self.nodes: dict[str, LightNode] = {}
 
+        # prevent infinite self connection loop
+        r = requests.get("https://api.ipify.org/?format=json")
+        self.self_ip = r.json()["ip"]
+
     def connect(self, ip: str, port: int):
         if ip == "127.0.0.1":
+            return
+        if ip == self.self_ip and port == 14132:
             return
         key = ":".join([ip, str(port)])
         if key not in self.states:

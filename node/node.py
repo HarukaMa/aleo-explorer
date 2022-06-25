@@ -67,7 +67,7 @@ class Node:
         await asyncio.start_server(self.listen_worker, host="0.0.0.0", port=14132)
 
     async def listen_worker(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
-        print(f"Connected from {writer.get_extra_info('peername')}")
+        # print(f"Connected from {writer.get_extra_info('peername')}")
         buffer = Buffer()
         while True:
             data = await reader.read(4096)
