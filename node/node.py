@@ -30,12 +30,13 @@ from more_itertools.recipes import take
 
 import explorer
 from util.buffer import Buffer
+from .light_node import LightNodeState
 from .testnet2.param import Testnet2
 from .type import *  # too many types
 
 
 class Node:
-    def __init__(self, explorer_message: Callable, explorer_request: Callable):
+    def __init__(self, explorer_message: Callable, explorer_request: Callable, light_node_state: LightNodeState):
         self.reader, self.writer = None, None
         self.buffer = Buffer()
         self.worker_task: asyncio.Task | None = None
@@ -57,6 +58,7 @@ class Node:
         self.block_requests = []
         self.block_requests_deadline = float('inf')
         self.ping_task = None
+        self.light_node_state = light_node_state
 
     async def connect(self, ip: str, port: int):
         self.node_port = port
@@ -82,8 +84,6 @@ class Node:
                     if frame.type != Message.Type.ChallengeRequest:
                         writer.close()
                         await writer.wait_closed()
-                    if self.handshake_state != 0:
-                        raise Exception("handshake is already done")
                     msg: ChallengeRequest = frame.message
                     if msg.version < Testnet2.version:
                         raise ValueError("peer is outdated")
@@ -96,7 +96,10 @@ class Node:
                     data = frame.dump()
                     size = len(data)
                     writer.write(size.to_bytes(4, "little") + data)
-                    await writer.drain()
+                    try:
+                        await writer.drain()
+                    except:
+                        pass
 
     async def worker(self, host: str, port: int):
         try:
@@ -214,6 +217,7 @@ class Node:
                     block_locators=BlockLocators(block_locators=locators)
                 )
                 await self.send_message(pong)
+                await self.send_message(PeerRequest())
 
             case Message.Type.Pong:
                 if self.handshake_state != 1:
@@ -292,6 +296,13 @@ class Node:
                     raise Exception("handshake is not done")
                 msg: UnconfirmedBlock = frame.message
                 await self.explorer_request(explorer.Request.ProcessBlock(msg.block))
+
+            case Message.Type.PeerResponse:
+                msg: PeerResponse = frame.message
+                for peer in msg.peer_ips:
+                    peer: SocketAddr
+                    self.light_node_state.connect(*peer.ip_port())
+
             case _:
                 print("unhandled message type:", frame.type)
 
@@ -397,6 +408,7 @@ class Node:
         self.peer_block_locators = OrderedDict()
         self.block_requests = []
         self.block_requests_deadline = float('inf')
-        self.ping_task.cancel()
+        if self.ping_task is not None:
+            self.ping_task.cancel()
         await asyncio.sleep(5)
         self.worker_task = asyncio.create_task(self.worker(self.node_ip, self.node_port))

@@ -1,3 +1,4 @@
+import socket
 import struct
 from abc import ABCMeta, abstractmethod
 from decimal import Decimal
@@ -286,6 +287,34 @@ class bool_(Int):
         if self:
             return "True"
         return "False"
+
+
+class SocketAddr(Deserialize):
+    def __init__(self, *, ip: int, port: int):
+        if not isinstance(ip, int):
+            raise TypeError("ip must be int")
+        if not isinstance(port, int):
+            raise TypeError("port must be int")
+        if ip < 0 or ip > 4294967295:
+            raise ValueError("ip must be between 0 and 4294967295")
+        if port < 0 or port > 65535:
+            raise ValueError("port must be between 0 and 65535")
+        self.ip = ip
+        self.port = port
+
+    @classmethod
+    def load(cls, data: bytearray):
+        del data[:4]
+        ip = u32.load(data)
+        port = u16.load(data)
+        return cls(ip=ip, port=port)
+
+    def __str__(self):
+        return ":".join(self.ip_port())
+
+    def ip_port(self):
+        return socket.inet_ntoa(struct.pack('<L', self.ip)), self.port
+
 
 # Generic types
 
@@ -1474,6 +1503,42 @@ class ChallengeResponse(Message):
         return cls(block_header=BlockHeader.load(data))
 
 
+class PeerRequest(Message):
+    type = Message.Type.PeerRequest
+
+    def __init__(self):
+        pass
+
+    def dump(self) -> bytes:
+        return b""
+
+    @classmethod
+    def load(cls, data: bytearray):
+        if not isinstance(data, bytearray):
+            raise TypeError("data must be bytearray")
+        return cls()
+
+
+class PeerResponse(Message):
+    type = Message.Type.PeerResponse
+
+    def __init__(self, *, peer_ips: Vec[SocketAddr, u64]):
+        if not isinstance(peer_ips, Vec):
+            raise TypeError("peer_ips must be Vec")
+        self.peer_ips = peer_ips
+
+    def dump(self) -> bytes:
+        raise NotImplementedError
+
+    @classmethod
+    def load(cls, data: bytearray):
+        if not isinstance(data, bytearray):
+            raise TypeError("data must be bytearray")
+        # noinspection PyArgumentList
+        peer_ips = Vec[SocketAddr, u64].load(data)
+        return cls(peer_ips=peer_ips)
+
+
 class Ping(Message):
     type = Message.Type.Ping
 
@@ -1629,6 +1694,8 @@ class Frame(Serialize, Deserialize):
                 message = ChallengeRequest.load(data)
             case Message.Type.ChallengeResponse:
                 message = ChallengeResponse.load(data)
+            case Message.Type.PeerResponse:
+                message = PeerResponse.load(data)
             case Message.Type.Ping:
                 message = Ping.load(data)
             case Message.Type.Pong:
@@ -1636,7 +1703,7 @@ class Frame(Serialize, Deserialize):
             case Message.Type.UnconfirmedBlock:
                 message = UnconfirmedBlock.load(data)
             case _:
-                raise ValueError("unknown message type")
+                raise ValueError(f"unknown message type {type_}")
 
         return cls(type_=type_, message=message)
 

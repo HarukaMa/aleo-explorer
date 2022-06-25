@@ -1,0 +1,51 @@
+{% extends "base.jinja2" %}
+
+{% block title %}Nodes - Haruka's Aleo Explorer{% endblock %}
+
+{% block head %}
+    <style>
+        table {
+            margin-top: 10px;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+
+    <div class="content">
+
+        <div class="header">
+            <h3>Known nodes: {{ nodes | length }}</h3>
+            <em>Note: only contains nodes that accept incoming connections</em>
+        </div>
+
+        <table class="unstriped">
+            <thead>
+            <tr>
+                <th>Address</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Height</th>
+                <th>Cumulative weight</th>
+                <th>Last seen</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for address, node in nodes.items() %}
+                <tr>
+                    <td>{{ address }}</td>
+                    <td>{{ node.node_type }}</td>
+                    <td>{{ node.status }}</td>
+                    <td>{{ node.height }}
+                            {% if node.height - latest_height %} ({{ node.height - latest_height }}){% endif %}</td>
+                    <td>{{ node.cumulative_weight }}
+                            {% if node.cumulative_weight - latest_weight %} ({{ node.cumulative_weight - latest_weight }}){% endif %}</td>
+                    <td>{{ node.last_ping }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+
+    </div>
+
+{% endblock %}

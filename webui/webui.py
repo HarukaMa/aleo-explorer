@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import copy
 import os
 import threading
 import time
@@ -13,6 +14,7 @@ from starlette.routing import Route
 from starlette.templating import Jinja2Templates
 
 from db import Database
+from node.light_node import LightNodeState
 from node.testnet2 import Testnet2
 from node.type import u32, Transaction, Transition, Event
 
@@ -261,6 +263,20 @@ async def search_route(request: Request):
     raise HTTPException(status_code=404, detail="Unknown object type or searching is not supported")
 
 
+async def nodes_route(request: Request):
+    nodes = copy.deepcopy(lns.states)
+    nodes = {k: v for k, v in nodes.items() if "status" in v}
+    latest_height = await db.get_latest_canonical_height()
+    latest_weight = await db.get_latest_canonical_weight()
+    ctx = {
+        "request": request,
+        "nodes": nodes,
+        "latest_height": latest_height,
+        "latest_weight": latest_weight,
+    }
+    return templates.TemplateResponse('nodes.jinja2', ctx, headers={'Cache-Control': 'public, max-age=30'})
+
+
 async def bad_request(request: Request, exc: HTTPException):
     return templates.TemplateResponse('400.jinja2', {'request': request, "exc": exc}, status_code=400)
 
@@ -279,6 +295,7 @@ routes = [
     Route("/transaction", transaction_route),
     Route("/transition", transition_route),
     Route("/search", search_route),
+    Route("/nodes", nodes_route),
     # Route("/miner", miner_stats),
     # Route("/calc", calc),
 ]
@@ -303,11 +320,14 @@ async def startup():
 # noinspection PyTypeChecker
 app = Starlette(debug=True, routes=routes, on_startup=[startup], exception_handlers=exc_handlers)
 db: Database
+lns: LightNodeState | None = None
 
 
-async def run():
+async def run(light_node_state: LightNodeState):
     config = uvicorn.Config("webui:app", reload=True, log_level="info")
     server = Server(config=config)
+    global lns
+    lns = light_node_state
 
     with server.run_in_thread():
         while True:
