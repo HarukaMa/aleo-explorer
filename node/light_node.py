@@ -99,7 +99,7 @@ class LightNode:
                             break
                         self.buffer.read(4)
                         frame = self.buffer.read(size)
-                        await self.parse_message(Frame.load(frame))
+                        await self.parse_message(Frame.load(frame, ignore_blocks=True))
                     else:
                         print(f"buffer.count() < 4: {self.buffer.count()}")
                         break

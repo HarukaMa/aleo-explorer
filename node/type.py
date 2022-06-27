@@ -1678,7 +1678,7 @@ class Frame(Serialize, Deserialize):
         return self.type.to_bytes(2, "little") + self.message.dump()
 
     @classmethod
-    def load(cls, data: bytearray):
+    def load(cls, data: bytearray, *, ignore_blocks=False):
         if not isinstance(data, bytearray):
             raise TypeError("data must be bytearray")
         if len(data) < 2:
@@ -1701,7 +1701,10 @@ class Frame(Serialize, Deserialize):
             case Message.Type.Pong:
                 message = Pong.load(data)
             case Message.Type.UnconfirmedBlock:
-                message = UnconfirmedBlock.load(data)
+                if ignore_blocks:
+                    message = None
+                else:
+                    message = UnconfirmedBlock.load(data)
             case _:
                 raise ValueError(f"unknown message type {type_}")
 
