@@ -97,7 +97,8 @@
                     Mining reward
                 </div>
                 <div class="cell auto data-line-value">
-                    {{ mining_reward }} Aleo Credits
+                    {{ mining_reward.credit() }} Aleo Credits
+                    {% if fee > 0 %} (fee: {{ fee.credit() }} Aleo Credits{% if burned %}, burned {{ burned.credit() }} Aleo Credits{% endif %}){% endif %}
                 </div>
             </div>
             <div class="data-line grid-x grid-padding-x">

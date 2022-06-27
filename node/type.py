@@ -694,6 +694,15 @@ class AleoAmount(i64):
     def credit(self):
         return self / 1000000
 
+    def __add__(self, other):
+        return AleoAmount(int(self) + other)
+
+    def __sub__(self, other):
+        return AleoAmount(int(self) - other)
+
+    def __neg__(self):
+        return AleoAmount(-int(self))
+
 
 class CustomEvent(Serialize, Deserialize):
 

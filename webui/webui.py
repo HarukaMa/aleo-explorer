@@ -16,7 +16,7 @@ from starlette.templating import Jinja2Templates
 from db import Database
 from node.light_node import LightNodeState
 from node.testnet2 import Testnet2
-from node.type import u32, Transaction, Transition, Event
+from node.type import u32, Transaction, Transition, Event, AleoAmount
 
 
 class Server(uvicorn.Server):
@@ -82,10 +82,18 @@ async def block_route(request: Request):
 
     testnet2_bug = False
     mining_reward = 0
+    fee = 0
     txs = []
     for tx in block.transactions.transactions:
         tx: Transaction
-        if str(tx.ledger_root) == "al1gesxhq6vwwa2xx3uh8w5pcfsg7zh942c3tlqhdn5c8wt8lh5tvqqpu882x":
+        if str(tx.ledger_root) in [
+            "al1gesxhq6vwwa2xx3uh8w5pcfsg7zh942c3tlqhdn5c8wt8lh5tvqqpu882x",
+            "al1c2agd5u90kpvcjvk70rgrhnkagfw4kfgusym9t0mjyr8yl0m6qyqez0q6j",
+            "al1cp6qpzgt0elcpyk95p9vfme7p29ytp0rccnctx602fdc9uf2zv9qjtx35r",
+            "al1tm27a5wukgxv6ks5fr7aa90zsvstu2ruplxkp5tena3tae8nxgfqldxqec",
+            "al1fyspkzz7uq594k5wkmktwujlawkl0tf0w3tatarpwq5gs37lj5rs06f30h",
+            "al1rwsj7nydhunppu268aqdaxd465rel9wx9wrqmamtymmrxt3j0ypsg25usd",
+        ]:
             testnet2_bug = True
         t = {
             "tx_id": tx.transaction_id,
@@ -94,11 +102,20 @@ async def block_route(request: Request):
         balance = 0
         for ts in tx.transitions:
             ts: Transition
-            balance += ts.value_balance.credit()
+            balance += ts.value_balance
             if ts.value_balance < 0:
-                mining_reward = ts.value_balance.credit()
+                mining_reward = -ts.value_balance
         t["balance"] = balance
+        if balance >= 0:
+            fee += balance
         txs.append(t)
+    height = block.header.metadata.height
+    if height <= 4730400:
+        standard_mining_reward = AleoAmount(100000000)
+    elif height <= 9460800:
+        standard_mining_reward = AleoAmount(50000000)
+    else:
+        standard_mining_reward = AleoAmount(25000000)
 
     ctx = {
         "request": request,
@@ -108,8 +125,10 @@ async def block_route(request: Request):
         "ledger_root": ledger_root,
         "owner": await db.get_miner_from_block_hash(block.block_hash),
         "testnet2_bug": testnet2_bug,
-        "mining_reward": "%.6f" % -mining_reward,
+        "mining_reward": AleoAmount(mining_reward),
         "transactions": txs,
+        "fee": AleoAmount(fee),
+        "burned": standard_mining_reward + fee - mining_reward,
     }
     return templates.TemplateResponse('block.jinja2', ctx, headers={'Cache-Control': 'public, max-age=30'})
 
