@@ -106,9 +106,11 @@ class Node:
             self.reader, self.writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=5)
         except asyncio.TimeoutError as e:
             await self.explorer_message(explorer.Message(explorer.Message.Type.NodeConnectError, e))
+            await self.close()
             return
         except Exception as e:
             await self.explorer_message(explorer.Message(explorer.Message.Type.NodeConnectError, e))
+            await self.close()
             return
         await self.explorer_message(explorer.Message(explorer.Message.Type.NodeConnected, None))
         try:
