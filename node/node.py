@@ -396,7 +396,7 @@ class Node:
         await self.writer.drain()
 
     async def close(self):
-        if not self.writer.is_closing():
+        if self.writer is not None and not self.writer.is_closing():
             self.writer.close()
             await self.writer.wait_closed()
         # reset states
