@@ -73,11 +73,13 @@ async def block_route(request: Request):
         if block is None:
             raise HTTPException(status_code=404, detail="Block not found")
         is_canonical = True
+        block_hash = block.block_hash
     else:
         block = await db.get_block_by_hash(block_hash)
         if block is None:
             raise HTTPException(status_code=404, detail="Block not found")
         is_canonical = await db.is_block_hash_canonical(block.block_hash)
+        height = block.header.metadata.height
     latest_block_height = await db.get_latest_canonical_height()
     confirmations = latest_block_height - block.header.metadata.height + 1
     ledger_root = await db.get_ledger_root_from_block_hash(block.block_hash)
@@ -104,7 +106,6 @@ async def block_route(request: Request):
         if balance >= 0:
             fee += balance
         txs.append(t)
-    height = block.header.metadata.height
     if height <= 4730400:
         standard_mining_reward = AleoAmount(100000000)
     elif height <= 9460800:
@@ -115,6 +116,7 @@ async def block_route(request: Request):
     ctx = {
         "request": request,
         "block": block,
+        "block_hash_trunc": str(block_hash)[:9] + "..." + str(block_hash)[-6:],
         "is_canonical": is_canonical,
         "confirmations": confirmations,
         "ledger_root": ledger_root,
