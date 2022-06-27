@@ -108,7 +108,7 @@ class Explorer:
         testnet2_bug = False
         for tx in block.transactions.transactions:
             tx: Transaction
-            if str(tx.ledger_root) == "al1gesxhq6vwwa2xx3uh8w5pcfsg7zh942c3tlqhdn5c8wt8lh5tvqqpu882x":
+            if str(tx.ledger_root) in Testnet2.non_canonical_ledger_roots:
                 testnet2_bug = True
                 break
         if block.previous_block_hash != self.latest_block_hash or testnet2_bug:
