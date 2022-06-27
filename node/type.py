@@ -1512,6 +1512,73 @@ class ChallengeResponse(Message):
         return cls(block_header=BlockHeader.load(data))
 
 
+class YourPortIsClosed(int):
+    def __new__(cls, **kwargs):
+        return int.__new__(cls, 11)
+
+    def __init__(self, *, port: u16):
+        if not isinstance(port, u16):
+            raise TypeError("port must be u16")
+        self.port = port
+
+    @classmethod
+    def load(cls, data: bytearray):
+        if not isinstance(data, bytearray):
+            raise TypeError("data must be bytearray")
+        port = u16.load(data)
+        return cls(port=port)
+
+    def __str__(self):
+        return f"{str(DisconnectReason(self))}(port={self.port})"
+
+    def __repr__(self):
+        return f"{repr(DisconnectReason(self))} port={self.port}"
+
+class DisconnectReason(IntEnumu32):
+
+    ExceededForkRange = 0
+    InvalidForkDepth = 1
+    INeedToSyncFirst = 2
+    NoReasonGiven = 3
+    OutdatedClientVersion = 4
+    PeerHasDisconnected = 5
+    ShuttingDown = 6
+    SyncComplete = 7
+    TooManyFailures = 8
+    TooManyPeers = 9
+    YouNeedToSyncFirst = 10
+    YourPortIsClosed = YourPortIsClosed(port=u16()),
+
+    @classmethod
+    def load(cls, data: bytearray):
+        if not isinstance(data, bytearray):
+            raise TypeError("data must be bytearray")
+        if len(data) == 0:
+            return cls(cls.NoReasonGiven)
+        reason = u32.load(data)
+        if reason == 11:
+            return YourPortIsClosed.load(data)
+        return cls(reason)
+
+
+class Disconnect(Message):
+    type = Message.Type.Disconnect
+
+    def __init__(self, *, reason: DisconnectReason):
+        if not isinstance(reason, DisconnectReason):
+            raise TypeError("reason must be DisconnectReason")
+        self.reason = reason
+
+    def dump(self) -> bytes:
+        return self.reason.dump()
+
+    @classmethod
+    def load(cls, data: bytearray):
+        if not isinstance(data, bytearray):
+            raise TypeError("data must be bytearray")
+        return cls(reason=DisconnectReason.load(data))
+
+
 class PeerRequest(Message):
     type = Message.Type.PeerRequest
 
@@ -1673,6 +1740,28 @@ class UnconfirmedBlock(Message):
         return cls(block_height=block_height, block_hash=block_hash, block=block)
 
 
+class UnconfirmedTransaction(Message):
+    type = Message.Type.UnconfirmedTransaction
+
+    def __init__(self, *, transaction: Transaction):
+        if not isinstance(transaction, Transaction):
+            raise TypeError("transaction must be Transaction")
+        self.transaction = transaction
+
+    def dump(self) -> bytes:
+        data = self.transaction.dump()
+        return u64(len(data)).dump() + data
+
+    @classmethod
+    def load(cls, data: bytearray):
+        if not isinstance(data, bytearray):
+            raise TypeError("data must be bytearray")
+        # deferred Data type ignored
+        del data[:8]
+        transaction = Transaction.load(data)
+        return cls(transaction=transaction)
+
+
 class Frame(Serialize, Deserialize):
 
     def __init__(self, *, type_: Message.Type, message: Message):
@@ -1699,6 +1788,8 @@ class Frame(Serialize, Deserialize):
                 message = BlockRequest.load(data)
             case Message.Type.BlockResponse:
                 message = BlockResponse.load(data)
+            case Message.Type.Disconnect:
+                message = Disconnect.load(data)
             case Message.Type.ChallengeRequest:
                 message = ChallengeRequest.load(data)
             case Message.Type.ChallengeResponse:
@@ -1714,6 +1805,8 @@ class Frame(Serialize, Deserialize):
                     message = None
                 else:
                     message = UnconfirmedBlock.load(data)
+            case Message.Type.UnconfirmedTransaction:
+                message = UnconfirmedTransaction.load(data)
             case _:
                 raise ValueError(f"unknown message type {type_}")
 

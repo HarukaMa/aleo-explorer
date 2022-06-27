@@ -312,6 +312,10 @@ class Node:
                     peer: SocketAddr
                     self.light_node_state.connect(*peer.ip_port())
 
+            case Message.Type.Disconnect:
+                msg: Disconnect = frame.message
+                print("Disconnected:", msg.reason)
+
             case _:
                 print("unhandled message type:", frame.type)
 
