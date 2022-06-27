@@ -51,8 +51,8 @@
                     {% if is_canonical %}
                         <a href="/block?h={{ block.header.metadata.height }}">{{ block.header.metadata.height }}</a> ({{ confirmations }} confirmations)
                     {% else %}
-                        <span class="mono"><a href="/block?bh={{ block.block_hash }}">{{ block.block_hash }}</a></span> (
-                        <span class="text-alert">Non-canonical block</span>)
+                        <span class="mono"><a href="/block?bh={{ block.block_hash }}">{{ block.block_hash }}</a></span>
+                        (<span class="text-alert">Non-canonical block</span>)
                     {% endif %}
                 </div>
             </div>
