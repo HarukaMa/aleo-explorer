@@ -1,0 +1,78 @@
+{% extends "base.jinja2" %}
+
+{% block title %}Blocks - Haruka's Aleo Explorer{% endblock %}
+
+{% block head %}
+    <style>
+
+    </style>
+{% endblock %}
+
+{% block content %}
+
+    <div class="content">
+
+        <div id="header">
+            <h3>Blocks</h3>
+        </div>
+
+        <div id="blocks">
+
+            <nav>
+                <ul class="pagination">
+                    <li class="pagination-previous{% if page == 1 %} disabled{% endif %}">{% if page != 1 %}<a href="/blocks?p={{ page - 1 }}"></a>{% endif %}</li>
+                    {% for p in range(1, ([total_pages, 4] | min)) %}
+                        <li{% if p == page %} class="current"{% endif %}>{% if p != page %}<a href="/blocks?p={{ p }}">{% endif %}{{ p }}{% if p != page %}</a>{% endif %}</li>
+                    {% endfor %}
+                    {% if page > 7 %}
+                        <li class="ellipsis" aria-hidden="true"></li>
+                    {% endif %}
+                    {% for p in range(([4, page - 3] | max), page) %}
+                        <li><a href="/blocks?p={{ p }}">{{ p }}</a></li>
+                    {% endfor %}
+                    {% if page > 3 %}
+                        <li class="current">{{ page }}</li>
+                    {% endif %}
+                    {% for p in range([4, page + 1] | max, [page + 4, total_pages] | min) %}
+                        <li><a href="/blocks?p={{ p }}">{{ p }}</a></li>
+                    {% endfor %}
+                    {% if page < total_pages - 4 %}
+                        <li class="ellipsis" aria-hidden="true"></li>
+                    {% endif %}
+                    {% if page < total_pages %}
+                        <li><a href="/blocks?p={{ total_pages }}">{{ total_pages }}</a></li>
+                    {% endif %}
+                    <li class="pagination-next{% if page == total_pages %} disabled{% endif %}">{% if page != total_pages %}<a href="/blocks?p={{ page + 1 }}"></a>{% endif %}</li>
+                </ul>
+            </nav>
+
+            <table class="unstriped">
+                <thead>
+                <tr>
+                    <th>Height</th>
+                    <th>Block hash</th>
+                    <th>Timestamp</th>
+                    <th>Transactions</th>
+                    <th>Transitions</th>
+                    <th>Miner</th>
+                    <th>Orphaned blocks</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for block in blocks %}
+                    <tr>
+                        <td><a href="/block?bh={{ block.block_hash }}">{{ block.height }}</a></td>
+                        <td class="mono">{{ block.block_hash_trunc }}</td>
+                        <td>{{ block.timestamp }}</td>
+                        <td>{{ block.transactions }}</td>
+                        <td>{{ block.transitions }}</td>
+                        <td class="mono"><a href="/address?a={{ block.owner }}">{{ block.owner_trunc }}</a></td>
+                        <td><a href="/orphan?h={{ block.height }}">{{ block.orphan_count }}</a></td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+{% endblock %}

@@ -116,7 +116,7 @@ async def block_route(request: Request):
     ctx = {
         "request": request,
         "block": block,
-        "block_hash_trunc": str(block_hash)[:9] + "..." + str(block_hash)[-6:],
+        "block_hash_trunc": str(block_hash)[:12] + "..." + str(block_hash)[-6:],
         "is_canonical": is_canonical,
         "confirmations": confirmations,
         "ledger_root": ledger_root,
@@ -154,13 +154,14 @@ async def transaction_route(request: Request):
     ctx = {
         "request": request,
         "tx_id": tx_id,
-        "tx_id_trunc": str(tx_id)[:9] + "..." + str(tx_id)[-6:],
+        "tx_id_trunc": str(tx_id)[:12] + "..." + str(tx_id)[-6:],
         "block": block,
         "is_canonical": is_canonical,
         "confirmations": confirmations,
         "transaction": transaction,
     }
     return templates.TemplateResponse('transaction.jinja2', ctx, headers={'Cache-Control': 'public, max-age=30'})
+
 
 async def transition_route(request: Request):
     ts_id = request.query_params.get("id")
@@ -198,7 +199,7 @@ async def transition_route(request: Request):
     ctx = {
         "request": request,
         "ts_id": ts_id,
-        "ts_id_trunc": str(ts_id)[:9] + "..." + str(ts_id)[-6:],
+        "ts_id_trunc": str(ts_id)[:12] + "..." + str(ts_id)[-6:],
         "transaction_id": transaction_id,
         "transition": transition,
         "public_record": public_record,
@@ -327,10 +328,49 @@ async def orphan_route(request: Request):
         data.append(b)
     ctx = {
         "request": request,
-        "recent_blocks": data,
+        "blocks": data,
         "height": height,
     }
-    return templates.TemplateResponse('orphan.jinja2', ctx, headers={'Cache-Control': 'public, max-age=10'})
+    return templates.TemplateResponse('orphan.jinja2', ctx, headers={'Cache-Control': 'public, max-age=30'})
+
+
+async def blocks_route(request: Request):
+    try:
+        page = request.query_params.get("p")
+        if page is None:
+            page = 1
+        else:
+            page = int(page)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid page")
+    total_blocks = await db.get_latest_canonical_height()
+    total_pages = (total_blocks // 50) + 1
+    if page < 1 or page > total_pages:
+        raise HTTPException(status_code=400, detail="Invalid page")
+    start = total_blocks - 50 * (page - 1)
+    blocks = await db.get_blocks_range_fast(start, start - 50)
+    data = []
+    for block in blocks:
+        owner = await db.get_miner_from_block_hash(block["block_hash"])
+        b = {
+            "timestamp": block["timestamp"],
+            "height": block["height"],
+            "transactions": block["transaction_count"],
+            "transitions": block["transition_count"],
+            "owner": owner,
+            "owner_trunc": owner[:14] + "..." + owner[-6:],
+            "block_hash": block["block_hash"],
+            "block_hash_trunc": block["block_hash"][:12] + "..." + block["block_hash"][-6:],
+            "orphan_count": block["orphan_count"],
+        }
+        data.append(b)
+    ctx = {
+        "request": request,
+        "blocks": data,
+        "page": page,
+        "total_pages": total_pages,
+    }
+    return templates.TemplateResponse('blocks.jinja2', ctx, headers={'Cache-Control': 'public, max-age=30'})
 
 
 async def bad_request(request: Request, exc: HTTPException):
@@ -353,6 +393,7 @@ routes = [
     Route("/search", search_route),
     Route("/nodes", nodes_route),
     Route("/orphan", orphan_route),
+    Route("/blocks", blocks_route),
     # Route("/miner", miner_stats),
     # Route("/calc", calc),
 ]

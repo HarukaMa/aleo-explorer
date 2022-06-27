@@ -48,6 +48,15 @@
 
         <div id="data">
             <!-- Keeping this verbose but need a way to simplify it -->
+            <!-- Looks like web components is the way to go, but I don't know how now-->
+            <div class="data-line grid-x grid-padding-x">
+                <div class="cell small-3 block-data-line-label">
+                    Height
+                </div>
+                <div class="cell auto data-line-value">
+                    {{ block.header.metadata.height }}
+                </div>
+            </div>
             <div class="data-line grid-x grid-padding-x">
                 <div class="cell small-3 block-data-line-label">
                     Timestamp

@@ -16,7 +16,7 @@
             <h3>Orphaned blocks at height {{ height }}</h3>
         </div>
 
-        <div id="recent-blocks">
+        <div id="blocks">
             <table class="unstriped">
                 <thead>
                 <tr>
@@ -28,7 +28,7 @@
                 </tr>
                 </thead>
                 <tbody>
-                {% for block in recent_blocks %}
+                {% for block in blocks %}
                     <tr>
                         <td class="mono"><a href="/block?bh={{ block.block_hash }}">{{ block.block_hash }}</a></td>
                         <td>{{ block.timestamp }}</td>

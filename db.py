@@ -1,5 +1,3 @@
-import time
-
 import aleo
 import asyncpg
 
@@ -200,7 +198,6 @@ class Database:
 
     @staticmethod
     async def _get_full_block(block: dict, conn: asyncpg.Connection, fast=False):
-        t = time.perf_counter_ns()
         transactions = await conn.fetch("SELECT * FROM transaction WHERE block_id = $1", block['id'])
         txs = []
         for transaction in transactions:
@@ -594,6 +591,36 @@ class Database:
             try:
                 blocks = await conn.fetch(
                     "SELECT * FROM block WHERE is_canonical = false AND height = $1 ORDER BY timestamp DESC", height)
+                res = []
+                for block in blocks:
+                    b = {**block}
+                    txs = await conn.fetch("SELECT * FROM transaction WHERE block_id = $1", block['id'])
+                    b["transaction_count"] = len(txs)
+                    ts_count = 0
+                    for tx in txs:
+                        ts_count += await conn.fetchval("SELECT COUNT(*) FROM transition WHERE transaction_id = $1",
+                                                        tx['id'])
+                    b["transition_count"] = ts_count
+                    res.append(b)
+                return res
+            except Exception as e:
+                await self.message_callback(Message(Message.Type.DatabaseError, e))
+                raise
+
+    async def get_blocks_range_fast(self, start, end):
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            blocks = await conn.fetch(
+                "SELECT b.*, CASE WHEN c.count IS NULL THEN 0 ELSE c.count END AS orphan_count "
+                "FROM block b "
+                "LEFT JOIN "
+                "(SELECT height, COUNT(*) AS count FROM block WHERE block.is_canonical = false AND height <= $1 AND height > $2 GROUP BY height) AS c "
+                "ON c.height = b.height "
+                "WHERE b.is_canonical = true AND b.height <= $1 AND b.height > $2 "
+                "ORDER BY height DESC ",
+                start, end
+            )
+            try:
                 res = []
                 for block in blocks:
                     b = {**block}
