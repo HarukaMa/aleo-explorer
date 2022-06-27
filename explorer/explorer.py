@@ -77,13 +77,13 @@ class Explorer:
                 msg = await self.message_queue.get()
                 match msg.type:
                     case Message.Type.NodeConnectError:
-                        print("node connect error")
+                        print("node connect error:", msg.data)
                     case Message.Type.NodeConnected:
                         print("node connected")
                     case Message.Type.NodeDisconnected:
                         print("node disconnected")
                     case Message.Type.DatabaseConnectError:
-                        print("database connect error")
+                        print("database connect error:", msg.data)
                     case Message.Type.DatabaseConnected:
                         print("database connected")
                     case Message.Type.DatabaseDisconnected:
