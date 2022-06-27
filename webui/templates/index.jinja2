@@ -91,7 +91,7 @@
                         <td>{{ block.transactions }}</td>
                         <td>{{ block.transitions }}</td>
                         <td class="mono"><a href="/address?a={{ block.owner }}">{{ block.owner }}</a></td>
-                        <td><a href="/orphan?h={{ block.height }}">{{ block.orphaned }}</a></td>
+                        <td>{% if block.orphaned %}<a href="/orphan?h={{ block.height }}">{{ block.orphaned }}</a>{% else %}{{ block.orphaned }}{% endif %}</td>
                     </tr>
                 {% endfor %}
                 </tbody>
