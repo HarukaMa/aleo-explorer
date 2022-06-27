@@ -150,6 +150,13 @@ class Node:
         if not isinstance(frame, Frame):
             raise TypeError("frame must be instance of Frame")
         match frame.type:
+            case Message.Type.BlockRequest:
+                msg: BlockRequest = frame.message
+                for height in range(msg.start_block_height, msg.end_block_height):
+                    block = await self.explorer_request(explorer.Request.GetBlockByHeight(height))
+                    print("sending block", height)
+                    await self.send_message(BlockResponse(block=block))
+
             case Message.Type.BlockResponse:
                 if self.handshake_state != 1:
                     raise Exception("handshake is not done")

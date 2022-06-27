@@ -1,0 +1,45 @@
+{% extends "base.jinja2" %}
+
+{% block title %}Orphan blocks - {{ height }} - Haruka's Aleo Explorer{% endblock %}
+
+{% block head %}
+    <style>
+
+    </style>
+{% endblock %}
+
+{% block content %}
+
+    <div class="content">
+
+        <div id="header">
+            <h3>Orphaned blocks at height {{ height }}</h3>
+        </div>
+
+        <div id="recent-blocks">
+            <table class="unstriped">
+                <thead>
+                <tr>
+                    <th>Block hash</th>
+                    <th>Timestamp</th>
+                    <th>Transactions</th>
+                    <th>Transitions</th>
+                    <th>Miner</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for block in recent_blocks %}
+                    <tr>
+                        <td class="mono"><a href="/block?bh={{ block.block_hash }}">{{ block.block_hash }}</a></td>
+                        <td>{{ block.timestamp }}</td>
+                        <td>{{ block.transactions }}</td>
+                        <td>{{ block.transitions }}</td>
+                        <td class="mono"><a href="/address?a={{ block.owner }}">{{ block.owner }}</a></td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+{% endblock %}

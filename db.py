@@ -576,3 +576,36 @@ class Database:
             except Exception as e:
                 await self.message_callback(Message(Message.Type.DatabaseError, e))
                 raise
+
+    async def get_orphaned_block_count_on_height(self, height: int) -> int:
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                return await conn.fetchval(
+                    "SELECT COUNT(*) FROM block WHERE height = $1 AND is_canonical = false", height
+                )
+            except Exception as e:
+                await self.message_callback(Message(Message.Type.DatabaseError, e))
+                raise
+
+    async def get_orphaned_blocks_on_height_fast(self, height: int) -> [Block]:
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                blocks = await conn.fetch(
+                    "SELECT * FROM block WHERE is_canonical = false AND height = $1 ORDER BY timestamp DESC", height)
+                res = []
+                for block in blocks:
+                    b = {**block}
+                    txs = await conn.fetch("SELECT * FROM transaction WHERE block_id = $1", block['id'])
+                    b["transaction_count"] = len(txs)
+                    ts_count = 0
+                    for tx in txs:
+                        ts_count += await conn.fetchval("SELECT COUNT(*) FROM transition WHERE transaction_id = $1",
+                                                        tx['id'])
+                    b["transition_count"] = ts_count
+                    res.append(b)
+                return res
+            except Exception as e:
+                await self.message_callback(Message(Message.Type.DatabaseError, e))
+                raise

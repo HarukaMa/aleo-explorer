@@ -80,6 +80,7 @@
                     <th>Transactions</th>
                     <th>Transitions</th>
                     <th>Miner</th>
+                    <th>Orphaned blocks</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -90,6 +91,7 @@
                         <td>{{ block.transactions }}</td>
                         <td>{{ block.transitions }}</td>
                         <td class="mono"><a href="/address?a={{ block.owner }}">{{ block.owner }}</a></td>
+                        <td><a href="/orphan?h={{ block.height }}">{{ block.orphaned }}</a></td>
                     </tr>
                 {% endfor %}
                 </tbody>

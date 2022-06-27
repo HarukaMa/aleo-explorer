@@ -26,17 +26,17 @@
         <ul>
             {% for block in blocks %}
                 <li>
-                    <a href="/block?bh={{ block }}">{{ block }}</a>
+                    <span class="mono"><a href="/block?bh={{ block }}">{{ block }}</a></span>
                 </li>
             {% endfor %}
             {% for transaction_id in transactions %}
                 <li>
-                    <a href="/transaction?id={{ transaction_id }}">{{ transaction_id }}</a>
+                    <span class="mono"><a href="/transaction?id={{ transaction_id }}">{{ transaction_id }}</a></span>
                 </li>
             {% endfor %}
             {% for transition_id in transitions %}
                 <li>
-                    <a href="/transition?id={{ transition_id }}">{{ transition_id }}</a>
+                    <span class="mono"><a href="/transition?id={{ transition_id }}">{{ transition_id }}</a></span>
                 </li>
             {% endfor %}
         </ul>

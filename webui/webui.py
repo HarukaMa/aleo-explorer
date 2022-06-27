@@ -53,6 +53,8 @@ async def index_route(request: Request):
             "block_hash": block["block_hash"],
         }
         data.append(b)
+        height = block["height"]
+        b["orphaned"] = await db.get_orphaned_block_count_on_height(height)
     ctx = {
         "latest_block": await db.get_latest_canonical_block_fast(),
         "request": request,
@@ -105,7 +107,7 @@ async def block_route(request: Request):
             balance += ts.value_balance
             if ts.value_balance < 0:
                 mining_reward = -ts.value_balance
-        t["balance"] = balance
+        t["balance"] = AleoAmount(balance)
         if balance >= 0:
             fee += balance
         txs.append(t)
@@ -312,6 +314,30 @@ async def nodes_route(request: Request):
     return templates.TemplateResponse('nodes.jinja2', ctx, headers={'Cache-Control': 'no-cache'})
 
 
+async def orphan_route(request: Request):
+    height = request.query_params.get("h")
+    if height is None:
+        raise HTTPException(status_code=400, detail="Missing height")
+    blocks = await db.get_orphaned_blocks_on_height_fast(int(height))
+    data = []
+    for block in blocks:
+        b = {
+            "timestamp": block["timestamp"],
+            "height": block["height"],
+            "transactions": block["transaction_count"],
+            "transitions": block["transition_count"],
+            "owner": await db.get_miner_from_block_hash(block["block_hash"]),
+            "block_hash": block["block_hash"],
+        }
+        data.append(b)
+    ctx = {
+        "request": request,
+        "recent_blocks": data,
+        "height": height,
+    }
+    return templates.TemplateResponse('orphan.jinja2', ctx, headers={'Cache-Control': 'public, max-age=10'})
+
+
 async def bad_request(request: Request, exc: HTTPException):
     return templates.TemplateResponse('400.jinja2', {'request': request, "exc": exc}, status_code=400)
 
@@ -331,6 +357,7 @@ routes = [
     Route("/transition", transition_route),
     Route("/search", search_route),
     Route("/nodes", nodes_route),
+    Route("/orphan", orphan_route),
     # Route("/miner", miner_stats),
     # Route("/calc", calc),
 ]
