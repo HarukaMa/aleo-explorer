@@ -39,6 +39,10 @@ class Server(uvicorn.Server):
 
 templates = Jinja2Templates(directory='webui/templates')
 
+def get_env(name):
+    return os.environ.get(name)
+
+templates.env.filters["get_env"] = get_env
 
 async def index_route(request: Request):
     recent_blocks = await db.get_recent_canonical_blocks_fast()
