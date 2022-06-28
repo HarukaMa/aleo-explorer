@@ -44,6 +44,8 @@ class Explorer:
                     return weight
                 case Request.ProcessBlock:
                     await self.add_block(request.block)
+                case Request.GetBlockByHeight:
+                    return await self.db.get_canonical_block_by_height(request.height)
                 case Request.GetBlockHashByHeight:
                     if request.height == self.latest_height:
                         return self.latest_block_hash
