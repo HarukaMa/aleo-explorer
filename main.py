@@ -1,7 +1,10 @@
 import asyncio
 
+from dotenv import load_dotenv
+
 from explorer import Explorer
 
+load_dotenv()
 
 async def main():
     e = Explorer()
