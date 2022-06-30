@@ -421,7 +421,7 @@ async def startup():
 
 
 # noinspection PyTypeChecker
-app = Starlette(debug=True, routes=routes, on_startup=[startup], exception_handlers=exc_handlers)
+app = Starlette(debug=True if os.environ.get("DEBUG") else False, routes=routes, on_startup=[startup], exception_handlers=exc_handlers)
 db: Database
 lns: LightNodeState | None = None
 
