@@ -30,11 +30,11 @@
                 <tbody>
                 {% for block in blocks %}
                     <tr>
-                        <td class="mono"><a href="/block?bh={{ block.block_hash }}">{{ block.block_hash }}</a></td>
-                        <td>{{ block.timestamp }}</td>
+                        <td class="mono"><a href="/block?bh={{ block.block_hash }}">{{ block.block_hash_trunc }}</a></td>
+                        <td>{{ block.timestamp | format_time }}</td>
                         <td>{{ block.transactions }}</td>
                         <td>{{ block.transitions }}</td>
-                        <td class="mono"><a href="/address?a={{ block.owner }}">{{ block.owner }}</a></td>
+                        <td class="mono"><a href="/address?a={{ block.owner }}">{{ block.owner_trunc }}</a></td>
                     </tr>
                 {% endfor %}
                 </tbody>

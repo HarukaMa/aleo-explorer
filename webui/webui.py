@@ -1,6 +1,7 @@
 import asyncio
 import contextlib
 import copy
+import datetime
 import os
 import threading
 import time
@@ -42,7 +43,11 @@ templates = Jinja2Templates(directory='webui/templates')
 def get_env(name):
     return os.environ.get(name)
 
+def format_time(epoch):
+    return datetime.datetime.fromtimestamp(epoch, tz=datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
 templates.env.filters["get_env"] = get_env
+templates.env.filters["format_time"] = format_time
 
 async def index_route(request: Request):
     recent_blocks = await db.get_recent_canonical_blocks_fast()
@@ -322,13 +327,16 @@ async def orphan_route(request: Request):
     blocks = await db.get_orphaned_blocks_on_height_fast(int(height))
     data = []
     for block in blocks:
+        owner = await db.get_miner_from_block_hash(block["block_hash"])
         b = {
             "timestamp": block["timestamp"],
             "height": block["height"],
             "transactions": block["transaction_count"],
             "transitions": block["transition_count"],
-            "owner": await db.get_miner_from_block_hash(block["block_hash"]),
+            "owner": owner,
+            "owner_trunc": owner[:14] + "..." + owner[-6:],
             "block_hash": block["block_hash"],
+            "block_hash_trunc": block["block_hash"][:12] + "..." + block["block_hash"][-6:],
         }
         data.append(b)
     ctx = {

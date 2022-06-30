@@ -63,7 +63,7 @@
                     <tr>
                         <td><a href="/block?bh={{ block.block_hash }}">{{ block.height }}</a></td>
                         <td class="mono">{{ block.block_hash_trunc }}</td>
-                        <td>{{ block.timestamp }}</td>
+                        <td>{{ block.timestamp | format_time }}</td>
                         <td>{{ block.transactions }}</td>
                         <td>{{ block.transitions }}</td>
                         <td class="mono"><a href="/address?a={{ block.owner }}">{{ block.owner_trunc }}</a></td>

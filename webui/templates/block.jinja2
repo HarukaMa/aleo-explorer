@@ -62,7 +62,7 @@
                     Timestamp
                 </div>
                 <div class="cell auto data-line-value">
-                    {{ block.header.metadata.timestamp }}
+                    {{ block.header.metadata.timestamp | format_time }}
                 </div>
             </div>
             <div class="data-line grid-x grid-padding-x">
