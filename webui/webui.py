@@ -84,8 +84,9 @@ async def block_route(request: Request):
             raise HTTPException(status_code=404, detail="Block not found")
         is_canonical = await db.is_block_hash_canonical(block.block_hash)
         height = block.header.metadata.height
+    height = int(height)
     latest_block_height = await db.get_latest_canonical_height()
-    confirmations = latest_block_height - block.header.metadata.height + 1
+    confirmations = latest_block_height - height + 1
     ledger_root = await db.get_ledger_root_from_block_hash(block.block_hash)
 
     testnet2_bug = False
