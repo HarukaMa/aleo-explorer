@@ -25,4 +25,5 @@ class Testnet2:
         "al1rwsj7nydhunppu268aqdaxd465rel9wx9wrqmamtymmrxt3j0ypsg25usd",
 
         "al1r9ulfc9kcdmj9hpjf2e2yqgahuj0ffx0tns6awp6nqa2lzm6l59qe3sm29",
+        "al14xmsrdexxj2ce2jejt2ely0pludyarfwmal32zn44tfvqyttcyxqw27m75",
     ]
