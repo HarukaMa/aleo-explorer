@@ -17,9 +17,12 @@ class Testnet2:
 
     non_canonical_ledger_roots = [
         "al1gesxhq6vwwa2xx3uh8w5pcfsg7zh942c3tlqhdn5c8wt8lh5tvqqpu882x",
+
         "al1c2agd5u90kpvcjvk70rgrhnkagfw4kfgusym9t0mjyr8yl0m6qyqez0q6j",
         "al1cp6qpzgt0elcpyk95p9vfme7p29ytp0rccnctx602fdc9uf2zv9qjtx35r",
         "al1tm27a5wukgxv6ks5fr7aa90zsvstu2ruplxkp5tena3tae8nxgfqldxqec",
         "al1fyspkzz7uq594k5wkmktwujlawkl0tf0w3tatarpwq5gs37lj5rs06f30h",
         "al1rwsj7nydhunppu268aqdaxd465rel9wx9wrqmamtymmrxt3j0ypsg25usd",
+
+        "al1r9ulfc9kcdmj9hpjf2e2yqgahuj0ffx0tns6awp6nqa2lzm6l59qe3sm29",
     ]
