@@ -167,6 +167,7 @@ class Node:
                 if not self.block_requests:
                     self.status = Status.Ready
                     self.block_requests_deadline = float('inf')
+                    self.is_fork = False
                     await self._sync()
 
             case Message.Type.ChallengeRequest:
