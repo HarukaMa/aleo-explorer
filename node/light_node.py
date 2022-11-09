@@ -5,8 +5,8 @@ from collections import OrderedDict
 
 import requests
 
-from node.testnet2 import Testnet2
-from node.type import ChallengeRequest, NodeType, Status, u16, u64, u128, Frame, Message, ChallengeResponse, \
+from node.testnet3 import Testnet3
+from node.types import ChallengeRequest, NodeType, Status, u16, u64, u128, Frame, Message, ChallengeResponse, \
     PeerRequest, Ping, PeerResponse, SocketAddr, u32, Pong, bool_, BlockLocators
 from util.buffer import Buffer
 
@@ -78,8 +78,8 @@ class LightNode:
             return
         try:
             challenge_request = ChallengeRequest(
-                version=Testnet2.version,
-                fork_depth=Testnet2.fork_depth,
+                version=Testnet3.version,
+                fork_depth=Testnet3.fork_depth,
                 node_type=NodeType.Client,
                 peer_status=Status.Peering,
                 listener_port=u16(14132),
@@ -114,18 +114,18 @@ class LightNode:
 
             case Message.Type.ChallengeRequest:
                 msg: ChallengeRequest = frame.message
-                if msg.version < Testnet2.version:
+                if msg.version < Testnet3.version:
                     raise ValueError("peer is outdated")
-                if msg.fork_depth != Testnet2.fork_depth:
+                if msg.fork_depth != Testnet3.fork_depth:
                     raise ValueError("peer has wrong fork depth")
                 response = ChallengeResponse(
-                    block_header=Testnet2.genesis_block.header,
+                    block_header=Testnet3.genesis_block.header,
                 )
                 await self.send_message(response)
 
             case Message.Type.ChallengeResponse:
                 msg: ChallengeResponse = frame.message
-                if msg.block_header != Testnet2.genesis_block.header:
+                if msg.block_header != Testnet3.genesis_block.header:
                     raise ValueError("peer has wrong genesis block")
                 await self.send_ping()
 
@@ -144,7 +144,7 @@ class LightNode:
                 # print(f"Peer {self.ip}:{self.port} is at block {height} (type = {msg.node_type}, status = {msg.status}, cumulative_weight = {cumulative_weight})")
 
                 locators = {
-                    u32(): (Testnet2.genesis_block.block_hash, None)
+                    u32(): (Testnet3.genesis_block.block_hash, None)
                 }
                 pong = Pong(
                     is_fork=bool_(),
@@ -176,12 +176,12 @@ class LightNode:
 
     async def send_ping(self):
         ping = Ping(
-            version=Testnet2.version,
-            fork_depth=Testnet2.fork_depth,
+            version=Testnet3.version,
+            fork_depth=Testnet3.fork_depth,
             node_type=NodeType.Client,
             status=Status.Peering,
-            block_hash=Testnet2.genesis_block.block_hash,
-            block_header=Testnet2.genesis_block.header,
+            block_hash=Testnet3.genesis_block.block_hash,
+            block_header=Testnet3.genesis_block.header,
         )
         await self.send_message(ping)
 

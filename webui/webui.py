@@ -17,7 +17,7 @@ from starlette.templating import Jinja2Templates
 from db import Database
 from node.light_node import LightNodeState
 from node.testnet2 import Testnet2
-from node.type import u32, Transaction, Transition, Event, AleoAmount
+from node.types import u32, Transaction, Transition, Event, AleoAmount
 
 
 class Server(uvicorn.Server):

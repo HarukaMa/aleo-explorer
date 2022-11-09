@@ -1,6 +1,6 @@
 import os
 
-from ..type import u32, Block, ProgramID
+from ..types import u32, Block, ProgramID
 
 
 class Testnet2:

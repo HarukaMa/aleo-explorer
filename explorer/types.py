@@ -1,6 +1,6 @@
 from enum import IntEnum
 
-from node.type import Block
+from node.types import Block
 
 
 class Message:

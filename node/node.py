@@ -31,8 +31,8 @@ from more_itertools.recipes import take
 import explorer
 from util.buffer import Buffer
 from .light_node import LightNodeState
-from .testnet2.param import Testnet2
-from .type import *  # too many types
+from .testnet3.param import Testnet3
+from .types import *  # too many types
 
 
 class Node:
@@ -85,12 +85,12 @@ class Node:
                         writer.close()
                         await writer.wait_closed()
                     msg: ChallengeRequest = frame.message
-                    if msg.version < Testnet2.version:
+                    if msg.version < Testnet3.version:
                         raise ValueError("peer is outdated")
-                    if msg.fork_depth != Testnet2.fork_depth:
+                    if msg.fork_depth != Testnet3.fork_depth:
                         raise ValueError("peer has wrong fork depth")
                     response = ChallengeResponse(
-                        block_header=Testnet2.genesis_block.header,
+                        block_header=Testnet3.genesis_block.header,
                     )
                     frame = Frame(type_=response.type, message=response)
                     data = frame.dump()
@@ -115,8 +115,8 @@ class Node:
         await self.explorer_message(explorer.Message(explorer.Message.Type.NodeConnected, None))
         try:
             challenge_request = ChallengeRequest(
-                version=Testnet2.version,
-                fork_depth=Testnet2.fork_depth,
+                version=Testnet3.version,
+                fork_depth=Testnet3.fork_depth,
                 node_type=NodeType.Client,
                 peer_status=self.status,
                 listener_port=u16(14132),
@@ -174,12 +174,12 @@ class Node:
                 if self.handshake_state != 0:
                     raise Exception("handshake is already done")
                 msg: ChallengeRequest = frame.message
-                if msg.version < Testnet2.version:
+                if msg.version < Testnet3.version:
                     raise ValueError("peer is outdated")
-                if msg.fork_depth != Testnet2.fork_depth:
+                if msg.fork_depth != Testnet3.fork_depth:
                     raise ValueError("peer has wrong fork depth")
                 response = ChallengeResponse(
-                    block_header=Testnet2.genesis_block.header,
+                    block_header=Testnet3.genesis_block.header,
                 )
                 await self.send_message(response)
 
@@ -187,7 +187,7 @@ class Node:
                 if self.handshake_state != 0:
                     raise Exception("handshake is already done")
                 msg: ChallengeResponse = frame.message
-                if msg.block_header != Testnet2.genesis_block.header:
+                if msg.block_header != Testnet3.genesis_block.header:
                     raise ValueError("peer has wrong genesis block")
                 self.handshake_state = 1
                 self.status = Status.Ready
@@ -207,7 +207,7 @@ class Node:
                 else:
                     is_fork = bool_(True)
                 latest_height = await self.explorer_request(explorer.Request.GetLatestHeight())
-                num_block_headers = min(Testnet2.maximum_linear_block_locators, latest_height)
+                num_block_headers = min(Testnet3.maximum_linear_block_locators, latest_height)
                 locators = {}
                 for i in range(num_block_headers):
                     height = latest_height - i
@@ -221,7 +221,7 @@ class Node:
                     locators[u32(locator_height)] = (block_hash, None)
                     locator_height -= accumulator
                     accumulator *= 2
-                locators[u32()] = (Testnet2.genesis_block.block_hash, None)
+                locators[u32()] = (Testnet3.genesis_block.block_hash, None)
                 pong = Pong(
                     is_fork=is_fork,
                     block_locators=BlockLocators(block_locators=locators)
@@ -236,10 +236,10 @@ class Node:
 
                 if len(msg.block_locators) == 0:
                     raise ValueError("block locators is empty")
-                if msg.block_locators[0][0] != Testnet2.genesis_block.block_hash:
+                if msg.block_locators[0][0] != Testnet3.genesis_block.block_hash:
                     raise ValueError("incorrect genesis block")
 
-                num_linear_block_headers = min(Testnet2.maximum_linear_block_locators, len(msg.block_locators) - 1)
+                num_linear_block_headers = min(Testnet3.maximum_linear_block_locators, len(msg.block_locators) - 1)
                 num_quadratic_block_headers = len(msg.block_locators) - 1 - num_linear_block_headers
                 self.peer_block_height = last_block_height = max(msg.block_locators.keys())
                 block_locators = OrderedDict(sorted(msg.block_locators.items(), key=lambda k: k[0], reverse=True))
@@ -253,7 +253,7 @@ class Node:
                         raise ValueError("block header is missing")
                     if block_header.metadata.height != block_height:
                         raise ValueError("block header has wrong height")
-                if len(block_locators) > Testnet2.maximum_linear_block_locators:
+                if len(block_locators) > Testnet3.maximum_linear_block_locators:
                     previous_block_height = -1
                     accumulator = 1
                     quadratic_block_locators = take(num_linear_block_headers + num_quadratic_block_headers,
@@ -353,13 +353,13 @@ class Node:
                 else:
                     latest_common_ancestor = latest_block_height
             else:
-                if latest_block_height - common_ancestor <= Testnet2.fork_depth:
+                if latest_block_height - common_ancestor <= Testnet3.fork_depth:
                     print(
                         f"Discovered a canonical chain with common ancestor {common_ancestor} and cumulative weight {self.peer_cumulative_weight}")
                     latest_common_ancestor = common_ancestor
                     ledger_is_on_fork = latest_block_height != common_ancestor
                 elif first_deviating_locator is not None:
-                    if latest_block_height - first_deviating_locator > Testnet2.fork_depth:
+                    if latest_block_height - first_deviating_locator > Testnet3.fork_depth:
                         print("Peer exceeded the permitted fork range")
                         return
                     else:
@@ -389,8 +389,8 @@ class Node:
     async def send_ping(self):
         latest_height = await self.explorer_request(explorer.Request.GetLatestHeight())
         ping = Ping(
-            version=Testnet2.version,
-            fork_depth=Testnet2.fork_depth,
+            version=Testnet3.version,
+            fork_depth=Testnet3.fork_depth,
             node_type=NodeType.Client,
             status=self.status,
             block_hash=await self.explorer_request(explorer.Request.GetBlockHashByHeight(latest_height)),

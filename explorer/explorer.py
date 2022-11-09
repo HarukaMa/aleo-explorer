@@ -7,8 +7,8 @@ from db import Database
 from node import Node
 from node.light_node import LightNodeState
 from node.testnet2 import Testnet2
-from node.type import Block, Transaction
-from .type import Request, Message
+from node.types import Block, Transaction
+from .types import Request, Message
 
 
 class Explorer:

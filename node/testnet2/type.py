@@ -1,3 +1,5 @@
+raise Exception("Old types, only for reference")
+
 import socket
 import struct
 from abc import ABCMeta, abstractmethod

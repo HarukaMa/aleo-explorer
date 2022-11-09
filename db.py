@@ -1,8 +1,8 @@
 import aleo
 import asyncpg
 
-from explorer.type import Message
-from node.type import Block, Transaction, Transition, SerialNumber, RecordCiphertext, Event, Vec, u16, TransitionID, \
+from explorer.types import Message
+from node.types import Block, Transaction, Transition, SerialNumber, RecordCiphertext, Event, Vec, u16, TransitionID, \
     AleoAmount, OuterProof, InnerCircuitID, LedgerRoot, BlockHash, BlockHeader, TransactionsRoot, BlockHeaderMetadata, \
     u32, i64, u64, u128, PoSWNonce, PoSWProof, Transactions, DeprecatedPoSWProof, RecordViewKeyEvent, Record, Operation, \
     CustomEvent, RecordViewKey, u8, NoopOperation, CoinbaseOperation, Address, TransferOperation, EvaluateOperation, \
