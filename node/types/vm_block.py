@@ -2489,3 +2489,6 @@ class Block(Serialize, Deserialize):
         if remaining_blocks <= 0:
             return 0
         return int((remaining_blocks * anchor_reward) * 2 ** (-1 * ((self.header.metadata.timestamp - last_timestamp) - 25) / 25))
+
+    def get_epoch_number(self) -> int:
+        return self.header.metadata.height // 256

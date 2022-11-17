@@ -5,6 +5,7 @@ import datetime
 import os
 import threading
 import time
+from decimal import Decimal
 
 import uvicorn
 from starlette.applications import Starlette
@@ -45,10 +46,14 @@ def get_env(name):
 def format_time(epoch):
     return datetime.datetime.fromtimestamp(epoch, tz=datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
+def format_aleo_credit(gates):
+    return str(Decimal(gates) / 1_000_000)
+
 templates.env.filters["get_env"] = get_env
 templates.env.filters["format_time"] = format_time
+templates.env.filters["format_aleo_credit"] = format_aleo_credit
 
-def get_block_list_info(block: Block) -> dict:
+async def get_block_list_info(block: Block) -> dict:
     b = {
         "timestamp": block.header.metadata.timestamp,
         "height": block.header.metadata.height,
@@ -57,7 +62,7 @@ def get_block_list_info(block: Block) -> dict:
         "block_hash": block.block_hash,
     }
     if block.coinbase.value:
-        b["coinbase_rewards"] = str(block.coinbase_reward())
+        b["coinbase_rewards"] = str(await db.get_block_coinbase_reward_by_height(block.header.metadata.height))
         b["coinbase_solutions"] = str(len(block.coinbase.value.partial_solutions))
     else:
         b["coinbase_rewards"] = "-"
@@ -68,7 +73,7 @@ async def index_route(request: Request):
     recent_blocks = await db.get_recent_blocks()
     data = []
     for block in recent_blocks:
-        data.append(get_block_list_info(block))
+        data.append(await get_block_list_info(block))
     ctx = {
         "latest_block": await db.get_latest_block(),
         "request": request,
@@ -238,7 +243,7 @@ async def search_route(request: Request):
             "blocks": blocks,
             "too_many": too_many,
         }
-        return templates.TemplateResponse('search_result.jinja2', ctx, headers={'Cache-Control': 'public, max-age=30'})
+        return templates.TemplateResponse('search_result.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
     elif query.startswith("at1"):
         # transaction id
         transactions = await db.search_transaction_id(query)
@@ -257,7 +262,7 @@ async def search_route(request: Request):
             "transactions": transactions,
             "too_many": too_many,
         }
-        return templates.TemplateResponse('search_result.jinja2', ctx, headers={'Cache-Control': 'public, max-age=30'})
+        return templates.TemplateResponse('search_result.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
     elif query.startswith("as1"):
         # transition id
         transitions = await db.search_transition_id(query)
@@ -276,7 +281,7 @@ async def search_route(request: Request):
             "transitions": transitions,
             "too_many": too_many,
         }
-        return templates.TemplateResponse('search_result.jinja2', ctx, headers={'Cache-Control': 'public, max-age=30'})
+        return templates.TemplateResponse('search_result.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
     raise HTTPException(status_code=404, detail="Unknown object type or searching is not supported")
 
 
@@ -334,7 +339,7 @@ async def orphan_route(request: Request):
         "blocks": data,
         "height": height,
     }
-    return templates.TemplateResponse('orphan.jinja2', ctx, headers={'Cache-Control': 'public, max-age=30'})
+    return templates.TemplateResponse('orphan.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
 
 
 async def blocks_route(request: Request):
@@ -373,7 +378,38 @@ async def blocks_route(request: Request):
         "page": page,
         "total_pages": total_pages,
     }
-    return templates.TemplateResponse('blocks.jinja2', ctx, headers={'Cache-Control': 'public, max-age=30'})
+    return templates.TemplateResponse('blocks.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
+
+
+async def leaderboard_route(request: Request):
+    try:
+        page = request.query_params.get("p")
+        if page is None:
+            page = 1
+        else:
+            page = int(page)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid page")
+    address_count = await db.get_leaderboard_size()
+    total_pages = (address_count // 50) + 1
+    if page < 1 or page > total_pages:
+        raise HTTPException(status_code=400, detail="Invalid page")
+    start = 50 * (page - 1)
+    leaderboard_data = await db.get_leaderboard(start, start + 50)
+    data = []
+    for line in leaderboard_data:
+        data.append({
+            "address": line["address"],
+            "total_rewards": line["total_reward"],
+        })
+    ctx = {
+        "request": request,
+        "leaderboard": data,
+        "page": page,
+        "total_pages": total_pages,
+    }
+    return templates.TemplateResponse('leaderboard.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
+
 
 
 async def bad_request(request: Request, exc: HTTPException):
@@ -399,6 +435,7 @@ routes = [
     Route("/blocks", blocks_route),
     # Route("/miner", miner_stats),
     # Route("/calc", calc),
+    Route("/leaderboard", leaderboard_route),
 ]
 
 exc_handlers = {

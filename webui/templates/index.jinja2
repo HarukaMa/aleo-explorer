@@ -32,6 +32,10 @@
             height: 20px;
         }
 
+        .timestamp-font-size {
+            font-size: 1.35rem;
+        }
+
     </style>
 {% endblock %}
 
@@ -49,8 +53,14 @@
                 </div>
                 <div class="cell large-auto ticker-cell">
                     <div class="grid-y ticker-cell-content">
+                        <div class="cell ticker-cell-title">Current epoch</div>
+                        <div class="cell auto ticker-cell-data">{{ latest_block.get_epoch_number() }}</div>
+                    </div>
+                </div>
+                <div class="cell large-auto ticker-cell">
+                    <div class="grid-y ticker-cell-content">
                         <div class="cell ticker-cell-title">Timestamp</div>
-                        <div class="cell auto ticker-cell-data">{{ latest_block.header.metadata.timestamp | format_time }}</div>
+                        <div class="cell auto ticker-cell-data timestamp-font-size">{{ latest_block.header.metadata.timestamp | format_time }}</div>
                     </div>
                 </div>
                 <div class="cell large-auto ticker-cell">
@@ -65,6 +75,8 @@
                         <div class="cell auto ticker-cell-data">{{ latest_block.header.metadata.coinbase_target }}</div>
                     </div>
                 </div>
+            </div>
+            <div class="grid-x grid-padding-x">
             </div>
         </div>
 
@@ -84,10 +96,10 @@
                 <tbody>
                 {% for block in recent_blocks %}
                     <tr>
-                        <td><a href="/block?bh={{ block.block_hash }}">{{ block.height }}</a></td>
+                        <td><a href="/block?h={{ block.height }}">{{ block.height }}</a></td>
                         <td>{{ block.timestamp | format_time }}</td>
                         <td>{{ block.transactions }}</td>
-                        <td>{{ block.coinbase_rewards }}</td>
+                        <td>{{ block.coinbase_rewards | format_aleo_credit }}</td>
                         <td>{{ block.coinbase_solutions }}</td>
                         <td>-</td>
                     </tr>

@@ -36,6 +36,7 @@ class RESTNode:
         self.explorer_request = explorer_request
 
     async def connect(self, _: str, __: int):
+        return
         self.worker_task = asyncio.create_task(self.worker())
 
     async def worker(self):
@@ -61,4 +62,3 @@ class RESTNode:
                                 block = Block.load_json(block)
                                 await self.explorer_request(explorer.Request.ProcessBlock(block))
                                 local_height = block.header.metadata.height
-

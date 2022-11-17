@@ -123,6 +123,10 @@ class Database:
 
                     if block.coinbase.value is not None:
                         coinbase_reward = block.get_coinbase_reward((await self.get_latest_block()).header.metadata.last_coinbase_timestamp)
+                        await conn.execute(
+                            "UPDATE block SET coinbase_reward = $1 WHERE id = $2",
+                            coinbase_reward, block_db_id
+                        )
                         partial_solutions = list(block.coinbase.value.partial_solutions)
                         solutions = []
                         if coinbase_reward > 0:
@@ -547,19 +551,35 @@ class Database:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
-    async def update_leaderboard(self, reward: {str, int}):
+    async def get_block_coinbase_reward_by_height(self, height: int) -> int | None:
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
             try:
-                for address, reward in reward.items():
-                    await conn.execute(
-                        "INSERT INTO leaderboard (address, total_reward) VALUES ($1, $2) "
-                        "ON CONFLICT (address) DO UPDATE SET total_reward = leaderboard.total_reward + $2",
-                        address, reward
-                    )
-                    await conn.execute(
-                        "INSERT INTO leaderboard_log (height, address, partial_solution_id, reward) "
-                    )
+                return await conn.fetchval(
+                    "SELECT coinbase_reward FROM block WHERE height = $1", height
+                )
+            except Exception as e:
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                raise
+
+    async def get_leaderboard_size(self) -> int:
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                return await conn.fetchval(
+                    "SELECT COUNT(*) FROM leaderboard"
+                )
+            except Exception as e:
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                raise
+
+    async def get_leaderboard(self, start: int, end: int) -> list:
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                return await conn.fetch(
+                    "SELECT * FROM leaderboard ORDER BY total_reward DESC LIMIT $1 OFFSET $2", end - start, start
+                )
             except Exception as e:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
