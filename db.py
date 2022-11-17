@@ -606,7 +606,7 @@ class Database:
                     "JOIN partial_solution ps ON ps.id = ll.partial_solution_id "
                     "JOIN coinbase_solution cs ON cs.id = ps.coinbase_solution_id "
                     "JOIN block b ON b.id = cs.block_id "
-                    "WHERE ll.address = $1 ORDER BY height DESC LIMIT 30 ",
+                    "WHERE ll.address = $1 ORDER BY ll.height DESC LIMIT 30 ",
                     address
                 )
             except Exception as e:
@@ -635,7 +635,7 @@ class Database:
                     "JOIN partial_solution ps ON ps.id = ll.partial_solution_id "
                     "JOIN coinbase_solution cs ON cs.id = ps.coinbase_solution_id "
                     "JOIN block b ON b.id = cs.block_id "
-                    "WHERE ll.address = $1 ORDER BY height DESC LIMIT $2 OFFSET $3",
+                    "WHERE ll.address = $1 ORDER BY ll.height DESC LIMIT $2 OFFSET $3",
                     address, end - start, start
                 )
             except Exception as e:
