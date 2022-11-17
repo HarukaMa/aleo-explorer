@@ -60,6 +60,8 @@ async def get_block_list_info(block: Block) -> dict:
         "timestamp": block.header.metadata.timestamp,
         "height": block.header.metadata.height,
         "transactions": len(block.transactions.transactions),
+        "proof_target": block.header.metadata.proof_target,
+        "coinbase_target": block.header.metadata.coinbase_target,
         "validator": "Not implemented", # await db.get_miner_from_block_hash(block.block_hash),
         "block_hash": block.block_hash,
     }

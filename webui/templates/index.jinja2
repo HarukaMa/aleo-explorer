@@ -43,6 +43,10 @@
 
     <div class="content">
 
+        <div class="callout primary">
+            Very WIP version, many parts are not working yet.
+        </div>
+
         <div id="ticker">
             <div class="grid-x grid-padding-x">
                 <div class="cell large-auto ticker-cell">
@@ -88,6 +92,8 @@
                     <th>Height</th>
                     <th>Timestamp</th>
                     <th>Transactions</th>
+                    <th>Proof target</th>
+                    <th>Coinbase target</th>
                     <th>Coinbase rewards</th>
                     <th>Coinbase solutions</th>
                     <th>Validator</th>
@@ -99,6 +105,8 @@
                         <td><a href="/block?h={{ block.height }}">{{ block.height }}</a></td>
                         <td>{{ block.timestamp | format_time }}</td>
                         <td>{{ block.transactions }}</td>
+                        <td>{{ block.proof_target }}</td>
+                        <td>{{ block.coinbase_target }}</td>
                         <td>{{ block.coinbase_rewards | format_aleo_credit }}</td>
                         <td>{{ block.coinbase_solutions }}</td>
                         <td>-</td>
