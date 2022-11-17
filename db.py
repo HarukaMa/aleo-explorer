@@ -624,6 +624,24 @@ class Database:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
+    async def get_solution_by_address(self, address: str, start: int, end: int) -> list:
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                return await conn.fetch(
+                    "SELECT b.height as height, b.timestamp as timestamp, ps.nonce as nonce, ps.target as target, "
+                    "reward, get_block_target_sum(b.height) as target_sum "
+                    "FROM leaderboard_log ll "
+                    "JOIN partial_solution ps ON ps.id = ll.partial_solution_id "
+                    "JOIN coinbase_solution cs ON cs.id = ps.coinbase_solution_id "
+                    "JOIN block b ON b.id = cs.block_id "
+                    "WHERE ll.address = $1 ORDER BY height DESC LIMIT $2 OFFSET $3",
+                    address, end - start, start
+                )
+            except Exception as e:
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                raise
+
     async def search_address(self, address: str) -> [str]:
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:

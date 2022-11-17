@@ -465,6 +465,43 @@ async def address_route(request: Request):
     }
     return templates.TemplateResponse('address.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
 
+async def address_solution_route(request: Request):
+    address = request.query_params.get("a")
+    if address is None:
+        raise HTTPException(status_code=400, detail="Missing address")
+    try:
+        page = request.query_params.get("p")
+        if page is None:
+            page = 1
+        else:
+            page = int(page)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid page")
+    solution_count = await db.get_solution_count_by_address(address)
+    total_pages = (solution_count // 50) + 1
+    if page < 1 or page > total_pages:
+        raise HTTPException(status_code=400, detail="Invalid page")
+    start = 50 * (page - 1)
+    solutions = await db.get_solution_by_address(address, start, start + 50)
+    data = []
+    for solution in solutions:
+        data.append({
+            "height": solution["height"],
+            "timestamp": solution["timestamp"],
+            "reward": solution["reward"],
+            "nonce": solution["nonce"],
+            "target": solution["target"],
+            "target_sum": solution["target_sum"],
+        })
+    ctx = {
+        "request": request,
+        "address": address,
+        "address_trunc": address[:14] + "..." + address[-6:],
+        "solutions": data,
+        "page": page,
+        "total_pages": total_pages,
+    }
+    return templates.TemplateResponse('address_solution.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
 
 
 async def bad_request(request: Request, exc: HTTPException):
@@ -492,6 +529,7 @@ routes = [
     # Route("/calc", calc),
     Route("/leaderboard", leaderboard_route),
     Route("/address", address_route),
+    Route("/address_solution", address_solution_route),
 ]
 
 exc_handlers = {
