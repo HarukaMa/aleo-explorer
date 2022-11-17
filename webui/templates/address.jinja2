@@ -1,0 +1,107 @@
+{% extends "base.jinja2" %}
+
+{% block title %}Address {{ address_trunc }} - Haruka's Aleo Explorer{% endblock %}
+
+{% block head %}
+    <style>
+
+        #data {
+            margin: 20px 4px;
+        }
+
+        .data-line {
+            padding: 10px 0;
+            border-bottom: 1px solid #ccc;
+        }
+
+        .data-line-value {
+            overflow-wrap: break-word;
+        }
+
+        .tooltip {
+            max-width: 250px;
+        }
+
+        .text-alert {
+            color: #cc4b37;
+        }
+
+        .note {
+            font-size: 0.75rem;
+            color: #999;
+        }
+
+    </style>
+{% endblock %}
+
+{% block content %}
+
+    <div class="content">
+
+        <div id="header">
+            <h3>Address {{ address_trunc }}</h3>
+        </div>
+
+
+        <div id="data">
+            <h4>Overview</h4>
+            <div class="data-line grid-x grid-padding-x">
+                <div class="cell small-3 block-data-line-label">
+                    Address
+                </div>
+                <div class="cell auto data-line-value">
+                    <span class="mono">{{ address }}</span>
+                </div>
+            </div>
+            <div class="data-line grid-x grid-padding-x">
+                <div class="cell small-3 block-data-line-label">
+                    Total phase 2 rewards (not incentivized)
+                </div>
+                <div class="cell auto data-line-value">
+                    {{ total_rewards | format_aleo_credit }}
+                </div>
+            </div>
+            <div class="data-line grid-x grid-padding-x">
+                <div class="cell small-3 block-data-line-label">
+                    Total solutions found
+                </div>
+                <div class="cell auto data-line-value">
+                    {{ total_solutions }}
+                </div>
+            </div>
+        </div>
+
+        <div id="solutions">
+            <h4>Accepted solutions</h4>
+            <table class="unstriped">
+                <thead>
+                <tr>
+                    <th>Block</th>
+                    <th>Epoch</th>
+                    <th>Timestamp</th>
+                    <th>Nonce</th>
+                    <th>Target / Total</th>
+                    <th>Reward</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for solution in solutions %}
+                    <tr>
+                        <td><a href="/block?h={{ solution.height }}">{{ solution.height }}</a></td>
+                        <td>{{ solution.height // 256 }}</td>
+                        <td>{{ solution.timestamp | format_time }}</td>
+                        <td>{{ solution.nonce }}</td>
+                        <td>{{ solution.target }}<span class="note"> / {{ solution.target_sum }}</span></td>
+                        <td>{{ solution.reward | format_aleo_credit }}</td>
+                    </tr>
+                {% endfor %}
+                <tr>
+                    <td><a href="/address_solution?a={{ address }}">Show more</a></td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+
+{% endblock %}

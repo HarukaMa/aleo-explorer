@@ -39,6 +39,11 @@
                     <span class="mono"><a href="/transition?id={{ transition_id }}">{{ transition_id }}</a></span>
                 </li>
             {% endfor %}
+            {% for address in addresses %}
+                <li>
+                    <span class="mono"><a href="/address?a={{ address }}">{{ address }}</a></span>
+                </li>
+            {% endfor %}
         </ul>
     </div>
 

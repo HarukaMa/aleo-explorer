@@ -287,6 +287,26 @@ async def search_route(request: Request):
             "too_many": too_many,
         }
         return templates.TemplateResponse('search_result.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
+    elif query.startswith("aleo1"):
+        # address
+        addresses = await db.search_address(query)
+        if not addresses:
+            raise HTTPException(status_code=404, detail="Address not found")
+        if len(addresses) == 1:
+            return RedirectResponse(f"/address?a={addresses[0]}", status_code=302)
+        too_many = False
+        if len(addresses) > 50:
+            addresses = addresses[:50]
+            too_many = True
+        ctx = {
+            "request": request,
+            "query": query,
+            "type": "address",
+            "addresses": addresses,
+            "too_many": too_many,
+        }
+        return templates.TemplateResponse('search_result.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
+
     raise HTTPException(status_code=404, detail="Unknown object type or searching is not supported")
 
 
@@ -415,6 +435,35 @@ async def leaderboard_route(request: Request):
     }
     return templates.TemplateResponse('leaderboard.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
 
+async def address_route(request: Request):
+    address = request.query_params.get("a")
+    if address is None:
+        raise HTTPException(status_code=400, detail="Missing address")
+    solutions = await db.get_recent_solutions_by_address(address)
+    if solutions is None:
+        raise HTTPException(status_code=404, detail="Address not found")
+    solution_count = await db.get_solution_count_by_address(address)
+    total_rewards = await db.get_leaderboard_reward_by_address(address)
+    data = []
+    for solution in solutions:
+        data.append({
+            "height": solution["height"],
+            "timestamp": solution["timestamp"],
+            "reward": solution["reward"],
+            "nonce": solution["nonce"],
+            "target": solution["target"],
+            "target_sum": solution["target_sum"],
+        })
+    ctx = {
+        "request": request,
+        "address": address,
+        "address_trunc": address[:14] + "..." + address[-6:],
+        "solutions": data,
+        "total_rewards": total_rewards,
+        "total_solutions": solution_count,
+    }
+    return templates.TemplateResponse('address.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
+
 
 
 async def bad_request(request: Request, exc: HTTPException):
@@ -441,6 +490,7 @@ routes = [
     # Route("/miner", miner_stats),
     # Route("/calc", calc),
     Route("/leaderboard", leaderboard_route),
+    Route("/address", address_route),
 ]
 
 exc_handlers = {
