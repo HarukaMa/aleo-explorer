@@ -39,3 +39,9 @@ def type_check(func):
         return func(*args, **kwargs)
 
     return wrapper
+
+def bech32_to_bytes(s: str) -> bytearray:
+    """Convert a bech32 string to bytes."""
+    import thirdparty.bech32 as bech32
+    hrp, data, _ = bech32.bech32_decode(s)
+    return bytearray(bech32.convertbits(data, 5, 8)[:-1])

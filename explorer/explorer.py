@@ -5,9 +5,9 @@ import traceback
 import webui
 from db import Database
 from node import Node
-from node.light_node import LightNodeState
-from node.testnet2 import Testnet2
-from node.types import Block, Transaction
+# from node.light_node import LightNodeState
+from node.testnet3 import Testnet3
+from node.types import Block
 from .types import Request, Message
 
 
@@ -23,9 +23,9 @@ class Explorer:
 
         # states
         self.latest_height = 0
-        self.latest_block_hash = Testnet2.genesis_block.block_hash
+        self.latest_block_hash = Testnet3.genesis_block.block_hash
         self.db_lock = asyncio.Lock()
-        self.light_node_state = LightNodeState()
+        # self.light_node_state = LightNodeState()
 
     def start(self):
         self.task = asyncio.create_task(self.main_loop())
@@ -39,19 +39,16 @@ class Explorer:
             match type(request):
                 case Request.GetLatestHeight:
                     return self.latest_height
-                case Request.GetLatestWeight:
-                    weight = await self.db.get_latest_canonical_weight()
-                    return weight
                 case Request.ProcessBlock:
                     await self.add_block(request.block)
                 case Request.GetBlockByHeight:
-                    return await self.db.get_canonical_block_by_height(request.height)
+                    return await self.db.get_block_by_height(request.height)
                 case Request.GetBlockHashByHeight:
                     if request.height == self.latest_height:
                         return self.latest_block_hash
-                    return await self.db.get_canonical_block_hash_by_height(request.height)
+                    return await self.db.get_block_hash_by_height(request.height)
                 case Request.GetBlockHeaderByHeight:
-                    return await self.db.get_canonical_block_header_by_height(request.height)
+                    return await self.db.get_block_header_by_height(request.height)
                 case Request.RevertToBlock:
                     await self.revert_to_block(request.height)
                 case _:
@@ -60,21 +57,21 @@ class Explorer:
             self.db_lock.release()
 
     async def check_genesis(self):
-        height = await self.db.get_latest_canonical_height()
+        height = await self.db.get_latest_height()
         if height is None:
-            await self.node_request(Request.ProcessBlock(Testnet2.genesis_block))
+            await self.node_request(Request.ProcessBlock(Testnet3.genesis_block))
 
     async def main_loop(self):
         try:
             await self.db.connect()
             await self.check_genesis()
-            self.latest_height = await self.db.get_latest_canonical_height()
-            self.latest_block_hash = await self.db.get_canonical_block_hash_by_height(self.latest_height)
+            self.latest_height = await self.db.get_latest_height()
+            self.latest_block_hash = await self.db.get_block_hash_by_height(self.latest_height)
             print(f"latest height: {self.latest_height}")
-            self.node = Node(explorer_message=self.message, explorer_request=self.node_request,
-                             light_node_state=self.light_node_state)
+            self.node = Node(explorer_message=self.message, explorer_request=self.node_request,)
+                             #light_node_state=self.light_node_state)
             await self.node.connect(os.environ.get("NODE_HOST", "127.0.0.1"), int(os.environ.get("NODE_PORT", "4132")))
-            asyncio.create_task(webui.run(light_node_state=self.light_node_state))
+            asyncio.create_task(webui.run())
             while True:
                 msg = await self.message_queue.get()
                 match msg.type:
@@ -103,32 +100,18 @@ class Explorer:
             raise
 
     async def add_block(self, block: Block):
-        if block is Testnet2.genesis_block:
-            await self.db.save_canonical_block(block)
+        if block is Testnet3.genesis_block:
+            await self.db.save_block(block)
             return
-        # testnet2 bug check
-        testnet2_bug = False
-        for tx in block.transactions.transactions:
-            tx: Transaction
-            if str(tx.ledger_root) in Testnet2.non_canonical_ledger_roots:
-                testnet2_bug = True
-                break
-        if block.previous_block_hash != self.latest_block_hash or testnet2_bug:
-            if await self.db.is_block_hash_canonical(block.block_hash):
-                # should only cancel canonical state during revertion
-                return
-            print(f"adding non-canonical block {block}")
-            await self.db.save_non_canonical_block(block)
+        if block.previous_hash != self.latest_block_hash:
+            print(f"ignoring block {block} because previous block hash does not match")
         else:
-            print(f"adding canonical block {block}")
-            await self.db.save_canonical_block(block)
+            print(f"adding block {block}")
+            await self.db.save_block(block)
             self.latest_height = block.header.metadata.height
             self.latest_block_hash = block.block_hash
 
-    async def revert_to_block(self, height):
-        await self.db.revert_to_block(height)
-        self.latest_height = height
-        self.latest_block_hash = await self.db.get_canonical_block_hash_by_height(height)
+
 
     async def get_latest_block(self):
-        return await self.db.get_latest_canonical_block()
+        return await self.db.get_latest_block()

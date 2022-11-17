@@ -187,7 +187,16 @@ class Option(Generic, Serialize, Deserialize):
         super().__init__(types)
 
     def __call__(self, value):
-        if not isinstance(value, self.type | None):
+        if value is None:
+            self.value = None
+        elif issubclass(type(self.type), Generic):
+            if isinstance(self.type, Vec):
+                if value.type != self.type.type and not (isinstance(value.type, Tuple) and isinstance(self.type.type, Tuple)):
+                    raise TypeError(f"value should be {self.type}, but got {type(value)}")
+            if isinstance(self.type, Tuple):
+                if value.types != self.type.types:
+                    raise TypeError(f"value should be {self.type}, but got {type(value)}")
+        elif not isinstance(value, self.type):
             raise TypeError("value must be of type {} or None".format(self.type))
         self.value = value
         return self
@@ -197,6 +206,12 @@ class Option(Generic, Serialize, Deserialize):
             return b"\x00"
         else:
             return b"\x01" + self.type.dump(self.value)
+
+    def dumps(self) -> str | None:
+        if self.value is None:
+            return None
+        else:
+            return str(self.value)
 
     @type_check
     def load(self, data: bytearray):

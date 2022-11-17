@@ -15,9 +15,8 @@ from starlette.routing import Route
 from starlette.templating import Jinja2Templates
 
 from db import Database
-from node.light_node import LightNodeState
-from node.testnet2 import Testnet2
-from node.types import u32, Transaction, Transition, Event, AleoAmount
+# from node.light_node import LightNodeState
+from node.types import u32, Transaction, Transition, ExecuteTransaction, Block
 
 
 class Server(uvicorn.Server):
@@ -49,23 +48,29 @@ def format_time(epoch):
 templates.env.filters["get_env"] = get_env
 templates.env.filters["format_time"] = format_time
 
+def get_block_list_info(block: Block) -> dict:
+    b = {
+        "timestamp": block.header.metadata.timestamp,
+        "height": block.header.metadata.height,
+        "transactions": len(block.transactions.transactions),
+        "validator": "Not implemented", # await db.get_miner_from_block_hash(block.block_hash),
+        "block_hash": block.block_hash,
+    }
+    if block.coinbase.value:
+        b["coinbase_rewards"] = str(block.coinbase_reward())
+        b["coinbase_solutions"] = str(len(block.coinbase.value.partial_solutions))
+    else:
+        b["coinbase_rewards"] = "-"
+        b["coinbase_solutions"] = "-"
+    return b
+
 async def index_route(request: Request):
-    recent_blocks = await db.get_recent_canonical_blocks_fast()
+    recent_blocks = await db.get_recent_blocks()
     data = []
     for block in recent_blocks:
-        b = {
-            "timestamp": block["timestamp"],
-            "height": block["height"],
-            "transactions": block["transaction_count"],
-            "transitions": block["transition_count"],
-            "owner": await db.get_miner_from_block_hash(block["block_hash"]),
-            "block_hash": block["block_hash"],
-        }
-        data.append(b)
-        height = block["height"]
-        b["orphaned"] = await db.get_orphaned_block_count_on_height(height)
+        data.append(get_block_list_info(block))
     ctx = {
-        "latest_block": await db.get_latest_canonical_block_fast(),
+        "latest_block": await db.get_latest_block(),
         "request": request,
         "recent_blocks": data,
     }
@@ -78,7 +83,7 @@ async def block_route(request: Request):
     if height is None and block_hash is None:
         raise HTTPException(status_code=400, detail="Missing height or block hash")
     if height is not None:
-        block = await db.get_canonical_block_by_height(u32(int(height)))
+        block = await db.get_block_by_height(u32(int(height)))
         if block is None:
             raise HTTPException(status_code=404, detail="Block not found")
         is_canonical = True
@@ -87,55 +92,38 @@ async def block_route(request: Request):
         block = await db.get_block_by_hash(block_hash)
         if block is None:
             raise HTTPException(status_code=404, detail="Block not found")
-        is_canonical = await db.is_block_hash_canonical(block.block_hash)
         height = block.header.metadata.height
     height = int(height)
-    latest_block_height = await db.get_latest_canonical_height()
+    latest_block_height = await db.get_latest_height()
     confirmations = latest_block_height - height + 1
-    ledger_root = await db.get_ledger_root_from_block_hash(block.block_hash)
 
-    testnet2_bug = False
     mining_reward = 0
     fee = 0
     txs = []
     for tx in block.transactions.transactions:
         tx: Transaction
-        if str(tx.ledger_root) in Testnet2.non_canonical_ledger_roots:
-            testnet2_bug = True
-        t = {
-            "tx_id": tx.transaction_id,
-            "transitions": len(tx.transitions),
-        }
-        balance = 0
-        for ts in tx.transitions:
-            ts: Transition
-            balance += ts.value_balance
-            if ts.value_balance < 0:
-                mining_reward = -ts.value_balance
-        t["balance"] = AleoAmount(balance)
-        if balance >= 0:
-            fee += balance
-        txs.append(t)
-    if height <= 4730400:
-        standard_mining_reward = AleoAmount(100000000)
-    elif height <= 9460800:
-        standard_mining_reward = AleoAmount(50000000)
-    else:
-        standard_mining_reward = AleoAmount(25000000)
+        match tx.type:
+            case Transaction.Type.Deploy:
+                raise NotImplementedError
+            case Transaction.Type.Execute:
+                tx: ExecuteTransaction
+                t = {
+                    "tx_id": tx.id,
+                }
+                balance = 0
+                if balance >= 0:
+                    fee += balance
+                txs.append(t)
 
     ctx = {
         "request": request,
         "block": block,
         "block_hash_trunc": str(block_hash)[:12] + "..." + str(block_hash)[-6:],
-        "is_canonical": is_canonical,
         "confirmations": confirmations,
-        "ledger_root": ledger_root,
-        "owner": await db.get_miner_from_block_hash(block.block_hash),
-        "testnet2_bug": testnet2_bug,
-        "mining_reward": AleoAmount(mining_reward),
+        "validator": "Not implemented", # await db.get_miner_from_block_hash(block.block_hash),
+        "pow_reward": mining_reward,
         "transactions": txs,
-        "fee": AleoAmount(fee),
-        "burned": standard_mining_reward + fee - mining_reward,
+        "fee": fee,
     }
     return templates.TemplateResponse('block.jinja2', ctx, headers={'Cache-Control': 'public, max-age=30'})
 
@@ -144,20 +132,23 @@ async def transaction_route(request: Request):
     tx_id = request.query_params.get("id")
     if tx_id is None:
         raise HTTPException(status_code=400, detail="Missing transaction id")
-    block = await db.get_best_block_from_transaction_id(tx_id)
+    block = await db.get_block_from_transaction_id(tx_id)
     if block is None:
         raise HTTPException(status_code=404, detail="Transaction not found")
-    is_canonical = await db.is_block_hash_canonical(block.block_hash)
 
-    latest_block_height = await db.get_latest_canonical_height()
+    latest_block_height = await db.get_latest_height()
     confirmations = latest_block_height - block.header.metadata.height + 1
 
     transaction = None
     for tx in block.transactions.transactions:
-        tx: Transaction
-        if str(tx.transaction_id) == tx_id:
-            transaction = tx
-            break
+        match tx.type:
+            case Transaction.Type.Deploy:
+                raise NotImplementedError
+            case Transaction.Type.Execute:
+                tx: ExecuteTransaction
+                if str(tx.id) == tx_id:
+                    transaction = tx
+                    break
     if transaction is None:
         raise HTTPException(status_code=550, detail="Transaction not found in block")
 
@@ -166,7 +157,6 @@ async def transaction_route(request: Request):
         "tx_id": tx_id,
         "tx_id_trunc": str(tx_id)[:12] + "..." + str(tx_id)[-6:],
         "block": block,
-        "is_canonical": is_canonical,
         "confirmations": confirmations,
         "transaction": transaction,
     }
@@ -177,7 +167,7 @@ async def transition_route(request: Request):
     ts_id = request.query_params.get("id")
     if ts_id is None:
         raise HTTPException(status_code=400, detail="Missing transition id")
-    block = await db.get_best_block_from_transition_id(ts_id)
+    block = await db.get_block_from_transition_id(ts_id)
     if block is None:
         raise HTTPException(status_code=404, detail="Transition not found")
 
@@ -402,9 +392,9 @@ routes = [
     Route("/", index_route),
     Route("/block", block_route),
     Route("/transaction", transaction_route),
-    Route("/transition", transition_route),
+    # Route("/transition", transition_route),
     Route("/search", search_route),
-    Route("/nodes", nodes_route),
+    # Route("/nodes", nodes_route),
     Route("/orphan", orphan_route),
     Route("/blocks", blocks_route),
     # Route("/miner", miner_stats),
@@ -431,14 +421,14 @@ async def startup():
 # noinspection PyTypeChecker
 app = Starlette(debug=True if os.environ.get("DEBUG") else False, routes=routes, on_startup=[startup], exception_handlers=exc_handlers)
 db: Database
-lns: LightNodeState | None = None
+# lns: LightNodeState | None = None
 
 
-async def run(light_node_state: LightNodeState):
+async def run():
     config = uvicorn.Config("webui:app", reload=True, log_level="info")
     server = Server(config=config)
-    global lns
-    lns = light_node_state
+    # global lns
+    # lns = light_node_state
 
     with server.run_in_thread():
         while True:

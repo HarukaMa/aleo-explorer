@@ -55,16 +55,14 @@
                 </div>
                 <div class="cell large-auto ticker-cell">
                     <div class="grid-y ticker-cell-content">
-                        <div class="cell ticker-cell-title">Cumulative Weight</div>
-                        <div class="cell auto ticker-cell-data">{{ latest_block.header.metadata.cumulative_weight }}</div>
+                        <div class="cell ticker-cell-title">Proof target</div>
+                        <div class="cell auto ticker-cell-data">{{ latest_block.header.metadata.proof_target }}</div>
                     </div>
                 </div>
                 <div class="cell large-auto ticker-cell">
                     <div class="grid-y ticker-cell-content">
-                        <div class="cell ticker-cell-title">Block Weight
-                            <span data-tooltip title="(2 ^ 64 - 1) / difficulty_target"><i class="fi-info"></i></span>
-                        </div>
-                        <div class="cell auto ticker-cell-data">{{ (2 ** 64 - 1) / latest_block.header.metadata.difficulty_target }}</div>
+                        <div class="cell ticker-cell-title">Coinbase target</div>
+                        <div class="cell auto ticker-cell-data">{{ latest_block.header.metadata.coinbase_target }}</div>
                     </div>
                 </div>
             </div>
@@ -78,9 +76,9 @@
                     <th>Height</th>
                     <th>Timestamp</th>
                     <th>Transactions</th>
-                    <th>Transitions</th>
-                    <th>Miner</th>
-                    <th>Orphaned blocks</th>
+                    <th>Coinbase rewards</th>
+                    <th>Coinbase solutions</th>
+                    <th>Validator</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -89,9 +87,9 @@
                         <td><a href="/block?bh={{ block.block_hash }}">{{ block.height }}</a></td>
                         <td>{{ block.timestamp | format_time }}</td>
                         <td>{{ block.transactions }}</td>
-                        <td>{{ block.transitions }}</td>
-                        <td class="mono"><a href="/address?a={{ block.owner }}">{{ block.owner }}</a></td>
-                        <td>{% if block.orphaned %}<a href="/orphan?h={{ block.height }}">{{ block.orphaned }}</a>{% else %}{{ block.orphaned }}{% endif %}</td>
+                        <td>{{ block.coinbase_rewards }}</td>
+                        <td>{{ block.coinbase_solutions }}</td>
+                        <td>-</td>
                     </tr>
                 {% endfor %}
                 </tbody>

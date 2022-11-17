@@ -30,13 +30,13 @@ from more_itertools.recipes import take
 
 import explorer
 from util.buffer import Buffer
-from .light_node import LightNodeState
+# from .light_node import LightNodeState
 from .testnet3.param import Testnet3
 from .types import *  # too many types
 
 
 class Node:
-    def __init__(self, explorer_message: Callable, explorer_request: Callable, light_node_state: LightNodeState):
+    def __init__(self, explorer_message: Callable, explorer_request: Callable):
         self.reader, self.writer = None, None
         self.buffer = Buffer()
         self.worker_task: asyncio.Task | None = None
@@ -58,7 +58,7 @@ class Node:
         self.block_requests = []
         self.block_requests_deadline = float('inf')
         self.ping_task = None
-        self.light_node_state = light_node_state
+        # self.light_node_state = light_node_state
 
     async def connect(self, ip: str, port: int):
         self.node_port = port

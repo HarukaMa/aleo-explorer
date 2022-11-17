@@ -187,31 +187,90 @@ class Field(Serialize, Deserialize):
         del data[:32]
         return cls(data_)
 
-# Binary wise they are both just a Field
-# We should update this to a full class if we need to use the actual Group value
-Group = Field
+    @classmethod
+    def loads(cls, data: str):
+        return cls(int(data.replace("field", "")))
 
-# ditto
-Scalar = Field
+    def __str__(self):
+        return str(self.data) + "field"
+
+
+class Group(Serialize, Deserialize):
+    # This is definitely wrong, but we are not using the internals
+    @type_check
+    def __init__(self, data):
+        if not isinstance(data, int):
+            raise TypeError("data must be int")
+        self.data = data
+
+    def dump(self) -> bytes:
+        return self.data.to_bytes(32, "little")
+
+    @classmethod
+    @type_check
+    def load(cls, data: bytearray):
+        if len(data) < 32:
+            raise ValueError("incorrect length")
+        data_ = int.from_bytes(bytes(data[:32]), "little")
+        del data[:32]
+        return cls(data_)
+
+    @classmethod
+    def loads(cls, data: str):
+        return cls(int(data.replace("group", "")))
+
+    def __str__(self):
+        return str(self.data) + "group"
+
+
+class Scalar(Serialize, Deserialize):
+    # Could be wrong as well
+    @type_check
+    def __init__(self, data):
+        if not isinstance(data, int):
+            raise TypeError("data must be int")
+        self.data = data
+
+    def dump(self) -> bytes:
+        return self.data.to_bytes(32, "little")
+
+    @classmethod
+    @type_check
+    def load(cls, data: bytearray):
+        if len(data) < 32:
+            raise ValueError("incorrect length")
+        data_ = int.from_bytes(bytes(data[:32]), "little")
+        del data[:32]
+        return cls(data_)
+
+    @classmethod
+    def loads(cls, data: str):
+        return cls(int(data.replace("scalar", "")))
+
+    def __str__(self):
+        return str(self.data) + "scalar"
 
 
 class Fq(Serialize, Deserialize):
     # Fp384, G1
     @type_check
-    def __init__(self, data):
-        self.data = data
+    def __init__(self, value: int):
+        self.value = value
 
     def dump(self) -> bytes:
-        return self.data.to_bytes(48, "little")
+        return self.value.to_bytes(48, "little")
 
     @classmethod
     @type_check
     def load(cls, data: bytearray):
         if len(data) < 48:
             raise ValueError("incorrect length")
-        data_ = int.from_bytes(bytes(data[:48]), "little")
+        value = int.from_bytes(bytes(data[:48]), "little")
         del data[:48]
-        return cls(data_)
+        return cls(value=value)
+
+    def __str__(self):
+        return str(self.value)
 
 class G1Affine(Serialize, Deserialize):
 
@@ -221,9 +280,9 @@ class G1Affine(Serialize, Deserialize):
         self.flags = flags
 
     def dump(self) -> bytes:
-        res = self.x.dump()
+        res = bytearray(self.x.dump())
         res[-1] |= self.flags << 7
-        return res
+        return bytes(res)
 
     @classmethod
     @type_check
@@ -233,6 +292,14 @@ class G1Affine(Serialize, Deserialize):
         flags = bool(data_[-1] >> 7)
         data_[-1] &= 0x7f
         return cls(x=Fq.load(data_), flags=flags)
+
+    @classmethod
+    @type_check
+    def load_json(cls, data: dict):
+        x = Fq(value=int(data["x"]))
+        # This is very wrong
+        flags = False
+        return cls(x=x, flags=flags)
 
 class Fq2(Serialize, Deserialize):
 

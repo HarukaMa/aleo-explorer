@@ -1,3 +1,5 @@
+from hashlib import sha256
+
 from .vm_instruction import *
 
 
@@ -909,6 +911,13 @@ class KZGProof(Serialize, Deserialize):
         random_v = Option[Field].load(data)
         return cls(w=w, random_v=random_v)
 
+    @classmethod
+    @type_check
+    def load_json(cls, data: dict):
+        w = G1Affine.load_json(data)
+        # This is wrong
+        random_v = Option[Field](None)
+        return cls(w=w, random_v=random_v)
 
 class BatchProof(Serialize, Deserialize):
 
@@ -1156,6 +1165,11 @@ class Proof(Serialize, Deserialize):
         pc_proof = BatchLCProof.load(data)
         return cls(batch_size=batch_size, commitments=commitments, evaluations=evaluations, msg=msg, pc_proof=pc_proof)
 
+    @classmethod
+    @type_check
+    def loads(cls, data: str):
+        return cls.load(bech32_to_bytes(data))
+
 
     def __str__(self):
         return str(Bech32m(self.dump(), "proof"))
@@ -1175,6 +1189,11 @@ class Ciphertext(Serialize, Deserialize):
     def load(cls, data: bytearray):
         ciphertext = Vec[Field, u16].load(data)
         return cls(ciphertext=ciphertext)
+
+    @classmethod
+    @type_check
+    def loads(cls, data: str):
+        return cls.load(bech32_to_bytes(data))
 
     def __str__(self):
         return str(Bech32m(self.dump(), "ciphertext"))
@@ -1526,6 +1545,10 @@ class Record(Generic, Serialize, Deserialize):
         self.nonce = Group.load(data)
         return self
 
+    @type_check
+    def loads(self, data: str):
+        return self.load(bech32_to_bytes(data))
+
     def __str__(self):
         return str(Bech32m(self.dump(), "record"))
 
@@ -1620,6 +1643,17 @@ class TransitionInput(Serialize, Deserialize): # enum
         else:
             raise ValueError("unknown transition input type")
 
+    @classmethod
+    @type_check
+    def load_json(cls, data: dict):
+        type_ = data["type"]
+        if type_ == "private":
+            return PrivateTransitionInput.load_json(data)
+        elif type_ == "record":
+            return RecordTransitionInput.load_json(data)
+        else:
+            raise ValueError("unsupported transition input type")
+
 
 class ConstantTransitionInput(TransitionInput):
     type = TransitionInput.Type.Constant
@@ -1677,6 +1711,16 @@ class PrivateTransitionInput(TransitionInput):
         ciphertext = Option[Ciphertext].load(data)
         return cls(ciphertext_hash=ciphertext_hash, ciphertext=ciphertext)
 
+    @classmethod
+    @type_check
+    def load_json(cls, data: dict):
+        ciphertext_hash = Field.loads(data["id"])
+        if "value" in data:
+            ciphertext = Option[Ciphertext](Ciphertext.load(bech32_to_bytes(data["value"])))
+        else:
+            ciphertext = Option[Ciphertext](None)
+        return cls(ciphertext_hash=ciphertext_hash, ciphertext=ciphertext)
+
 
 class RecordTransitionInput(TransitionInput):
     type = TransitionInput.Type.Record
@@ -1694,6 +1738,13 @@ class RecordTransitionInput(TransitionInput):
     def load(cls, data: bytearray):
         serial_number = Field.load(data)
         tag = Field.load(data)
+        return cls(serial_number=serial_number, tag=tag)
+
+    @classmethod
+    @type_check
+    def load_json(cls, data: dict):
+        serial_number = Field.loads(data["id"])
+        tag = Field.loads(data["tag"])
         return cls(serial_number=serial_number, tag=tag)
 
 
@@ -1744,6 +1795,15 @@ class TransitionOutput(Serialize, Deserialize): # enum
             return ExternalRecordTransitionOutput.load(data)
         else:
             raise ValueError("unknown transition output type")
+
+    @classmethod
+    @type_check
+    def load_json(cls, data: dict):
+        type_ = data["type"]
+        if type_ == "record":
+            return RecordTransitionOutput.load_json(data)
+        else:
+            raise ValueError("unsupported transition output type")
 
 
 class ConstantTransitionOutput(TransitionOutput):
@@ -1823,6 +1883,17 @@ class RecordTransitionOutput(TransitionOutput):
         record_ciphertext = Option[Record[Ciphertext]].load(data)
         return cls(commitment=commitment, checksum=checksum, record_ciphertext=record_ciphertext)
 
+    @classmethod
+    @type_check
+    def load_json(cls, data: dict):
+        commitment = Field.loads(data["id"])
+        checksum = Field.loads(data["checksum"])
+        if "value" in data:
+            record_ciphertext = Option[Record[Ciphertext]](Record[Ciphertext].load(bech32_to_bytes(data["value"])))
+        else:
+            record_ciphertext = Option[Record[Ciphertext]](None)
+        return cls(commitment=commitment, checksum=checksum, record_ciphertext=record_ciphertext)
+
 
 class ExternalRecordTransitionOutput(TransitionOutput):
     type = TransitionOutput.Type.ExternalRecord
@@ -1841,11 +1912,9 @@ class ExternalRecordTransitionOutput(TransitionOutput):
         return cls(commitment=commitment)
 
 
-
 class Transition(Serialize, Deserialize):
     version = u16()
 
-    @type_check
     @generic_type_check
     def __init__(self, *, id_: TransitionID, program_id: ProgramID, function_name: Identifier,
                  inputs: Vec[TransitionInput, u16], outputs: Vec[TransitionOutput, u16], finalize: Option[Vec[Value, u16]],
@@ -1892,6 +1961,29 @@ class Transition(Serialize, Deserialize):
         tpk = Group.load(data)
         tcm = Field.load(data)
         fee = i64.load(data)
+        return cls(id_=id_, program_id=program_id, function_name=function_name, inputs=inputs, outputs=outputs,
+                   finalize=finalize, proof=proof, tpk=tpk, tcm=tcm, fee=fee)
+
+    @classmethod
+    @type_check
+    def load_json(cls, data: dict):
+        id_ = TransitionID.loads(data["id"])
+        program_id = ProgramID.loads(data["program"])
+        function_name = Identifier(value=data["function"])
+        inputs = []
+        for input_ in data["inputs"]:
+            inputs.append(TransitionInput.load_json(input_))
+        inputs = Vec[TransitionInput, u16](inputs)
+        outputs = []
+        for output in data["outputs"]:
+            outputs.append(TransitionOutput.load_json(output))
+        outputs = Vec[TransitionOutput, u16](outputs)
+        # This is wrong
+        finalize = Option[Vec[Value, u16]](None)
+        proof = Proof.load(bech32_to_bytes(data["proof"]))
+        tpk = Group.loads(data["tpk"])
+        tcm = Field.loads(data["tcm"])
+        fee = i64(data["fee"])
         return cls(id_=id_, program_id=program_id, function_name=function_name, inputs=inputs, outputs=outputs,
                    finalize=finalize, proof=proof, tpk=tpk, tcm=tcm, fee=fee)
 
@@ -1954,6 +2046,19 @@ class Execution(Serialize, Deserialize):
         global_state_root = StateRoot.load(data)
         inclusion_proof = Option[Proof].load(data)
         return cls(transitions=transitions, global_state_root=global_state_root, inclusion_proof=inclusion_proof)
+
+    @classmethod
+    @type_check
+    def load_json(cls, data: dict):
+        transitions = []
+        for transition in data['transitions']:
+            transitions.append(Transition.load_json(transition))
+        global_state_root = StateRoot.loads(data['global_state_root'])
+        if "inclusion" in data:
+            inclusion_proof = Option[Proof](Proof.load(bech32_to_bytes(data['inclusion'])))
+        else:
+            inclusion_proof = Option[Proof](None)
+        return cls(transitions=Vec[Transition, u16](transitions), global_state_root=global_state_root, inclusion_proof=inclusion_proof)
 
 
 class Transaction(Serialize, Deserialize):  # Enum
@@ -2029,6 +2134,15 @@ class ExecuteTransaction(Transaction):
         additional_fee = Option[Fee].load(data)
         return cls(id_=id_, execution=execution, additional_fee=additional_fee)
 
+    @classmethod
+    @type_check
+    def load_json(cls, data: dict):
+        id_ = TransactionID.loads(data["id"])
+        execution = Execution.load_json(data["execution"])
+        # This is wrong
+        additional_fee = Option[Fee](None)
+        return cls(id_=id_, execution=execution, additional_fee=additional_fee)
+
 
 class Transactions(Serialize, Deserialize):
     version = u16()
@@ -2051,6 +2165,20 @@ class Transactions(Serialize, Deserialize):
         transactions = Vec[Transaction, u32].load(data)
         return cls(transactions=transactions)
 
+    @classmethod
+    @type_check
+    def load_json(cls, data: list):
+        transactions = []
+        for transaction in data:
+            if transaction["type"] == "deploy":
+                # crash here as we are not anticipating deploy transactions
+                transactions.append(DeployTransaction.load_json(transaction))
+            elif transaction["type"] == "execute":
+                transactions.append(ExecuteTransaction.load_json(transaction))
+            else:
+                raise ValueError("invalid transaction type")
+        return cls(transactions=Vec[Transaction, u32](transactions))
+
     def __iter__(self):
         return iter(self.transactions)
 
@@ -2060,19 +2188,20 @@ class BlockHeaderMetadata(Serialize, Deserialize):
 
     @type_check
     def __init__(self, *, network: u16, round_: u64, height: u32, coinbase_target: u64, proof_target: u64,
-                 last_coinbase_timestamp: i64, timestamp: i64):
+                 last_coinbase_target: u64, last_coinbase_timestamp: i64, timestamp: i64):
         self.network = network
         self.round = round_
         self.height = height
         self.coinbase_target = coinbase_target
         self.proof_target = proof_target
+        self.last_coinbase_target = last_coinbase_target
         self.last_coinbase_timestamp = last_coinbase_timestamp
         self.timestamp = timestamp
 
     def dump(self) -> bytes:
         return self.version.dump() + self.network.dump() + self.round.dump() + self.height.dump() \
-               + self.coinbase_target.dump() + self.proof_target.dump() + self.last_coinbase_timestamp.dump() \
-               + self.timestamp.dump()
+               + self.coinbase_target.dump() + self.proof_target.dump() + self.last_coinbase_target.dump() \
+               + self.last_coinbase_timestamp.dump() + self.timestamp.dump()
 
     @classmethod
     @type_check
@@ -2085,10 +2214,27 @@ class BlockHeaderMetadata(Serialize, Deserialize):
         height = u32.load(data)
         coinbase_target = u64.load(data)
         proof_target = u64.load(data)
+        last_coinbase_target = u64.load(data)
         last_coinbase_timestamp = i64.load(data)
         timestamp = i64.load(data)
         return cls(network=network, round_=round_, height=height, coinbase_target=coinbase_target,
-                   proof_target=proof_target, last_coinbase_timestamp=last_coinbase_timestamp, timestamp=timestamp)
+                   proof_target=proof_target, last_coinbase_target=last_coinbase_target,
+                   last_coinbase_timestamp=last_coinbase_timestamp, timestamp=timestamp)
+
+    @classmethod
+    @type_check
+    def load_json(cls, data: dict):
+        network = u16(data["network"])
+        round_ = u64(data["round"])
+        height = u32(data["height"])
+        coinbase_target = u64(data["coinbase_target"])
+        proof_target = u64(data["proof_target"])
+        last_coinbase_target = u64(data["last_coinbase_target"])
+        last_coinbase_timestamp = i64(data["last_coinbase_timestamp"])
+        timestamp = i64(data["timestamp"])
+        return cls(network=network, round_=round_, height=height, coinbase_target=coinbase_target,
+                   proof_target=proof_target, last_coinbase_target=last_coinbase_target,
+                   last_coinbase_timestamp=last_coinbase_timestamp, timestamp=timestamp)
 
     # # really needed?
     # def __eq__(self, other):
@@ -2128,6 +2274,16 @@ class BlockHeader(Serialize, Deserialize):
         return cls(previous_state_root=previous_state_root, transactions_root=transactions_root,
                    coinbase_accumulator_point=coinbase_accumulator_point, metadata=metadata)
 
+    @classmethod
+    @type_check
+    def load_json(cls, data: dict):
+        previous_state_root = Field.loads(data['previous_state_root'])
+        transactions_root = Field.loads(data['transactions_root'])
+        coinbase_accumulator_point = Field.loads(data['coinbase_accumulator_point'])
+        metadata = BlockHeaderMetadata.load_json(data['metadata'])
+        return cls(previous_state_root=previous_state_root, transactions_root=transactions_root,
+                   coinbase_accumulator_point=coinbase_accumulator_point, metadata=metadata)
+
     # # really needed?
     # def __eq__(self, other):
     #     if not isinstance(other, BlockHeader):
@@ -2154,6 +2310,17 @@ class PuzzleCommitment(Serialize, Deserialize):
         commitment = KZGCommitment.load(data)
         return cls(commitment=commitment)
 
+    @classmethod
+    @type_check
+    def loads(cls, data: str):
+        return cls.load(bech32_to_bytes(data))
+
+    def to_target(self) -> int:
+        return (2 ** 64 - 1) // int.from_bytes(sha256(sha256(self.dump()).digest()).digest()[:8], byteorder='little')
+
+    def __str__(self):
+        return str(Bech32m(self.dump(), "puzzle"))
+
 
 class PartialSolution(Serialize, Deserialize):
 
@@ -2173,6 +2340,17 @@ class PartialSolution(Serialize, Deserialize):
         nonce = u64.load(data)
         commitment = PuzzleCommitment.load(data)
         return cls(address=address, nonce=nonce, commitment=commitment)
+
+    @classmethod
+    @type_check
+    def load_json(cls, data: dict):
+        address = Address.loads(data['address'])
+        nonce = u64(data['nonce'])
+        commitment = PuzzleCommitment.loads(data['commitment'])
+        return cls(address=address, nonce=nonce, commitment=commitment)
+
+    def __hash__(self):
+        return hash(self.nonce)
 
 
 PuzzleProof = KZGProof
@@ -2194,6 +2372,16 @@ class CoinbaseSolution(Serialize, Deserialize):
     def load(cls, data: bytearray):
         partial_solutions = Vec[PartialSolution, u32].load(data)
         proof = PuzzleProof.load(data)
+        return cls(partial_solutions=partial_solutions, proof=proof)
+
+    @classmethod
+    @type_check
+    def load_json(cls, data: dict):
+        partial_solutions = []
+        for partial_solution in data['partial_solutions']:
+            partial_solutions.append(PartialSolution.load_json(partial_solution))
+        partial_solutions = Vec[PartialSolution, u32](partial_solutions)
+        proof = PuzzleProof.load_json(data['proof.w'])
         return cls(partial_solutions=partial_solutions, proof=proof)
 
 
@@ -2234,6 +2422,11 @@ class Signature(Serialize, Deserialize):
         compute_key = ComputeKey.load(data)
         return cls(challange=challange, response=response, compute_key=compute_key)
 
+    @classmethod
+    @type_check
+    def loads(cls, data: str):
+        return cls.load(bech32_to_bytes(data))
+
     def __str__(self):
         return str(Bech32m(self.dump(), "sign"))
 
@@ -2269,3 +2462,30 @@ class Block(Serialize, Deserialize):
             raise ValueError("invalid block version")
         return cls(block_hash=block_hash, previous_hash=previous_hash, header=header, transactions=transactions,
                    coinbase=coinbase, signature=signature)
+
+    @classmethod
+    def load_json(cls, data: dict):
+        block_hash = BlockHash.loads(data["block_hash"])
+        previous_hash = BlockHash.loads(data["previous_hash"])
+        header = BlockHeader.load_json(data["header"])
+        transactions = Transactions.load_json(data["transactions"])
+        if "coinbase" in data:
+            coinbase = Option[CoinbaseSolution](CoinbaseSolution.load_json(data["coinbase"]))
+        else:
+            coinbase = Option[CoinbaseSolution](None)
+        signature = Signature.load(bech32_to_bytes(data["signature"]))
+        return cls(block_hash=block_hash, previous_hash=previous_hash, header=header, transactions=transactions,
+                   coinbase=coinbase, signature=signature)
+
+    def __str__(self):
+        return f"Block {self.header.metadata.height} ({str(self.block_hash)[:16]}...)"
+
+    def get_coinbase_reward(self, last_timestamp) -> int:
+        if self.coinbase.value is None:
+            return 0
+        anchor_reward = 13
+        y10_anchor_height = 31536000 // 25 * 10
+        remaining_blocks = y10_anchor_height - self.header.metadata.height
+        if remaining_blocks <= 0:
+            return 0
+        return int((remaining_blocks * anchor_reward) * 2 ** (-1 * ((self.header.metadata.timestamp - last_timestamp) - 25) / 25))

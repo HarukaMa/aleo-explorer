@@ -2,8 +2,8 @@
 -- PostgreSQL database dump
 --
 
--- Dumped from database version 14.3
--- Dumped by pg_dump version 14.2
+-- Dumped from database version 15.1
+-- Dumped by pg_dump version 15.0
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -24,43 +24,36 @@ CREATE SCHEMA explorer;
 
 
 --
--- Name: event_type; Type: TYPE; Schema: explorer; Owner: -
+-- Name: finalize_value_type; Type: TYPE; Schema: explorer; Owner: -
 --
 
-CREATE TYPE explorer.event_type AS ENUM (
-    'Custom',
-    'RecordViewKey',
-    'Operation'
-    );
-
-
---
--- Name: function_type; Type: TYPE; Schema: explorer; Owner: -
---
-
-CREATE TYPE explorer.function_type AS ENUM (
-    'Noop',
-    'Insert',
-    'Update',
-    'Remove',
-    'DoubleInsert',
-    'DoubleRemove',
-    'Join',
-    'Split',
-    'Full'
-    );
+CREATE TYPE explorer.finalize_value_type AS ENUM (
+    'Plaintext',
+    'Record'
+);
 
 
 --
--- Name: operation_type; Type: TYPE; Schema: explorer; Owner: -
+-- Name: transaction_type; Type: TYPE; Schema: explorer; Owner: -
 --
 
-CREATE TYPE explorer.operation_type AS ENUM (
-    'Noop',
-    'Coinbase',
-    'Transfer',
-    'Evaluate'
-    );
+CREATE TYPE explorer.transaction_type AS ENUM (
+    'Deploy',
+    'Execute'
+);
+
+
+--
+-- Name: transition_data_type; Type: TYPE; Schema: explorer; Owner: -
+--
+
+CREATE TYPE explorer.transition_data_type AS ENUM (
+    'Constant',
+    'Public',
+    'Private',
+    'Record',
+    'ExternalRecord'
+);
 
 
 SET default_tablespace = '';
@@ -71,28 +64,29 @@ SET default_table_access_method = heap;
 -- Name: block; Type: TABLE; Schema: explorer; Owner: -
 --
 
-CREATE TABLE explorer.block
-(
-    id                   integer              NOT NULL,
-    height               integer              NOT NULL,
-    block_hash           text                 NOT NULL,
-    previous_block_hash  text                 NOT NULL,
-    previous_ledger_root text                 NOT NULL,
-    transactions_root    text                 NOT NULL,
-    "timestamp"          bigint               NOT NULL,
-    difficulty_target    numeric(20, 0)       NOT NULL,
-    cumulative_weight    numeric(40, 0)       NOT NULL,
-    nonce                text                 NOT NULL,
-    proof                text                 NOT NULL,
-    is_canonical         boolean DEFAULT true NOT NULL
+CREATE TABLE explorer.block (
+    id integer NOT NULL,
+    height bigint NOT NULL,
+    block_hash text NOT NULL,
+    previous_hash text NOT NULL,
+    previous_state_root text NOT NULL,
+    transactions_root text NOT NULL,
+    coinbase_accumulator_point text NOT NULL,
+    round numeric(20,0) NOT NULL,
+    coinbase_target numeric(20,0) NOT NULL,
+    proof_target numeric(20,0) NOT NULL,
+    last_coinbase_target numeric(20,0) NOT NULL,
+    last_coinbase_timestamp bigint NOT NULL,
+    "timestamp" bigint NOT NULL,
+    signature text NOT NULL
 );
 
 
 --
--- Name: blocks_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+-- Name: block_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
 --
 
-CREATE SEQUENCE explorer.blocks_id_seq
+CREATE SEQUENCE explorer.block_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -102,30 +96,29 @@ CREATE SEQUENCE explorer.blocks_id_seq
 
 
 --
--- Name: blocks_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+-- Name: block_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
 --
 
-ALTER SEQUENCE explorer.blocks_id_seq OWNED BY explorer.block.id;
+ALTER SEQUENCE explorer.block_id_seq OWNED BY explorer.block.id;
 
 
 --
--- Name: ciphertext; Type: TABLE; Schema: explorer; Owner: -
+-- Name: coinbase_solution; Type: TABLE; Schema: explorer; Owner: -
 --
 
-CREATE TABLE explorer.ciphertext
-(
-    id            integer NOT NULL,
-    transition_id integer NOT NULL,
-    index         integer NOT NULL,
-    ciphertext    text    NOT NULL
+CREATE TABLE explorer.coinbase_solution (
+    id integer NOT NULL,
+    block_id integer NOT NULL,
+    proof_x text NOT NULL,
+    proof_y_positive boolean NOT NULL
 );
 
 
 --
--- Name: ciphertext_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+-- Name: coinbase_solution_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
 --
 
-CREATE SEQUENCE explorer.ciphertext_id_seq
+CREATE SEQUENCE explorer.coinbase_solution_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -135,30 +128,30 @@ CREATE SEQUENCE explorer.ciphertext_id_seq
 
 
 --
--- Name: ciphertext_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+-- Name: coinbase_solution_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
 --
 
-ALTER SEQUENCE explorer.ciphertext_id_seq OWNED BY explorer.ciphertext.id;
+ALTER SEQUENCE explorer.coinbase_solution_id_seq OWNED BY explorer.coinbase_solution.id;
 
 
 --
--- Name: coinbase_operation; Type: TABLE; Schema: explorer; Owner: -
+-- Name: transaction_execute; Type: TABLE; Schema: explorer; Owner: -
 --
 
-CREATE TABLE explorer.coinbase_operation
-(
-    id                 integer NOT NULL,
-    operation_event_id integer NOT NULL,
-    recipient          text    NOT NULL,
-    amount             bigint  NOT NULL
+CREATE TABLE explorer.transaction_execute (
+    id integer NOT NULL,
+    transaction_id integer NOT NULL,
+    global_state_root text NOT NULL,
+    inclusion_proof text,
+    index integer NOT NULL
 );
 
 
 --
--- Name: coinbase_operation_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+-- Name: execute_transaction_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
 --
 
-CREATE SEQUENCE explorer.coinbase_operation_id_seq
+CREATE SEQUENCE explorer.execute_transaction_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -168,29 +161,29 @@ CREATE SEQUENCE explorer.coinbase_operation_id_seq
 
 
 --
--- Name: coinbase_operation_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+-- Name: execute_transaction_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
 --
 
-ALTER SEQUENCE explorer.coinbase_operation_id_seq OWNED BY explorer.coinbase_operation.id;
+ALTER SEQUENCE explorer.execute_transaction_id_seq OWNED BY explorer.transaction_execute.id;
 
 
 --
--- Name: custom_event; Type: TABLE; Schema: explorer; Owner: -
+-- Name: fee; Type: TABLE; Schema: explorer; Owner: -
 --
 
-CREATE TABLE explorer.custom_event
-(
-    id       integer NOT NULL,
-    event_id integer NOT NULL,
-    bytes    bytea   NOT NULL
+CREATE TABLE explorer.fee (
+    id integer NOT NULL,
+    transaction_id integer NOT NULL,
+    global_state_root text NOT NULL,
+    inclusion_proof text
 );
 
 
 --
--- Name: custom_event_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+-- Name: fee_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
 --
 
-CREATE SEQUENCE explorer.custom_event_id_seq
+CREATE SEQUENCE explorer.fee_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -200,34 +193,85 @@ CREATE SEQUENCE explorer.custom_event_id_seq
 
 
 --
--- Name: custom_event_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+-- Name: fee_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
 --
 
-ALTER SEQUENCE explorer.custom_event_id_seq OWNED BY explorer.custom_event.id;
+ALTER SEQUENCE explorer.fee_id_seq OWNED BY explorer.fee.id;
 
 
 --
--- Name: evaluate_operation; Type: TABLE; Schema: explorer; Owner: -
+-- Name: leaderboard; Type: TABLE; Schema: explorer; Owner: -
 --
 
-CREATE TABLE explorer.evaluate_operation
-(
-    id                 integer                NOT NULL,
-    operation_event_id integer                NOT NULL,
-    function_id        text                   NOT NULL,
-    function_type      explorer.function_type NOT NULL,
-    caller             text                   NOT NULL,
-    recipient          text                   NOT NULL,
-    amount             bigint                 NOT NULL,
-    record_payload     bytea                  NOT NULL
+CREATE TABLE explorer.leaderboard (
+    address text NOT NULL,
+    total_reward numeric(20,0) DEFAULT 0 NOT NULL
 );
 
 
 --
--- Name: evaluate_operation_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+-- Name: leaderboard_log; Type: TABLE; Schema: explorer; Owner: -
 --
 
-CREATE SEQUENCE explorer.evaluate_operation_id_seq
+CREATE TABLE explorer.leaderboard_log (
+    height integer NOT NULL,
+    address text NOT NULL,
+    partial_solution_id integer NOT NULL,
+    reward integer NOT NULL
+);
+
+
+--
+-- Name: partial_solution; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.partial_solution (
+    id bigint NOT NULL,
+    coinbase_solution_id integer NOT NULL,
+    address text NOT NULL,
+    nonce numeric(20,0) NOT NULL,
+    commitment text NOT NULL,
+    target numeric(20,0) NOT NULL
+);
+
+
+--
+-- Name: partial_solution_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.partial_solution_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: partial_solution_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.partial_solution_id_seq OWNED BY explorer.partial_solution.id;
+
+
+--
+-- Name: transition_input_private; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.transition_input_private (
+    id integer NOT NULL,
+    transition_input_id integer NOT NULL,
+    ciphertext_hash text NOT NULL,
+    ciphertext text,
+    index integer NOT NULL
+);
+
+
+--
+-- Name: private_transition_input_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.private_transition_input_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -237,193 +281,21 @@ CREATE SEQUENCE explorer.evaluate_operation_id_seq
 
 
 --
--- Name: evaluate_operation_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+-- Name: private_transition_input_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
 --
 
-ALTER SEQUENCE explorer.evaluate_operation_id_seq OWNED BY explorer.evaluate_operation.id;
-
-
---
--- Name: event; Type: TABLE; Schema: explorer; Owner: -
---
-
-CREATE TABLE explorer.event
-(
-    id            integer             NOT NULL,
-    transition_id integer             NOT NULL,
-    index         integer             NOT NULL,
-    event_type    explorer.event_type NOT NULL
-);
-
-
---
--- Name: event_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
---
-
-CREATE SEQUENCE explorer.event_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: event_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
---
-
-ALTER SEQUENCE explorer.event_id_seq OWNED BY explorer.event.id;
-
-
---
--- Name: operation_event; Type: TABLE; Schema: explorer; Owner: -
---
-
-CREATE TABLE explorer.operation_event
-(
-    id             integer                 NOT NULL,
-    event_id       integer                 NOT NULL,
-    operation_type explorer.operation_type NOT NULL
-);
-
-
---
--- Name: operation_event_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
---
-
-CREATE SEQUENCE explorer.operation_event_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: operation_event_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
---
-
-ALTER SEQUENCE explorer.operation_event_id_seq OWNED BY explorer.operation_event.id;
-
-
---
--- Name: record; Type: TABLE; Schema: explorer; Owner: -
---
-
-CREATE TABLE explorer.record
-(
-    id                       integer NOT NULL,
-    output_transition_id     integer NOT NULL,
-    record_view_key_event_id integer NOT NULL,
-    ciphertext_id            integer NOT NULL,
-    owner                    text    NOT NULL,
-    value                    bigint  NOT NULL,
-    payload                  bytea   NOT NULL,
-    program_id               text    NOT NULL,
-    randomizer               text    NOT NULL,
-    commitment               text    NOT NULL
-);
-
-
---
--- Name: record_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
---
-
-CREATE SEQUENCE explorer.record_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: record_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
---
-
-ALTER SEQUENCE explorer.record_id_seq OWNED BY explorer.record.id;
-
-
---
--- Name: record_view_key_event; Type: TABLE; Schema: explorer; Owner: -
---
-
-CREATE TABLE explorer.record_view_key_event
-(
-    id              integer  NOT NULL,
-    event_id        integer  NOT NULL,
-    index           smallint NOT NULL,
-    record_view_key text     NOT NULL
-);
-
-
---
--- Name: record_view_key_event_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
---
-
-CREATE SEQUENCE explorer.record_view_key_event_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: record_view_key_event_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
---
-
-ALTER SEQUENCE explorer.record_view_key_event_id_seq OWNED BY explorer.record_view_key_event.id;
-
-
---
--- Name: serial_number; Type: TABLE; Schema: explorer; Owner: -
---
-
-CREATE TABLE explorer.serial_number
-(
-    id            integer  NOT NULL,
-    transition_id integer  NOT NULL,
-    index         smallint NOT NULL,
-    serial_number text     NOT NULL
-);
-
-
---
--- Name: serial_number_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
---
-
-CREATE SEQUENCE explorer.serial_number_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: serial_number_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
---
-
-ALTER SEQUENCE explorer.serial_number_id_seq OWNED BY explorer.serial_number.id;
+ALTER SEQUENCE explorer.private_transition_input_id_seq OWNED BY explorer.transition_input_private.id;
 
 
 --
 -- Name: transaction; Type: TABLE; Schema: explorer; Owner: -
 --
 
-CREATE TABLE explorer.transaction
-(
-    id               integer NOT NULL,
-    block_id         integer NOT NULL,
-    transaction_id   text    NOT NULL,
-    inner_circuit_id text    NOT NULL,
-    ledger_root      text
+CREATE TABLE explorer.transaction (
+    id integer NOT NULL,
+    block_id integer NOT NULL,
+    transaction_id text NOT NULL,
+    type explorer.transaction_type NOT NULL
 );
 
 
@@ -448,37 +320,21 @@ ALTER SEQUENCE explorer.transaction_id_seq OWNED BY explorer.transaction.id;
 
 
 --
--- Name: transfer_operation; Type: TABLE; Schema: explorer; Owner: -
+-- Name: transition; Type: TABLE; Schema: explorer; Owner: -
 --
 
-CREATE TABLE explorer.transfer_operation
-(
-    id                 integer NOT NULL,
-    operation_event_id integer NOT NULL,
-    caller             text    NOT NULL,
-    recipient          text    NOT NULL,
-    amount             bigint  NOT NULL
+CREATE TABLE explorer.transition (
+    id integer NOT NULL,
+    transition_id text NOT NULL,
+    transaction_execute_id integer,
+    fee_id integer,
+    program_id text NOT NULL,
+    function_name text NOT NULL,
+    proof text NOT NULL,
+    tpk text NOT NULL,
+    tcm text NOT NULL,
+    fee bigint NOT NULL
 );
-
-
---
--- Name: transfer_operation_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
---
-
-CREATE SEQUENCE explorer.transfer_operation_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: transfer_operation_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
---
-
-ALTER SEQUENCE explorer.transfer_operation_id_seq OWNED BY explorer.transfer_operation.id;
 
 
 --
@@ -495,113 +351,223 @@ CREATE SEQUENCE explorer.transition_id_seq
 
 
 --
--- Name: transition; Type: TABLE; Schema: explorer; Owner: -
+-- Name: transition_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
 --
 
-CREATE TABLE explorer.transition
-(
-    id             integer DEFAULT nextval('explorer.transition_id_seq'::regclass) NOT NULL,
-    transaction_id integer,
-    transition_id  text                                                            NOT NULL,
-    value_balance  bigint,
-    proof          text
+ALTER SEQUENCE explorer.transition_id_seq OWNED BY explorer.transition.id;
+
+
+--
+-- Name: transition_input; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.transition_input (
+    id integer NOT NULL,
+    transition_id integer NOT NULL,
+    type explorer.transition_data_type NOT NULL
 );
+
+
+--
+-- Name: transition_input_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.transition_input_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: transition_input_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.transition_input_id_seq OWNED BY explorer.transition_input.id;
+
+
+--
+-- Name: transition_input_record; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.transition_input_record (
+    id integer NOT NULL,
+    transition_input_id integer NOT NULL,
+    serial_number text NOT NULL,
+    tag text NOT NULL,
+    index integer NOT NULL
+);
+
+
+--
+-- Name: transition_input_record_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.transition_input_record_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: transition_input_record_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.transition_input_record_id_seq OWNED BY explorer.transition_input_record.id;
+
+
+--
+-- Name: transition_output; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.transition_output (
+    id integer NOT NULL,
+    transition_id integer NOT NULL,
+    type explorer.transition_data_type NOT NULL
+);
+
+
+--
+-- Name: transition_output_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.transition_output_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: transition_output_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.transition_output_id_seq OWNED BY explorer.transition_output.id;
+
+
+--
+-- Name: transition_output_record; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.transition_output_record (
+    id integer NOT NULL,
+    transition_output_id integer NOT NULL,
+    commitment text NOT NULL,
+    checksum text NOT NULL,
+    record_ciphertext text,
+    index integer NOT NULL
+);
+
+
+--
+-- Name: transition_output_record_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.transition_output_record_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: transition_output_record_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.transition_output_record_id_seq OWNED BY explorer.transition_output_record.id;
 
 
 --
 -- Name: block id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
-ALTER TABLE ONLY explorer.block
-    ALTER COLUMN id SET DEFAULT nextval('explorer.blocks_id_seq'::regclass);
+ALTER TABLE ONLY explorer.block ALTER COLUMN id SET DEFAULT nextval('explorer.block_id_seq'::regclass);
 
 
 --
--- Name: ciphertext id; Type: DEFAULT; Schema: explorer; Owner: -
+-- Name: coinbase_solution id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
-ALTER TABLE ONLY explorer.ciphertext
-    ALTER COLUMN id SET DEFAULT nextval('explorer.ciphertext_id_seq'::regclass);
-
-
---
--- Name: coinbase_operation id; Type: DEFAULT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.coinbase_operation
-    ALTER COLUMN id SET DEFAULT nextval('explorer.coinbase_operation_id_seq'::regclass);
+ALTER TABLE ONLY explorer.coinbase_solution ALTER COLUMN id SET DEFAULT nextval('explorer.coinbase_solution_id_seq'::regclass);
 
 
 --
--- Name: custom_event id; Type: DEFAULT; Schema: explorer; Owner: -
+-- Name: fee id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
-ALTER TABLE ONLY explorer.custom_event
-    ALTER COLUMN id SET DEFAULT nextval('explorer.custom_event_id_seq'::regclass);
-
-
---
--- Name: evaluate_operation id; Type: DEFAULT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.evaluate_operation
-    ALTER COLUMN id SET DEFAULT nextval('explorer.evaluate_operation_id_seq'::regclass);
+ALTER TABLE ONLY explorer.fee ALTER COLUMN id SET DEFAULT nextval('explorer.fee_id_seq'::regclass);
 
 
 --
--- Name: event id; Type: DEFAULT; Schema: explorer; Owner: -
+-- Name: partial_solution id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
-ALTER TABLE ONLY explorer.event
-    ALTER COLUMN id SET DEFAULT nextval('explorer.event_id_seq'::regclass);
-
-
---
--- Name: operation_event id; Type: DEFAULT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.operation_event
-    ALTER COLUMN id SET DEFAULT nextval('explorer.operation_event_id_seq'::regclass);
-
-
---
--- Name: record id; Type: DEFAULT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.record
-    ALTER COLUMN id SET DEFAULT nextval('explorer.record_id_seq'::regclass);
-
-
---
--- Name: record_view_key_event id; Type: DEFAULT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.record_view_key_event
-    ALTER COLUMN id SET DEFAULT nextval('explorer.record_view_key_event_id_seq'::regclass);
-
-
---
--- Name: serial_number id; Type: DEFAULT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.serial_number
-    ALTER COLUMN id SET DEFAULT nextval('explorer.serial_number_id_seq'::regclass);
+ALTER TABLE ONLY explorer.partial_solution ALTER COLUMN id SET DEFAULT nextval('explorer.partial_solution_id_seq'::regclass);
 
 
 --
 -- Name: transaction id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
-ALTER TABLE ONLY explorer.transaction
-    ALTER COLUMN id SET DEFAULT nextval('explorer.transaction_id_seq'::regclass);
+ALTER TABLE ONLY explorer.transaction ALTER COLUMN id SET DEFAULT nextval('explorer.transaction_id_seq'::regclass);
 
 
 --
--- Name: transfer_operation id; Type: DEFAULT; Schema: explorer; Owner: -
+-- Name: transaction_execute id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
-ALTER TABLE ONLY explorer.transfer_operation
-    ALTER COLUMN id SET DEFAULT nextval('explorer.transfer_operation_id_seq'::regclass);
+ALTER TABLE ONLY explorer.transaction_execute ALTER COLUMN id SET DEFAULT nextval('explorer.execute_transaction_id_seq'::regclass);
+
+
+--
+-- Name: transition id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transition ALTER COLUMN id SET DEFAULT nextval('explorer.transition_id_seq'::regclass);
+
+
+--
+-- Name: transition_input id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transition_input ALTER COLUMN id SET DEFAULT nextval('explorer.transition_input_id_seq'::regclass);
+
+
+--
+-- Name: transition_input_private id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transition_input_private ALTER COLUMN id SET DEFAULT nextval('explorer.private_transition_input_id_seq'::regclass);
+
+
+--
+-- Name: transition_input_record id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transition_input_record ALTER COLUMN id SET DEFAULT nextval('explorer.transition_input_record_id_seq'::regclass);
+
+
+--
+-- Name: transition_output id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transition_output ALTER COLUMN id SET DEFAULT nextval('explorer.transition_output_id_seq'::regclass);
+
+
+--
+-- Name: transition_output_record id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transition_output_record ALTER COLUMN id SET DEFAULT nextval('explorer.transition_output_record_id_seq'::regclass);
 
 
 --
@@ -613,75 +579,51 @@ ALTER TABLE ONLY explorer.block
 
 
 --
--- Name: ciphertext ciphertext_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+-- Name: coinbase_solution coinbase_solution_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
-ALTER TABLE ONLY explorer.ciphertext
-    ADD CONSTRAINT ciphertext_pk PRIMARY KEY (id);
-
-
---
--- Name: coinbase_operation coinbase_operation_pkey; Type: CONSTRAINT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.coinbase_operation
-    ADD CONSTRAINT coinbase_operation_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY explorer.coinbase_solution
+    ADD CONSTRAINT coinbase_solution_pk PRIMARY KEY (id);
 
 
 --
--- Name: custom_event custom_event_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+-- Name: fee fee_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
-ALTER TABLE ONLY explorer.custom_event
-    ADD CONSTRAINT custom_event_pk PRIMARY KEY (id);
-
-
---
--- Name: evaluate_operation evaluate_operation_pkey; Type: CONSTRAINT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.evaluate_operation
-    ADD CONSTRAINT evaluate_operation_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY explorer.fee
+    ADD CONSTRAINT fee_pk PRIMARY KEY (id);
 
 
 --
--- Name: event event_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+-- Name: leaderboard_log leaderboard_log_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
-ALTER TABLE ONLY explorer.event
-    ADD CONSTRAINT event_pk PRIMARY KEY (id);
-
-
---
--- Name: operation_event operation_event_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.operation_event
-    ADD CONSTRAINT operation_event_pk PRIMARY KEY (id);
+ALTER TABLE ONLY explorer.leaderboard_log
+    ADD CONSTRAINT leaderboard_log_pk UNIQUE (partial_solution_id);
 
 
 --
--- Name: record record_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+-- Name: leaderboard leaderboard_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
-ALTER TABLE ONLY explorer.record
-    ADD CONSTRAINT record_pk PRIMARY KEY (id);
-
-
---
--- Name: record_view_key_event record_view_key_event_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.record_view_key_event
-    ADD CONSTRAINT record_view_key_event_pk PRIMARY KEY (id);
+ALTER TABLE ONLY explorer.leaderboard
+    ADD CONSTRAINT leaderboard_pk PRIMARY KEY (address);
 
 
 --
--- Name: serial_number serial_number_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+-- Name: partial_solution partial_solution_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
-ALTER TABLE ONLY explorer.serial_number
-    ADD CONSTRAINT serial_number_pk PRIMARY KEY (id);
+ALTER TABLE ONLY explorer.partial_solution
+    ADD CONSTRAINT partial_solution_pk PRIMARY KEY (id);
+
+
+--
+-- Name: transaction_execute transaction_execute_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transaction_execute
+    ADD CONSTRAINT transaction_execute_pk PRIMARY KEY (id);
 
 
 --
@@ -693,11 +635,43 @@ ALTER TABLE ONLY explorer.transaction
 
 
 --
--- Name: transfer_operation transfer_operation_pkey; Type: CONSTRAINT; Schema: explorer; Owner: -
+-- Name: transition_input transition_input_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
-ALTER TABLE ONLY explorer.transfer_operation
-    ADD CONSTRAINT transfer_operation_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY explorer.transition_input
+    ADD CONSTRAINT transition_input_pk PRIMARY KEY (id);
+
+
+--
+-- Name: transition_input_private transition_input_private_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transition_input_private
+    ADD CONSTRAINT transition_input_private_pk PRIMARY KEY (id);
+
+
+--
+-- Name: transition_input_record transition_input_record_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transition_input_record
+    ADD CONSTRAINT transition_input_record_pk PRIMARY KEY (id);
+
+
+--
+-- Name: transition_output transition_output_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transition_output
+    ADD CONSTRAINT transition_output_pk PRIMARY KEY (id);
+
+
+--
+-- Name: transition_output_record transition_output_record_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transition_output_record
+    ADD CONSTRAINT transition_output_record_pk PRIMARY KEY (id);
 
 
 --
@@ -716,101 +690,73 @@ CREATE UNIQUE INDEX block_block_hash_uindex ON explorer.block USING btree (block
 
 
 --
--- Name: block_height_block_hash_uindex; Type: INDEX; Schema: explorer; Owner: -
+-- Name: block_height_uindex; Type: INDEX; Schema: explorer; Owner: -
 --
 
-CREATE UNIQUE INDEX block_height_block_hash_uindex ON explorer.block USING btree (height, block_hash);
-
-
---
--- Name: block_height_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX block_height_index ON explorer.block USING btree (height DESC);
+CREATE UNIQUE INDEX block_height_uindex ON explorer.block USING btree (height);
 
 
 --
--- Name: ciphertext_transition_id_index_uindex; Type: INDEX; Schema: explorer; Owner: -
+-- Name: coinbase_solution_block_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-CREATE UNIQUE INDEX ciphertext_transition_id_index_uindex ON explorer.ciphertext USING btree (transition_id, index);
-
-
---
--- Name: coinbase_operation_operation_event_id_uindex; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE UNIQUE INDEX coinbase_operation_operation_event_id_uindex ON explorer.coinbase_operation USING btree (operation_event_id);
+CREATE INDEX coinbase_solution_block_id_index ON explorer.coinbase_solution USING btree (block_id);
 
 
 --
--- Name: custom_event_event_id_uindex; Type: INDEX; Schema: explorer; Owner: -
+-- Name: fee_transaction_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-CREATE UNIQUE INDEX custom_event_event_id_uindex ON explorer.custom_event USING btree (event_id);
-
-
---
--- Name: evaluate_operation_operation_event_id_uindex; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE UNIQUE INDEX evaluate_operation_operation_event_id_uindex ON explorer.evaluate_operation USING btree (operation_event_id);
+CREATE INDEX fee_transaction_id_index ON explorer.fee USING btree (transaction_id);
 
 
 --
--- Name: event_transition_id_index_uindex; Type: INDEX; Schema: explorer; Owner: -
+-- Name: leaderboard_address_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-CREATE UNIQUE INDEX event_transition_id_index_uindex ON explorer.event USING btree (transition_id, index);
-
-
---
--- Name: operation_event_event_id_uindex; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE UNIQUE INDEX operation_event_event_id_uindex ON explorer.operation_event USING btree (event_id);
+CREATE INDEX leaderboard_address_index ON explorer.leaderboard USING btree (address text_pattern_ops);
 
 
 --
--- Name: record_output_transition_id_index; Type: INDEX; Schema: explorer; Owner: -
+-- Name: leaderboard_log_address_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-CREATE INDEX record_output_transition_id_index ON explorer.record USING btree (output_transition_id);
-
-
---
--- Name: record_owner_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX record_owner_index ON explorer.record USING btree (owner text_pattern_ops);
+CREATE INDEX leaderboard_log_address_index ON explorer.leaderboard_log USING btree (address text_pattern_ops);
 
 
 --
--- Name: record_record_view_key_event_id_index; Type: INDEX; Schema: explorer; Owner: -
+-- Name: leaderboard_log_height_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-CREATE INDEX record_record_view_key_event_id_index ON explorer.record USING btree (record_view_key_event_id);
-
-
---
--- Name: record_view_key_event_event_id_uindex; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE UNIQUE INDEX record_view_key_event_event_id_uindex ON explorer.record_view_key_event USING btree (event_id);
+CREATE INDEX leaderboard_log_height_index ON explorer.leaderboard_log USING btree (height);
 
 
 --
--- Name: serial_number_serial_number_index; Type: INDEX; Schema: explorer; Owner: -
+-- Name: leaderboard_log_partial_solution_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-CREATE INDEX serial_number_serial_number_index ON explorer.serial_number USING btree (serial_number text_pattern_ops);
+CREATE INDEX leaderboard_log_partial_solution_id_index ON explorer.leaderboard_log USING btree (partial_solution_id);
 
 
 --
--- Name: serial_number_transition_id_index_uindex; Type: INDEX; Schema: explorer; Owner: -
+-- Name: leaderboard_total_reward_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-CREATE UNIQUE INDEX serial_number_transition_id_index_uindex ON explorer.serial_number USING btree (transition_id, index);
+CREATE INDEX leaderboard_total_reward_index ON explorer.leaderboard USING btree (total_reward);
+
+
+--
+-- Name: partial_solution_address_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX partial_solution_address_index ON explorer.partial_solution USING btree (address text_pattern_ops);
+
+
+--
+-- Name: partial_solution_coinbase_solution_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX partial_solution_coinbase_solution_id_index ON explorer.partial_solution USING btree (coinbase_solution_id);
 
 
 --
@@ -821,119 +767,147 @@ CREATE INDEX transaction_block_id_index ON explorer.transaction USING btree (blo
 
 
 --
--- Name: transaction_transaction_id_index; Type: INDEX; Schema: explorer; Owner: -
+-- Name: transaction_execute_index_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-CREATE INDEX transaction_transaction_id_index ON explorer.transaction USING btree (transaction_id text_pattern_ops);
-
-
---
--- Name: transfer_operation_operation_event_id_uindex; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE UNIQUE INDEX transfer_operation_operation_event_id_uindex ON explorer.transfer_operation USING btree (operation_event_id);
+CREATE INDEX transaction_execute_index_index ON explorer.transaction_execute USING btree (index);
 
 
 --
--- Name: transition_transaction_id_index; Type: INDEX; Schema: explorer; Owner: -
+-- Name: transaction_execute_transaction_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-CREATE INDEX transition_transaction_id_index ON explorer.transition USING btree (transaction_id);
-
-
---
--- Name: transition_transition_id_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX transition_transition_id_index ON explorer.transition USING btree (transition_id text_pattern_ops);
+CREATE INDEX transaction_execute_transaction_id_index ON explorer.transaction_execute USING btree (transaction_id);
 
 
 --
--- Name: ciphertext ciphertext_transition_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+-- Name: transaction_transaction_id_uindex; Type: INDEX; Schema: explorer; Owner: -
 --
 
-ALTER TABLE ONLY explorer.ciphertext
-    ADD CONSTRAINT ciphertext_transition_id_fk FOREIGN KEY (transition_id) REFERENCES explorer.transition (id);
-
-
---
--- Name: coinbase_operation coinbase_operation_operation_event_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.coinbase_operation
-    ADD CONSTRAINT coinbase_operation_operation_event_id_fk FOREIGN KEY (operation_event_id) REFERENCES explorer.operation_event (id);
+CREATE UNIQUE INDEX transaction_transaction_id_uindex ON explorer.transaction USING btree (transaction_id text_pattern_ops);
 
 
 --
--- Name: custom_event custom_event_event_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+-- Name: transition_fee_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-ALTER TABLE ONLY explorer.custom_event
-    ADD CONSTRAINT custom_event_event_id_fk FOREIGN KEY (event_id) REFERENCES explorer.event (id);
-
-
---
--- Name: evaluate_operation evaluate_operation_operation_event_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.evaluate_operation
-    ADD CONSTRAINT evaluate_operation_operation_event_id_fk FOREIGN KEY (operation_event_id) REFERENCES explorer.operation_event (id);
+CREATE INDEX transition_fee_id_index ON explorer.transition USING btree (fee_id);
 
 
 --
--- Name: event event_transition_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+-- Name: transition_fee_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-ALTER TABLE ONLY explorer.event
-    ADD CONSTRAINT event_transition_id_fk FOREIGN KEY (transition_id) REFERENCES explorer.transition (id);
-
-
---
--- Name: operation_event operation_event_event_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.operation_event
-    ADD CONSTRAINT operation_event_event_id_fk FOREIGN KEY (event_id) REFERENCES explorer.event (id);
+CREATE INDEX transition_fee_index ON explorer.transition USING btree (fee);
 
 
 --
--- Name: record record_ciphertext_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+-- Name: transition_function_name_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-ALTER TABLE ONLY explorer.record
-    ADD CONSTRAINT record_ciphertext_id_fk FOREIGN KEY (ciphertext_id) REFERENCES explorer.ciphertext (id);
-
-
---
--- Name: record record_event_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.record
-    ADD CONSTRAINT record_event_id_fk FOREIGN KEY (record_view_key_event_id) REFERENCES explorer.event (id);
+CREATE INDEX transition_function_name_index ON explorer.transition USING btree (function_name);
 
 
 --
--- Name: record record_transition_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+-- Name: transition_input_private_index_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-ALTER TABLE ONLY explorer.record
-    ADD CONSTRAINT record_transition_id_fk FOREIGN KEY (output_transition_id) REFERENCES explorer.transition (id);
-
-
---
--- Name: record_view_key_event record_view_key_event_event_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.record_view_key_event
-    ADD CONSTRAINT record_view_key_event_event_id_fk FOREIGN KEY (event_id) REFERENCES explorer.event (id);
+CREATE INDEX transition_input_private_index_index ON explorer.transition_input_private USING btree (index);
 
 
 --
--- Name: serial_number serial_number_transition_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+-- Name: transition_input_private_transition_input_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-ALTER TABLE ONLY explorer.serial_number
-    ADD CONSTRAINT serial_number_transition_id_fk FOREIGN KEY (transition_id) REFERENCES explorer.transition (id);
+CREATE INDEX transition_input_private_transition_input_id_index ON explorer.transition_input_private USING btree (transition_input_id);
+
+
+--
+-- Name: transition_input_record_index_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX transition_input_record_index_index ON explorer.transition_input_record USING btree (index);
+
+
+--
+-- Name: transition_input_transition_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX transition_input_transition_id_index ON explorer.transition_input USING btree (transition_id);
+
+
+--
+-- Name: transition_output_record_index_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX transition_output_record_index_index ON explorer.transition_output_record USING btree (index);
+
+
+--
+-- Name: transition_output_record_transition_output_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX transition_output_record_transition_output_id_index ON explorer.transition_output_record USING btree (transition_output_id);
+
+
+--
+-- Name: transition_output_transition_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX transition_output_transition_id_index ON explorer.transition_output USING btree (transition_id);
+
+
+--
+-- Name: transition_program_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX transition_program_id_index ON explorer.transition USING btree (program_id);
+
+
+--
+-- Name: transition_transaction_execute_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX transition_transaction_execute_id_index ON explorer.transition USING btree (transaction_execute_id);
+
+
+--
+-- Name: transition_transition_id_uindex; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE UNIQUE INDEX transition_transition_id_uindex ON explorer.transition USING btree (transition_id text_pattern_ops);
+
+
+--
+-- Name: coinbase_solution coinbase_solution_block_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.coinbase_solution
+    ADD CONSTRAINT coinbase_solution_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id);
+
+
+--
+-- Name: fee fee_transaction_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.fee
+    ADD CONSTRAINT fee_transaction_id_fk FOREIGN KEY (transaction_id) REFERENCES explorer.transaction(id);
+
+
+--
+-- Name: leaderboard_log leaderboard_log_partial_solution_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.leaderboard_log
+    ADD CONSTRAINT leaderboard_log_partial_solution_id_fk FOREIGN KEY (partial_solution_id) REFERENCES explorer.partial_solution(id);
+
+
+--
+-- Name: partial_solution partial_solution_coinbase_solution_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.partial_solution
+    ADD CONSTRAINT partial_solution_coinbase_solution_id_fk FOREIGN KEY (coinbase_solution_id) REFERENCES explorer.coinbase_solution(id);
 
 
 --
@@ -941,23 +915,71 @@ ALTER TABLE ONLY explorer.serial_number
 --
 
 ALTER TABLE ONLY explorer.transaction
-    ADD CONSTRAINT transaction_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block (id);
+    ADD CONSTRAINT transaction_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id);
 
 
 --
--- Name: transfer_operation transfer_operation_operation_event_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+-- Name: transaction_execute transaction_execute_transaction_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
-ALTER TABLE ONLY explorer.transfer_operation
-    ADD CONSTRAINT transfer_operation_operation_event_id_fk FOREIGN KEY (operation_event_id) REFERENCES explorer.operation_event (id);
+ALTER TABLE ONLY explorer.transaction_execute
+    ADD CONSTRAINT transaction_execute_transaction_id_fk FOREIGN KEY (transaction_id) REFERENCES explorer.transaction(id);
 
 
 --
--- Name: transition transition_transaction_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+-- Name: transition transition_fee_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
 ALTER TABLE ONLY explorer.transition
-    ADD CONSTRAINT transition_transaction_id_fk FOREIGN KEY (transaction_id) REFERENCES explorer.transaction (id);
+    ADD CONSTRAINT transition_fee_id_fk FOREIGN KEY (fee_id) REFERENCES explorer.fee(id);
+
+
+--
+-- Name: transition_input_private transition_input_private_transition_input_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transition_input_private
+    ADD CONSTRAINT transition_input_private_transition_input_id_fk FOREIGN KEY (transition_input_id) REFERENCES explorer.transition_input(id);
+
+
+--
+-- Name: transition_input_record transition_input_record_transition_input_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transition_input_record
+    ADD CONSTRAINT transition_input_record_transition_input_id_fk FOREIGN KEY (transition_input_id) REFERENCES explorer.transition_input(id);
+
+
+--
+-- Name: transition_input transition_input_transition_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transition_input
+    ADD CONSTRAINT transition_input_transition_id_fk FOREIGN KEY (transition_id) REFERENCES explorer.transition(id);
+
+
+--
+-- Name: transition_output_record transition_output_record_transition_output_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transition_output_record
+    ADD CONSTRAINT transition_output_record_transition_output_id_fk FOREIGN KEY (transition_output_id) REFERENCES explorer.transition_output(id);
+
+
+--
+-- Name: transition_output transition_output_transition_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transition_output
+    ADD CONSTRAINT transition_output_transition_id_fk FOREIGN KEY (transition_id) REFERENCES explorer.transition(id);
+
+
+--
+-- Name: transition transition_transaction_execute_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transition
+    ADD CONSTRAINT transition_transaction_execute_id_fk FOREIGN KEY (transaction_execute_id) REFERENCES explorer.transaction_execute(id);
 
 
 --

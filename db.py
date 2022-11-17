@@ -1,13 +1,7 @@
-import aleo
 import asyncpg
 
-from explorer.types import Message
-from node.types import Block, Transaction, Transition, SerialNumber, RecordCiphertext, Event, Vec, u16, TransitionID, \
-    AleoAmount, OuterProof, InnerCircuitID, LedgerRoot, BlockHash, BlockHeader, TransactionsRoot, BlockHeaderMetadata, \
-    u32, i64, u64, u128, PoSWNonce, PoSWProof, Transactions, DeprecatedPoSWProof, RecordViewKeyEvent, Record, Operation, \
-    CustomEvent, RecordViewKey, u8, NoopOperation, CoinbaseOperation, Address, TransferOperation, EvaluateOperation, \
-    FunctionID, FunctionType, FunctionInputs, Payload, OperationEvent, ProgramID, RecordRandomizer, TransactionID, \
-    Commitment
+from explorer.types import Message as ExplorerMessage
+from node.types import *
 
 
 class Database:
@@ -28,172 +22,168 @@ class Database:
                                                   database=self.database, server_settings={'search_path': self.schema},
                                                   min_size=1, max_size=4)
         except Exception as e:
-            await self.message_callback(Message(Message.Type.DatabaseConnectError, e))
+            await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseConnectError, e))
             return
-        await self.message_callback(Message(Message.Type.DatabaseConnected, None))
+        await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseConnected, None))
 
-    async def _save_block(self, block: Block, is_canonical: bool):
+    async def _save_block(self, block: Block):
         async with self.pool.acquire() as conn:
             async with conn.transaction():
                 try:
                     block_db_id = await conn.fetchval(
-                        "INSERT INTO block (height, block_hash, previous_block_hash, previous_ledger_root, "
-                        "transactions_root, timestamp, difficulty_target, cumulative_weight, nonce, proof, is_canonical) "
-                        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id",
-                        block.header.metadata.height, str(block.block_hash), str(block.previous_block_hash),
-                        str(block.header.previous_ledger_root),
-                        str(block.header.transactions_root), block.header.metadata.timestamp,
-                        block.header.metadata.difficulty_target, block.header.metadata.cumulative_weight,
-                        str(block.header.nonce), str(block.header.proof), is_canonical)
+                        "INSERT INTO block (height, block_hash, previous_hash, previous_state_root, transactions_root, "
+                        "coinbase_accumulator_point, round, coinbase_target, proof_target, last_coinbase_target, "
+                        "last_coinbase_timestamp, timestamp, signature) "
+                        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) "
+                        "RETURNING id",
+                        block.header.metadata.height, str(block.block_hash), str(block.previous_hash),
+                        str(block.header.previous_state_root), str(block.header.transactions_root),
+                        str(block.header.coinbase_accumulator_point), block.header.metadata.round,
+                        block.header.metadata.coinbase_target, block.header.metadata.proof_target,
+                        block.header.metadata.last_coinbase_target, block.header.metadata.last_coinbase_timestamp,
+                        block.header.metadata.timestamp, str(block.signature)
+                    )
+
                     transaction: Transaction
-                    for transaction in block.transactions:
-                        transaction_db_id = await conn.fetchval(
-                            "INSERT INTO transaction (block_id, transaction_id, inner_circuit_id, ledger_root) VALUES ($1, $2, $3, $4) RETURNING id",
-                            block_db_id, str(transaction.transaction_id), str(transaction.inner_circuit_id),
-                            str(transaction.ledger_root))
-                        transition: Transition
-                        for transition in transaction.transitions:
-                            transition_db_id = await conn.fetchval(
-                                "INSERT INTO transition (transaction_id, transition_id, value_balance, proof) VALUES ($1, $2, $3, $4) RETURNING id",
-                                transaction_db_id, str(transition.transition_id), transition.value_balance,
-                                str(transition.proof))
-                            for i, sn in enumerate(transition.serial_numbers):
+                    for tx_index, transaction in enumerate(block.transactions):
+                        match transaction.type:
+                            case Transaction.Type.Deploy:
+                                raise NotImplementedError
+                            case Transaction.Type.Execute:
+                                transaction: ExecuteTransaction
+                                transaction_id = transaction.id
+                                transaction_db_id = await conn.fetchval(
+                                    "INSERT INTO transaction (block_id, transaction_id, type) VALUES ($1, $2, $3) RETURNING id",
+                                    block_db_id, str(transaction_id), transaction.type.name
+                                )
+                                execute_transaction_db_id = await conn.fetchval(
+                                    "INSERT INTO transaction_execute (transaction_id, global_state_root, inclusion_proof, index) "
+                                    "VALUES ($1, $2, $3, $4) RETURNING id",
+                                    transaction_db_id, str(transaction.execution.global_state_root),
+                                    transaction.execution.inclusion_proof.dumps(), tx_index
+                                )
+
+                                transition: Transition
+                                for transition in transaction.execution.transitions:
+                                    transition_db_id = await conn.fetchval(
+                                        "INSERT INTO transition (transition_id, transaction_execute_id, fee_id, program_id, "
+                                        "function_name, proof, tpk, tcm, fee) "
+                                        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id",
+                                        str(transition.id), execute_transaction_db_id, None, str(transition.program_id),
+                                        str(transition.function_name), str(transition.proof), str(transition.tpk),
+                                        str(transition.tcm), transition.fee
+                                    )
+
+                                    transition_input: TransitionInput
+                                    for input_index, transition_input in enumerate(transition.inputs):
+                                        transition_input_db_id = await conn.fetchval(
+                                            "INSERT INTO transition_input (transition_id, type) VALUES ($1, $2) RETURNING id",
+                                            transition_db_id, transition_input.type.name
+                                        )
+                                        match transition_input.type:
+                                            case TransitionInput.Type.Private:
+                                                transition_input: PrivateTransitionInput
+                                                await conn.execute(
+                                                    "INSERT INTO transition_input_private (transition_input_id, ciphertext_hash, ciphertext, index) "
+                                                    "VALUES ($1, $2, $3, $4)",
+                                                    transition_input_db_id, str(transition_input.ciphertext_hash),
+                                                    transition_input.ciphertext.dumps(), input_index
+                                                )
+                                            case TransitionInput.Type.Record:
+                                                transition_input: RecordTransitionInput
+                                                await conn.execute(
+                                                    "INSERT INTO transition_input_record (transition_input_id, serial_number, tag, index) "
+                                                    "VALUES ($1, $2, $3, $4)",
+                                                    transition_input_db_id, str(transition_input.serial_number),
+                                                    str(transition_input.tag), input_index
+                                                )
+                                            case _:
+                                                raise NotImplementedError
+
+                                    transition_output: TransitionOutput
+                                    for output_index, transition_output in enumerate(transition.outputs):
+                                        transition_output_db_id = await conn.fetchval(
+                                            "INSERT INTO transition_output (transition_id, type) VALUES ($1, $2) RETURNING id",
+                                            transition_db_id, transition_output.type.name
+                                        )
+                                        match transition_output.type:
+                                            case TransitionOutput.Type.Record:
+                                                transition_output: RecordTransitionOutput
+                                                await conn.execute(
+                                                    "INSERT INTO transition_output_record (transition_output_id, commitment, checksum, record_ciphertext, index) "
+                                                    "VALUES ($1, $2, $3, $4, $5)",
+                                                    transition_output_db_id, str(transition_output.commitment),
+                                                    str(transition_output.checksum), transition_output.record_ciphertext.dumps(), output_index
+                                                )
+                                            case _:
+                                                raise NotImplementedError
+
+                                    if transition.finalize.value is not None:
+                                        raise NotImplementedError
+
+                    if block.coinbase.value is not None:
+                        coinbase_reward = block.get_coinbase_reward((await self.get_latest_block()).header.metadata.last_coinbase_timestamp)
+                        partial_solutions = list(block.coinbase.value.partial_solutions)
+                        solutions = []
+                        if coinbase_reward > 0:
+                            partial_solutions = list(zip(partial_solutions,
+                                                    [partial_solution.commitment.to_target() for partial_solution in
+                                                     partial_solutions]))
+                            target_sum = sum(target for _, target in partial_solutions)
+                            partial_solution: PartialSolution
+                            for partial_solution, target in partial_solutions:
+                                solutions.append((partial_solution, target, coinbase_reward * target // (2 * target_sum)))
+                        else:
+                            solutions = [(s, 0, 0) for s in partial_solutions]
+                        coinbase_solution_db_id = await conn.fetchval(
+                            "INSERT INTO coinbase_solution (block_id, proof_x, proof_y_positive) VALUES ($1, $2, $3) RETURNING id",
+                            block_db_id, str(block.coinbase.value.proof.w.x), block.coinbase.value.proof.w.flags
+                        )
+                        partial_solution: PartialSolution
+                        for partial_solution, target, reward in solutions:
+                            partial_solution_db_id = await conn.fetchval(
+                                "INSERT INTO partial_solution (coinbase_solution_id, address, nonce, commitment, target) "
+                                "VALUES ($1, $2, $3, $4, $5) RETURNING id",
+                                coinbase_solution_db_id, str(partial_solution.address), partial_solution.nonce,
+                                str(partial_solution.commitment), partial_solution.commitment.to_target()
+                            )
+                            if reward > 0:
                                 await conn.execute(
-                                    "INSERT INTO serial_number (transition_id, index, serial_number) VALUES ($1, $2, $3)",
-                                    transition_db_id, i, str(sn))
-                            for i, event in enumerate(transition.events):
-                                event_db_id = await conn.fetchval(
-                                    "INSERT INTO event (transition_id, index, event_type) VALUES ($1, $2, $3) RETURNING id",
-                                    transition_db_id, i, event.type.name)
-                                match event.type:
-                                    case Event.Type.Custom:
-                                        await conn.execute("INSERT INTO custom_event (event_id, bytes) VALUES ($1, $2)",
-                                                           event_db_id, event.event.bytes.dump())
-                                    case Event.Type.RecordViewKey:
-                                        await conn.execute(
-                                            "INSERT INTO record_view_key_event (event_id, index, record_view_key) VALUES ($1, $2, $3)",
-                                            event_db_id, event.event.index, str(event.event.record_view_key))
-                                    case Event.Type.Operation:
-                                        operation_event_db_id = await conn.fetchval(
-                                            "INSERT INTO operation_event (event_id, operation_type) VALUES ($1, $2) RETURNING id",
-                                            event_db_id, event.event.operation.type.name)
-                                        match event.event.operation.type:
-                                            case Operation.Type.Coinbase:
-                                                await conn.execute(
-                                                    "INSERT INTO coinbase_operation (operation_event_id, recipient, amount) VALUES ($1, $2, $3)",
-                                                    operation_event_db_id,
-                                                    str(event.event.operation.operation.recipient),
-                                                    str(event.event.operation.operation.amount))
-                                            case Operation.Type.Transfer:
-                                                await conn.execute(
-                                                    "INSERT INTO transfer_operation (operation_event_id, caller, recipient, amount) VALUES ($1, $2, $3, $4)",
-                                                    operation_event_db_id, str(event.event.operation.operation.caller),
-                                                    str(event.event.operation.operation.recipient),
-                                                    str(event.event.operation.operation.amount))
-                                            case Operation.Type.Evaluate:
-                                                await conn.execute(
-                                                    "INSERT INTO evaluate_operation (operation_event_id, function_id, function_type, caller, recipient, amount, record_payload) VALUES ($1, $2, $3, $4, $5, $6, $7)",
-                                                    operation_event_db_id,
-                                                    str(event.event.operation.operation.function_id),
-                                                    event.event.operation.operation.function_type.name,
-                                                    str(event.event.operation.operation.function_inputs.caller),
-                                                    str(event.event.operation.operation.function_inputs.recipient),
-                                                    event.event.operation.operation.function_inputs.amount,
-                                                    event.event.operation.operation.function_inputs.record_payload.dump())
+                                    "INSERT INTO leaderboard (address, total_reward) VALUES ($1, $2) "
+                                    "ON CONFLICT (address) DO UPDATE SET total_reward = leaderboard.total_reward + $2",
+                                    str(partial_solution.address), reward
+                                )
+                                await conn.execute(
+                                    "INSERT INTO leaderboard_log (height, address, partial_solution_id, reward) VALUES ($1, $2, $3, $4)",
+                                    block.header.metadata.height, str(partial_solution.address), partial_solution_db_id, reward
+                                )
 
-                            for i, ct in enumerate(transition.ciphertexts):
-                                ciphertext_db_id = await conn.fetchval(
-                                    "INSERT INTO ciphertext (transition_id, index, ciphertext) VALUES ($1, $2, $3) RETURNING id",
-                                    transition_db_id, i, str(ct))
-                                event: Event
-                                for event in transition.events:
-                                    if event.type == Event.Type.RecordViewKey:
-                                        rvk_event: RecordViewKeyEvent = event.event
-                                        if rvk_event.index == i:
-                                            record = Record.load(bytearray(
-                                                aleo.get_record(event.event.record_view_key.dump(), ct.dump())))
-                                            event_db_id = await conn.fetchval(
-                                                "SELECT event.id FROM event JOIN record_view_key_event e ON e.event_id = event.id WHERE transition_id = $1 AND event_type = 'RecordViewKey' AND e.index = $2",
-                                                transition_db_id, i)
-                                            if event_db_id is None:
-                                                raise ValueError("inconsistent database state")
-                                            await conn.execute(
-                                                "INSERT INTO record (output_transition_id, record_view_key_event_id, ciphertext_id, owner, value, payload, program_id, randomizer, commitment) "
-                                                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
-                                                transition_db_id, event_db_id, ciphertext_db_id, str(record.owner),
-                                                record.value, record.payload.dump(), str(record.program_id),
-                                                str(record.randomizer), str(record.commitment))
-                    await self.message_callback(Message(Message.Type.DatabaseBlockAdded, block.header.metadata.height))
+
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseBlockAdded, block.header.metadata.height))
                 except Exception as e:
-                    await self.message_callback(Message(Message.Type.DatabaseError, e))
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    breakpoint()
                     raise
 
-    async def _set_canonical_block(self, block: Block) -> None:
-        async with self.pool.acquire() as conn:
-            async with conn.transaction():
-                try:
-                    await conn.execute("UPDATE block SET is_canonical = FALSE WHERE height = $1",
-                                       block.header.metadata.height)
-                    await conn.execute("UPDATE block SET is_canonical = TRUE WHERE block_hash = $1",
-                                       str(block.block_hash))
-                except Exception as e:
-                    await self.message_callback(Message(Message.Type.DatabaseError, e))
-                    raise
-
-    async def _set_non_canonical_block(self, block: Block) -> None:
-        async with self.pool.acquire() as conn:
-            try:
-                await conn.execute("UPDATE block SET is_canonical = FALSE WHERE block_hash = $1", str(block.block_hash))
-            except Exception as e:
-                await self.message_callback(Message(Message.Type.DatabaseError, e))
-                raise
-
-    async def save_canonical_block(self, block: Block):
-        if (existing_block := await self.get_block_header_by_hash(block.block_hash)) is not None:
-            if existing_block.metadata.height == block.header.metadata.height:
-                await self._set_canonical_block(block)
-                return
-        async with self.pool.acquire() as conn:
-            try:
-                await conn.execute("UPDATE block SET is_canonical = FALSE WHERE height = $1",
-                                   block.header.metadata.height)
-            except Exception as e:
-                await self.message_callback(Message(Message.Type.DatabaseError, e))
-                raise
-        await self._save_block(block, True)
-
-    async def save_non_canonical_block(self, block: Block):
-        if (existing_block := await self.get_block_header_by_hash(block.block_hash)) is not None:
-            if existing_block.metadata.height == block.header.metadata.height:
-                await self._set_non_canonical_block(block)
-                return
-        await self._save_block(block, False)
-
-    async def revert_to_block(self, height: int) -> None:
-        async with self.pool.acquire() as conn:
-            try:
-                await conn.execute("UPDATE block SET is_canonical = FALSE WHERE height > $1", height)
-            except Exception as e:
-                await self.message_callback(Message(Message.Type.DatabaseError, e))
-                raise
+    async def save_block(self, block: Block):
+        await self._save_block(block)
 
     @staticmethod
     def _get_block_header(block: dict):
-        if block["height"] < 100000:
-            proof = DeprecatedPoSWProof.loads(block['proof'])
-        else:
-            proof = PoSWProof.loads(block['proof'])
         return BlockHeader(
-            previous_ledger_root=LedgerRoot.loads(block['previous_ledger_root']),
-            transactions_root=TransactionsRoot.loads(block['transactions_root']),
+            previous_state_root=Field.loads(block["previous_state_root"]),
+            transactions_root=Field.loads(block["transactions_root"]),
+            coinbase_accumulator_point=Field.loads(block["coinbase_accumulator_point"]),
             metadata=BlockHeaderMetadata(
-                height=u32(block['height']),
-                timestamp=i64(block['timestamp']),
-                difficulty_target=u64(block['difficulty_target']),
-                cumulative_weight=u128(block['cumulative_weight'])
-            ),
-            nonce=PoSWNonce.loads(block['nonce']),
-            proof=proof
+                network=u16(3),
+                round_=u64(block["round"]),
+                height=u32(block["height"]),
+                coinbase_target=u64(block["coinbase_target"]),
+                proof_target=u64(block["proof_target"]),
+                last_coinbase_target=u64(block["last_coinbase_target"]),
+                last_coinbase_timestamp=i64(block["last_coinbase_timestamp"]),
+                timestamp=i64(block["timestamp"]),
+            )
         )
 
     @staticmethod
@@ -201,186 +191,211 @@ class Database:
         transactions = await conn.fetch("SELECT * FROM transaction WHERE block_id = $1", block['id'])
         txs = []
         for transaction in transactions:
-            transitions = await conn.fetch("SELECT * FROM transition WHERE transaction_id = $1",
-                                           transaction['id'])
-            tss = []
-            for transition in transitions:
-                serial_numbers = await conn.fetch("SELECT * FROM serial_number WHERE transition_id = $1 ORDER BY index",
-                                                  transition['id'])
-                sns = []
-                for serial_number in serial_numbers:
-                    sns.append(SerialNumber.loads(serial_number['serial_number']))
-                ciphertexts = await conn.fetch("SELECT * FROM ciphertext WHERE transition_id = $1 ORDER BY index",
-                                               transition['id'])
-                cts = []
-                for ciphertext in ciphertexts:
-                    cts.append(RecordCiphertext.loads(ciphertext['ciphertext']))
-                events = await conn.fetch("SELECT * FROM event WHERE transition_id = $1 ORDER BY index",
-                                          transition['id'])
-                es = []
-                for event in events:
-                    # noinspection PyUnresolvedReferences
-                    match Event.Type[event['event_type']]:
-                        case Event.Type.Custom:
-                            custom = await conn.fetchrow("SELECT * FROM custom_event WHERE event_id = $1", event['id'])
-                            es.append(Event(type_=Event.Type.Custom, event=CustomEvent(bytes_=custom['bytes'])))
-                        case Event.Type.RecordViewKey:
-                            rvk = await conn.fetchrow("SELECT * FROM record_view_key_event WHERE event_id = $1",
-                                                      event['id'])
-                            es.append(Event(type_=Event.Type.RecordViewKey, event=RecordViewKeyEvent(
-                                record_view_key=RecordViewKey.loads(rvk['record_view_key']), index=u8(rvk['index']))))
-                        case Event.Type.Operation:
-                            op = await conn.fetchrow("SELECT * FROM operation_event WHERE event_id = $1", event['id'])
-                            # noinspection PyUnresolvedReferences
-                            match Operation.Type[op['operation_type']]:
-                                case Operation.Type.Noop:
-                                    operation = Operation(type_=Operation.Type.Noop, operation=NoopOperation())
-                                case Operation.Type.Coinbase:
-                                    coinbase = await conn.fetchrow(
-                                        "SELECT * FROM coinbase_operation WHERE operation_event_id = $1", op['id'])
-                                    operation = Operation(type_=Operation.Type.Coinbase, operation=CoinbaseOperation(
-                                        recipient=Address.loads(coinbase['recipient']),
-                                        amount=AleoAmount(coinbase['amount'])))
-                                case Operation.Type.Transfer:
-                                    transfer = await conn.fetchrow(
-                                        "SELECT * FROM transfer_operation WHERE operation_event_id = $1", op['id'])
-                                    operation = Operation(type_=Operation.Type.Transfer, operation=TransferOperation(
-                                        caller=Address.loads(transfer["caller"]),
-                                        recipient=Address.loads(transfer['recipient']),
-                                        amount=AleoAmount(transfer['amount'])))
-                                case Operation.Type.Evaluate:
-                                    evaluate = await conn.fetchrow(
-                                        "SELECT * FROM evaluate_operation WHERE operation_event_id = $1", op['id'])
-                                    # noinspection PyUnresolvedReferences
-                                    operation = Operation(
-                                        type_=Operation.Type.Evaluate,
-                                        operation=EvaluateOperation(
-                                            function_id=FunctionID.loads(evaluate['function_id']),
-                                            function_type=FunctionType[evaluate['function_type']],
-                                            function_inputs=FunctionInputs(
-                                                caller=Address.loads(evaluate['caller']),
-                                                recipient=Address.loads(evaluate['recipient']),
-                                                amount=AleoAmount(evaluate['amount']),
-                                                record_payload=Payload.load(bytearray(evaluate['record_payload'])),
-                                            )
-                                        )
+            match transaction["type"]:
+                case Transaction.Type.Execute.name:
+                    execute_transaction = await conn.fetchrow(
+                        "SELECT * FROM transaction_execute WHERE transaction_id = $1", transaction["id"]
+                    )
+                    transitions = await conn.fetch(
+                        "SELECT * FROM transition WHERE transaction_execute_id = $1",
+                        execute_transaction["id"]
+                    )
+                    tss = []
+                    for transition in transitions:
+                        transition_inputs = await conn.fetch(
+                            "SELECT * FROM transition_input WHERE transition_id = $1",
+                            transition["id"]
+                        )
+                        tis = []
+                        for transition_input in transition_inputs:
+                            match transition_input["type"]:
+                                case TransitionInput.Type.Private.name:
+                                    transition_input_private = await conn.fetchrow(
+                                        "SELECT * FROM transition_input_private WHERE transition_input_id = $1",
+                                        transition_input["id"]
                                     )
+                                    if transition_input_private is None:
+                                        ciphertext = None
+                                    else:
+                                        ciphertext = Ciphertext.loads(transition_input_private["ciphertext"])
+                                    tis.append(PrivateTransitionInput(
+                                        ciphertext_hash=Field.loads(transition_input_private["ciphertext_hash"]),
+                                        ciphertext=Option[Ciphertext](ciphertext)
+                                    ))
+                                case TransitionInput.Type.Record.name:
+                                    transition_input_record = await conn.fetchrow(
+                                        "SELECT * FROM transition_input_record WHERE transition_input_id = $1",
+                                        transition_input["id"]
+                                    )
+                                    tis.append(RecordTransitionInput(
+                                        serial_number=Field.loads(transition_input_record["serial_number"]),
+                                        tag=Field.loads(transition_input_record["tag"])
+                                    ))
                                 case _:
-                                    raise ValueError("invalid operation type")
-                            es.append(Event(type_=Event.Type.Operation, event=OperationEvent(operation=operation)))
-                        case _:
-                            raise ValueError("invalid event type")
-                tss.append(Transition(
-                    transition_id=TransitionID.loads(transition['transition_id']),
-                    serial_numbers=Vec[SerialNumber, 2](sns),
-                    ciphertexts=Vec[RecordCiphertext, 2](cts),
-                    value_balance=AleoAmount(transition['value_balance']),
-                    events=Vec[Event, u16](es),
-                    proof=OuterProof.loads(transition['proof'])
-                ))
-            txs.append(Transaction(
-                inner_circuit_id=InnerCircuitID.loads(transaction['inner_circuit_id']),
-                ledger_root=LedgerRoot.loads(transaction['ledger_root']),
-                transitions=Vec[Transition, u16](tss),
-                fast=fast
-            ))
+                                    raise NotImplementedError
+                        transition_outputs = await conn.fetch(
+                            "SELECT * FROM transition_output WHERE transition_id = $1",
+                            transition["id"]
+                        )
+                        tos = []
+                        for transition_output in transition_outputs:
+                            match transition_output["type"]:
+                                case TransitionOutput.Type.Record.name:
+                                    transition_output_record = await conn.fetchrow(
+                                        "SELECT * FROM transition_output_record WHERE transition_output_id = $1",
+                                        transition_output["id"]
+                                    )
+                                    if transition_output_record["record_ciphertext"] is None:
+                                        record_ciphertext = None
+                                    else:
+                                        record_ciphertext = Record[Ciphertext].loads(transition_output_record["record_ciphertext"])
+                                    tos.append(RecordTransitionOutput(
+                                        commitment=Field.loads(transition_output_record["commitment"]),
+                                        checksum=Field.loads(transition_output_record["checksum"]),
+                                        record_ciphertext=Option[Record[Ciphertext]](record_ciphertext)
+                                    ))
+                                case _:
+                                    raise NotImplementedError
+                        tss.append(Transition(
+                            id_=TransitionID.loads(transition["transition_id"]),
+                            program_id=ProgramID.loads(transition["program_id"]),
+                            function_name=Identifier.loads(transition["function_name"]),
+                            inputs=Vec[TransitionInput, u16](tis),
+                            outputs=Vec[TransitionOutput, u16](tos),
+                            # This is wrong
+                            finalize=Option[Vec[Value, u16]](None),
+                            proof=Proof.loads(transition["proof"]),
+                            tpk=Group.loads(transition["tpk"]),
+                            tcm=Field.loads(transition["tcm"]),
+                            fee=i64(transition["fee"]),
+                        ))
+                    additional_fee = await conn.fetchrow(
+                        "SELECT * FROM fee WHERE transaction_id = $1", transaction["id"]
+                    )
+                    if additional_fee is None:
+                        fee = None
+                    else:
+                        raise NotImplementedError
+                    if execute_transaction["inclusion_proof"] is None:
+                        proof = None
+                    else:
+                        proof = Proof.loads(execute_transaction["inclusion_proof"])
+                    txs.append(ExecuteTransaction(
+                        id_=TransactionID.loads(transaction["transaction_id"]),
+                        execution=Execution(
+                            transitions=Vec[Transition, u16](tss),
+                            global_state_root=StateRoot.loads(execute_transaction["global_state_root"]),
+                            inclusion_proof=Option[Proof](proof),
+                        ),
+                        additional_fee=Option[Fee](fee),
+                    ))
+                case _:
+                    raise NotImplementedError
+        coinbase_solution = await conn.fetchrow("SELECT * FROM coinbase_solution WHERE block_id = $1", block["id"])
+        if coinbase_solution is not None:
+            partial_solutions = await conn.fetch(
+                "SELECT * FROM partial_solution WHERE coinbase_solution_id = $1",
+                coinbase_solution["id"]
+            )
+            pss = []
+            for partial_solution in partial_solutions:
+                pss.append(PartialSolution.load_json(dict(partial_solution)))
+            coinbase_solution = CoinbaseSolution(
+                partial_solutions=Vec[PartialSolution, u32](pss),
+                proof=KZGProof(
+                    w=G1Affine(
+                        x=Fq(value=int(coinbase_solution["proof_x"])),
+                        # This is very wrong
+                        flags=False,
+                    ),
+                    random_v=Option[Field](None),
+                )
+            )
+        else:
+            coinbase_solution = None
+
         return Block(
             block_hash=BlockHash.loads(block['block_hash']),
-            previous_block_hash=BlockHash.loads(block['previous_block_hash']),
+            previous_hash=BlockHash.loads(block['previous_hash']),
             header=Database._get_block_header(block),
             transactions=Transactions(
-                transactions=Vec[Transaction, u16](txs)
-            )
+                transactions=Vec[Transaction, u32](txs),
+            ),
+            coinbase=Option[CoinbaseSolution](coinbase_solution),
+            signature=Signature.loads(block['signature']),
         )
 
-    async def get_latest_canonical_height(self):
+    @staticmethod
+    async def _get_full_block_range(start: int, end: int, conn: asyncpg.Connection):
+        blocks = await conn.fetch(
+            "SELECT * FROM block WHERE height <= $1 AND height > $2 ORDER BY height DESC",
+            start,
+            end
+        )
+        return [await Database._get_full_block(block, conn) for block in blocks]
+
+    async def get_latest_height(self):
         async with self.pool.acquire() as conn:
             try:
                 result = await conn.fetchrow(
-                    "SELECT height FROM block WHERE is_canonical = true ORDER BY height DESC LIMIT 1")
+                    "SELECT height FROM block ORDER BY height DESC LIMIT 1")
                 if result is None:
                     return None
                 return result['height']
             except Exception as e:
-                await self.message_callback(Message(Message.Type.DatabaseError, e))
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
-    async def get_latest_canonical_weight(self):
-        conn: asyncpg.Connection
-        async with self.pool.acquire() as conn:
-            try:
-                result = await conn.fetchrow(
-                    "SELECT cumulative_weight FROM block WHERE is_canonical = true ORDER BY height DESC LIMIT 1")
-                if result is None:
-                    return None
-                return result['cumulative_weight']
-            except Exception as e:
-                await self.message_callback(Message(Message.Type.DatabaseError, e))
-                raise
-
-    async def get_latest_canonical_block(self):
+    async def get_latest_block(self):
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
             try:
                 block = await conn.fetchrow(
-                    "SELECT * FROM block WHERE is_canonical = true ORDER BY height DESC LIMIT 1")
+                    "SELECT * FROM block ORDER BY height DESC LIMIT 1")
                 if block is None:
                     return None
                 return await self._get_full_block(block, conn)
             except Exception as e:
-                await self.message_callback(Message(Message.Type.DatabaseError, e))
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
-    async def get_latest_canonical_block_fast(self):
+    async def get_block_by_height(self, height: u32):
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
             try:
                 block = await conn.fetchrow(
-                    "SELECT * FROM block WHERE is_canonical = true ORDER BY height DESC LIMIT 1")
-                if block is None:
-                    return None
-                return await self._get_full_block(block, conn, fast=True)
-            except Exception as e:
-                await self.message_callback(Message(Message.Type.DatabaseError, e))
-                raise
-
-    async def get_canonical_block_by_height(self, height: u32):
-        conn: asyncpg.Connection
-        async with self.pool.acquire() as conn:
-            try:
-                block = await conn.fetchrow(
-                    "SELECT * FROM block WHERE is_canonical = true AND height = $1", height)
+                    "SELECT * FROM block WHERE height = $1", height)
                 if block is None:
                     return None
                 return await self._get_full_block(block, conn)
             except Exception as e:
-                await self.message_callback(Message(Message.Type.DatabaseError, e))
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
-    async def get_canonical_block_hash_by_height(self, height: u32):
+    async def get_block_hash_by_height(self, height: u32):
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
             try:
                 block = await conn.fetchrow(
-                    "SELECT * FROM block WHERE is_canonical = true AND height = $1", height)
+                    "SELECT * FROM block WHERE height = $1", height)
                 if block is None:
                     return None
                 return BlockHash.loads(block['block_hash'])
             except Exception as e:
-                await self.message_callback(Message(Message.Type.DatabaseError, e))
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
-    async def get_canonical_block_header_by_height(self, height: u32):
+    async def get_block_header_by_height(self, height: u32):
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
             try:
                 block = await conn.fetchrow(
-                    "SELECT * FROM block WHERE is_canonical = true AND height = $1", height)
+                    "SELECT * FROM block WHERE height = $1", height)
                 if block is None:
                     return None
                 return self._get_block_header(block)
             except Exception as e:
-                await self.message_callback(Message(Message.Type.DatabaseError, e))
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
     async def get_block_by_hash(self, block_hash: BlockHash | str) -> Block | None:
@@ -393,7 +408,7 @@ class Database:
                     return None
                 return await self._get_full_block(block, conn)
             except Exception as e:
-                await self.message_callback(Message(Message.Type.DatabaseError, e))
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
     async def get_block_header_by_hash(self, block_hash: BlockHash) -> BlockHeader | None:
@@ -406,45 +421,21 @@ class Database:
                     return None
                 return self._get_block_header(block)
             except Exception as e:
-                await self.message_callback(Message(Message.Type.DatabaseError, e))
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
-    async def is_block_hash_canonical(self, block_hash: BlockHash) -> bool:
+    async def get_recent_blocks(self):
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
             try:
-                block = await conn.fetchrow(
-                    "SELECT * FROM block WHERE block_hash = $1", str(block_hash))
-                if block is None:
-                    return False
-                return block['is_canonical']
+                latest_height = await self.get_latest_height()
+                return await Database._get_full_block_range(latest_height, latest_height - 30, conn)
             except Exception as e:
-                await self.message_callback(Message(Message.Type.DatabaseError, e))
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
-    async def get_recent_canonical_blocks_fast(self):
-        conn: asyncpg.Connection
-        async with self.pool.acquire() as conn:
-            try:
-                blocks = await conn.fetch(
-                    "SELECT * FROM block WHERE is_canonical = true ORDER BY height DESC LIMIT 20")
-                res = []
-                for block in blocks:
-                    b = {**block}
-                    txs = await conn.fetch("SELECT * FROM transaction WHERE block_id = $1", block['id'])
-                    b["transaction_count"] = len(txs)
-                    ts_count = 0
-                    for tx in txs:
-                        ts_count += await conn.fetchval("SELECT COUNT(*) FROM transition WHERE transaction_id = $1",
-                                                        tx['id'])
-                    b["transition_count"] = ts_count
-                    res.append(b)
-                return res
-            except Exception as e:
-                await self.message_callback(Message(Message.Type.DatabaseError, e))
-                raise
-
-    async def get_miner_from_block_hash(self, block_hash: BlockHash) -> Address | None:
+    async def get_validator_from_block_hash(self, block_hash: BlockHash) -> Address | None:
+        raise NotImplementedError
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
             try:
@@ -458,51 +449,15 @@ class Database:
                     str(block_hash)
                 )
             except Exception as e:
-                await self.message_callback(Message(Message.Type.DatabaseError, e))
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
-    async def get_ledger_root_from_block_hash(self, block_hash: BlockHash) -> LedgerRoot | None:
-        conn: asyncpg.Connection
-        async with self.pool.acquire() as conn:
-            try:
-                return await conn.fetchval(
-                    "SELECT previous_ledger_root FROM block WHERE previous_block_hash = $1",
-                    str(block_hash)
-                )
-            except Exception as e:
-                await self.message_callback(Message(Message.Type.DatabaseError, e))
-                raise
-
-    async def get_record_from_commitment(self, commitment: Commitment | str) -> Record | None:
-        conn: asyncpg.Connection
-        async with self.pool.acquire() as conn:
-            try:
-                record = await conn.fetchrow(
-                    "SELECT * FROM explorer.record WHERE commitment = $1", str(commitment)
-                )
-                if record is None:
-                    return None
-                record_view_key = await conn.fetchval(
-                    "SELECT record_view_key FROM record_view_key_event WHERE event_id = $1",
-                    record['record_view_key_event_id'])
-                return Record(
-                    owner=Address.loads(record['owner']),
-                    value=AleoAmount(record['value']),
-                    payload=Payload.load(bytearray(record['payload'])),
-                    program_id=ProgramID.loads(record['program_id']),
-                    randomizer=RecordRandomizer.loads(record['randomizer']),
-                    record_view_key=RecordViewKey.loads(record_view_key),
-                )
-            except Exception as e:
-                await self.message_callback(Message(Message.Type.DatabaseError, e))
-                raise
-
-    async def get_best_block_from_transaction_id(self, transaction_id: TransactionID | str) -> Block | None:
+    async def get_block_from_transaction_id(self, transaction_id: TransactionID | str) -> Block | None:
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
             try:
                 block = await conn.fetchrow(
-                    "SELECT b.* FROM block b JOIN transaction t ON b.id = t.block_id WHERE t.transaction_id = $1 AND b.is_canonical = true",
+                    "SELECT b.* FROM block b JOIN transaction t ON b.id = t.block_id WHERE t.transaction_id = $1",
                     str(transaction_id)
                 )
                 if block is None:
@@ -514,22 +469,31 @@ class Database:
                     return None
                 return await self._get_full_block(block, conn)
             except Exception as e:
-                await self.message_callback(Message(Message.Type.DatabaseError, e))
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
-    async def get_best_block_from_transition_id(self, transition_id: TransitionID | str) -> Block | None:
+    async def get_block_from_transition_id(self, transition_id: TransitionID | str) -> Block | None:
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
             try:
                 transaction_id = await conn.fetchval(
-                    "SELECT tx.transaction_id FROM transaction tx JOIN transition ts ON tx.id = ts.transaction_id WHERE ts.transition_id = $1",
+                    "SELECT tx.transaction_id FROM transaction tx "
+                    "JOIN transaction_execute te ON tx.id = te.transaction_id "
+                    "JOIN transition ts ON te.id = ts.transaction_execute_id "
+                    "WHERE ts.transition_id = $1",
+                    str(transition_id)
+                ) or await conn.fetchval(
+                    "SELECT tx.transaction_id FROM transaction tx "
+                    "JOIN fee ON tx.id = fee.transaction_id "
+                    "JOIN transition ts ON fee.id = ts.fee_id "
+                    "WHERE ts.transition_id = $1",
                     str(transition_id)
                 )
                 if transaction_id is None:
                     return None
-                return await self.get_best_block_from_transaction_id(transaction_id)
+                return await self.get_block_from_transaction_id(transaction_id)
             except Exception as e:
-                await self.message_callback(Message(Message.Type.DatabaseError, e))
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
     async def search_block_hash(self, block_hash: str) -> [str]:
@@ -543,7 +507,7 @@ class Database:
                     return []
                 return list(map(lambda x: x['block_hash'], result))
             except Exception as e:
-                await self.message_callback(Message(Message.Type.DatabaseError, e))
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
     async def search_transaction_id(self, transaction_id: str) -> [str]:
@@ -557,7 +521,7 @@ class Database:
                     return []
                 return list(map(lambda x: x['transaction_id'], result))
             except Exception as e:
-                await self.message_callback(Message(Message.Type.DatabaseError, e))
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
     async def search_transition_id(self, transition_id: str) -> [str]:
@@ -571,68 +535,31 @@ class Database:
                     return []
                 return list(map(lambda x: x['transition_id'], result))
             except Exception as e:
-                await self.message_callback(Message(Message.Type.DatabaseError, e))
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
-    async def get_orphaned_block_count_on_height(self, height: int) -> int:
+    async def get_blocks_range(self, start, end):
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
             try:
-                return await conn.fetchval(
-                    "SELECT COUNT(*) FROM block WHERE height = $1 AND is_canonical = false", height
-                )
+                return await Database._get_full_block_range(start, end, conn)
             except Exception as e:
-                await self.message_callback(Message(Message.Type.DatabaseError, e))
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
-    async def get_orphaned_blocks_on_height_fast(self, height: int) -> [Block]:
+    async def update_leaderboard(self, reward: {str, int}):
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
             try:
-                blocks = await conn.fetch(
-                    "SELECT * FROM block WHERE is_canonical = false AND height = $1 ORDER BY timestamp DESC", height)
-                res = []
-                for block in blocks:
-                    b = {**block}
-                    txs = await conn.fetch("SELECT * FROM transaction WHERE block_id = $1", block['id'])
-                    b["transaction_count"] = len(txs)
-                    ts_count = 0
-                    for tx in txs:
-                        ts_count += await conn.fetchval("SELECT COUNT(*) FROM transition WHERE transaction_id = $1",
-                                                        tx['id'])
-                    b["transition_count"] = ts_count
-                    res.append(b)
-                return res
+                for address, reward in reward.items():
+                    await conn.execute(
+                        "INSERT INTO leaderboard (address, total_reward) VALUES ($1, $2) "
+                        "ON CONFLICT (address) DO UPDATE SET total_reward = leaderboard.total_reward + $2",
+                        address, reward
+                    )
+                    await conn.execute(
+                        "INSERT INTO leaderboard_log (height, address, partial_solution_id, reward) "
+                    )
             except Exception as e:
-                await self.message_callback(Message(Message.Type.DatabaseError, e))
-                raise
-
-    async def get_blocks_range_fast(self, start, end):
-        conn: asyncpg.Connection
-        async with self.pool.acquire() as conn:
-            blocks = await conn.fetch(
-                "SELECT b.*, CASE WHEN c.count IS NULL THEN 0 ELSE c.count END AS orphan_count "
-                "FROM block b "
-                "LEFT JOIN "
-                "(SELECT height, COUNT(*) AS count FROM block WHERE block.is_canonical = false AND height <= $1 AND height > $2 GROUP BY height) AS c "
-                "ON c.height = b.height "
-                "WHERE b.is_canonical = true AND b.height <= $1 AND b.height > $2 "
-                "ORDER BY height DESC ",
-                start, end
-            )
-            try:
-                res = []
-                for block in blocks:
-                    b = {**block}
-                    txs = await conn.fetch("SELECT * FROM transaction WHERE block_id = $1", block['id'])
-                    b["transaction_count"] = len(txs)
-                    ts_count = 0
-                    for tx in txs:
-                        ts_count += await conn.fetchval("SELECT COUNT(*) FROM transition WHERE transaction_id = $1",
-                                                        tx['id'])
-                    b["transition_count"] = ts_count
-                    res.append(b)
-                return res
-            except Exception as e:
-                await self.message_callback(Message(Message.Type.DatabaseError, e))
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise

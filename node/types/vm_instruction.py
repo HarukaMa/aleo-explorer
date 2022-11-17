@@ -105,6 +105,14 @@ class Identifier(Serialize, Deserialize):
         del data[:length]
         return cls(value=value)
 
+    @classmethod
+    @type_check
+    def loads(cls, data: str):
+        return cls(value=data)
+
+    def __str__(self):
+        return self.data
+
 class ProgramID(Serialize, Deserialize):
 
     @type_check
@@ -121,6 +129,15 @@ class ProgramID(Serialize, Deserialize):
         name = Identifier.load(data)
         network = Identifier.load(data)
         return cls(name=name, network=network)
+
+    @classmethod
+    @type_check
+    def loads(cls, data: str):
+        (name, network) = data.split(".")
+        return cls(name=Identifier(value=name), network=Identifier(value=network))
+
+    def __str__(self):
+        return f"{self.name}.{self.network}"
 
 
 class Import(Serialize, Deserialize):
