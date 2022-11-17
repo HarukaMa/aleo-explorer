@@ -65,7 +65,7 @@ async def get_block_list_info(block: Block) -> dict:
     }
     reward = await db.get_block_coinbase_reward_by_height(block.header.metadata.height)
     if reward is not None:
-        b["coinbase_rewards"] = str(reward)
+        b["coinbase_rewards"] = str(reward // 2)
         b["coinbase_solutions"] = str(len(block.coinbase.value.partial_solutions))
     else:
         b["coinbase_rewards"] = "-"
