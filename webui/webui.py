@@ -61,8 +61,9 @@ async def get_block_list_info(block: Block) -> dict:
         "validator": "Not implemented", # await db.get_miner_from_block_hash(block.block_hash),
         "block_hash": block.block_hash,
     }
-    if block.coinbase.value:
-        b["coinbase_rewards"] = str(await db.get_block_coinbase_reward_by_height(block.header.metadata.height))
+    reward = await db.get_block_coinbase_reward_by_height(block.header.metadata.height)
+    if reward is not None:
+        b["coinbase_rewards"] = str(reward)
         b["coinbase_solutions"] = str(len(block.coinbase.value.partial_solutions))
     else:
         b["coinbase_rewards"] = "-"
