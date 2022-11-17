@@ -78,7 +78,8 @@ CREATE TABLE explorer.block (
     last_coinbase_target numeric(20,0) NOT NULL,
     last_coinbase_timestamp bigint NOT NULL,
     "timestamp" bigint NOT NULL,
-    signature text NOT NULL
+    signature text NOT NULL,
+    coinbase_reward numeric(20,0)
 );
 
 
