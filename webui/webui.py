@@ -44,7 +44,8 @@ def get_env(name):
     return os.environ.get(name)
 
 def format_time(epoch):
-    return datetime.datetime.fromtimestamp(epoch, tz=datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    time_str = datetime.datetime.fromtimestamp(epoch, tz=datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    return f"""<span class="time">{time_str}</span>"""
 
 def format_aleo_credit(gates):
     if gates == "-":
@@ -440,7 +441,7 @@ async def address_route(request: Request):
     if address is None:
         raise HTTPException(status_code=400, detail="Missing address")
     solutions = await db.get_recent_solutions_by_address(address)
-    if solutions is None:
+    if len(solutions) == 0:
         raise HTTPException(status_code=404, detail="Address not found")
     solution_count = await db.get_solution_count_by_address(address)
     total_rewards = await db.get_leaderboard_reward_by_address(address)
