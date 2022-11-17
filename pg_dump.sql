@@ -56,6 +56,20 @@ CREATE TYPE explorer.transition_data_type AS ENUM (
 );
 
 
+--
+-- Name: get_block_target_sum(bigint); Type: FUNCTION; Schema: explorer; Owner: -
+--
+
+CREATE FUNCTION explorer.get_block_target_sum(block_height bigint) RETURNS numeric
+    LANGUAGE sql STABLE
+    AS $$
+SELECT SUM(target) FROM explorer.partial_solution ps
+JOIN explorer.coinbase_solution cs ON cs.id = ps.coinbase_solution_id
+JOIN explorer.block b ON b.id = cs.block_id
+WHERE height = block_height
+$$;
+
+
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
