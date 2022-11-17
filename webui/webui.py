@@ -47,6 +47,8 @@ def format_time(epoch):
     return datetime.datetime.fromtimestamp(epoch, tz=datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 def format_aleo_credit(gates):
+    if gates == "-":
+        return "-"
     return str(Decimal(gates) / 1_000_000)
 
 templates.env.filters["get_env"] = get_env
