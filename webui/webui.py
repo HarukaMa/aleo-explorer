@@ -97,7 +97,6 @@ async def block_route(request: Request):
         block = await db.get_block_by_height(u32(int(height)))
         if block is None:
             raise HTTPException(status_code=404, detail="Block not found")
-        is_canonical = True
         block_hash = block.block_hash
     else:
         block = await db.get_block_by_hash(block_hash)
@@ -108,8 +107,15 @@ async def block_route(request: Request):
     latest_block_height = await db.get_latest_height()
     confirmations = latest_block_height - height + 1
 
-    mining_reward = 0
-    fee = 0
+    coinbase_reward = await db.get_block_coinbase_reward_by_height(height)
+    css = []
+    if coinbase_reward is not None:
+        partial_solutions = block.coinbase.value.partial_solutions
+        for partial_solution in partial_solutions:
+            css.append({
+                "partial_solution": partial_solution,
+                "coinbase_reward": str(coinbase_reward // len(partial_solutions)),
+            })
     txs = []
     for tx in block.transactions.transactions:
         tx: Transaction
@@ -120,10 +126,9 @@ async def block_route(request: Request):
                 tx: ExecuteTransaction
                 t = {
                     "tx_id": tx.id,
+                    "type": "Execute",
+                    "transitions_count": len(tx.execution.transitions),
                 }
-                balance = 0
-                if balance >= 0:
-                    fee += balance
                 txs.append(t)
 
     ctx = {
@@ -132,11 +137,10 @@ async def block_route(request: Request):
         "block_hash_trunc": str(block_hash)[:12] + "..." + str(block_hash)[-6:],
         "confirmations": confirmations,
         "validator": "Not implemented", # await db.get_miner_from_block_hash(block.block_hash),
-        "pow_reward": mining_reward,
+        "coinbase_reward": coinbase_reward,
         "transactions": txs,
-        "fee": fee,
     }
-    return templates.TemplateResponse('block.jinja2', ctx, headers={'Cache-Control': 'public, max-age=30'})
+    return templates.TemplateResponse('block.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'})
 
 
 async def transaction_route(request: Request):

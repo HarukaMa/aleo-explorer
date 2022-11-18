@@ -125,7 +125,8 @@ CREATE TABLE explorer.coinbase_solution (
     id integer NOT NULL,
     block_id integer NOT NULL,
     proof_x text NOT NULL,
-    proof_y_positive boolean NOT NULL
+    proof_y_positive boolean NOT NULL,
+    target_sum numeric(20,0) DEFAULT 0 NOT NULL
 );
 
 

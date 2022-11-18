@@ -159,8 +159,8 @@
 
     let timezone_setting = localStorage.getItem("timezone")
     if (timezone_setting === null) {
-        timezone_setting = "local"
-        localStorage.setItem("timezone", "local")
+        timezone_setting = "utc"
+        localStorage.setItem("timezone", "utc")
     }
 
     if (timezone_setting === "local") {

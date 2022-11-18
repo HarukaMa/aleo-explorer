@@ -140,8 +140,9 @@ class Database:
                         else:
                             solutions = [(s, 0, 0) for s in partial_solutions]
                         coinbase_solution_db_id = await conn.fetchval(
-                            "INSERT INTO coinbase_solution (block_id, proof_x, proof_y_positive) VALUES ($1, $2, $3) RETURNING id",
-                            block_db_id, str(block.coinbase.value.proof.w.x), block.coinbase.value.proof.w.flags
+                            "INSERT INTO coinbase_solution (block_id, proof_x, proof_y_positive, target_sum) "
+                            "VALUES ($1, $2, $3, $4) RETURNING id",
+                            block_db_id, str(block.coinbase.value.proof.w.x), block.coinbase.value.proof.w.flags, target_sum
                         )
                         partial_solution: PartialSolution
                         for partial_solution, target, reward in solutions:
@@ -642,6 +643,22 @@ class Database:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
+    async def get_solution_by_height(self, height: int, start: int, end: int) -> list:
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                return await conn.fetch(
+                    "SELECT ps.nonce as nonce, ps.commitment as commitment, ps.target as target, reward "
+                    "FROM leaderboard_log ll "
+                    "JOIN partial_solution ps ON ps.id = ll.partial_solution_id "
+                    "WHERE ll.height = $1 "
+                    "LIMIT $2 OFFSET $3",
+                    height, end - start, start
+                )
+            except Exception as e:
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                raise
+
     async def search_address(self, address: str) -> [str]:
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
@@ -652,6 +669,26 @@ class Database:
                 if result is None:
                     return []
                 return list(map(lambda x: x['address'], result))
+            except Exception as e:
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                raise
+
+
+    async def update_target_sum(self):
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                latest_height = await self.get_latest_height()
+                for height in range(latest_height):
+                    target_sum = await conn.fetchval("SELECT get_block_target_sum($1)", height)
+                    if target_sum is not None:
+                        print(f"Updating target sum for height {height}")
+                        coinbase_solution_id = await conn.fetchval(
+                            "SELECT cs.id FROM coinbase_solution cs "
+                            "JOIN block b ON b.id = cs.block_id "
+                            "WHERE b.height = $1", height
+                        )
+                        await conn.execute("UPDATE coinbase_solution SET target_sum = $1 WHERE id = $2", target_sum, coinbase_solution_id)
             except Exception as e:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
