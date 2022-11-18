@@ -95,13 +95,11 @@
                         <td>{{ solution.reward | format_aleo_credit }}</td>
                     </tr>
                 {% endfor %}
-                {% if total_solutions > 30 %}
-                <tr>
-                    <td><a href="/address_solution?a={{ address }}">Show more</a></td>
-                </tr>
-                {% endif %}
                 </tbody>
             </table>
+            {% if total_solutions > 30 %}
+            <a href="/address_solution?a={{ address }}">Show full list</a>
+            {% endif %}
         </div>
 
     </div>

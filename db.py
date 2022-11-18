@@ -602,7 +602,7 @@ class Database:
             try:
                 return await conn.fetch(
                     "SELECT b.height as height, b.timestamp as timestamp, ps.nonce as nonce, ps.target as target, "
-                    "reward, get_block_target_sum(b.height) as target_sum "
+                    "reward, cs.target_sum as target_sum "
                     "FROM leaderboard_log ll "
                     "JOIN partial_solution ps ON ps.id = ll.partial_solution_id "
                     "JOIN coinbase_solution cs ON cs.id = ps.coinbase_solution_id "
@@ -631,7 +631,7 @@ class Database:
             try:
                 return await conn.fetch(
                     "SELECT b.height as height, b.timestamp as timestamp, ps.nonce as nonce, ps.target as target, "
-                    "reward, get_block_target_sum(b.height) as target_sum "
+                    "reward, cs.target_sum as target_sum "
                     "FROM leaderboard_log ll "
                     "JOIN partial_solution ps ON ps.id = ll.partial_solution_id "
                     "JOIN coinbase_solution cs ON cs.id = ps.coinbase_solution_id "

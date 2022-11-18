@@ -72,7 +72,6 @@ class Explorer:
                              #light_node_state=self.light_node_state)
             await self.node.connect(os.environ.get("NODE_HOST", "127.0.0.1"), int(os.environ.get("NODE_PORT", "4132")))
             asyncio.create_task(webui.run())
-            await self.db.update_target_sum()
             while True:
                 msg = await self.message_queue.get()
                 match msg.type:
