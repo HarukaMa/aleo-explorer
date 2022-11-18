@@ -11,7 +11,7 @@ import uvicorn
 from starlette.applications import Starlette
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
-from starlette.responses import RedirectResponse
+from starlette.responses import RedirectResponse, FileResponse
 from starlette.routing import Route
 from starlette.templating import Jinja2Templates
 
@@ -478,6 +478,10 @@ async def address_solution_route(request: Request):
     return templates.TemplateResponse('address_solution.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
 
 
+async def robots_route(_: Request):
+    return FileResponse("webui/robots.txt", headers={'Cache-Control': 'public, max-age=3600'})
+
+
 async def bad_request(request: Request, exc: HTTPException):
     return templates.TemplateResponse('400.jinja2', {'request': request, "exc": exc}, status_code=400)
 
@@ -504,6 +508,7 @@ routes = [
     Route("/leaderboard", leaderboard_route),
     Route("/address", address_route),
     Route("/address_solution", address_solution_route),
+    Route("/robots.txt", robots_route),
 ]
 
 exc_handlers = {
