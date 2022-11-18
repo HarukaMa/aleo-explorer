@@ -109,7 +109,7 @@
                         <td>{{ block.transaction_count }}</td>
                         <td>{{ block.proof_target }}</td>
                         <td>{{ block.coinbase_target }}</td>
-                        <td>{% if block.coinbase_reward %}{{ block.coinbase_reward | format_aleo_credit }}{% else %}-{% endif %}</td>
+                        <td>{% if block.coinbase_reward %}{{ block.coinbase_reward // 2 | format_aleo_credit }}{% else %}-{% endif %}</td>
                         <td>{% if block.coinbase_reward %}{{ block.partial_solution_count }}{% else %}-{% endif %}</td>
                         <td>-</td>
                     </tr>
