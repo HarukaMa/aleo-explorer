@@ -30,7 +30,7 @@
                     {% for p in range(([4, page - 3] | max), page) %}
                         <li><a href="/blocks?p={{ p }}">{{ p }}</a></li>
                     {% endfor %}
-                    {% if page > 3 %}
+                    {% if page > 3 or page == total_pages %}
                         <li class="current">{{ page }}</li>
                     {% endif %}
                     {% for p in range([4, page + 1] | max, [page + 4, total_pages] | min) %}
@@ -50,24 +50,28 @@
                 <thead>
                 <tr>
                     <th>Height</th>
-                    <th>Block hash</th>
+                    <th>Epoch</th>
                     <th>Timestamp</th>
                     <th>Transactions</th>
-                    <th>Transitions</th>
-                    <th>Miner</th>
-                    <th>Orphaned blocks</th>
+                    <th>Proof target</th>
+                    <th>Coinbase target</th>
+                    <th>Coinbase rewards</th>
+                    <th>Coinbase solutions</th>
+                    <th>Validator</th>
                 </tr>
                 </thead>
                 <tbody>
                 {% for block in blocks %}
                     <tr>
-                        <td><a href="/block?bh={{ block.block_hash }}">{{ block.height }}</a></td>
-                        <td class="mono">{{ block.block_hash_trunc }}</td>
+                        <td><a href="/block?h={{ block.height }}">{{ block.height }}</a></td>
+                        <td>{{ block.height // 256 }}</td>
                         <td>{{ block.timestamp | format_time | safe }}</td>
-                        <td>{{ block.transactions }}</td>
-                        <td>{{ block.transitions }}</td>
-                        <td class="mono"><a href="/address?a={{ block.owner }}">{{ block.owner_trunc }}</a></td>
-                        <td>{% if block.orphan_count %}<a href="/orphan?h={{ block.height }}">{{ block.orphan_count }}</a>{% else %}{{ block.orphan_count }}{% endif %}</td>
+                        <td>{{ block.transaction_count }}</td>
+                        <td>{{ block.proof_target }}</td>
+                        <td>{{ block.coinbase_target }}</td>
+                        <td>{% if block.coinbase_reward %}{{ block.coinbase_reward | format_aleo_credit }}{% else %}-{% endif %}</td>
+                        <td>{% if block.coinbase_reward %}{{ block.partial_solution_count }}{% else %}-{% endif %}</td>
+                        <td>-</td>
                     </tr>
                 {% endfor %}
                 </tbody>

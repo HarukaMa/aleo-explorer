@@ -192,7 +192,7 @@ class Database:
         )
 
     @staticmethod
-    async def _get_full_block(block: dict, conn: asyncpg.Connection, fast=False):
+    async def _get_full_block(block: dict, conn: asyncpg.Connection):
         transactions = await conn.fetch("SELECT * FROM transaction WHERE block_id = $1", block['id'])
         txs = []
         for transaction in transactions:
@@ -334,10 +334,36 @@ class Database:
     async def _get_full_block_range(start: int, end: int, conn: asyncpg.Connection):
         blocks = await conn.fetch(
             "SELECT * FROM block WHERE height <= $1 AND height > $2 ORDER BY height DESC",
-            start,
-            end
+            start, end
         )
         return [await Database._get_full_block(block, conn) for block in blocks]
+
+    @staticmethod
+    async def _get_fast_block(block: dict, conn: asyncpg.Connection) -> dict:
+        transaction_count = await conn.fetchval(
+            "SELECT COUNT(*) FROM transaction WHERE block_id = $1",
+            block["id"]
+        )
+        partial_solution_count = await conn.fetchval(
+            "SELECT COUNT(*) FROM partial_solution ps "
+            "JOIN coinbase_solution cs on ps.coinbase_solution_id = cs.id "
+            "WHERE cs.block_id = $1",
+            block["id"]
+        )
+        return {
+            **block,
+            "transaction_count": transaction_count,
+            "partial_solution_count": partial_solution_count,
+        }
+
+    @staticmethod
+    async def _get_fast_block_range(start: int, end: int, conn: asyncpg.Connection):
+        blocks = await conn.fetch(
+            "SELECT * FROM block WHERE height <= $1 AND height > $2 ORDER BY height DESC",
+            start, end
+        )
+        return [await Database._get_fast_block(block, conn) for block in blocks]
+
 
     async def get_latest_height(self):
         async with self.pool.acquire() as conn:
@@ -429,12 +455,12 @@ class Database:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
-    async def get_recent_blocks(self):
+    async def get_recent_blocks_fast(self):
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
             try:
                 latest_height = await self.get_latest_height()
-                return await Database._get_full_block_range(latest_height, latest_height - 30, conn)
+                return await Database._get_fast_block_range(latest_height, latest_height - 30, conn)
             except Exception as e:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
@@ -552,12 +578,35 @@ class Database:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
+    async def get_blocks_range_fast(self, start, end):
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                return await Database._get_fast_block_range(start, end, conn)
+            except Exception as e:
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                raise
+
     async def get_block_coinbase_reward_by_height(self, height: int) -> int | None:
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
             try:
                 return await conn.fetchval(
                     "SELECT coinbase_reward FROM block WHERE height = $1", height
+                )
+            except Exception as e:
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                raise
+
+    async def get_block_target_sum_by_height(self, height: int) -> int | None:
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                return await conn.fetchval(
+                    "SELECT target_sum FROM coinbase_solution "
+                    "JOIN block b on coinbase_solution.block_id = b.id "
+                    "WHERE height = $1 ",
+                    height
                 )
             except Exception as e:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
@@ -648,10 +697,11 @@ class Database:
         async with self.pool.acquire() as conn:
             try:
                 return await conn.fetch(
-                    "SELECT ps.nonce as nonce, ps.commitment as commitment, ps.target as target, reward "
+                    "SELECT ps.address as address, ps.nonce as nonce, ps.commitment as commitment, ps.target as target, reward "
                     "FROM leaderboard_log ll "
                     "JOIN partial_solution ps ON ps.id = ll.partial_solution_id "
                     "WHERE ll.height = $1 "
+                    "ORDER BY target DESC "
                     "LIMIT $2 OFFSET $3",
                     height, end - start, start
                 )

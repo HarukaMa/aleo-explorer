@@ -26,6 +26,12 @@
             color: #cc4b37;
         }
 
+        .note {
+            font-size: 0.75rem;
+            color: #999;
+        }
+
+
     </style>
 {% endblock %}
 
@@ -66,14 +72,6 @@
             </div>
             <div class="data-line grid-x grid-padding-x">
                 <div class="cell small-3 block-data-line-label">
-                    Confirmations
-                </div>
-                <div class="cell auto data-line-value">
-                    {{ confirmations }}
-                </div>
-            </div>
-            <div class="data-line grid-x grid-padding-x">
-                <div class="cell small-3 block-data-line-label">
                     Coinbase target
                 </div>
                 <div class="cell auto data-line-value">
@@ -93,7 +91,7 @@
                     Coinbase reward
                 </div>
                 <div class="cell auto data-line-value">
-                    {% if coinbase_reward %}{{ coinbase_reward | format_aleo_credit }}{% else %}-{% endif %}
+                    {% if coinbase_reward %}{{ (coinbase_reward // 2) | format_aleo_credit }}{% else %}-{% endif %}
                 </div>
             </div>
             <div class="data-line grid-x grid-padding-x">
@@ -160,6 +158,45 @@
             </table>
         </div>
 
+    {% if coinbase_reward %}
+        <div id="coinbase">
+            <h4>Coinbase solutions</h4>
+            <div class="data-line grid-x grid-padding-x">
+                <div class="cell small-2 block-data-line-label">
+                    Puzzle proof
+                </div>
+                <div class="cell auto data-line-value">
+                    x: <span class="mono">{{ block.coinbase.value.proof.w.x }}</span><br>
+                    y: <span class="mono">Not implemented</span>
+                </div>
+            </div>
+            <table id="coinbase-table" class="unstriped">
+                <thead>
+                <tr>
+                    <td>Address</td>
+                    <td>Nonce</td>
+                    <td>Commitment</td>
+                    <td>Target / Total</td>
+                    <td>Reward</td>
+                </tr>
+                </thead>
+                <tbody>
+                {% for partial_solution in coinbase_solutions %}
+                <tr>
+                    <td><a href="/address?a={{ partial_solution.address }}"><span class="mono">{{ partial_solution.address_trunc }}</span></a></td>
+                    <td><span class="mono">{{ partial_solution.nonce }}</span></td>
+                    <td><span class="mono">{{ partial_solution.commitment }}</span></td>
+                    <td>{{ partial_solution.target }}<span class="note"> / {{ target_sum }}</span></td>
+                    <td>{{ partial_solution.reward | format_aleo_credit }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% if block.coinbase.value.partial_solutions | count > 100 %}
+            Showing 100 items. <a href="block_solutions?h={{ block.header.metadata.height }}">Show all</a>
+            {% endif %}
+        </div>
+    {% endif %}
     </div>
 
 {% endblock %}

@@ -35,7 +35,7 @@
                     {% for p in range(([4, page - 3] | max), page) %}
                         <li><a href="/leaderboard?p={{ p }}">{{ p }}</a></li>
                     {% endfor %}
-                    {% if page > 3 %}
+                    {% if page > 3 or page == total_pages %}
                         <li class="current">{{ page }}</li>
                     {% endif %}
                     {% for p in range([4, page + 1] | max, [page + 4, total_pages] | min) %}

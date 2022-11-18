@@ -17,7 +17,7 @@ from starlette.templating import Jinja2Templates
 
 from db import Database
 # from node.light_node import LightNodeState
-from node.types import u32, Transaction, Transition, ExecuteTransaction, Block
+from node.types import u32, Transaction, Transition, ExecuteTransaction
 
 
 class Server(uvicorn.Server):
@@ -56,34 +56,12 @@ templates.env.filters["get_env"] = get_env
 templates.env.filters["format_time"] = format_time
 templates.env.filters["format_aleo_credit"] = format_aleo_credit
 
-async def get_block_list_info(block: Block) -> dict:
-    b = {
-        "timestamp": block.header.metadata.timestamp,
-        "height": block.header.metadata.height,
-        "transactions": len(block.transactions.transactions),
-        "proof_target": block.header.metadata.proof_target,
-        "coinbase_target": block.header.metadata.coinbase_target,
-        "validator": "Not implemented", # await db.get_miner_from_block_hash(block.block_hash),
-        "block_hash": block.block_hash,
-    }
-    reward = await db.get_block_coinbase_reward_by_height(block.header.metadata.height)
-    if reward is not None:
-        b["coinbase_rewards"] = str(reward // 2)
-        b["coinbase_solutions"] = str(len(block.coinbase.value.partial_solutions))
-    else:
-        b["coinbase_rewards"] = "-"
-        b["coinbase_solutions"] = "-"
-    return b
-
 async def index_route(request: Request):
-    recent_blocks = await db.get_recent_blocks()
-    data = []
-    for block in recent_blocks:
-        data.append(await get_block_list_info(block))
+    recent_blocks = await db.get_recent_blocks_fast()
     ctx = {
         "latest_block": await db.get_latest_block(),
         "request": request,
-        "recent_blocks": data,
+        "recent_blocks": recent_blocks,
     }
     return templates.TemplateResponse('index.jinja2', ctx, headers={'Cache-Control': 'public, max-age=10'})
 
@@ -104,18 +82,23 @@ async def block_route(request: Request):
             raise HTTPException(status_code=404, detail="Block not found")
         height = block.header.metadata.height
     height = int(height)
-    latest_block_height = await db.get_latest_height()
-    confirmations = latest_block_height - height + 1
 
     coinbase_reward = await db.get_block_coinbase_reward_by_height(height)
     css = []
+    target_sum = 0
     if coinbase_reward is not None:
-        partial_solutions = block.coinbase.value.partial_solutions
-        for partial_solution in partial_solutions:
+        solutions = await db.get_solution_by_height(height, 0, 100)
+        for solution in solutions:
             css.append({
-                "partial_solution": partial_solution,
-                "coinbase_reward": str(coinbase_reward // len(partial_solutions)),
+                "address": solution["address"],
+                "address_trunc": solution["address"][:15] + "..." + solution["address"][-10:],
+                "nonce": solution["nonce"],
+                "commitment": solution["commitment"][:13] + "..." + solution["commitment"][-10:],
+                "target": solution["target"],
+                "reward": solution["reward"],
             })
+            target_sum += solution["target"]
+
     txs = []
     for tx in block.transactions.transactions:
         tx: Transaction
@@ -135,10 +118,11 @@ async def block_route(request: Request):
         "request": request,
         "block": block,
         "block_hash_trunc": str(block_hash)[:12] + "..." + str(block_hash)[-6:],
-        "confirmations": confirmations,
         "validator": "Not implemented", # await db.get_miner_from_block_hash(block.block_hash),
         "coinbase_reward": coinbase_reward,
         "transactions": txs,
+        "coinbase_solutions": css,
+        "target_sum": target_sum,
     }
     return templates.TemplateResponse('block.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'})
 
@@ -381,30 +365,16 @@ async def blocks_route(request: Request):
             page = int(page)
     except:
         raise HTTPException(status_code=400, detail="Invalid page")
-    total_blocks = await db.get_latest_canonical_height()
+    total_blocks = await db.get_latest_height()
     total_pages = (total_blocks // 50) + 1
     if page < 1 or page > total_pages:
         raise HTTPException(status_code=400, detail="Invalid page")
     start = total_blocks - 50 * (page - 1)
     blocks = await db.get_blocks_range_fast(start, start - 50)
-    data = []
-    for block in blocks:
-        owner = await db.get_miner_from_block_hash(block["block_hash"])
-        b = {
-            "timestamp": block["timestamp"],
-            "height": block["height"],
-            "transactions": block["transaction_count"],
-            "transitions": block["transition_count"],
-            "owner": owner,
-            "owner_trunc": owner[:14] + "..." + owner[-6:],
-            "block_hash": block["block_hash"],
-            "block_hash_trunc": block["block_hash"][:12] + "..." + block["block_hash"][-6:],
-            "orphan_count": block["orphan_count"],
-        }
-        data.append(b)
+
     ctx = {
         "request": request,
-        "blocks": data,
+        "blocks": blocks,
         "page": page,
         "total_pages": total_pages,
     }
