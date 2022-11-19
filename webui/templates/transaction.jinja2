@@ -10,15 +10,6 @@
             margin: 20px 4px;
         }
 
-        .data-line {
-            padding: 10px 0;
-            border-bottom: 1px solid #ccc;
-        }
-
-        .data-line-value {
-            overflow-wrap: break-word;
-        }
-
         .text-alert {
             color: #cc4b37;
         }
@@ -35,43 +26,22 @@
         </div>
 
         <div id="data">
-            <div class="data-line grid-x grid-padding-x">
-                <div class="cell small-3 block-data-line-label">
-                    Transaction ID
-                </div>
-                <div class="cell auto data-line-value">
-                    <span class="mono">{{ tx_id }}</span>
-                </div>
-            </div>
-            <div class="data-line grid-x grid-padding-x">
-                <div class="cell small-3 block-data-line-label">
-                    Block
-                </div>
-                <div class="cell auto data-line-value">
-                    {% if is_canonical %}
-                        <a href="/block?h={{ block.header.metadata.height }}">{{ block.header.metadata.height }}</a> ({{ confirmations }} confirmations)
-                    {% else %}
-                        <span class="mono"><a href="/block?bh={{ block.block_hash }}">{{ block.block_hash }}</a></span>
-                        (<span class="text-alert">Non-canonical block</span>)
-                    {% endif %}
-                </div>
-            </div>
-            <div class="data-line grid-x grid-padding-x">
-                <div class="cell small-3 block-data-line-label">
-                    Inner circuit ID
-                </div>
-                <div class="cell auto data-line-value">
-                    <span class="mono">{{ transaction.inner_circuit_id }}</span>
-                </div>
-            </div>
-            <div class="data-line grid-x grid-padding-x">
-                <div class="cell small-3 block-data-line-label">
-                    Ledger root
-                </div>
-                <div class="cell auto data-line-value">
-                    <span class="mono">{{ transaction.ledger_root }}</span>
-                </div>
-            </div>
+            <data-line>
+                <span slot="title">Transaction ID</span>
+                <span slot="content"><span class="mono">{{ tx_id }}</span></span>
+            </data-line>
+            <data-line>
+                <span slot="title">Block</span>
+                <span slot="content"><a href="/block?h={{ block.header.metadata.height }}">{{ block.header.metadata.height }}</a> ({{ confirmations }} confirmations)</span>
+            </data-line>
+            <data-line>
+                <span slot="title">Inner circuit ID</span>
+                <span slot="content"><span class="mono">{{ transaction.inner_circuit_id }}</span></span>
+            </data-line>
+            <data-line>
+                <span slot="title">Ledger root</span>
+                <span slot="content"><span class="mono">{{ transaction.ledger_root }}</span></span>
+            </data-line>
         </div>
 
         <div id="transitions">

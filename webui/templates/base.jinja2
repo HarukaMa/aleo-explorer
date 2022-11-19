@@ -77,7 +77,20 @@
             font-family: monospace;
             font-size: 0.825rem;
         }
+
+        data-line {
+            display: block;
+            min-height: 2.4rem;
+            {#transition: opacity 0.05s ease-in-out;#}
+        }
+
+        data-line:not(:defined) {
+            opacity: 0;
+        }
     </style>
+    <script>
+
+    </script>
     {% block head %}{% endblock %}
 </head>
 <body>
@@ -117,6 +130,28 @@
         <a href="https://github.com/HarukaMa/aleo-explorer">Open source</a> Aleo explorer made by Haruka.{% if "CLOUDFLARE" | get_env %} Contains CloudFlare analytics.{% endif %}
     </div>
 </div>
+<template id="data-line">
+    <style>
+        @import "https://cdnjs.cloudflare.com/ajax/libs/foundation/6.7.4/css/foundation.min.css";
+
+        .data-line {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #ccc;
+        }
+
+        .data-line-value {
+            overflow-wrap: break-word;
+        }
+    </style>
+    <div class="data-line grid-x grid-padding-x">
+        <div class="cell small-3 block-data-line-label">
+            <slot name="title"></slot>
+        </div>
+        <div class="cell auto data-line-value">
+            <slot name="content"></slot>
+        </div>
+    </div>
+</template>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"
         integrity="sha512-894YE6QWD5I59HgZOGReFYm4dnWc1Qt5NtvYSaNcOP+u1T9qYdvdihz0PPSiiqn/+/3e7Jo4EaG7TubfWGUrMQ=="
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -125,6 +160,20 @@
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>
     $(document).foundation()
+
+    customElements.define(
+      "data-line",
+      class extends HTMLElement {
+        constructor() {
+          super();
+          let template = document.getElementById("data-line");
+          let templateContent = template.content;
+
+          const shadowRoot = this.attachShadow({ mode: "open" });
+          shadowRoot.appendChild(templateContent.cloneNode(true));
+        }
+      }
+    );
 
     function utc_to_local() {
         const times = $(".time")

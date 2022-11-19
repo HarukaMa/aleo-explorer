@@ -44,96 +44,50 @@
         </div>
 
         <div id="data">
-            <!-- Keeping this verbose but need a way to simplify it -->
-            <!-- Looks like web components is the way to go, but I don't know how now-->
-            <div class="data-line grid-x grid-padding-x">
-                <div class="cell small-3 block-data-line-label">
-                    Height
-                </div>
-                <div class="cell auto data-line-value">
-                    {{ block.header.metadata.height }}
-                </div>
-            </div>
-            <div class="data-line grid-x grid-padding-x">
-                <div class="cell small-3 block-data-line-label">
-                    Epoch
-                </div>
-                <div class="cell auto data-line-value">
-                    {{ block.header.metadata.height // 256 }}
-                </div>
-            </div>
-            <div class="data-line grid-x grid-padding-x">
-                <div class="cell small-3 block-data-line-label">
-                    Timestamp
-                </div>
-                <div class="cell auto data-line-value">
-                    {{ block.header.metadata.timestamp | format_time | safe }}
-                </div>
-            </div>
-            <div class="data-line grid-x grid-padding-x">
-                <div class="cell small-3 block-data-line-label">
-                    Coinbase target
-                </div>
-                <div class="cell auto data-line-value">
-                    {{ block.header.metadata.coinbase_target }}
-                </div>
-            </div>
-            <div class="data-line grid-x grid-padding-x">
-                <div class="cell small-3 block-data-line-label">
-                    Proof target
-                </div>
-                <div class="cell auto data-line-value">
-                    {{ block.header.metadata.proof_target }}
-                </div>
-            </div>
-            <div class="data-line grid-x grid-padding-x">
-                <div class="cell small-3 block-data-line-label">
-                    Coinbase reward
-                </div>
-                <div class="cell auto data-line-value">
-                    {% if coinbase_reward %}{{ (coinbase_reward // 2) | format_aleo_credit }}{% else %}-{% endif %}
-                </div>
-            </div>
-            <div class="data-line grid-x grid-padding-x">
-                <div class="cell small-3 block-data-line-label">
-                    Block hash
-                </div>
-                <div class="cell auto data-line-value">
-                    <span class="mono">{{ block.block_hash }}</span>
-                </div>
-            </div>
-            <div class="data-line grid-x grid-padding-x">
-                <div class="cell small-3 block-data-line-label">
-                    Previous block hash
-                </div>
-                <div class="cell auto data-line-value">
-                    <a href="/block?bh={{ block.previous_hash }}"><span class="mono">{{ block.previous_hash }}</span></a>
-                </div>
-            </div>
-            <div class="data-line grid-x grid-padding-x">
-                <div class="cell small-3 block-data-line-label">
-                    Previous state root
-                </div>
-                <div class="cell auto data-line-value">
-                    <span class="mono">{{ block.header.previous_state_root }}</span>
-                </div>
-            </div>
-            <div class="data-line grid-x grid-padding-x">
-                <div class="cell small-3 block-data-line-label">
-                    Transactions root
-                </div>
-                <div class="cell auto data-line-value">
-                    <span class="mono">{{ block.header.transactions_root }}</span>
-                </div>
-            </div>
-            <div class="data-line grid-x grid-padding-x">
-                <div class="cell small-3 block-data-line-label">
-                    Coinbase accumulator point
-                </div>
-                <div class="cell auto data-line-value">
-                    <span class="mono">{{ block.header.coinbase_accumulator_point }}</span>
-                </div>
-            </div>
+            <data-line>
+                <span slot="title">Height</span>
+                <span slot="content">{{ block.header.metadata.height }}</span>
+            </data-line>
+            <data-line>
+                <span slot="title">Epoch</span>
+                <span slot="content">{{ block.header.metadata.height // 256 }}</span>
+            </data-line>
+            <data-line>
+                <span slot="title">Timestamp</span>
+                <span slot="content">{{ block.header.metadata.timestamp | format_time | safe }}</span>
+            </data-line>
+            <data-line>
+                <span slot="title">Coinbase target</span>
+                <span slot="content">{{ block.header.metadata.coinbase_target }}</span>
+            </data-line>
+            <data-line>
+                <span slot="title">Proof target</span>
+                <span slot="content">{{ block.header.metadata.proof_target }}</span>
+            </data-line>
+            <data-line>
+                <span slot="title">Coinbase reward</span>
+                <span slot="content">{% if coinbase_reward %}{{ (coinbase_reward // 2) | format_aleo_credit }}{% else %}-{% endif %}</span>
+            </data-line>
+            <data-line>
+                <span slot="title">Block hash</span>
+                <span slot="content"><span class="mono">{{ block.block_hash }}</span></span>
+            </data-line>
+            <data-line>
+                <span slot="title">Previous block hash</span>
+                <span slot="content"><a href="/block?bh={{ block.previous_hash }}"><span class="mono">{{ block.previous_hash }}</span></a></span>
+            </data-line>
+            <data-line>
+                <span slot="title">Previous state root</span>
+                <span slot="content"><span class="mono">{{ block.header.previous_state_root }}</span></span>
+            </data-line>
+            <data-line>
+                <span slot="title">Transactions root</span>
+                <span slot="content"><span class="mono">{{ block.header.transactions_root }}</span></span>
+            </data-line>
+            <data-line>
+                <span slot="title">Coinbase accumulator point</span>
+                <span slot="content"><span class="mono">{{ block.header.coinbase_accumulator_point }}</span></span>
+            </data-line>
         </div>
 
         <div id="transactions">
@@ -166,8 +120,7 @@
                     Puzzle proof
                 </div>
                 <div class="cell auto data-line-value">
-                    x: <span class="mono">{{ block.coinbase.value.proof.w.x }}</span><br>
-                    y: <span class="mono">Not implemented</span>
+                    x: <span class="mono">{{ block.coinbase.value.proof.w.x }}</span><br>y: <span class="mono">Not implemented</span>
                 </div>
             </div>
             <table id="coinbase-table" class="unstriped">
