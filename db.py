@@ -1,3 +1,5 @@
+import time
+
 import asyncpg
 
 from explorer.types import Message as ExplorerMessage
@@ -650,7 +652,7 @@ class Database:
         async with self.pool.acquire() as conn:
             try:
                 return await conn.fetch(
-                    "SELECT b.height as height, b.timestamp as timestamp, ps.nonce as nonce, ps.target as target, "
+                    "SELECT b.height, b.timestamp, ps.nonce, ps.target, "
                     "reward, cs.target_sum as target_sum "
                     "FROM leaderboard_log ll "
                     "JOIN partial_solution ps ON ps.id = ll.partial_solution_id "
@@ -679,7 +681,7 @@ class Database:
         async with self.pool.acquire() as conn:
             try:
                 return await conn.fetch(
-                    "SELECT b.height as height, b.timestamp as timestamp, ps.nonce as nonce, ps.target as target, "
+                    "SELECT b.height, b.timestamp, ps.nonce, ps as target, "
                     "reward, cs.target_sum as target_sum "
                     "FROM leaderboard_log ll "
                     "JOIN partial_solution ps ON ps.id = ll.partial_solution_id "
@@ -697,7 +699,7 @@ class Database:
         async with self.pool.acquire() as conn:
             try:
                 return await conn.fetch(
-                    "SELECT ps.address as address, ps.nonce as nonce, ps.commitment as commitment, ps.target as target, reward "
+                    "SELECT ps.address, ps.nonce, ps.commitment, ps.target, reward "
                     "FROM leaderboard_log ll "
                     "JOIN partial_solution ps ON ps.id = ll.partial_solution_id "
                     "WHERE ll.height = $1 "
@@ -723,7 +725,39 @@ class Database:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
+    async def get_address_speed(self, address: str) -> (int, int): # (speed, interval)
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            interval_list = [300, 900, 1800, 3600, 14400, 86400]
+            now = int(time.time())
+            try:
+                for interval in interval_list:
+                    partial_solutions = await conn.fetch(
+                        "SELECT b.height FROM partial_solution ps "
+                        "JOIN coinbase_solution cs ON ps.coinbase_solution_id = cs.id "
+                        "JOIN block b ON cs.block_id = b.id "
+                        "WHERE address = $1 AND timestamp > $2",
+                        address, now - interval
+                    )
+                    if partial_solutions is None or len(partial_solutions) < 10:
+                        continue
+                    heights = list(map(lambda x: x['height'], partial_solutions))
+                    ref_heights = list(map(lambda x: x - 1, set(heights)))
+                    ref_proof_targets = await conn.fetch(
+                        "SELECT height, proof_target FROM block WHERE height IN $1", ref_heights
+                    )
+                    ref_proof_target_dict = dict(map(lambda x: (x['height'], x['proof_target']), ref_proof_targets))
+                    total_solutions = 0
+                    for height in heights:
+                        total_solutions += ref_proof_target_dict[height - 1]
+                    return total_solutions / interval, interval
+                return 0, 0
+            except Exception as e:
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                raise
 
+
+    # migration method
     async def update_target_sum(self):
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:

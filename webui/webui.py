@@ -136,7 +136,6 @@ async def transaction_route(request: Request):
         raise HTTPException(status_code=404, detail="Transaction not found")
 
     latest_block_height = await db.get_latest_height()
-    confirmations = latest_block_height - block.header.metadata.height + 1
 
     transaction = None
     for tx in block.transactions.transactions:
@@ -156,7 +155,6 @@ async def transaction_route(request: Request):
         "tx_id": tx_id,
         "tx_id_trunc": str(tx_id)[:12] + "..." + str(tx_id)[-6:],
         "block": block,
-        "confirmations": confirmations,
         "transaction": transaction,
     }
     return templates.TemplateResponse('transaction.jinja2', ctx, headers={'Cache-Control': 'public, max-age=30'})
@@ -421,6 +419,16 @@ async def address_route(request: Request):
         raise HTTPException(status_code=404, detail="Address not found")
     solution_count = await db.get_solution_count_by_address(address)
     total_rewards = await db.get_leaderboard_reward_by_address(address)
+    speed, interval = await db.get_address_speed(address)
+    interval_text = {
+        0: "never",
+        300: "5 minutes",
+        900: "15 minutes",
+        1800: "30 minutes",
+        3600: "1 hour",
+        14400: "4 hours",
+        86400: "1 day",
+    }
     data = []
     for solution in solutions:
         data.append({
@@ -438,6 +446,8 @@ async def address_route(request: Request):
         "solutions": data,
         "total_rewards": total_rewards,
         "total_solutions": solution_count,
+        "speed": speed,
+        "timespan": interval_text[interval],
     }
     return templates.TemplateResponse('address.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
 

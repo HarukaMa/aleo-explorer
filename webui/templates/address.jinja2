@@ -40,6 +40,16 @@
                 <span slot="title">Total solutions found</span>
                 <span slot="content">{{ total_solutions }}</span>
             </data-line>
+            <data-line>
+                <span slot="title">Estimated speed</span>
+                <span slot="content">
+                    {% if speed != 0 %}
+                    {{ speed }} <span data-tooltip title='commitments per second, also known as "p/s" or "s/s"'>c/s</span> (last {{ timespan }})
+                    {% else %}
+                    Not enough solutions during last day
+                    {% endif %}
+                </span>
+            </data-line>
         </div>
 
         <div id="solutions">
