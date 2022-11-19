@@ -219,7 +219,9 @@ async def search_route(request: Request):
         return RedirectResponse(f"/block?h={height}", status_code=302)
     except ValueError:
         pass
-    if query.startswith("ab1"):
+    if query.startswith("aprivatekey1zkp"):
+        raise HTTPException(status_code=400, detail=">>> YOU HAVE LEAKED YOUR PRIVATE KEY <<< Please throw it away and generate a new one.")
+    elif query.startswith("ab1"):
         # block hash
         blocks = await db.search_block_hash(query)
         if not blocks:
