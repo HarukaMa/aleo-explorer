@@ -728,7 +728,7 @@ class Database:
     async def get_address_speed(self, address: str) -> (int, int): # (speed, interval)
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
-            interval_list = [300, 900, 1800, 3600, 14400, 86400]
+            interval_list = [300, 900, 1800, 3600, 14400, 86400, 99999999]
             now = int(time.time())
             try:
                 for interval in interval_list:
@@ -744,7 +744,7 @@ class Database:
                     heights = list(map(lambda x: x['height'], partial_solutions))
                     ref_heights = list(map(lambda x: x - 1, set(heights)))
                     ref_proof_targets = await conn.fetch(
-                        "SELECT height, proof_target FROM block WHERE height IN $1", ref_heights
+                        "SELECT height, proof_target FROM block WHERE height = ANY($1::bigint[])", ref_heights
                     )
                     ref_proof_target_dict = dict(map(lambda x: (x['height'], x['proof_target']), ref_proof_targets))
                     total_solutions = 0
