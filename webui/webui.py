@@ -422,7 +422,6 @@ async def address_route(request: Request):
     speed, interval = await db.get_address_speed(address)
     interval_text = {
         0: "never",
-        300: "5 minutes",
         900: "15 minutes",
         1800: "30 minutes",
         3600: "1 hour",

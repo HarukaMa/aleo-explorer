@@ -728,7 +728,7 @@ class Database:
     async def get_address_speed(self, address: str) -> (int, int): # (speed, interval)
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
-            interval_list = [300, 900, 1800, 3600, 14400, 86400]
+            interval_list = [900, 1800, 3600, 14400, 86400]
             now = int(time.time())
             try:
                 for interval in interval_list:
