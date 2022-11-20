@@ -544,7 +544,7 @@ async def startup():
     await db.connect()
 
 
-AccessLoggerMiddleware.DEFAULT_FORMAT = '%(client_addr)s - - %(t)s "%(request_line)s" %(s)s %(B)s "%(f)s" "%(a)s" %(L)s'
+AccessLoggerMiddleware.DEFAULT_FORMAT = '\033[92mACCESS\033[0m: \033[94m%(client_addr)s\033[0m - - %(t)s \033[96m"%(request_line)s"\033[0m %(s)s %(B)s "%(f)s" "%(a)s" %(L)s'
 # noinspection PyTypeChecker
 app = Starlette(
     debug=True if os.environ.get("DEBUG") else False,
