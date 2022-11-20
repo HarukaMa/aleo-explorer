@@ -58,10 +58,12 @@ templates.env.filters["format_aleo_credit"] = format_aleo_credit
 
 async def index_route(request: Request):
     recent_blocks = await db.get_recent_blocks_fast()
+    network_speed = await db.get_network_speed()
     ctx = {
         "latest_block": await db.get_latest_block(),
         "request": request,
         "recent_blocks": recent_blocks,
+        "network_speed": network_speed,
     }
     return templates.TemplateResponse('index.jinja2', ctx, headers={'Cache-Control': 'public, max-age=10'})
 

@@ -725,7 +725,7 @@ class Database:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
-    async def get_address_speed(self, address: str) -> (int, int): # (speed, interval)
+    async def get_address_speed(self, address: str) -> (float, int): # (speed, interval)
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
             interval_list = [900, 1800, 3600, 14400, 86400]
@@ -752,6 +752,33 @@ class Database:
                         total_solutions += ref_proof_target_dict[height - 1]
                     return total_solutions / interval, interval
                 return 0, 0
+            except Exception as e:
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                raise
+
+    async def get_network_speed(self) -> float:
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            now = int(time.time())
+            interval = 300
+            try:
+                partial_solutions = await conn.fetch(
+                    "SELECT b.height FROM partial_solution ps "
+                    "JOIN coinbase_solution cs ON ps.coinbase_solution_id = cs.id "
+                    "JOIN block b ON cs.block_id = b.id "
+                    "WHERE timestamp > $1",
+                    now - interval
+                )
+                heights = list(map(lambda x: x['height'], partial_solutions))
+                ref_heights = list(map(lambda x: x - 1, set(heights)))
+                ref_proof_targets = await conn.fetch(
+                    "SELECT height, proof_target FROM block WHERE height = ANY($1::bigint[])", ref_heights
+                )
+                ref_proof_target_dict = dict(map(lambda x: (x['height'], x['proof_target']), ref_proof_targets))
+                total_solutions = 0
+                for height in heights:
+                    total_solutions += ref_proof_target_dict[height - 1]
+                return total_solutions / interval
             except Exception as e:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
