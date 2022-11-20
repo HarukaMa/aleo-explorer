@@ -1,5 +1,6 @@
-asyncpg~=0.25.0
-starlette~=0.20.3
-uvicorn~=0.18.2
-requests~=2.28.0
-python-dotenv~=0.20.0
+asyncpg==0.27.0
+starlette==0.22.0
+uvicorn==0.19.0
+requests==2.28.1
+python-dotenv==0.21.0
+asgi-logger==0.1.0

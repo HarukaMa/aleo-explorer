@@ -2,14 +2,17 @@ import asyncio
 import contextlib
 import copy
 import datetime
+import logging
 import os
 import threading
 import time
 from decimal import Decimal
 
 import uvicorn
+from asgi_logger import AccessLoggerMiddleware
 from starlette.applications import Starlette
 from starlette.exceptions import HTTPException
+from starlette.middleware import Middleware
 from starlette.requests import Request
 from starlette.responses import RedirectResponse, FileResponse
 from starlette.routing import Route
@@ -541,14 +544,22 @@ async def startup():
     await db.connect()
 
 
+AccessLoggerMiddleware.DEFAULT_FORMAT = '%(client_addr)s - - %(t)s "%(request_line)s" %(s)s %(B)s "%(f)s" "%(a)s" %(L)s'
 # noinspection PyTypeChecker
-app = Starlette(debug=True if os.environ.get("DEBUG") else False, routes=routes, on_startup=[startup], exception_handlers=exc_handlers)
+app = Starlette(
+    debug=True if os.environ.get("DEBUG") else False,
+    routes=routes,
+    on_startup=[startup],
+    exception_handlers=exc_handlers,
+    middleware=[Middleware(AccessLoggerMiddleware)]
+)
 db: Database
 # lns: LightNodeState | None = None
 
 
 async def run():
     config = uvicorn.Config("webui:app", reload=True, log_level="info")
+    logging.getLogger("uvicorn.access").handlers = []
     server = Server(config=config)
     # global lns
     # lns = light_node_state

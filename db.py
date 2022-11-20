@@ -760,7 +760,7 @@ class Database:
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
             now = int(time.time())
-            interval = 300
+            interval = 900
             try:
                 partial_solutions = await conn.fetch(
                     "SELECT b.height FROM partial_solution ps "
