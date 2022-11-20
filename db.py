@@ -681,7 +681,7 @@ class Database:
         async with self.pool.acquire() as conn:
             try:
                 return await conn.fetch(
-                    "SELECT b.height, b.timestamp, ps.nonce, ps as target, "
+                    "SELECT b.height, b.timestamp, ps.nonce, ps.target, "
                     "reward, cs.target_sum as target_sum "
                     "FROM leaderboard_log ll "
                     "JOIN partial_solution ps ON ps.id = ll.partial_solution_id "
