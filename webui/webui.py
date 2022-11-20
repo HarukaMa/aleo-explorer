@@ -298,7 +298,7 @@ async def search_route(request: Request):
     query = request.query_params.get("q")
     if query is None:
         raise HTTPException(status_code=400, detail="Missing query")
-    query = query.lower()
+    query = query.lower().strip()
     try:
         height = int(query)
         return RedirectResponse(f"/block?h={height}", status_code=302)
