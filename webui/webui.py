@@ -21,7 +21,7 @@ from starlette.templating import Jinja2Templates
 from db import Database
 # from node.light_node import LightNodeState
 from node.types import u32, Transaction, Transition, ExecuteTransaction, TransitionInput, PrivateTransitionInput, \
-    RecordTransitionInput, TransitionOutput, RecordTransitionOutput
+    RecordTransitionInput, TransitionOutput, RecordTransitionOutput, Record
 
 
 class Server(uvicorn.Server):
@@ -264,12 +264,24 @@ async def transition_route(request: Request):
         match output.type:
             case TransitionOutput.Type.Record:
                 output: RecordTransitionOutput
-                outputs.append({
+                output_data = {
                     "type": "Record",
                     "commitment": output.commitment,
                     "checksum": output.checksum,
-                    "ciphertext": output.record_ciphertext.value,
-                })
+                    "record": output.record_ciphertext.value,
+                }
+                record: Record = output.record_ciphertext.value
+                if record is not None:
+                    record_data = {
+                        "owner": record.owner,
+                        "gates": record.gates,
+                    }
+                    data = []
+                    for identifier, entry in record.data:
+                        data.append((identifier, entry))
+                    record_data["data"] = data
+                    output_data["record_data"] = record_data
+                outputs.append(output_data)
 
     finalize = []
 

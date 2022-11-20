@@ -1318,6 +1318,9 @@ class PublicOwner(Owner):
         owner = Address.load(data)
         return cls(owner=owner)
 
+    def __str__(self):
+        return str(self.owner)
+
 
 class PrivateOwner(Owner):
     type = Owner.Type.Private
@@ -1341,6 +1344,9 @@ class PrivateOwner(Owner):
     def load(self, data: bytearray):
         self.owner = self.Private.load(data)
         return self
+
+    def __str__(self):
+        return str(self.owner)
 
 
 class Balance(TypeParameter, Serialize, Deserialize):  # enum
@@ -1388,6 +1394,9 @@ class PublicBalance(Balance):
         balance = u64.load(data)
         return cls(balance=balance)
 
+    def __str__(self):
+        return str(self.balance)
+
 
 class PrivateBalance(Balance):
     type = Balance.Type.Private
@@ -1411,6 +1420,9 @@ class PrivateBalance(Balance):
     def load(self, data: bytearray):
         self.balance = self.Private.load(data)
         return self
+
+    def __str__(self):
+        return str(self.balance)
 
 
 class Entry(Generic, Serialize, Deserialize):  # enum
@@ -1459,6 +1471,9 @@ class ConstantEntry(Entry):
         plaintext = Plaintext.load(data)
         return cls(plaintext=plaintext)
 
+    def __str__(self):
+        return str(self.plaintext)
+
 
 class PublicEntry(Entry):
     type = Entry.Type.Public
@@ -1475,6 +1490,9 @@ class PublicEntry(Entry):
     def load(cls, data: bytearray):
         plaintext = Plaintext.load(data)
         return cls(plaintext=plaintext)
+
+    def __str__(self):
+        return str(self.plaintext)
 
 
 class PrivateEntry(Entry):
@@ -1499,6 +1517,9 @@ class PrivateEntry(Entry):
     def load(self, data: bytearray):
         self.plaintext = self.Private.load(data)
         return self
+
+    def __str__(self):
+        return str(self.plaintext)
 
 
 class Record(Generic, Serialize, Deserialize):

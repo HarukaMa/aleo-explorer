@@ -10,18 +10,10 @@
             margin: 20px 4px;
         }
 
-        .data-line {
-            padding: 10px 0;
-            border-bottom: 1px solid #ccc;
-        }
-
         .data-line-value {
             overflow-wrap: break-word;
         }
 
-        .text-alert {
-            color: #cc4b37;
-        }
 
     </style>
 
@@ -120,8 +112,22 @@
             </data-line>
             <data-line>
                 <span slot="title">Record data</span>
-                <span slot="content"><span class="mono">{{ output.ciphertext }}</span></span>
+                <span slot="content"><span class="mono">{{ output.record }}</span></span>
             </data-line>
+            <sub-data-line>
+                <span slot="title"><span class="mono">owner</span></span>
+                <span slot="content"><span class="mono">{{ output.record_data.owner }}</span></span>
+            </sub-data-line>
+            <sub-data-line>
+                <span slot="title"><span class="mono">gates</span></span>
+                <span slot="content"><span class="mono">{{ output.record_data.gates }}</span></span>
+            </sub-data-line>
+            {% for identifier, entry in output.record_data.data %}
+            <sub-data-line>
+                <span slot="title"><span class="mono">{{ identifier }}</span></span>
+                <span slot="content"><span class="mono">{{ entry }}</span></span>
+            </sub-data-line>
+            {% endfor %}
         {% endif %}
             <br>
         {% endfor %}
