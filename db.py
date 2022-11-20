@@ -225,21 +225,24 @@ class Database:
                                         ciphertext = None
                                     else:
                                         ciphertext = Ciphertext.loads(transition_input_private["ciphertext"])
-                                    tis.append(PrivateTransitionInput(
+                                    tis.append((PrivateTransitionInput(
                                         ciphertext_hash=Field.loads(transition_input_private["ciphertext_hash"]),
                                         ciphertext=Option[Ciphertext](ciphertext)
-                                    ))
+                                    ), transition_input_private["index"]))
                                 case TransitionInput.Type.Record.name:
                                     transition_input_record = await conn.fetchrow(
                                         "SELECT * FROM transition_input_record WHERE transition_input_id = $1",
                                         transition_input["id"]
                                     )
-                                    tis.append(RecordTransitionInput(
+                                    tis.append((RecordTransitionInput(
                                         serial_number=Field.loads(transition_input_record["serial_number"]),
                                         tag=Field.loads(transition_input_record["tag"])
-                                    ))
+                                    ), transition_input_record["index"]))
                                 case _:
                                     raise NotImplementedError
+                        tis.sort(key=lambda x: x[1])
+                        tis = [x[0] for x in tis]
+
                         transition_outputs = await conn.fetch(
                             "SELECT * FROM transition_output WHERE transition_id = $1",
                             transition["id"]
@@ -256,13 +259,15 @@ class Database:
                                         record_ciphertext = None
                                     else:
                                         record_ciphertext = Record[Ciphertext].loads(transition_output_record["record_ciphertext"])
-                                    tos.append(RecordTransitionOutput(
+                                    tos.append((RecordTransitionOutput(
                                         commitment=Field.loads(transition_output_record["commitment"]),
                                         checksum=Field.loads(transition_output_record["checksum"]),
                                         record_ciphertext=Option[Record[Ciphertext]](record_ciphertext)
-                                    ))
+                                    ), transition_output_record["index"]))
                                 case _:
                                     raise NotImplementedError
+                        tos.sort(key=lambda x: x[1])
+                        tos = [x[0] for x in tos]
                         tss.append(Transition(
                             id_=TransitionID.loads(transition["transition_id"]),
                             program_id=ProgramID.loads(transition["program_id"]),

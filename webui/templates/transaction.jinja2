@@ -35,38 +35,53 @@
                 <span slot="content"><a href="/block?h={{ block.header.metadata.height }}">{{ block.header.metadata.height }}</a></span>
             </data-line>
             <data-line>
-                <span slot="title">Inner circuit ID</span>
-                <span slot="content"><span class="mono">{{ transaction.inner_circuit_id }}</span></span>
+                <span slot="title">Type</span>
+                <span slot="content">{{ type }}</span>
+            </data-line>
+        {% if type == "Execute" %}
+            <data-line>
+                <span slot="title">Global state root</span>
+                <span slot="content"><span class="mono">{{ global_state_root }}</span></span>
             </data-line>
             <data-line>
-                <span slot="title">Ledger root</span>
-                <span slot="content"><span class="mono">{{ transaction.ledger_root }}</span></span>
+                <span slot="title">Inclusion proof</span>
+                <span slot="content">{% if inclusion_proof %}<span class="mono">{{ inclusion_proof }}</span>{% else %}-{% endif %}</span>
+            </data-line>
+        {% elif type == "Deploy" %}
+        {% endif %}
+            <data-line>
+                <span slot="title">Total fee</span>
+                <span slot="content">{{ total_fee | format_aleo_credit }} Aleo credits</span>
             </data-line>
         </div>
 
+    {% if type == "Execute" %}
         <div id="transitions">
             <h4>Transitions</h4>
             <table id="transitions-table">
                 <thead>
                 <tr>
                     <td>Transition ID</td>
-                    <td>Value balance</td>
-                    <td>Events</td>
+                    <td>Program / Function call</td>
+                    <td>Fee</td>
                 </tr>
                 </thead>
                 <tbody>
-                {% for transition in transaction.transitions %}
+                {% for transition in transitions %}
                     <tr>
                         <td>
                             <span class="mono"><a href="/transition?id={{ transition.transition_id }}">{{ transition.transition_id }}</a></span>
                         </td>
-                        <td>{{ "%.6f" % transition.value_balance.credit() }}</td>
-                        <td>{{ transition.events | length }}</td>
+                        <td><span class="mono">{{ transition.action }}</span></td>
+                        <td>{{ transition.fee | format_aleo_credit }}</td>
                     </tr>
                 {% endfor %}
                 </tbody>
             </table>
         </div>
+    {% elif type == "Deploy" %}
+        TODO
+    {% endif %}
     </div>
 
 {% endblock %}

@@ -20,7 +20,8 @@ from starlette.templating import Jinja2Templates
 
 from db import Database
 # from node.light_node import LightNodeState
-from node.types import u32, Transaction, Transition, ExecuteTransaction
+from node.types import u32, Transaction, Transition, ExecuteTransaction, TransitionInput, PrivateTransitionInput, \
+    RecordTransitionInput, TransitionOutput, RecordTransitionOutput
 
 
 class Server(uvicorn.Server):
@@ -58,6 +59,35 @@ def format_aleo_credit(gates):
 templates.env.filters["get_env"] = get_env
 templates.env.filters["format_time"] = format_time
 templates.env.filters["format_aleo_credit"] = format_aleo_credit
+
+credits_functions = {
+    "mint": [("address", "u64"), ("credits",), ()],
+    "transfer": [("credits", "address", "u64"), ("credits", "credits"), ()],
+}
+
+async def function_signature(transition: Transition):
+
+    if str(transition.program_id) != "credits.aleo":
+        return f"Unknown program {transition.program_id}"
+    if str(transition.function_name) not in credits_functions:
+        return f"Unknown function {transition.program_id}/{transition.function_name}"
+
+    inputs, outputs, _ = credits_functions[str(transition.function_name)]
+    result = f"{transition.program_id}/{transition.function_name}({', '.join(inputs)})"
+    if len(outputs) == 1:
+        result += f" -> {outputs[0]}"
+    else:
+        result += f" -> ({', '.join(outputs)})"
+    return result
+
+async def function_definition(transition: Transition):
+    if str(transition.program_id) != "credits.aleo":
+        return f"Unknown program {transition.program_id}"
+    if str(transition.function_name) not in credits_functions:
+        return f"Unknown function {transition.program_id}/{transition.function_name}"
+
+    return credits_functions[str(transition.function_name)]
+
 
 async def index_route(request: Request):
     recent_blocks = await db.get_recent_blocks_fast()
@@ -140,20 +170,31 @@ async def transaction_route(request: Request):
     if block is None:
         raise HTTPException(status_code=404, detail="Transaction not found")
 
-    latest_block_height = await db.get_latest_height()
-
     transaction = None
+    transaction_type = ""
     for tx in block.transactions.transactions:
         match tx.type:
             case Transaction.Type.Deploy:
                 raise NotImplementedError
             case Transaction.Type.Execute:
                 tx: ExecuteTransaction
+                transaction_type = "Execute"
                 if str(tx.id) == tx_id:
                     transaction = tx
                     break
     if transaction is None:
         raise HTTPException(status_code=550, detail="Transaction not found in block")
+    global_state_root = transaction.execution.global_state_root
+    inclusion_proof = transaction.execution.inclusion_proof.value
+    total_fee = 0
+    transitions = []
+    for transition in transaction.execution.transitions:
+        transition: Transition
+        transitions.append({
+            "transition_id": transition.id,
+            "action": await function_signature(transition),
+            "fee": transition.fee,
+        })
 
     ctx = {
         "request": request,
@@ -161,6 +202,11 @@ async def transaction_route(request: Request):
         "tx_id_trunc": str(tx_id)[:12] + "..." + str(tx_id)[-6:],
         "block": block,
         "transaction": transaction,
+        "type": transaction_type,
+        "global_state_root": global_state_root,
+        "inclusion_proof": inclusion_proof,
+        "total_fee": total_fee,
+        "transitions": transitions,
     }
     return templates.TemplateResponse('transaction.jinja2', ctx, headers={'Cache-Control': 'public, max-age=30'})
 
@@ -176,27 +222,56 @@ async def transition_route(request: Request):
     transaction_id = None
     transition = None
     for tx in block.transactions.transactions:
-        tx: Transaction
-        for ts in tx.transitions:
+        tx: ExecuteTransaction
+        for ts in tx.execution.transitions:
             ts: Transition
-            if str(ts.transition_id) == ts_id:
+            if str(ts.id) == ts_id:
                 transition = ts
-                transaction_id = tx.transaction_id
+                transaction_id = tx.id
                 break
     if transaction_id is None:
         raise HTTPException(status_code=550, detail="Transition not found in block")
 
-    public_record = [False, False]
-    records = [None, None]
-    is_dummy = [False, False]
-    for event in transition.events:
-        event: Event
-        if event.type == Event.Type.RecordViewKey:
-            public_record[event.event.index] = True
-            record = await db.get_record_from_commitment(transition.commitments[event.event.index])
-            if record.value == 0 and record.payload.is_empty() and record.program_id == Testnet2.noop_program_id:
-                is_dummy[event.event.index] = True
-            records[event.event.index] = record
+    program_id = transition.program_id
+    function_name = transition.function_name
+    tpk = transition.tpk
+    tcm = transition.tcm
+    proof = transition.proof
+    fee = transition.fee
+
+    inputs = []
+    for input_ in transition.inputs:
+        input_: TransitionInput
+        match input_.type:
+            case TransitionInput.Type.Private:
+                input_: PrivateTransitionInput
+                inputs.append({
+                    "type": "Private",
+                    "ciphertext_hash": input_.ciphertext_hash,
+                    "ciphertext": input_.ciphertext.value,
+                })
+            case TransitionInput.Type.Record:
+                input_: RecordTransitionInput
+                inputs.append({
+                    "type": "Record",
+                    "serial_number": input_.serial_number,
+                    "tag": input_.tag,
+                })
+
+    outputs = []
+    for output in transition.outputs:
+        output: TransitionOutput
+        match output.type:
+            case TransitionOutput.Type.Record:
+                output: RecordTransitionOutput
+                outputs.append({
+                    "type": "Record",
+                    "commitment": output.commitment,
+                    "checksum": output.checksum,
+                    "ciphertext": output.record_ciphertext.value,
+                })
+
+    finalize = []
 
     ctx = {
         "request": request,
@@ -204,10 +279,17 @@ async def transition_route(request: Request):
         "ts_id_trunc": str(ts_id)[:12] + "..." + str(ts_id)[-6:],
         "transaction_id": transaction_id,
         "transition": transition,
-        "public_record": public_record,
-        "records": records,
-        "is_dummy": is_dummy,
-        "noop_program_id": Testnet2.noop_program_id,
+        "program_id": program_id,
+        "function_name": function_name,
+        "tpk": tpk,
+        "tcm": tcm,
+        "fee": fee,
+        "proof": proof,
+        "function_signature": await function_signature(transition),
+        "function_definition": await function_definition(transition),
+        "inputs": inputs,
+        "outputs": outputs,
+        "finalize": finalize,
     }
     return templates.TemplateResponse('transition.jinja2', ctx, headers={'Cache-Control': 'public, max-age=900'})
 
@@ -415,6 +497,7 @@ async def leaderboard_route(request: Request):
     }
     return templates.TemplateResponse('leaderboard.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
 
+
 async def address_route(request: Request):
     address = request.query_params.get("a")
     if address is None:
@@ -454,6 +537,7 @@ async def address_route(request: Request):
         "timespan": interval_text[interval],
     }
     return templates.TemplateResponse('address.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
+
 
 async def address_solution_route(request: Request):
     address = request.query_params.get("a")
@@ -514,7 +598,7 @@ routes = [
     Route("/", index_route),
     Route("/block", block_route),
     Route("/transaction", transaction_route),
-    # Route("/transition", transition_route),
+    Route("/transition", transition_route),
     Route("/search", search_route),
     # Route("/nodes", nodes_route),
     Route("/orphan", orphan_route),
