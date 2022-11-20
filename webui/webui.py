@@ -208,7 +208,7 @@ async def transaction_route(request: Request):
         "total_fee": total_fee,
         "transitions": transitions,
     }
-    return templates.TemplateResponse('transaction.jinja2', ctx, headers={'Cache-Control': 'public, max-age=30'})
+    return templates.TemplateResponse('transaction.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'})
 
 
 async def transition_route(request: Request):
@@ -291,7 +291,7 @@ async def transition_route(request: Request):
         "outputs": outputs,
         "finalize": finalize,
     }
-    return templates.TemplateResponse('transition.jinja2', ctx, headers={'Cache-Control': 'public, max-age=900'})
+    return templates.TemplateResponse('transition.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'})
 
 
 async def search_route(request: Request):
