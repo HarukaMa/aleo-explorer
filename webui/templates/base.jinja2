@@ -224,7 +224,7 @@
         Advanced mode: <a onclick="toggle_advanced()"><span id="advanced-setting"></span></a><br>
     </div>
     <div class="footer">
-        <a href="https://github.com/HarukaMa/aleo-explorer">Open source</a> Aleo explorer made by Haruka.{% if "CLOUDFLARE" | get_env %} Contains CloudFlare analytics.{% endif %}
+        <a href="https://github.com/HarukaMa/aleo-explorer">Open source</a> Aleo explorer made by Haruka.{% if "CLOUDFLARE" | get_env %} Contains CloudFlare analytics.{% endif %}{% if "MATOMO" | get_env %} Contains self-hosted Matomo analytics.{% endif %}
     </div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"
