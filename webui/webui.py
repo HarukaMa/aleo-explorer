@@ -21,7 +21,8 @@ from starlette.templating import Jinja2Templates
 from db import Database
 # from node.light_node import LightNodeState
 from node.types import u32, Transaction, Transition, ExecuteTransaction, TransitionInput, PrivateTransitionInput, \
-    RecordTransitionInput, TransitionOutput, RecordTransitionOutput, Record
+    RecordTransitionInput, TransitionOutput, RecordTransitionOutput, Record, KZGProof, Proof, WitnessCommitments, \
+    G1Affine, Ciphertext, Owner, Balance, Entry
 
 
 class Server(uvicorn.Server):
@@ -590,6 +591,198 @@ async def address_solution_route(request: Request):
     return templates.TemplateResponse('address_solution.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
 
 
+def get_proof_data(proof: Proof):
+    def G1Affine_to_html(affine: G1Affine, depth: int) -> str:
+        return "{<br>" + "&nbsp;" * depth * 2 + f"x: {affine.x},<br>" + "&nbsp;" * depth * 2 + "y: Not implemented<br>" + "&nbsp;" * (depth - 1) * 2 + "}"
+
+    data = {"Batch size": proof.batch_size}
+    commitments = {}
+    witness_commitments = proof.commitments.witness_commitments
+    witness_commitment_list = []
+    for witness_commitment in witness_commitments:
+        witness_commitment: WitnessCommitments
+        witness_commitment_str = f"{{<br>&nbsp;&nbsp;&nbsp;&nbsp;w: {G1Affine_to_html(witness_commitment.w.element, 3)},<br>" \
+                                 f"&nbsp;&nbsp;&nbsp;&nbsp;z_a: {G1Affine_to_html(witness_commitment.z_a.element, 3)},<br>" \
+                                 f"&nbsp;&nbsp;&nbsp;&nbsp;z_b: {G1Affine_to_html(witness_commitment.z_b.element, 3)}<br>&nbsp;&nbsp;}}"
+        witness_commitment_list.append(witness_commitment_str)
+    commitments["Witness commitments"] = "[<br>&nbsp;&nbsp;" + ",<br>&nbsp;&nbsp;".join(witness_commitment_list) + "<br>]"
+    commitments["Mask polynomial commitment"] = "-" if proof.commitments.mask_poly.value is None else \
+        G1Affine_to_html(proof.commitments.mask_poly.value.element, 1)
+    commitments["g_1 commitment"] = G1Affine_to_html(proof.commitments.g_1.element, 1)
+    commitments["h_1 commitment"] = G1Affine_to_html(proof.commitments.h_1.element, 1)
+    commitments["g_a commitment"] = G1Affine_to_html(proof.commitments.g_a.element, 1)
+    commitments["g_b commitment"] = G1Affine_to_html(proof.commitments.g_b.element, 1)
+    commitments["g_c commitment"] = G1Affine_to_html(proof.commitments.g_c.element, 1)
+    commitments["h_2 commitment"] = G1Affine_to_html(proof.commitments.h_2.element, 1)
+    data["Commitments"] = commitments
+    evaluations = {
+        "z_b evaluations": "<br>".join(map(lambda x: str(x), proof.evaluations.z_b_evals)),
+        "g_1 evaluation": str(proof.evaluations.g_1_eval),
+        "g_a evaluation": str(proof.evaluations.g_a_eval),
+        "g_b evaluation": str(proof.evaluations.g_b_eval),
+        "g_c evaluation": str(proof.evaluations.g_c_eval),
+    }
+    data["Evaluations"] = evaluations
+    msg = {
+        "sum_a": str(proof.msg.sum_a),
+        "sum_b": str(proof.msg.sum_b),
+        "sum_c": str(proof.msg.sum_c),
+    }
+    data["Prover messages"] = msg
+    pc_proof = {}
+    proof_list = []
+    for proof in proof.pc_proof.proof.proof:
+        proof: KZGProof
+        proof_str = f"{{<br>&nbsp;&nbsp;&nbsp;&nbsp;w: {G1Affine_to_html(proof.w, 3)},<br>" \
+                    f"&nbsp;&nbsp;&nbsp;&nbsp;random_v: {str(proof.random_v.value)},<br>" \
+                    f"&nbsp;&nbsp;}}"
+        proof_list.append(proof_str)
+    pc_proof["Proof"] = "[<br>&nbsp;&nbsp;" + ",<br>&nbsp;&nbsp;".join(proof_list) + "<br>]"
+    data["Polynomial commitment proof"] = pc_proof
+
+    return data
+
+def get_ciphertext_data(ciphertext: Ciphertext):
+    return {
+        "ciphertext": "<br>".join(map(lambda x: str(x), ciphertext.ciphertext)),
+    }
+
+
+async def advanced_route(request: Request):
+    scope = request.query_params.get("scope")
+    if scope is None:
+        raise HTTPException(status_code=400, detail="Missing scope")
+    if scope not in ["transaction", "transition"]:
+        raise HTTPException(status_code=400, detail="Invalid scope")
+    obj = request.query_params.get("object")
+    if obj is None:
+        raise HTTPException(status_code=400, detail="Missing object")
+    data = {}
+    object_type = ""
+    id_ = ""
+    if scope == "transaction":
+        transaction: Transaction
+        block = await db.get_block_from_transaction_id(obj)
+        if block is None:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        for tx in block.transactions:
+            match tx.type:
+                case Transaction.Type.Execute:
+                    tx: ExecuteTransaction
+                    transaction: ExecuteTransaction
+                    if str(tx.id) == obj:
+                        transaction = tx
+                        break
+                case _:
+                    raise HTTPException(status_code=400, detail="Invalid transaction type")
+        type_ = request.query_params.get("type")
+        if type_ is None:
+            raise HTTPException(status_code=400, detail="Missing type")
+        if type_ != "inclusion_proof":
+            raise HTTPException(status_code=400, detail="Invalid type")
+        object_type = "Inclusion proof"
+        # noinspection PyUnboundLocalVariable
+        inclusion_proof: Proof = transaction.execution.inclusion_proof.value
+        if inclusion_proof is None:
+            raise HTTPException(status_code=400, detail="Transaction doesn't have an inclusion proof")
+        id_ = str(inclusion_proof)
+        data = get_proof_data(inclusion_proof)
+
+    elif scope == "transition":
+        transition: Transition | None = None
+        block = await db.get_block_from_transition_id(obj)
+        if block is None:
+            raise HTTPException(status_code=404, detail="Transition not found")
+        for tx in block.transactions:
+            if tx.type != Transaction.Type.Execute:
+                continue
+            for tr in tx.execution.transitions:
+                if str(tr.id) == obj:
+                    transition = tr
+                    break
+        type_ = request.query_params.get("type")
+        if type_ is None:
+            raise HTTPException(status_code=400, detail="Missing type")
+        if type_ == "proof":
+            object_type = "Proof"
+            id_ = str(transition.proof)
+            data = get_proof_data(transition.proof)
+        elif type_.startswith("input") or type_.startswith("output"):
+            object_type = "Ciphertext"
+            index = request.query_params.get("index")
+            if index is None:
+                raise HTTPException(status_code=400, detail="Missing index")
+            index = int(index)
+            if type_.startswith("input"):
+                if index < 0 or index >= len(transition.inputs):
+                    raise HTTPException(status_code=400, detail="Invalid index")
+                input_ = transition.inputs[index]
+                if type_ == "input_private":
+                    if input_.type != TransitionInput.Type.Private:
+                        raise HTTPException(status_code=400, detail="Invalid input type")
+                    input_: PrivateTransitionInput
+                    if input_.ciphertext.value is None:
+                        raise HTTPException(status_code=400, detail="Input doesn't have a ciphertext")
+                    id_ = str(input_.ciphertext.value)
+                    data = get_ciphertext_data(input_.ciphertext.value)
+                else:
+                    raise HTTPException(status_code=550, detail="Not Implemented")
+            else:
+                if index < 0 or index >= len(transition.outputs):
+                    raise HTTPException(status_code=400, detail="Invalid index")
+                output = transition.outputs[index]
+                if type_ == "output_record":
+                    if output.type != TransitionOutput.Type.Record:
+                        raise HTTPException(status_code=400, detail="Invalid output type")
+                    output: RecordTransitionOutput
+                    if output.record_ciphertext.value is None:
+                        raise HTTPException(status_code=400, detail="Output doesn't have a record ciphertext")
+                    record: Record = output.record_ciphertext.value
+                    field = request.query_params.get("field")
+                    if field is None:
+                        raise HTTPException(status_code=400, detail="Missing field")
+                    if field == "owner":
+                        if record.owner.type == Owner.Type.Public:
+                            raise HTTPException(status_code=400, detail="Owner is public")
+                        if record.owner.Private != Ciphertext:
+                            raise HTTPException(status_code=400, detail="Owner is not a ciphertext")
+                        id_ = str(record.owner.owner)
+                        data = get_ciphertext_data(record.owner.owner)
+                    elif field == "gates":
+                        if record.gates.type == Balance.Type.Public:
+                            raise HTTPException(status_code=400, detail="Gates are public")
+                        if record.gates.Private != Ciphertext:
+                            raise HTTPException(status_code=400, detail="Gates are not a ciphertext")
+                        id_ = str(record.gates.balance)
+                        data = get_ciphertext_data(record.gates.balance)
+                    else:
+                        for identifier, entry in record.data:
+                            if str(identifier) == field:
+                                if entry.type == Entry.Type.Public:
+                                    raise HTTPException(status_code=400, detail="Entry is public")
+                                if entry.Private != Ciphertext:
+                                    raise HTTPException(status_code=400, detail="Entry is not a ciphertext")
+                                id_ = str(entry.plaintext)
+                                data = get_ciphertext_data(entry.plaintext)
+                                break
+                        raise HTTPException(status_code=400, detail="Invalid field")
+                else:
+                    raise HTTPException(status_code=550, detail="Not Implemented")
+        else:
+            raise HTTPException(status_code=400, detail="Invalid type")
+
+    id_prefix_size = id_.index("1")
+
+    ctx = {
+        "request": request,
+        "type": object_type,
+        "id": id_,
+        "id_trunc": id_[:id_prefix_size + 6] + "..." + id_[-6:],
+        "data": data,
+    }
+    return templates.TemplateResponse('advanced.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'})
+
+
 async def robots_route(_: Request):
     return FileResponse("webui/robots.txt", headers={'Cache-Control': 'public, max-age=3600'})
 
@@ -620,6 +813,7 @@ routes = [
     Route("/leaderboard", leaderboard_route),
     Route("/address", address_route),
     Route("/address_solution", address_solution_route),
+    Route("/advanced", advanced_route),
     Route("/robots.txt", robots_route),
 ]
 

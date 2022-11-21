@@ -192,11 +192,36 @@
         }
       }
     );
+    customElements.define(
+        "advanced-link",
+        class extends HTMLElement {
+            constructor() {
+                super();
+                this.addEventListener("advanced-toggle", (e) => {
+                    const show = e.detail;
+                    if (show) {
+                        const query_string = Array.from(this.attributes).map((attr) => {
+                            return `${attr.name}=${attr.value}`;
+                        }).reduce((a, b) => {
+                            return `${a}&${b}`;
+                        });
+                        this.innerHTML = `<a class="advanced-link" href="/advanced?${query_string}">${this.innerHTML}</a>`;
+                    } else {
+                        if (this.children[0].tagName === "A") {
+                            this.innerHTML = this.children[0].innerHTML;
+                        }
+                    }
+                })
+            }
+
+        }
+    )
 </script>
 {% block content %}{% endblock %}
 <div class="footer-container">
     <div class="settings">
-        Timezone display: <a onclick="toggle_timezone()"><span id="timezone-setting"></span></a>
+        Timezone display: <a onclick="toggle_timezone()"><span id="timezone-setting"></span></a><br>
+        Advanced mode: <a onclick="toggle_advanced()"><span id="advanced-setting"></span></a><br>
     </div>
     <div class="footer">
         <a href="https://github.com/HarukaMa/aleo-explorer">Open source</a> Aleo explorer made by Haruka.{% if "CLOUDFLARE" | get_env %} Contains CloudFlare analytics.{% endif %}
@@ -229,14 +254,16 @@
         }
     }
 
+    const timezone_setting_element = $("#timezone-setting")
+
     function toggle_timezone() {
         if (localStorage.getItem("timezone") === "local") {
             localStorage.setItem("timezone", "utc")
-            $("#timezone-setting").text("UTC")
+            timezone_setting_element.text("UTC")
             local_to_utc()
         } else {
             localStorage.setItem("timezone", "local")
-            $("#timezone-setting").text("Local")
+            timezone_setting_element.text("Local")
             utc_to_local()
         }
     }
@@ -250,11 +277,41 @@
 
     if (timezone_setting === "local") {
         utc_to_local()
-        $("#timezone-setting").text("Local")
+        timezone_setting_element.text("Local")
     } else {
-        $("#timezone-setting").text("UTC")
+        timezone_setting_element.text("UTC")
     }
 
+    let advanced_setting = localStorage.getItem("advanced")
+    if (advanced_setting === null) {
+        advanced_setting = false
+        localStorage.setItem("advanced", "false")
+    } else {
+        advanced_setting = JSON.parse(advanced_setting)
+    }
+
+    const advanced_setting_element = $("#advanced-setting")
+
+    advanced_setting_element.text(advanced_setting ? "On" : "Off")
+    dispatch_advanced_event()
+
+    function dispatch_advanced_event() {
+        $("advanced-link").each((_, element) => {
+            element.dispatchEvent(new CustomEvent("advanced-toggle", { detail: advanced_setting }))
+        })
+    }
+
+    function toggle_advanced() {
+        if (advanced_setting) {
+            localStorage.setItem("advanced", "false")
+            advanced_setting_element.text("Off")
+        } else {
+            localStorage.setItem("advanced", "true")
+            advanced_setting_element.text("On")
+        }
+        advanced_setting = !advanced_setting
+        dispatch_advanced_event()
+    }
 
 </script>
 </body>

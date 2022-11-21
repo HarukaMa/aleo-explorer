@@ -45,7 +45,15 @@
             </data-line>
             <data-line>
                 <span slot="title">Inclusion proof</span>
-                <span slot="content">{% if inclusion_proof %}<span class="mono">{{ inclusion_proof }}</span>{% else %}-{% endif %}</span>
+                <span slot="content">
+                {% if inclusion_proof %}
+                    <advanced-link scope="transaction" object="{{ tx_id }}" type="inclusion_proof">
+                        <span class="mono">{{ inclusion_proof }}</span>
+                    </advanced-link>
+                {% else %}
+                    -
+                {% endif %}
+                </span>
             </data-line>
         {% elif type == "Deploy" %}
         {% endif %}

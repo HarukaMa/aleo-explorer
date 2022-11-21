@@ -10,10 +10,6 @@
             margin: 20px 4px;
         }
 
-        .data-line-value {
-            overflow-wrap: break-word;
-        }
-
 
     </style>
 
@@ -57,7 +53,11 @@
             </data-line>
             <data-line>
                 <span slot="title">Proof</span>
-                <span slot="content"><span class="mono">{{ proof }}</span></span>
+                <span slot="content">
+                    <advanced-link scope="transition" object="{{ ts_id }}" type="proof">
+                        <span class="mono">{{ proof }}</span>
+                    </advanced-link>
+                </span>
             </data-line>
         </div>
 
@@ -81,7 +81,11 @@
             </data-line>
             <data-line>
                 <span slot="title">Ciphertext</span>
-                <span slot="content"><span class="mono">{{ input.ciphertext }}</span></span>
+                <span slot="content">
+                    <advanced-link scope="transition" object="{{ ts_id }}" type="input_private" index="{{ loop.index0 }}">
+                        <span class="mono">{{ input.ciphertext }}</span>
+                    </advanced-link>
+                </span>
             </data-line>
         {% elif input.type == "Record" %}
             <data-line>
@@ -96,6 +100,7 @@
             <br>
         {% endfor %}
         {% for output in outputs %}
+            {% set outer_loop = loop %}
             <h5>Output #{{ loop.index }}</h5>
             <data-line>
                 <span slot="title">Type</span>
@@ -116,16 +121,28 @@
             </data-line>
             <sub-data-line>
                 <span slot="title"><span class="mono">owner</span></span>
-                <span slot="content"><span class="mono">{{ output.record_data.owner }}</span></span>
+                <span slot="content">
+                    <advanced-link scope="transition" object="{{ ts_id }}" type="output_record" index="{{ loop.index0 }}" field="owner">
+                        <span class="mono">{{ output.record_data.owner }}</span>
+                    </advanced-link>
+                </span>
             </sub-data-line>
             <sub-data-line>
                 <span slot="title"><span class="mono">gates</span></span>
-                <span slot="content"><span class="mono">{{ output.record_data.gates }}</span></span>
+                <span slot="content">
+                    <advanced-link scope="transition" object="{{ ts_id }}" type="output_record" index="{{ loop.index0 }}" field="gates">
+                        <span class="mono">{{ output.record_data.gates }}</span>
+                    </advanced-link>
+                </span>
             </sub-data-line>
             {% for identifier, entry in output.record_data.data %}
             <sub-data-line>
                 <span slot="title"><span class="mono">{{ identifier }}</span></span>
-                <span slot="content"><span class="mono">{{ entry }}</span></span>
+                <span slot="content">
+                    <advanced-link scope="transition" object="{{ ts_id }}" type="output_record" index="{{ outer_loop.index0 }}" field="{{ identifier }}">
+                        <span class="mono">{{ entry }}</span>
+                    </advanced-link>
+                </span>
             </sub-data-line>
             {% endfor %}
         {% endif %}
