@@ -783,6 +783,13 @@ async def advanced_route(request: Request):
     return templates.TemplateResponse('advanced.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'})
 
 
+async def faq_route(request: Request):
+    ctx = {
+        "request": request,
+    }
+    return templates.TemplateResponse('faq.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'})
+
+
 async def robots_route(_: Request):
     return FileResponse("webui/robots.txt", headers={'Cache-Control': 'public, max-age=3600'})
 
@@ -814,6 +821,7 @@ routes = [
     Route("/address", address_route),
     Route("/address_solution", address_solution_route),
     Route("/advanced", advanced_route),
+    Route("/faq", faq_route),
     Route("/robots.txt", robots_route),
 ]
 
