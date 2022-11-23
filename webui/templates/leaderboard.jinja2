@@ -4,6 +4,28 @@
 
 {% block head %}
     <style>
+    .pagination {
+        display: inline-block;
+    }
+
+    #goto {
+        display: inline-block;
+    }
+
+    #goto input {
+        height: 2rem;
+        width: 50px;
+    }
+
+    input::-webkit-outer-spin-button,
+    input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+    input[type=number] {
+        -moz-appearance:textfield;
+    }
 
     </style>
 {% endblock %}
@@ -49,6 +71,14 @@
                     {% endif %}
                     <li class="pagination-next{% if page == total_pages %} disabled{% endif %}">{% if page != total_pages %}<a href="/leaderboard?p={{ page + 1 }}"></a>{% endif %}</li>
                 </ul>
+                <form id="goto" action="/leaderboard">
+                    <div class="input-group">
+                        <input class="input-group-field" type="number" name="p" placeholder="">
+                        <div class="input-group-button">
+                            <button type="submit" class="button">Go</button>
+                        </div>
+                    </div>
+                </form>
             </nav>
 
             <table class="unstriped">
