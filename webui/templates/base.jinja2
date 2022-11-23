@@ -328,8 +328,10 @@
         _paq.push([function () {
             if (this.isUserOptedOut()) {
                 _paq.push(['forgetUserOptOut']);
+                $("#matomo-optout").text("Opt out")
             } else {
                 _paq.push(['optUserOut']);
+                $("#matomo-optout").text("Opt in")
             }
         }])
     }
