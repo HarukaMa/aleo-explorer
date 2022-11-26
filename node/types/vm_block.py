@@ -2377,6 +2377,24 @@ class PartialSolution(Serialize, Deserialize):
 PuzzleProof = KZGProof
 
 
+class ProverSolution(Serialize, Deserialize):
+
+    @type_check
+    def __init__(self, *, partial_solution: PartialSolution, proof: PuzzleProof):
+        self.partial_solution = partial_solution
+        self.proof = proof
+
+    def dump(self) -> bytes:
+        return self.partial_solution.dump() + self.proof.dump()
+
+    @classmethod
+    @type_check
+    def load(cls, data: bytearray):
+        partial_solution = PartialSolution.load(data)
+        proof = PuzzleProof.load(data)
+        return cls(partial_solution=partial_solution, proof=proof)
+
+
 class CoinbaseSolution(Serialize, Deserialize):
 
     @type_check

@@ -8,6 +8,8 @@
     </style>
 {% endblock %}
 
+{% from "macros.jinja2" import nav %}
+
 {% block content %}
 
     <div class="content">
@@ -18,33 +20,7 @@
 
         <div id="blocks">
 
-            <nav>
-                <ul class="pagination">
-                    <li class="pagination-previous{% if page == 1 %} disabled{% endif %}">{% if page != 1 %}<a href="/blocks?p={{ page - 1 }}"></a>{% endif %}</li>
-                    {% for p in range(1, ([total_pages, 4] | min)) %}
-                        <li{% if p == page %} class="current"{% endif %}>{% if p != page %}<a href="/blocks?p={{ p }}">{% endif %}{{ p }}{% if p != page %}</a>{% endif %}</li>
-                    {% endfor %}
-                    {% if page > 7 %}
-                        <li class="ellipsis" aria-hidden="true"></li>
-                    {% endif %}
-                    {% for p in range(([4, page - 3] | max), page) %}
-                        <li><a href="/blocks?p={{ p }}">{{ p }}</a></li>
-                    {% endfor %}
-                    {% if page > 3 or page == total_pages %}
-                        <li class="current">{{ page }}</li>
-                    {% endif %}
-                    {% for p in range([4, page + 1] | max, [page + 4, total_pages] | min) %}
-                        <li><a href="/blocks?p={{ p }}">{{ p }}</a></li>
-                    {% endfor %}
-                    {% if page < total_pages - 4 %}
-                        <li class="ellipsis" aria-hidden="true"></li>
-                    {% endif %}
-                    {% if page < total_pages %}
-                        <li><a href="/blocks?p={{ total_pages }}">{{ total_pages }}</a></li>
-                    {% endif %}
-                    <li class="pagination-next{% if page == total_pages %} disabled{% endif %}">{% if page != total_pages %}<a href="/blocks?p={{ page + 1 }}"></a>{% endif %}</li>
-                </ul>
-            </nav>
+            {{ nav(page, total_pages, "/blocks?") }}
 
             <table class="unstriped">
                 <thead>
@@ -76,6 +52,9 @@
                 {% endfor %}
                 </tbody>
             </table>
+
+            {{ nav(page, total_pages, "/blocks?") }}
+
         </div>
     </div>
 

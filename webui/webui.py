@@ -15,7 +15,8 @@ from starlette.exceptions import HTTPException
 from starlette.middleware import Middleware
 from starlette.requests import Request
 from starlette.responses import RedirectResponse, FileResponse
-from starlette.routing import Route
+from starlette.routing import Route, Mount
+from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 
 from db import Database
@@ -43,7 +44,7 @@ class Server(uvicorn.Server):
             thread.join()
 
 
-templates = Jinja2Templates(directory='webui/templates')
+templates = Jinja2Templates(directory='webui/templates', trim_blocks=True, lstrip_blocks=True)
 
 def get_env(name):
     return os.environ.get(name)
@@ -823,6 +824,7 @@ routes = [
     Route("/advanced", advanced_route),
     Route("/faq", faq_route),
     Route("/robots.txt", robots_route),
+    Mount("/static", StaticFiles(directory="webui/static"), name="static"),
 ]
 
 exc_handlers = {

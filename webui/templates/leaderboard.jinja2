@@ -4,31 +4,11 @@
 
 {% block head %}
     <style>
-    .pagination {
-        display: inline-block;
-    }
-
-    #goto {
-        display: inline-block;
-    }
-
-    #goto input {
-        height: 2rem;
-        width: 50px;
-    }
-
-    input::-webkit-outer-spin-button,
-    input::-webkit-inner-spin-button {
-        -webkit-appearance: none;
-        margin: 0;
-    }
-
-    input[type=number] {
-        -moz-appearance:textfield;
-    }
 
     </style>
 {% endblock %}
+
+{% from "macros.jinja2" import nav %}
 
 {% block content %}
 
@@ -45,41 +25,7 @@
 
         <div id="blocks">
 
-            <nav>
-                <ul class="pagination">
-                    <li class="pagination-previous{% if page == 1 %} disabled{% endif %}">{% if page != 1 %}<a href="/leaderboard?p={{ page - 1 }}"></a>{% endif %}</li>
-                    {% for p in range(1, ([total_pages, 4] | min)) %}
-                        <li{% if p == page %} class="current"{% endif %}>{% if p != page %}<a href="/leaderboard?p={{ p }}">{% endif %}{{ p }}{% if p != page %}</a>{% endif %}</li>
-                    {% endfor %}
-                    {% if page > 7 %}
-                        <li class="ellipsis" aria-hidden="true"></li>
-                    {% endif %}
-                    {% for p in range(([4, page - 3] | max), page) %}
-                        <li><a href="/leaderboard?p={{ p }}">{{ p }}</a></li>
-                    {% endfor %}
-                    {% if page > 3 or page == total_pages %}
-                        <li class="current">{{ page }}</li>
-                    {% endif %}
-                    {% for p in range([4, page + 1] | max, [page + 4, total_pages] | min) %}
-                        <li><a href="/leaderboard?p={{ p }}">{{ p }}</a></li>
-                    {% endfor %}
-                    {% if page < total_pages - 4 %}
-                        <li class="ellipsis" aria-hidden="true"></li>
-                    {% endif %}
-                    {% if page < total_pages %}
-                        <li><a href="/leaderboard?p={{ total_pages }}">{{ total_pages }}</a></li>
-                    {% endif %}
-                    <li class="pagination-next{% if page == total_pages %} disabled{% endif %}">{% if page != total_pages %}<a href="/leaderboard?p={{ page + 1 }}"></a>{% endif %}</li>
-                </ul>
-                <form id="goto" action="/leaderboard">
-                    <div class="input-group">
-                        <input class="input-group-field" type="number" name="p" placeholder="">
-                        <div class="input-group-button">
-                            <button type="submit" class="button">Go</button>
-                        </div>
-                    </div>
-                </form>
-            </nav>
+            {{ nav(page, total_pages, "/leaderboard?") }}
 
             <table class="unstriped">
                 <thead>
@@ -98,6 +44,9 @@
                 {% endfor %}
                 </tbody>
             </table>
+
+            {{ nav(page, total_pages, "/leaderboard?") }}
+
         </div>
     </div>
 

@@ -131,16 +131,14 @@ class Database:
                         )
                         partial_solutions = list(block.coinbase.value.partial_solutions)
                         solutions = []
-                        if coinbase_reward > 0:
-                            partial_solutions = list(zip(partial_solutions,
-                                                    [partial_solution.commitment.to_target() for partial_solution in
-                                                     partial_solutions]))
-                            target_sum = sum(target for _, target in partial_solutions)
-                            partial_solution: PartialSolution
-                            for partial_solution, target in partial_solutions:
-                                solutions.append((partial_solution, target, coinbase_reward * target // (2 * target_sum)))
-                        else:
-                            solutions = [(s, 0, 0) for s in partial_solutions]
+                        partial_solutions = list(zip(partial_solutions,
+                                                [partial_solution.commitment.to_target() for partial_solution in
+                                                 partial_solutions]))
+                        target_sum = sum(target for _, target in partial_solutions)
+                        partial_solution: PartialSolution
+                        for partial_solution, target in partial_solutions:
+                            solutions.append((partial_solution, target, coinbase_reward * target // (2 * target_sum)))
+
                         coinbase_solution_db_id = await conn.fetchval(
                             "INSERT INTO coinbase_solution (block_id, proof_x, proof_y_positive, target_sum) "
                             "VALUES ($1, $2, $3, $4) RETURNING id",
