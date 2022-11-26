@@ -15,6 +15,8 @@
 
 {% endblock %}
 
+{% from "macros.jinja2" import data_line %}
+
 {% block content %}
 
     <div class="content">
@@ -23,102 +25,80 @@
         </div>
 
         <div class="data">
-            <data-line>
-                <span slot="title">Transition ID</span>
-                <span slot="content"><span class="mono">{{ ts_id }}</span></span>
-            </data-line>
-            <data-line>
-                <span slot="title">Transaction</span>
-                <span slot="content"><span class="mono"><a href="/transaction?id={{ transaction_id }}">{{ transaction_id }}</a></span></span>
-            </data-line>
-            <data-line>
-                <span slot="title">Program ID</span>
-                <span slot="content"><span class="mono">{{ program_id }}</span></span>
-            </data-line>
-            <data-line>
-                <span slot="title">Function name</span>
-                <span slot="content"><span class="mono">{{ function_name }}</span></span>
-            </data-line>
-            <data-line>
-                <span slot="title">Transition public key</span>
-                <span slot="content"><span class="mono">{{ tpk }}</span></span>
-            </data-line>
-            <data-line>
-                <span slot="title">Transition commitment</span>
-                <span slot="content"><span class="mono">{{ tcm }}</span></span>
-            </data-line>
-            <data-line>
-                <span slot="title">Fee</span>
-                <span slot="content">{{ fee | format_aleo_credit }} Aleo credit</span>
-            </data-line>
-            <data-line>
-                <span slot="title">Proof</span>
-                <span slot="content">
-                    <advanced-link scope="transition" object="{{ ts_id }}" type="proof">
-                        <span class="mono">{{ proof }}</span>
-                    </advanced-link>
-                </span>
-            </data-line>
+        {% call data_line("Transition ID") %}
+            <span class="mono">{{ ts_id }}</span>
+        {% endcall %}
+        {% call data_line("Transaction") %}
+            <span class="mono"><a href="/transaction?id={{ transaction_id }}">{{ transaction_id }}</a></span>
+        {% endcall %}
+        {% call data_line("Program ID") %}
+            <span class="mono">{{ program_id }}</span>
+        {% endcall %}
+        {% call data_line("Function name") %}
+            <span class="mono">{{ function_name }}</span>
+        {% endcall %}
+        {% call data_line("Transition public key") %}
+            <span class="mono">{{ tpk }}</span>
+        {% endcall %}
+        {% call data_line("Transition commitment") %}
+            <span class="mono">{{ tcm }}</span>
+        {% endcall %}
+        {% call data_line("Fee") %}
+            {{ fee | format_aleo_credit }} Aleo credit
+        {% endcall %}
+        {% call data_line("Proof") %}
+            <advanced-link scope="transition" object="{{ ts_id }}" type="proof">
+                <span class="mono">{{ proof }}</span>
+            </advanced-link>
+        {% endcall %}
         </div>
 
         <div class="data">
             <h4>Function call</h4>
-            <data-line>
-                <span slot="title">Function signature</span>
-                <span slot="content"><span class="mono">{{ function_signature }}</span></span>
-            </data-line>
+            {% call data_line("Function signature") %}
+                <span class="mono">{{ function_signature }}</span>
+            {% endcall %}
             <br>
         {% for input in inputs %}
             <h5>Input #{{ loop.index }}</h5>
-            <data-line>
-                <span slot="title">Type</span>
-                <span slot="content">{{ input.type }} <span class="mono">{{ function_definition[0][loop.index0] }}</span></span>
-            </data-line>
+            {% call data_line("Type") %}
+                {{ input.type }} <span class="mono">{{ function_definition[0][loop.index0] }}</span>
+            {% endcall %}
         {% if input.type == "Private" %}
-            <data-line>
-                <span slot="title">Ciphertext hash</span>
-                <span slot="content"><span class="mono">{{ input.ciphertext_hash }}</span></span>
-            </data-line>
-            <data-line>
-                <span slot="title">Ciphertext</span>
-                <span slot="content">
-                    <advanced-link scope="transition" object="{{ ts_id }}" type="input_private" index="{{ loop.index0 }}">
-                        <span class="mono">{{ input.ciphertext }}</span>
-                    </advanced-link>
-                </span>
-            </data-line>
+            {% call data_line("Ciphertext hash") %}
+                <span class="mono">{{ input.ciphertext_hash }}</span>
+            {% endcall %}
+            {% call data_line("Ciphertext") %}
+                <advanced-link scope="transition" object="{{ ts_id }}" type="input_private" index="{{ loop.index0 }}">
+                    <span class="mono">{{ input.ciphertext }}</span>
+                </advanced-link>
+            {% endcall %}
         {% elif input.type == "Record" %}
-            <data-line>
-                <span slot="title">Serial number</span>
-                <span slot="content"><span class="mono">{{ input.serial_number }}</span></span>
-            </data-line>
-            <data-line>
-                <span slot="title">Tag</span>
-                <span slot="content"><span class="mono">{{ input.tag }}</span></span>
-            </data-line>
+            {% call data_line("Serial number") %}
+                <span class="mono">{{ input.serial_number }}</span>
+            {% endcall %}
+            {% call data_line("Tag") %}
+                <span class="mono">{{ input.tag }}</span>
+            {% endcall %}
         {% endif %}
             <br>
         {% endfor %}
         {% for output in outputs %}
             {% set outer_loop = loop %}
             <h5>Output #{{ loop.index }}</h5>
-            <data-line>
-                <span slot="title">Type</span>
-                <span slot="content">{{ output.type }} <span class="mono">{{ function_definition[1][loop.index0] }}</span></span>
-            </data-line>
+            {% call data_line("Type") %}
+                {{ output.type }} <span class="mono">{{ function_definition[1][loop.index0] }}</span>
+            {% endcall %}
         {% if output.type == "Record" %}
-            <data-line>
-                <span slot="title">Commitment</span>
-                <span slot="content"><span class="mono">{{ output.commitment }}</span></span>
-            </data-line>
-            <data-line>
-                <span slot="title">Checksum</span>
-                <span slot="content"><span class="mono">{{ output.checksum }}</span></span>
-            </data-line>
-            <data-line>
-                <span slot="title">Record data</span>
-                <span slot="content"><span class="mono">{{ output.record }}</span></span>
-            </data-line>
+            {% call data_line("Commitment") %}
+                <span class="mono">{{ output.commitment }}</span>
+            {% endcall %}
+            {% call data_line("Checksum") %}
+                <span class="mono">{{ output.checksum }}</span>
+            {% endcall %}
+            {% call data_line("Record data") %}
+                <span class="mono">{{ output.record }}</span>
+            {% endcall %}
             <sub-data-line>
                 <span slot="title"><span class="mono">owner</span></span>
                 <span slot="content">

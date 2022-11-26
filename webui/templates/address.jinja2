@@ -17,6 +17,8 @@
     </style>
 {% endblock %}
 
+{% from "macros.jinja2" import data_line %}
+
 {% block content %}
 
     <div class="content">
@@ -25,31 +27,24 @@
             <h3>Address {{ address_trunc }}</h3>
         </div>
 
-
         <div id="data">
             <h4>Overview</h4>
-            <data-line>
-                <span slot="title">Address</span>
-                <span slot="content"><span class="mono">{{ address }}</span></span>
-            </data-line>
-            <data-line>
-                <span slot="title">Total phase 2 rewards (not incentivized)</span>
-                <span slot="content">{{ total_rewards | format_aleo_credit }}</span>
-            </data-line>
-            <data-line>
-                <span slot="title">Total solutions found</span>
-                <span slot="content">{{ total_solutions }}</span>
-            </data-line>
-            <data-line>
-                <span slot="title">Estimated speed</span>
-                <span slot="content">
-                    {% if speed != 0 %}
-                    {{ "%.2f" % speed }} <span data-tooltip title='commitments per second, also known as "p/s" or "s/s"'>c/s</span> (last {{ timespan }})
-                    {% else %}
-                    Not enough solutions during last day
-                    {% endif %}
-                </span>
-            </data-line>
+        {% call data_line("Address") %}
+            <span class="mono">{{ address }}</span>
+        {% endcall %}
+        {% call data_line("Total phase 2 rewards (not incentivized)") %}
+            {{ total_rewards | format_aleo_credit }}
+        {% endcall %}
+        {% call data_line("Total solutions found") %}
+            {{ total_solutions }}
+        {% endcall %}
+        {% call data_line("Estimated speed") %}
+            {% if speed != 0 %}
+            {{ "%.2f" % speed }} <span data-tooltip title='commitments per second, also known as "p/s" or "s/s"'>c/s</span> (last {{ timespan }})
+            {% else %}
+            Not enough solutions during last day
+            {% endif %}
+        {% endcall %}
         </div>
 
         <div id="solutions">

@@ -78,14 +78,18 @@
             font-size: 0.825rem;
         }
 
-        data-line {
-            display: block;
-            min-height: 2.4rem;
-            {#transition: opacity 0.05s ease-in-out;#}
+        .data-line {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #ccc;
         }
 
-        data-line:not(:defined) {
-            opacity: 0;
+        .sub-data-line {
+            padding: 0.5rem 0 0.5rem 1rem;
+            border-bottom: 1px solid #ccc;
+        }
+
+        .data-line-value {
+            overflow-wrap: break-word;
         }
 
         input::-webkit-outer-spin-button,
@@ -146,77 +150,7 @@
         </div>
     </div>
 </div>
-<template id="data-line">
-    <style>
-        @import "https://cdnjs.cloudflare.com/ajax/libs/foundation/6.7.4/css/foundation.min.css";
-
-        .data-line {
-            padding: 0.5rem 0;
-            border-bottom: 1px solid #ccc;
-        }
-
-        .data-line-value {
-            overflow-wrap: break-word;
-        }
-    </style>
-    <div class="data-line grid-x grid-padding-x">
-        <div class="cell small-3 block-data-line-label">
-            <slot name="title"></slot>
-        </div>
-        <div class="cell auto data-line-value">
-            <slot name="content"></slot>
-        </div>
-    </div>
-</template>
-<template id="sub-data-line">
-    <style>
-        @import "https://cdnjs.cloudflare.com/ajax/libs/foundation/6.7.4/css/foundation.min.css";
-
-        .sub-data-line {
-            padding: 0.5rem 0 0.5rem 1rem;
-            border-bottom: 1px solid #ccc;
-        }
-
-        .data-line-value {
-            overflow-wrap: break-word;
-        }
-    </style>
-    <div class="sub-data-line grid-x grid-padding-x">
-        <div class="cell small-3 block-data-line-label">
-            <slot name="title"></slot>
-        </div>
-        <div class="cell auto data-line-value">
-            <slot name="content"></slot>
-        </div>
-    </div>
-</template>
 <script>
-    customElements.define(
-      "data-line",
-      class extends HTMLElement {
-        constructor() {
-          super();
-          let template = document.getElementById("data-line");
-          let templateContent = template.content;
-
-          const shadowRoot = this.attachShadow({ mode: "open" });
-          shadowRoot.appendChild(templateContent.cloneNode(true));
-        }
-      }
-    );
-    customElements.define(
-      "sub-data-line",
-      class extends HTMLElement {
-        constructor() {
-          super();
-          let template = document.getElementById("sub-data-line");
-          let templateContent = template.content;
-
-          const shadowRoot = this.attachShadow({ mode: "open" });
-          shadowRoot.appendChild(templateContent.cloneNode(true));
-        }
-      }
-    );
     customElements.define(
         "advanced-link",
         class extends HTMLElement {

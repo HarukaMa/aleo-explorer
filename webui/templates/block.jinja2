@@ -35,6 +35,8 @@
     </style>
 {% endblock %}
 
+{% from "macros.jinja2" import data_line %}
+
 {% block content %}
 
     <div class="content">
@@ -44,50 +46,39 @@
         </div>
 
         <div id="data">
-            <data-line>
-                <span slot="title">Height</span>
-                <span slot="content">{{ block.header.metadata.height }}</span>
-            </data-line>
-            <data-line>
-                <span slot="title">Epoch</span>
-                <span slot="content">{{ block.header.metadata.height // 256 }}</span>
-            </data-line>
-            <data-line>
-                <span slot="title">Timestamp</span>
-                <span slot="content">{{ block.header.metadata.timestamp | format_time | safe }}</span>
-            </data-line>
-            <data-line>
-                <span slot="title">Coinbase target</span>
-                <span slot="content">{{ block.header.metadata.coinbase_target }}</span>
-            </data-line>
-            <data-line>
-                <span slot="title">Proof target</span>
-                <span slot="content">{{ block.header.metadata.proof_target }}</span>
-            </data-line>
-            <data-line>
-                <span slot="title">Coinbase reward</span>
-                <span slot="content">{% if coinbase_reward %}{{ (coinbase_reward // 2) | format_aleo_credit }}{% else %}-{% endif %}</span>
-            </data-line>
-            <data-line>
-                <span slot="title">Block hash</span>
-                <span slot="content"><span class="mono">{{ block.block_hash }}</span></span>
-            </data-line>
-            <data-line>
-                <span slot="title">Previous block hash</span>
-                <span slot="content"><a href="/block?bh={{ block.previous_hash }}"><span class="mono">{{ block.previous_hash }}</span></a></span>
-            </data-line>
-            <data-line>
-                <span slot="title">Previous state root</span>
-                <span slot="content"><span class="mono">{{ block.header.previous_state_root }}</span></span>
-            </data-line>
-            <data-line>
-                <span slot="title">Transactions root</span>
-                <span slot="content"><span class="mono">{{ block.header.transactions_root }}</span></span>
-            </data-line>
-            <data-line>
-                <span slot="title">Coinbase accumulator point</span>
-                <span slot="content"><span class="mono">{{ block.header.coinbase_accumulator_point }}</span></span>
-            </data-line>
+        {% call data_line("Height") %}
+            {{ block.header.metadata.height }}
+        {% endcall %}
+        {% call data_line("Epoch") %}
+            {{ block.header.metadata.height // 256 }}
+        {% endcall %}
+        {% call data_line("Timestamp") %}
+            {{ block.header.metadata.timestamp | format_time | safe }}
+        {% endcall %}
+        {% call data_line("Coinbase target") %}
+            {{ block.header.metadata.coinbase_target }}
+        {% endcall %}
+        {% call data_line("Proof target") %}
+            {{ block.header.metadata.proof_target }}
+        {% endcall %}
+        {% call data_line("Coinbase reward") %}
+            {% if coinbase_reward %}{{ (coinbase_reward // 2) | format_aleo_credit }}{% else %}-{% endif %}
+        {% endcall %}
+        {% call data_line("Block hash") %}
+            <span class="mono">{{ block.block_hash }}</span>
+        {% endcall %}
+        {% call data_line("Previous block hash") %}
+            <a href="/block?bh={{ block.previous_hash }}"><span class="mono">{{ block.previous_hash }}</span></a>
+        {% endcall %}
+        {% call data_line("Previous state root") %}
+            <span class="mono">{{ block.header.previous_state_root }}</span>
+        {% endcall %}
+        {% call data_line("Transactions root") %}
+            <span class="mono">{{ block.header.transactions_root }}</span>
+        {% endcall %}
+        {% call data_line("Coinbase accumulator point") %}
+            <span class="mono">{{ block.header.coinbase_accumulator_point }}</span>
+        {% endcall %}
         </div>
 
         <div id="transactions">

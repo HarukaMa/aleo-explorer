@@ -14,6 +14,8 @@
 
 {% endblock %}
 
+{% from "macros.jinja2" import data_line, sub_data_line %}
+
 {% block content %}
 
     <div class="content">
@@ -22,26 +24,22 @@
         </div>
 
         <div id="data">
-            <data-line>
-                <span slot="title">{{ type }}</span>
-                <span slot="content"><span class="mono">{{ id }}</span></span>
-            </data-line>
+        {% call data_line(type) %}
+            <span class="mono">{{ id }}</span>
+        {% endcall %}
         {% for title, content in data.items() %}
             {% if content is mapping %}
-            <data-line>
-                <span slot="title">{{ title }}</span>
-            </data-line>
+            {% call data_line(title) %}
+            {% endcall %}
             {% for sub_title, sub_content in content.items() %}
-                <sub-data-line>
-                    <span slot="title">{{ sub_title }}</span>
-                    <span slot="content"><span class="mono">{{ sub_content | safe }}</span></span>
-                </sub-data-line>
+                {% call sub_data_line(sub_title) %}
+                <span class="mono">{{ sub_content | safe }}</span>
+                {% endcall %}
             {% endfor %}
             {% else %}
-            <data-line>
-                <span slot="title">{{ title }}</span>
-                <span slot="content"><span class="mono">{{ content | safe }}</span></span>
-            </data-line>
+                {% call data_line(title) %}
+                <span class="mono">{{ content | safe }}</span>
+                {% endcall %}
             {% endif %}
         {% endfor %}
         </div>

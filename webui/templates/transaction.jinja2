@@ -18,6 +18,8 @@
 
 {% endblock %}
 
+{% from "macros.jinja2" import data_line %}
+
 {% block content %}
 
     <div class="content">
@@ -26,26 +28,20 @@
         </div>
 
         <div id="data">
-            <data-line>
-                <span slot="title">Transaction ID</span>
-                <span slot="content"><span class="mono">{{ tx_id }}</span></span>
-            </data-line>
-            <data-line>
-                <span slot="title">Block</span>
-                <span slot="content"><a href="/block?h={{ block.header.metadata.height }}">{{ block.header.metadata.height }}</a></span>
-            </data-line>
-            <data-line>
-                <span slot="title">Type</span>
-                <span slot="content">{{ type }}</span>
-            </data-line>
+        {% call data_line("Transaction ID") %}
+            <span class="mono">{{ tx_id }}</span>
+        {% endcall %}
+        {% call data_line("Block") %}
+            <a href="/block?h={{ block.header.metadata.height }}">{{ block.header.metadata.height }}</a>
+        {% endcall %}
+        {% call data_line("Type") %}
+            {{ type }}
+        {% endcall %}
         {% if type == "Execute" %}
-            <data-line>
-                <span slot="title">Global state root</span>
-                <span slot="content"><span class="mono">{{ global_state_root }}</span></span>
-            </data-line>
-            <data-line>
-                <span slot="title">Inclusion proof</span>
-                <span slot="content">
+            {% call data_line("Global state root") %}
+            <span class="mono">{{ global_state_root }}</span>
+            {% endcall %}
+            {% call data_line("Local state root") %}
                 {% if inclusion_proof %}
                     <advanced-link scope="transaction" object="{{ tx_id }}" type="inclusion_proof">
                         <span class="mono">{{ inclusion_proof }}</span>
@@ -53,14 +49,12 @@
                 {% else %}
                     -
                 {% endif %}
-                </span>
-            </data-line>
+            {% endcall %}
         {% elif type == "Deploy" %}
         {% endif %}
-            <data-line>
-                <span slot="title">Total fee</span>
-                <span slot="content">{{ total_fee | format_aleo_credit }} Aleo credits</span>
-            </data-line>
+        {% call data_line("Total fee") %}
+            {{ total_fee | format_aleo_credit }} Aleo credits
+        {% endcall %}
         </div>
 
     {% if type == "Execute" %}
