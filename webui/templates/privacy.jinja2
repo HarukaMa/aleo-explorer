@@ -78,6 +78,13 @@
 
     {% endif %}
 
+    {% if not ("CLOUDFLARE" | get_env) and not ("MATOMO | get_env") %}
+        <p>
+            <em>There are no analytics scripts on this site.</em>
+        </p>
+    {% endif %}
+
+        <p>For more questions and suggestions about this privacy policy, please send emails to privacy@hamp.app .</p>
 
     </div>
 
