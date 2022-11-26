@@ -381,7 +381,7 @@ async def search_route(request: Request):
         # address
         addresses = await db.search_address(query)
         if not addresses:
-            raise HTTPException(status_code=404, detail="Address not found")
+            raise HTTPException(status_code=404, detail="Address not found. See FAQ for mor info.")
         if len(addresses) == 1:
             return RedirectResponse(f"/address?a={addresses[0]}", status_code=302)
         too_many = False
