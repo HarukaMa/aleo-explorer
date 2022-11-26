@@ -20,6 +20,10 @@
           crossorigin="anonymous" referrerpolicy="no-referrer"/>
     <style>
 
+        .global-banner {
+            margin-bottom: 0 !important;
+        }
+
         .content {
             max-width: 1280px;
             margin: auto;
@@ -178,7 +182,7 @@
 </script>
 {% if maintenance != None %}
     <div class="content">
-    <div class="callout alert">
+    <div class="callout alert global-banner">
         {% if maintenance %}
             <p></p>
         {% else %}
