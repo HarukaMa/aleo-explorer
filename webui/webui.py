@@ -75,7 +75,7 @@ async def out_of_sync_check():
     if now - last_timestamp > 120:
         if maintenance_info:
             return True, maintenance_info
-        return False, get_relative_time(now - last_timestamp)
+        return False, get_relative_time(last_timestamp)
     return None, None
 
 async def function_signature(transition: Transition):
