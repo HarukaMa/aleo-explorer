@@ -176,6 +176,17 @@
         }
     )
 </script>
+{% if maintenance != None %}
+    <div class="content">
+    <div class="callout alert">
+        {% if maintenance %}
+            <p></p>
+        {% else %}
+            It seems the explorer is out of sync - the last block was {{ info }}. The data below might not be up-to-date.
+        {% endif %}
+    </div>
+    </div>
+{% endif %}
 {% block content %}{% endblock %}
 <div class="footer-container">
     <div class="settings">
