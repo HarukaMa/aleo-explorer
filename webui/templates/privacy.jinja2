@@ -1,0 +1,84 @@
+{% extends "base.jinja2" %}
+
+{% block title %}Privacy Policy - Haruka's Aleo Explorer{% endblock %}
+
+{% block head %}
+    <style>
+    .content {
+        font-size: 1rem;
+    }
+    </style>
+{% endblock %}
+
+{% block content %}
+
+    <div class="content">
+
+        <div class="header">
+            <h3>Privacy Policy</h3>
+        </div>
+
+        <p>
+            I'm not a lawyer, so I'm not going to write a legal document here. I'm just going to tell you what I do
+            with your data.
+        </p>
+
+        <p>
+            <strong>Important:</strong> When you use the explorer, your requests will appear in the web server logs
+            (non-cached part){% if ("CLOUDFLARE" | get_env) or ("MATOMO" | get_env) %} or analytics data{% endif %},
+            so there might be enough information to link different addresses together depending on your requests
+            (searches, page visits, etc.) I will not use this information against anyone or give them to anyone else,
+            nor will I actively collect and derive such information from various logs.
+        </p>
+
+        <p>
+            Depending on the code configuration, this explorer might have different analytic scripts embedded on every
+            page. Below are what's enabled on this explorer instance.
+        </p>
+
+    {% if "CLOUDFLARE" | get_env %}
+        <h4>Cloudflare</h4>
+
+        <p>
+            This site uses Cloudflare to protect the server from attacks, so all web requests go through Cloudflare's
+            CDN nodes before hitting this server. Cloudflare will collect data about those requests, so you should read
+            their policies:
+        </p>
+        <ul>
+            <li><a href="https://www.cloudflare.com/privacypolicy/">Cloudflare's Privacy Policy</a> (You are "End Users" in this document)</li>
+            <li><a href="https://www.cloudflare.com/cookie-policy/">Cloudflare's Cookie Policy</a></li>
+        </ul>
+        <p>
+            I can access aggregated request data and individual security logs to identify possible attacks and act on them.
+        </p>
+
+        <p>
+            This site also uses Cloudflare Analytics. I use the performance data and Core Web Vitals statistics to help
+            me optimize the explorer.
+        </p>
+    {% endif %}
+
+    {% if "MATOMO" | get_env %}
+        <h4>Matomo Analytics (Self-hosted)</h4>
+
+        <p>
+            This site uses a self-hosted Matomo Analytics instance. It's an open-source alternative to Google Analytics
+            and can collect more detailed info about your visits. As it's a self-hosted instance, only I can access the data.</p>
+
+        <p>
+            Matomo analytics can anonymize many data and is fully GDPR-compliant. I use this data to study how
+            visitors interact with the site and make improvements.
+        </p>
+
+        <p>
+            You can always opt out from being tracked by clicking the "Opt Out" link at the bottom of every page. You
+            can also require me to delete all your data by sending a request email to privacy@hamp.app and include at
+            least the first three segments of your IP address.
+        </p>
+
+    {% endif %}
+
+
+    </div>
+
+{% endblock %}
