@@ -20,6 +20,7 @@
 #
 
 import asyncio
+import traceback
 from typing import Callable
 
 import aiohttp
@@ -43,22 +44,26 @@ class RESTNode:
         async with aiohttp.ClientSession() as session:
             while True:
                 await asyncio.sleep(5)
-                async with session.get("https://vm.aleo.org/api/testnet3/latest/height") as resp:
-                    if not resp.ok:
-                        print("failed to get latest height")
-                        continue
-                    latest_height = int(await resp.text())
-                    print("remote latest height:", latest_height)
-                    local_height = await self.explorer_request(explorer.Request.GetLatestHeight())
-                    while latest_height > local_height:
-                        start = local_height + 1
-                        end = min(start + 50, latest_height + 1)
-                        print(f"fetching blocks {start} to {end - 1}")
-                        async with session.get(f"https://vm.aleo.org/api/testnet3/blocks?start={start}&end={end}") as block_resp:
-                            if not block_resp.ok:
-                                print("failed to get blocks")
-                                continue
-                            for block in await block_resp.json():
-                                block = Block.load_json(block)
-                                await self.explorer_request(explorer.Request.ProcessBlock(block))
-                                local_height = block.header.metadata.height
+                try:
+                    async with session.get("https://vm.aleo.org/api/testnet3/latest/height") as resp:
+                        if not resp.ok:
+                            print("failed to get latest height")
+                            continue
+                        latest_height = int(await resp.text())
+                        print("remote latest height:", latest_height)
+                        local_height = await self.explorer_request(explorer.Request.GetLatestHeight())
+                        while latest_height > local_height:
+                            start = local_height + 1
+                            end = min(start + 50, latest_height + 1)
+                            print(f"fetching blocks {start} to {end - 1}")
+                            async with session.get(f"https://vm.aleo.org/api/testnet3/blocks?start={start}&end={end}") as block_resp:
+                                if not block_resp.ok:
+                                    print("failed to get blocks")
+                                    continue
+                                for block in await block_resp.json():
+                                    block = Block.load_json(block)
+                                    await self.explorer_request(explorer.Request.ProcessBlock(block))
+                                    local_height = block.header.metadata.height
+                except Exception:
+                    traceback.print_exc()
+                    continue

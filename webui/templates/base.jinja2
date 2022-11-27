@@ -184,7 +184,7 @@
     <div class="content">
     <div class="callout alert global-banner">
         {% if maintenance %}
-            <p></p>
+            The explorer is resyncing with the network: {{ info }} The data below is not up-to-date. Please check back later.
         {% else %}
             It seems the explorer is out of sync - the last block was {{ info }}. The data below might not be up-to-date.
         {% endif %}
