@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
--- Dumped from database version 15.1
+-- Dumped from database version 14.4 (Debian 14.4-1.pgdg120+1)
 -- Dumped by pg_dump version 15.0
 
 SET statement_timeout = 0;
@@ -62,12 +62,10 @@ CREATE TYPE explorer.transition_data_type AS ENUM (
 
 CREATE FUNCTION explorer.get_block_target_sum(block_height bigint) RETURNS numeric
     LANGUAGE sql STABLE
-    AS $$
-SELECT SUM(target) FROM explorer.partial_solution ps
+    AS $$SELECT SUM(target) FROM explorer.partial_solution ps
 JOIN explorer.coinbase_solution cs ON cs.id = ps.coinbase_solution_id
 JOIN explorer.block b ON b.id = cs.block_id
-WHERE height = block_height
-$$;
+WHERE height = block_height$$;
 
 
 SET default_tablespace = '';
@@ -713,6 +711,13 @@ CREATE UNIQUE INDEX block_height_uindex ON explorer.block USING btree (height);
 
 
 --
+-- Name: block_timestamp_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX block_timestamp_index ON explorer.block USING btree ("timestamp");
+
+
+--
 -- Name: coinbase_solution_block_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -738,6 +743,13 @@ CREATE INDEX leaderboard_address_index ON explorer.leaderboard USING btree (addr
 --
 
 CREATE INDEX leaderboard_log_address_index ON explorer.leaderboard_log USING btree (address text_pattern_ops);
+
+
+--
+-- Name: leaderboard_log_height_address_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX leaderboard_log_height_address_index ON explorer.leaderboard_log USING btree (height, address);
 
 
 --
