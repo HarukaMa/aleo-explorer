@@ -15,7 +15,7 @@
 
 {% endblock %}
 
-{% from "macros.jinja2" import data_line %}
+{% from "macros.jinja2" import data_line, sub_data_line %}
 
 {% block content %}
 
@@ -99,31 +99,22 @@
             {% call data_line("Record data") %}
                 <span class="mono">{{ output.record }}</span>
             {% endcall %}
-            <sub-data-line>
-                <span slot="title"><span class="mono">owner</span></span>
-                <span slot="content">
-                    <advanced-link scope="transition" object="{{ ts_id }}" type="output_record" index="{{ loop.index0 }}" field="owner">
-                        <span class="mono">{{ output.record_data.owner }}</span>
-                    </advanced-link>
-                </span>
-            </sub-data-line>
-            <sub-data-line>
-                <span slot="title"><span class="mono">gates</span></span>
-                <span slot="content">
-                    <advanced-link scope="transition" object="{{ ts_id }}" type="output_record" index="{{ loop.index0 }}" field="gates">
-                        <span class="mono">{{ output.record_data.gates }}</span>
-                    </advanced-link>
-                </span>
-            </sub-data-line>
+            {% call sub_data_line("owner") %}
+                <advanced-link scope="transition" object="{{ ts_id }}" type="output_record" index="{{ loop.index0 }}" field="owner">
+                    <span class="mono">{{ output.record_data.owner }}</span>
+                </advanced-link>
+            {% endcall %}
+            {% call sub_data_line("gates") %}
+                <advanced-link scope="transition" object="{{ ts_id }}" type="output_record" index="{{ loop.index0 }}" field="gates">
+                    <span class="mono">{{ output.record_data.gates }}</span>
+                </advanced-link>
+            {% endcall %}
             {% for identifier, entry in output.record_data.data %}
-            <sub-data-line>
-                <span slot="title"><span class="mono">{{ identifier }}</span></span>
-                <span slot="content">
+                {% call sub_data_line(identifier) %}
                     <advanced-link scope="transition" object="{{ ts_id }}" type="output_record" index="{{ outer_loop.index0 }}" field="{{ identifier }}">
                         <span class="mono">{{ entry }}</span>
                     </advanced-link>
-                </span>
-            </sub-data-line>
+                {% endcall %}
             {% endfor %}
         {% endif %}
             <br>
