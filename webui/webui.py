@@ -509,6 +509,8 @@ async def blocks_route(request: Request):
 
 
 async def leaderboard_route(request: Request):
+    if time.time() > 1669939200:
+        return templates.TemplateResponse("testnet3_outdated.jinja2", {"request": request}, headers={'Cache-Control': 'public, max-age=15'})
     try:
         page = request.query_params.get("p")
         if page is None:
@@ -542,6 +544,8 @@ async def leaderboard_route(request: Request):
 
 
 async def address_route(request: Request):
+    if time.time() > 1669939200:
+        return templates.TemplateResponse("testnet3_outdated.jinja2", {"request": request}, headers={'Cache-Control': 'public, max-age=15'})
     address = request.query_params.get("a")
     if address is None:
         raise HTTPException(status_code=400, detail="Missing address")
