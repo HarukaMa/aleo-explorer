@@ -20,6 +20,7 @@
 #
 
 import asyncio
+import os
 import traceback
 from typing import Callable
 
@@ -36,16 +37,16 @@ class RESTNode:
         self.explorer_message = explorer_message
         self.explorer_request = explorer_request
 
-    async def connect(self, _: str, __: int):
-        return
-        self.worker_task = asyncio.create_task(self.worker())
+    async def connect(self, host: str, port: int):
+        # return
+        self.worker_task = asyncio.create_task(self.worker(host, port))
 
-    async def worker(self):
+    async def worker(self, host: str, port: int):
         async with aiohttp.ClientSession() as session:
             while True:
                 await asyncio.sleep(5)
                 try:
-                    async with session.get("https://vm.aleo.org/api/testnet3/latest/height") as resp:
+                    async with session.get(f"{os.environ.get('PROTOCOL', 'http')}://{host}:{port}/testnet3/latest/height") as resp:
                         if not resp.ok:
                             print("failed to get latest height")
                             continue
@@ -56,7 +57,7 @@ class RESTNode:
                             start = local_height + 1
                             end = min(start + 50, latest_height + 1)
                             print(f"fetching blocks {start} to {end - 1}")
-                            async with session.get(f"https://vm.aleo.org/api/testnet3/blocks?start={start}&end={end}") as block_resp:
+                            async with session.get(f"{os.environ.get('PROTOCOL', 'http')}://{host}:{port}/testnet3/blocks?start={start}&end={end}") as block_resp:
                                 if not block_resp.ok:
                                     print("failed to get blocks")
                                     continue
