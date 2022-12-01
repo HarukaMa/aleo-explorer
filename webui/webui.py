@@ -56,7 +56,7 @@ def format_time(epoch):
 def format_aleo_credit(gates):
     if gates == "-":
         return "-"
-    return str(Decimal(gates) / 1_000_000)
+    return "{:,}".format(Decimal(gates) / 1_000_000)
 
 templates.env.filters["get_env"] = get_env
 templates.env.filters["format_time"] = format_time
@@ -509,8 +509,6 @@ async def blocks_route(request: Request):
 
 
 async def leaderboard_route(request: Request):
-    if time.time() > 1669939200:
-        return templates.TemplateResponse("testnet3_outdated.jinja2", {"request": request}, headers={'Cache-Control': 'public, max-age=15'})
     try:
         page = request.query_params.get("p")
         if page is None:
@@ -531,12 +529,20 @@ async def leaderboard_route(request: Request):
             "address": line["address"],
             "total_rewards": line["total_reward"],
         })
+    now = int(time.time())
+    total_credit = await db.get_leaderboard_total()
+    target_credit = 37_500_000_000_000
+    ratio = total_credit / target_credit * 100
     maintenance, info = await out_of_sync_check()
     ctx = {
         "request": request,
         "leaderboard": data,
         "page": page,
         "total_pages": total_pages,
+        "total_credit": total_credit,
+        "target_credit": target_credit,
+        "ratio": ratio,
+        "now": now,
         "maintenance": maintenance,
         "info": info,
     }
@@ -544,8 +550,6 @@ async def leaderboard_route(request: Request):
 
 
 async def address_route(request: Request):
-    if time.time() > 1669939200:
-        return templates.TemplateResponse("testnet3_outdated.jinja2", {"request": request}, headers={'Cache-Control': 'public, max-age=15'})
     address = request.query_params.get("a")
     if address is None:
         raise HTTPException(status_code=400, detail="Missing address")

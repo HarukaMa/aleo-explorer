@@ -144,6 +144,10 @@ class Database:
                             "VALUES ($1, $2, $3, $4) RETURNING id",
                             block_db_id, str(block.coinbase.value.proof.w.x), block.coinbase.value.proof.w.flags, target_sum
                         )
+                        current_total_credit = await conn.fetchval("SELECT total_credit FROM leaderboard_total")
+                        if current_total_credit is None:
+                            await conn.execute("INSERT INTO leaderboard_total (total_credit) VALUES (0)")
+                            current_total_credit = 0
                         partial_solution: PartialSolution
                         for partial_solution, target, reward in solutions:
                             partial_solution_db_id = await conn.fetchval(
@@ -152,7 +156,7 @@ class Database:
                                 coinbase_solution_db_id, str(partial_solution.address), partial_solution.nonce,
                                 str(partial_solution.commitment), partial_solution.commitment.to_target()
                             )
-                            if reward > 0:
+                            if reward > 0 and 1669939200 <= block.header.metadata.timestamp < 1674777600 and current_total_credit < 37_500_000_000_000:
                                 await conn.execute(
                                     "INSERT INTO leaderboard (address, total_reward) VALUES ($1, $2) "
                                     "ON CONFLICT (address) DO UPDATE SET total_reward = leaderboard.total_reward + $2",
@@ -162,7 +166,11 @@ class Database:
                                     "INSERT INTO leaderboard_log (height, address, partial_solution_id, reward) VALUES ($1, $2, $3, $4)",
                                     block.header.metadata.height, str(partial_solution.address), partial_solution_db_id, reward
                                 )
-
+                        if 1669939200 <= block.header.metadata.timestamp < 1674777600 and current_total_credit < 37_500_000_000_000:
+                            await conn.execute(
+                                "UPDATE leaderboard_total SET total_credit = leaderboard_total.total_credit + $1",
+                                coinbase_reward
+                            )
 
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseBlockAdded, block.header.metadata.height))
                 except Exception as e:
@@ -782,6 +790,19 @@ class Database:
                 for height in heights:
                     total_solutions += ref_proof_target_dict[height - 1]
                 return total_solutions / interval
+            except Exception as e:
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                raise
+
+    async def get_leaderboard_total(self) -> int:
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                total_credit = await conn.fetchval("SELECT total_credit FROM leaderboard_total")
+                if total_credit is None:
+                    await conn.execute("INSERT INTO leaderboard_total (total_credit) VALUES (0)")
+                    total_credit = 0
+                return int(total_credit)
             except Exception as e:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise

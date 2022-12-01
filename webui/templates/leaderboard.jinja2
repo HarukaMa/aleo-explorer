@@ -18,10 +18,25 @@
             <h3>Leaderboard</h3>
         </div>
 
-        <div class="callout alert">
-            The network is <em>NOT INCENTIVIZED</em> at this moment. The leaderboard below carries no value. <br>
-            Only use it to confirm that your node is running correctly.
+    {% if now < 1669939200 %}
+        <div class="callout primary">
+            The incentive period for phase 2 will start at 2022-12-02 00:00 UTC.
         </div>
+    {% elif now >= 1674777600 or total_credit >= target_credit %}
+        <div class="callout success">
+            The incentive period for phase 2 has ended.
+        </div>
+    {% else %}
+        <div class="callout warning">
+            This leaderboard is unofficial. The data might be inaccurate.
+        </div>
+        Testnet Aleo credits rewarded: {{ total_credit | format_aleo_credit }} / {{ target_credit | format_aleo_credit }}
+        <div class="primary progress" role="progressbar">
+            <div class="progress-meter" style="width: {{ ratio }}%">
+                <p class="progress-meter-text">{{ "%.2f" % ratio }}%</p>
+            </div>
+        </div>
+    {% endif %}
 
         <div id="blocks">
 
