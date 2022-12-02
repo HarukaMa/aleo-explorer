@@ -21,8 +21,6 @@ class LightNodeState:
         self.self_ip = r.json()["ip"]
 
     def connect(self, ip: str, port: int):
-        if ip == "127.0.0.1":
-            return
         if ip == self.self_ip and port == 14133:
             return
         key = ":".join([ip, str(port)])
