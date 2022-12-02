@@ -24,6 +24,11 @@
             align-items: center;
         }
 
+        .ticker-cell-data-note {
+            font-size: 1rem;
+            color: #999;
+        }
+
         .tooltip {
             max-width: 250px;
         }
@@ -54,7 +59,7 @@
                 <div class="cell large-auto ticker-cell">
                     <div class="grid-y ticker-cell-content">
                         <div class="cell ticker-cell-title">Current epoch</div>
-                        <div class="cell auto ticker-cell-data">{{ latest_block.get_epoch_number() }}</div>
+                        <div class="cell auto ticker-cell-data">{{ latest_block.get_epoch_number() }}&nbsp;<span class="ticker-cell-data-note">{{ latest_block.header.metadata.height % 256 }} / 256</span></div>
                     </div>
                 </div>
                 <div class="cell large-auto ticker-cell">
@@ -106,7 +111,7 @@
                 {% for block in recent_blocks %}
                     <tr>
                         <td><a href="/block?h={{ block.height }}">{{ block.height }}</a></td>
-                        <td>{{ block.height // 256 }}</td>
+                        <td>{{ block.height // 256 }} <span class="note">{{ block.height % 256 }} / 256</span></td>
                         <td>{{ block.timestamp | format_time | safe }}</td>
                         <td>{{ block.transaction_count }}</td>
                         <td>{{ block.proof_target }}</td>

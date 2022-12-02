@@ -26,11 +26,6 @@
             color: #cc4b37;
         }
 
-        .note {
-            font-size: 0.75rem;
-            color: #999;
-        }
-
 
     </style>
 {% endblock %}
@@ -50,7 +45,7 @@
             {{ block.header.metadata.height }}
         {% endcall %}
         {% call data_line("Epoch") %}
-            {{ block.header.metadata.height // 256 }}
+            {{ block.header.metadata.height // 256 }} <span class="note">{{ block.header.metadata.height % 256 }} / 256
         {% endcall %}
         {% call data_line("Timestamp") %}
             {{ block.header.metadata.timestamp | format_time | safe }}

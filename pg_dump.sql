@@ -236,6 +236,15 @@ CREATE TABLE explorer.leaderboard_log (
 
 
 --
+-- Name: leaderboard_total; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.leaderboard_total (
+    total_credit numeric(20,0) DEFAULT 0 NOT NULL
+);
+
+
+--
 -- Name: partial_solution; Type: TABLE; Schema: explorer; Owner: -
 --
 
