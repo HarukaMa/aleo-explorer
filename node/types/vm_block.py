@@ -3,6 +3,78 @@ from hashlib import sha256
 from .vm_instruction import *
 
 
+class EvaluationDomain(Serialize, Deserialize):
+
+    @type_check
+    def __init__(self, *, size: u64, log_size_of_group: u32, size_as_field_element: Field, size_inv: Field,
+                 group_gen: Field, group_gen_inv: Field, generator_inv: Field):
+        self.size = size
+        self.log_size_of_group = log_size_of_group
+        self.size_as_field_element = size_as_field_element
+        self.size_inv = size_inv
+        self.group_gen = group_gen
+        self.group_gen_inv = group_gen_inv
+        self.generator_inv = generator_inv
+
+    def dump(self) -> bytes:
+        return self.size.dump() + self.log_size_of_group.dump() + self.size_as_field_element.dump() + \
+               self.size_inv.dump() + self.group_gen.dump() + self.group_gen_inv.dump() + self.generator_inv.dump()
+
+    @classmethod
+    @type_check
+    def load(cls, data: bytearray):
+        size = u64.load(data)
+        log_size_of_group = u32.load(data)
+        size_as_field_element = Field.load(data)
+        size_inv = Field.load(data)
+        group_gen = Field.load(data)
+        group_gen_inv = Field.load(data)
+        generator_inv = Field.load(data)
+        return cls(size=size, log_size_of_group=log_size_of_group, size_as_field_element=size_as_field_element,
+                   size_inv=size_inv, group_gen=group_gen, group_gen_inv=group_gen_inv, generator_inv=generator_inv)
+
+class EvaluationsOnDomain(Serialize, Deserialize):
+
+    @type_check
+    def __init__(self, *, evaluations: Vec[Field, u64], domain: EvaluationDomain):
+        self.evaluations = evaluations
+        self.domain = domain
+
+    def dump(self) -> bytes:
+        return self.evaluations.dump() + self.domain.dump()
+
+    @classmethod
+    @type_check
+    def load(cls, data: bytearray):
+        evaluations = Vec[Field, u64].load(data)
+        domain = EvaluationDomain.load(data)
+        return cls(evaluations=evaluations, domain=domain)
+
+
+class EpochChallenge(Serialize, Deserialize):
+
+    @type_check
+    def __init__(self, *, epoch_number: u32, epoch_block_hash: BlockHash, epoch_polynomial: Vec[Field, u64],
+                 epoch_polynomial_evaluations: EvaluationsOnDomain):
+        self.epoch_number = epoch_number
+        self.epoch_block_hash = epoch_block_hash
+        self.epoch_polynomial = epoch_polynomial
+        self.epoch_polynomial_evaluations = epoch_polynomial_evaluations
+
+    def dump(self) -> bytes:
+        return self.epoch_number.dump() + self.epoch_block_hash.dump() + self.epoch_polynomial.dump() + \
+               self.epoch_polynomial_evaluations.dump()
+
+    @classmethod
+    @type_check
+    def load(cls, data: bytearray):
+        epoch_number = u32.load(data)
+        epoch_block_hash = BlockHash.load(data)
+        epoch_polynomial = Vec[Field, u64].load(data)
+        epoch_polynomial_evaluations = EvaluationsOnDomain.load(data)
+        return cls(epoch_number=epoch_number, epoch_block_hash=epoch_block_hash, epoch_polynomial=epoch_polynomial,
+                   epoch_polynomial_evaluations=epoch_polynomial_evaluations)
+
 class FinalizeType(Serialize, Deserialize):  # enum
 
     class Type(IntEnumu8):
@@ -2257,14 +2329,14 @@ class BlockHeaderMetadata(Serialize, Deserialize):
                    proof_target=proof_target, last_coinbase_target=last_coinbase_target,
                    last_coinbase_timestamp=last_coinbase_timestamp, timestamp=timestamp)
 
-    # # really needed?
-    # def __eq__(self, other):
-    #     if not isinstance(other, BlockHeaderMetadata):
-    #         return False
-    #     return self.height == other.height and \
-    #            self.timestamp == other.timestamp and \
-    #            self.difficulty_target == other.difficulty_target and \
-    #            self.cumulative_weight == other.cumulative_weight
+    # really needed?
+    def __eq__(self, other):
+        if not isinstance(other, BlockHeaderMetadata):
+            return False
+        return self.network == other.network and self.round == other.round and self.height == other.height \
+               and self.coinbase_target == other.coinbase_target and self.proof_target == other.proof_target \
+               and self.last_coinbase_target == other.last_coinbase_target \
+               and self.last_coinbase_timestamp == other.last_coinbase_timestamp and self.timestamp == other.timestamp
 
 
 class BlockHeader(Serialize, Deserialize):
@@ -2305,15 +2377,13 @@ class BlockHeader(Serialize, Deserialize):
         return cls(previous_state_root=previous_state_root, transactions_root=transactions_root,
                    coinbase_accumulator_point=coinbase_accumulator_point, metadata=metadata)
 
-    # # really needed?
-    # def __eq__(self, other):
-    #     if not isinstance(other, BlockHeader):
-    #         return False
-    #     return self.previous_ledger_root == other.previous_ledger_root and \
-    #            self.transactions_root == other.transactions_root and \
-    #            self.metadata == other.metadata and \
-    #            self.nonce == other.nonce and \
-    #            self.proof == other.proof
+    def __eq__(self, other):
+        if not isinstance(other, BlockHeader):
+            return False
+        return self.previous_state_root == other.previous_state_root and \
+               self.transactions_root == other.transactions_root and \
+               self.coinbase_accumulator_point == other.coinbase_accumulator_point and \
+               self.metadata == other.metadata
 
 
 class PuzzleCommitment(Serialize, Deserialize):

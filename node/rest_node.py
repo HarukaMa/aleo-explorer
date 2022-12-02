@@ -1,24 +1,3 @@
-# Copyright (C) 2019-2022 Aleo Systems Inc.
-# This file is part of the snarkOS library.
-#
-# The snarkOS library is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# The snarkOS library is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with the snarkOS library. If not, see <https://www.gnu.org/licenses/>.
-#
-# -----------------------------------------------------------------------------
-#
-# This file contains rewritten code of snarkOS.
-#
-
 import asyncio
 import os
 import traceback
@@ -27,19 +6,21 @@ from typing import Callable
 import aiohttp
 
 import explorer
-# from .light_node import LightNodeState
+from .light_node import LightNodeState
 from .types import *  # too many types
 
 
 class RESTNode:
-    def __init__(self, explorer_message: Callable, explorer_request: Callable):
+    def __init__(self, explorer_message: Callable, explorer_request: Callable, light_node_state: LightNodeState):
         self.worker_task: asyncio.Task | None = None
         self.explorer_message = explorer_message
         self.explorer_request = explorer_request
+        self.light_node_state = light_node_state
 
     async def connect(self, host: str, port: int):
         # return
         self.worker_task = asyncio.create_task(self.worker(host, port))
+        self.light_node_state.connect("127.0.0.1", 4133)
 
     async def worker(self, host: str, port: int):
         async with aiohttp.ClientSession() as session:

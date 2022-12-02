@@ -22,11 +22,10 @@
         <table class="unstriped">
             <thead>
             <tr>
-                <th>Address</th>
+                <th>IP address</th>
                 <th>Type</th>
-                <th>Status</th>
+                <th>Address</th>
                 <th>Height</th>
-                <th>Cumulative weight</th>
                 <th>Last update</th>
             </tr>
             </thead>
@@ -35,17 +34,13 @@
                 <tr>
                     <td>{{ address }}</td>
                     <td>{{ node.node_type }}</td>
-                    <td>{{ node.status }}</td>
-                    <td>{{ node.height }}
-                            {% if node.height - latest_height %} ({{ node.height - latest_height }}){% endif %}</td>
-                    <td>{{ node.cumulative_weight }}
-                            {% if node.cumulative_weight - latest_weight %} ({{ node.cumulative_weight - latest_weight }}){% endif %}</td>
+                    <td><span class="mono">{{ node.address }}</span></td>
+                    <td>{% if node.height is not none %}{{ node.height }}{% else %}-{% endif %}</td>
                     <td>{{ node.last_ping }}</td>
                 </tr>
             {% endfor %}
             </tbody>
         </table>
-
     </div>
 
 {% endblock %}

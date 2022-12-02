@@ -5,7 +5,7 @@ import traceback
 import webui
 from db import Database
 from node import Node
-# from node.light_node import LightNodeState
+from node.light_node import LightNodeState
 from node.testnet3 import Testnet3
 from node.types import Block
 from .types import Request, Message
@@ -25,7 +25,7 @@ class Explorer:
         self.latest_height = 0
         self.latest_block_hash = Testnet3.genesis_block.block_hash
         self.db_lock = asyncio.Lock()
-        # self.light_node_state = LightNodeState()
+        self.light_node_state = LightNodeState()
 
     def start(self):
         self.task = asyncio.create_task(self.main_loop())
@@ -68,10 +68,10 @@ class Explorer:
             self.latest_height = await self.db.get_latest_height()
             self.latest_block_hash = await self.db.get_block_hash_by_height(self.latest_height)
             print(f"latest height: {self.latest_height}")
-            self.node = Node(explorer_message=self.message, explorer_request=self.node_request,)
-                             #light_node_state=self.light_node_state)
+            self.node = Node(explorer_message=self.message, explorer_request=self.node_request,
+                             light_node_state=self.light_node_state)
             await self.node.connect(os.environ.get("NODE_HOST", "127.0.0.1"), int(os.environ.get("NODE_PORT", "4132")))
-            asyncio.create_task(webui.run())
+            asyncio.create_task(webui.run(self.light_node_state))
             while True:
                 msg = await self.message_queue.get()
                 match msg.type:

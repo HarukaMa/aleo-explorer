@@ -21,6 +21,7 @@ from starlette.templating import Jinja2Templates
 
 from db import Database
 # from node.light_node import LightNodeState
+from node.light_node import LightNodeState
 from node.types import u32, Transaction, Transition, ExecuteTransaction, TransitionInput, PrivateTransitionInput, \
     RecordTransitionInput, TransitionOutput, RecordTransitionOutput, Record, KZGProof, Proof, WitnessCommitments, \
     G1Affine, Ciphertext, Owner, Balance, Entry
@@ -439,16 +440,14 @@ async def nodes_route(request: Request):
     nodes = copy.deepcopy(lns.states)
     res = {}
     for k, v in nodes.items():
-        if "status" in v:
+        if "address" in v:
             res[k] = v
             res[k]["last_ping"] = get_relative_time(v["last_ping"])
-    latest_height = await db.get_latest_canonical_height()
-    latest_weight = await db.get_latest_canonical_weight()
+            address = v["address"]
+            # res[k]["address"] = address[:14] + "..." + address[-6:]
     ctx = {
         "request": request,
         "nodes": res,
-        "latest_height": latest_height,
-        "latest_weight": latest_weight,
     }
     return templates.TemplateResponse('nodes.jinja2', ctx, headers={'Cache-Control': 'no-cache'})
 
@@ -869,7 +868,7 @@ routes = [
     Route("/transaction", transaction_route),
     Route("/transition", transition_route),
     Route("/search", search_route),
-    # Route("/nodes", nodes_route),
+    Route("/nodes", nodes_route),
     Route("/orphan", orphan_route),
     Route("/blocks", blocks_route),
     # Route("/miner", miner_stats),
@@ -911,15 +910,15 @@ app = Starlette(
     middleware=[Middleware(AccessLoggerMiddleware)]
 )
 db: Database
-# lns: LightNodeState | None = None
+lns: LightNodeState | None = None
 
 
-async def run():
+async def run(light_node_state: LightNodeState):
     config = uvicorn.Config("webui:app", reload=True, log_level="info")
     logging.getLogger("uvicorn.access").handlers = []
     server = Server(config=config)
-    # global lns
-    # lns = light_node_state
+    global lns
+    lns = light_node_state
 
     with server.run_in_thread():
         while True:

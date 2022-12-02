@@ -1,13 +1,13 @@
 import asyncio
 import random
 import time
-from collections import OrderedDict
 
+import aleo
 import requests
 
 from node.testnet3 import Testnet3
-from node.types import ChallengeRequest, NodeType, Status, u16, u64, u128, Frame, Message, ChallengeResponse, \
-    PeerRequest, Ping, PeerResponse, SocketAddr, u32, Pong, bool_, BlockLocators
+from node.types import ChallengeRequest, NodeType, u16, u64, Frame, Message, ChallengeResponse, \
+    PeerRequest, Ping, PeerResponse, SocketAddr, Pong, bool_, BlockLocators, Address, Signature, Option
 from util.buffer import Buffer
 
 
@@ -23,7 +23,7 @@ class LightNodeState:
     def connect(self, ip: str, port: int):
         if ip == "127.0.0.1":
             return
-        if ip == self.self_ip and port == 14132:
+        if ip == self.self_ip and port == 14133:
             return
         key = ":".join([ip, str(port)])
         if key not in self.states:
@@ -31,21 +31,18 @@ class LightNodeState:
             self.nodes[key] = LightNode(ip, port, self)
             self.nodes[key].connect()
 
-    def node_ping(self, ip: str, port: int, node_type: NodeType, status: Status, height: int, cumulative_weight: int):
+    def node_connected(self, ip: str, port: int, address: str):
         key = ":".join([ip, str(port)])
         if key in self.states:
-            self.states[key]["node_type"] = node_type
-            self.states[key]["status"] = status
-            self.states[key]["height"] = height
-            self.states[key]["cumulative_weight"] = cumulative_weight
+            self.states[key]["address"] = address
             self.states[key]["last_ping"] = time.time()
 
-    def node_pong(self, ip: str, port: int, height: int, cumulative_weight: int):
+    def node_ping(self, ip: str, port: int, node_type: NodeType, height: int):
         key = ":".join([ip, str(port)])
         if key in self.states:
-            self.states[key]["height"] = height
-            self.states[key]["cumulative_weight"] = cumulative_weight
             self.states[key]["last_ping"] = time.time()
+            self.states[key]["node_type"] = node_type
+            self.states[key]["height"] = height
 
     def disconnected(self, ip: str, port: int):
         key = ":".join([ip, str(port)])
@@ -65,7 +62,7 @@ class LightNode:
         self.ping_task: asyncio.Task | None = None
         self.worker_task: asyncio.Task | None = None
 
-        self.peer_nonce = random.randint(0, 2 ** 64 - 1)
+        self.nonce = u64(random.randint(0, 2 ** 64 - 1))
 
     def connect(self):
         self.worker_task = asyncio.create_task(self.worker(self.ip, self.port))
@@ -73,18 +70,16 @@ class LightNode:
     async def worker(self, host: str, port: int):
         try:
             self.reader, self.writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=5)
-        except Exception as e:
+        except Exception:
             await self.close()
             return
         try:
             challenge_request = ChallengeRequest(
                 version=Testnet3.version,
-                fork_depth=Testnet3.fork_depth,
+                listener_port=u16(14133),
                 node_type=NodeType.Client,
-                peer_status=Status.Peering,
-                listener_port=u16(14132),
-                peer_nonce=u64(self.peer_nonce),
-                peer_cumulative_weight=u128(),
+                address=Address.loads("aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px"),
+                nonce=self.nonce,
             )
             await self.send_message(challenge_request)
             while True:
@@ -99,7 +94,7 @@ class LightNode:
                             break
                         self.buffer.read(4)
                         frame = self.buffer.read(size)
-                        await self.parse_message(Frame.load(frame, ignore_blocks=True))
+                        await self.parse_message(Frame.load(frame))
                     else:
                         print(f"buffer.count() < 4: {self.buffer.count()}")
                         break
@@ -116,58 +111,59 @@ class LightNode:
                 msg: ChallengeRequest = frame.message
                 if msg.version < Testnet3.version:
                     raise ValueError("peer is outdated")
-                if msg.fork_depth != Testnet3.fork_depth:
-                    raise ValueError("peer has wrong fork depth")
+                nonce = msg.nonce
+                self.state.node_connected(self.ip, self.port, str(msg.address))
                 response = ChallengeResponse(
-                    block_header=Testnet3.genesis_block.header,
+                    genesis_header=Testnet3.genesis_block.header,
+                    signature=Signature.load(bytearray(aleo.sign_nonce("APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH", nonce.dump()))),
                 )
                 await self.send_message(response)
 
             case Message.Type.ChallengeResponse:
                 msg: ChallengeResponse = frame.message
-                if msg.block_header != Testnet3.genesis_block.header:
+                if msg.genesis_header != Testnet3.genesis_block.header:
                     raise ValueError("peer has wrong genesis block")
                 await self.send_ping()
 
                 async def ping_task():
                     while True:
-                        await asyncio.sleep(60)
+                        await asyncio.sleep(10)
                         await self.send_ping()
 
                 self.ping_task = asyncio.create_task(ping_task())
 
             case Message.Type.Ping:
                 msg: Ping = frame.message
-                height = msg.block_header.metadata.height
-                cumulative_weight = msg.block_header.metadata.cumulative_weight
-                self.state.node_ping(self.ip, self.port, msg.node_type, msg.status, height, cumulative_weight)
-                # print(f"Peer {self.ip}:{self.port} is at block {height} (type = {msg.node_type}, status = {msg.status}, cumulative_weight = {cumulative_weight})")
+                locators = msg.block_locators.value
+                if locators is not None:
+                    locators: BlockLocators
+                    height = max(locators.recents.keys())
+                else:
+                    height = None
+                self.state.node_ping(self.ip, self.port, msg.node_type, height)
+                # print(f"Peer {self.ip}:{self.port} is at block {height} (type = {msg.node_type})")
 
-                locators = {
-                    u32(): (Testnet3.genesis_block.block_hash, None)
-                }
                 pong = Pong(
-                    is_fork=bool_(),
-                    block_locators=BlockLocators(block_locators=locators)
+                    is_fork=Option[bool_](None),
                 )
                 await self.send_message(pong)
                 await self.send_message(PeerRequest())
 
-            case Message.Type.Pong:
-                msg: Pong = frame.message
-
-                latest_block_height_of_peer = 0
-                peer_block_locators = OrderedDict(sorted(msg.block_locators.items(), key=lambda k: k[0]))
-                for block_height, (block_hash, _) in peer_block_locators.items():
-                    if block_height > latest_block_height_of_peer:
-                        latest_block_height_of_peer = block_height
-
-                peer_cumulative_weight = peer_block_locators[latest_block_height_of_peer][1].metadata.cumulative_weight
-                self.state.node_pong(self.ip, self.port, latest_block_height_of_peer, peer_cumulative_weight)
+            # case Message.Type.Pong:
+            #     msg: Pong = frame.message
+            #
+            #     latest_block_height_of_peer = 0
+            #     peer_block_locators = OrderedDict(sorted(msg.block_locators.items(), key=lambda k: k[0]))
+            #     for block_height, (block_hash, _) in peer_block_locators.items():
+            #         if block_height > latest_block_height_of_peer:
+            #             latest_block_height_of_peer = block_height
+            #
+            #     peer_cumulative_weight = peer_block_locators[latest_block_height_of_peer][1].metadata.cumulative_weight
+            #     self.state.node_pong(self.ip, self.port, latest_block_height_of_peer, peer_cumulative_weight)
 
             case Message.Type.PeerResponse:
                 msg: PeerResponse = frame.message
-                for peer in msg.peer_ips:
+                for peer in msg.peers:
                     peer: SocketAddr
                     self.state.connect(*peer.ip_port())
 
@@ -177,11 +173,8 @@ class LightNode:
     async def send_ping(self):
         ping = Ping(
             version=Testnet3.version,
-            fork_depth=Testnet3.fork_depth,
             node_type=NodeType.Client,
-            status=Status.Peering,
-            block_hash=Testnet3.genesis_block.block_hash,
-            block_header=Testnet3.genesis_block.header,
+            block_locators=Option[BlockLocators](None),
         )
         await self.send_message(ping)
 

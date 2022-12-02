@@ -194,6 +194,11 @@ class Field(Serialize, Deserialize):
     def __str__(self):
         return str(self.data) + "field"
 
+    def __eq__(self, other):
+        if not isinstance(other, Field):
+            return False
+        return self.data == other.data
+
 
 class Group(Serialize, Deserialize):
     # This is definitely wrong, but we are not using the internals
