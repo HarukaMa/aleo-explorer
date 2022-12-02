@@ -167,7 +167,7 @@ class BlockResponse(Message):
 class ChallengeRequest(Message):
     type = Message.Type.ChallengeRequest
 
-    @type_check
+    # @type_check
     def __init__(self, *, version: u32, listener_port: u16, node_type: NodeType, address: Address, nonce: u64):
         self.version = version
         self.listener_port = listener_port
@@ -186,7 +186,7 @@ class ChallengeRequest(Message):
         ])
 
     @classmethod
-    @type_check
+    # @type_check
     def load(cls, data: bytearray):
         version = u32.load(data)
         listener_port = u16.load(data)
@@ -207,7 +207,7 @@ class ChallengeRequest(Message):
 class ChallengeResponse(Message):
     type = Message.Type.ChallengeResponse
 
-    @type_check
+    # @type_check
     def __init__(self, *, genesis_header: BlockHeader, signature: Signature):
         self.genesis_header = genesis_header
         self.signature = signature
@@ -216,7 +216,7 @@ class ChallengeResponse(Message):
         return self.genesis_header.dump() + self.signature.dump()
 
     @classmethod
-    @type_check
+    # @type_check
     def load(cls, data: bytearray):
         genesis_header = BlockHeader.load(data)
         signature = Signature.load(data)
@@ -354,8 +354,8 @@ class BlockLocators(Serialize, Deserialize):
 class Ping(Message):
     type = Message.Type.Ping
 
-    @type_check
-    @generic_type_check
+    # @type_check
+    # @generic_type_check
     def __init__(self, *, version: u32, node_type: NodeType, block_locators: Option[BlockLocators]):
         self.version = version
         self.node_type = node_type
@@ -365,7 +365,7 @@ class Ping(Message):
         return self.version.dump() + self.node_type.dump() + self.block_locators.dump()
 
     @classmethod
-    @type_check
+    # @type_check
     def load(cls, data: bytearray):
         version = u32.load(data)
         node_type = NodeType.load(data)
@@ -375,7 +375,7 @@ class Ping(Message):
 class Pong(Message):
     type = Message.Type.Pong
 
-    @generic_type_check
+    # @generic_type_check
     def __init__(self, *, is_fork: Option[bool_]):
         self.is_fork = is_fork
 
@@ -392,7 +392,7 @@ class Pong(Message):
         return res.dump()
 
     @classmethod
-    @type_check
+    # @type_check
     def load(cls, data: bytearray):
         fork_flag = u8.load(data)
         match fork_flag:
@@ -481,7 +481,7 @@ class UnconfirmedTransaction(Message):
 
 class Frame(Serialize, Deserialize):
 
-    @type_check
+    # @type_check
     def __init__(self, *, type_: Message.Type, message: Message):
         self.type = type_
         self.message = message
@@ -490,7 +490,7 @@ class Frame(Serialize, Deserialize):
         return self.type.to_bytes(2, "little") + self.message.dump()
 
     @classmethod
-    @type_check
+    # @type_check
     def load(cls, data: bytearray):
         if len(data) < 2:
             raise ValueError("missing message id")

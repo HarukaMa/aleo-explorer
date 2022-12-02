@@ -20,7 +20,7 @@ class RESTNode:
     async def connect(self, host: str, port: int):
         # return
         self.worker_task = asyncio.create_task(self.worker(host, port))
-        self.light_node_state.connect("127.0.0.1", 4133)
+        self.light_node_state.connect("51.81.176.217", 4133)
 
     async def worker(self, host: str, port: int):
         async with aiohttp.ClientSession() as session:
