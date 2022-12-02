@@ -437,14 +437,12 @@ def get_relative_time(timestamp):
 
 
 async def nodes_route(request: Request):
-    nodes = copy.deepcopy(lns.states)
+    nodes = lns.states
     res = {}
     for k, v in nodes.items():
         if "address" in v:
-            res[k] = v
+            res[k] = copy.deepcopy(v)
             res[k]["last_ping"] = get_relative_time(v["last_ping"])
-            address = v["address"]
-            # res[k]["address"] = address[:14] + "..." + address[-6:]
     ctx = {
         "request": request,
         "nodes": res,
