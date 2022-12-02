@@ -125,7 +125,7 @@ class LightNode:
 
                 async def ping_task():
                     while True:
-                        await asyncio.sleep(10)
+                        await asyncio.sleep(5)
                         await self.send_ping()
 
                 self.ping_task = asyncio.create_task(ping_task())
