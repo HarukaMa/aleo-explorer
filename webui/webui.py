@@ -525,6 +525,7 @@ async def leaderboard_route(request: Request):
         data.append({
             "address": line["address"],
             "total_rewards": line["total_reward"],
+            "total_incentive": line["total_incentive"],
         })
     now = int(time.time())
     total_credit = await db.get_leaderboard_total()
@@ -554,7 +555,7 @@ async def address_route(request: Request):
     if len(solutions) == 0:
         raise HTTPException(status_code=404, detail="Address not found")
     solution_count = await db.get_solution_count_by_address(address)
-    total_rewards = await db.get_leaderboard_reward_by_address(address)
+    total_rewards, total_incentive = await db.get_leaderboard_rewards_by_address(address)
     speed, interval = await db.get_address_speed(address)
     interval_text = {
         0: "never",
@@ -581,6 +582,7 @@ async def address_route(request: Request):
         "address_trunc": address[:14] + "..." + address[-6:],
         "solutions": data,
         "total_rewards": total_rewards,
+        "total_incentive": total_incentive,
         "total_solutions": solution_count,
         "speed": speed,
         "timespan": interval_text[interval],

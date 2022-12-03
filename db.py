@@ -150,23 +150,24 @@ class Database:
                             current_total_credit = 0
                         partial_solution: PartialSolution
                         for partial_solution, target, reward in solutions:
-                            partial_solution_db_id = await conn.fetchval(
-                                "INSERT INTO partial_solution (coinbase_solution_id, address, nonce, commitment, target) "
-                                "VALUES ($1, $2, $3, $4, $5) RETURNING id",
+                            await conn.execute(
+                                "INSERT INTO partial_solution (coinbase_solution_id, address, nonce, commitment, target, reward) "
+                                "VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
                                 coinbase_solution_db_id, str(partial_solution.address), partial_solution.nonce,
-                                str(partial_solution.commitment), partial_solution.commitment.to_target()
+                                str(partial_solution.commitment), partial_solution.commitment.to_target(), reward
                             )
-                            if reward > 0 and 1669939200 <= block.header.metadata.timestamp < 1674777600 and current_total_credit < 37_500_000_000_000:
+                            if reward > 0:
                                 await conn.execute(
                                     "INSERT INTO leaderboard (address, total_reward) VALUES ($1, $2) "
                                     "ON CONFLICT (address) DO UPDATE SET total_reward = leaderboard.total_reward + $2",
                                     str(partial_solution.address), reward
                                 )
-                                await conn.execute(
-                                    "INSERT INTO leaderboard_log (height, address, partial_solution_id, reward) VALUES ($1, $2, $3, $4)",
-                                    block.header.metadata.height, str(partial_solution.address), partial_solution_db_id, reward
-                                )
-                        if 1669939200 <= block.header.metadata.timestamp < 1674777600 and current_total_credit < 37_500_000_000_000:
+                                if block.header.metadata.height >= 100 and block.header.metadata.timestamp < 1674777600 and current_total_credit < 37_500_000_000_000:
+                                    await conn.execute(
+                                        "UPDATE leaderboard SET total_incentive = leaderboard.total_incentive + $1 WHERE address = $2",
+                                        reward, str(partial_solution.address)
+                                    )
+                        if block.header.metadata.height >= 100 and block.header.metadata.timestamp < 1674777600 and current_total_credit < 37_500_000_000_000:
                             await conn.execute(
                                 "UPDATE leaderboard_total SET total_credit = leaderboard_total.total_credit + $1",
                                 sum(reward for _, _, reward in solutions)
@@ -641,19 +642,20 @@ class Database:
         async with self.pool.acquire() as conn:
             try:
                 return await conn.fetch(
-                    "SELECT * FROM leaderboard ORDER BY total_reward DESC LIMIT $1 OFFSET $2", end - start, start
+                    "SELECT * FROM leaderboard ORDER BY total_incentive DESC LIMIT $1 OFFSET $2", end - start, start
                 )
             except Exception as e:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
-    async def get_leaderboard_reward_by_address(self, address: str) -> int:
+    async def get_leaderboard_rewards_by_address(self, address: str) -> (int, int):
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
             try:
-                return await conn.fetchval(
-                    "SELECT total_reward FROM leaderboard WHERE address = $1", address
+                row = await conn.fetchrow(
+                    "SELECT total_reward, total_incentive FROM leaderboard WHERE address = $1", address
                 )
+                return row['total_reward'], row['total_incentive']
             except Exception as e:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
@@ -665,11 +667,10 @@ class Database:
                 return await conn.fetch(
                     "SELECT b.height, b.timestamp, ps.nonce, ps.target, "
                     "reward, cs.target_sum as target_sum "
-                    "FROM leaderboard_log ll "
-                    "JOIN partial_solution ps ON ps.id = ll.partial_solution_id "
+                    "FROM partial_solution ps "
                     "JOIN coinbase_solution cs ON cs.id = ps.coinbase_solution_id "
                     "JOIN block b ON b.id = cs.block_id "
-                    "WHERE ll.address = $1 ORDER BY ll.height DESC LIMIT 30 ",
+                    "WHERE ps.address = $1 ORDER BY b.height DESC LIMIT 30 ",
                     address
                 )
             except Exception as e:
@@ -681,7 +682,7 @@ class Database:
         async with self.pool.acquire() as conn:
             try:
                 return await conn.fetchval(
-                    "SELECT COUNT(*) FROM leaderboard_log WHERE address = $1", address
+                    "SELECT COUNT(*) FROM partial_solution WHERE address = $1", address
                 )
             except Exception as e:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
@@ -694,11 +695,10 @@ class Database:
                 return await conn.fetch(
                     "SELECT b.height, b.timestamp, ps.nonce, ps.target, "
                     "reward, cs.target_sum as target_sum "
-                    "FROM leaderboard_log ll "
-                    "JOIN partial_solution ps ON ps.id = ll.partial_solution_id "
+                    "FROM partial_solution ps "
                     "JOIN coinbase_solution cs ON cs.id = ps.coinbase_solution_id "
                     "JOIN block b ON b.id = cs.block_id "
-                    "WHERE ll.address = $1 ORDER BY ll.height DESC LIMIT $2 OFFSET $3",
+                    "WHERE ps.address = $1 ORDER BY b.height DESC LIMIT $2 OFFSET $3",
                     address, end - start, start
                 )
             except Exception as e:
@@ -711,9 +711,10 @@ class Database:
             try:
                 return await conn.fetch(
                     "SELECT ps.address, ps.nonce, ps.commitment, ps.target, reward "
-                    "FROM leaderboard_log ll "
-                    "JOIN partial_solution ps ON ps.id = ll.partial_solution_id "
-                    "WHERE ll.height = $1 "
+                    "FROM partial_solution ps "
+                    "JOIN coinbase_solution cs on ps.coinbase_solution_id = cs.id "
+                    "JOIN block b on cs.block_id = b.id "
+                    "WHERE b.height = $1 "
                     "ORDER BY target DESC "
                     "LIMIT $2 OFFSET $3",
                     height, end - start, start

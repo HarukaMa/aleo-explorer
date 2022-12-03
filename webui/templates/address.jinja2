@@ -17,7 +17,7 @@
     </style>
 {% endblock %}
 
-{% from "macros.jinja2" import data_line %}
+{% from "macros.jinja2" import data_line, data_line_safe %}
 
 {% block content %}
 
@@ -32,7 +32,10 @@
         {% call data_line("Address") %}
             <span class="mono">{{ address }}</span>
         {% endcall %}
-        {% call data_line("Total phase 2 rewards") %}
+        {% call data_line_safe("Total incentive reward (<span data-tooltip title=\"Testnet3 credits. Divide by 5 to get mainnet reward.\">raw</span>)") %}
+            {{ total_incentive | format_aleo_credit }}
+        {% endcall %}
+        {% call data_line("Total coinbase reward") %}
             {{ total_rewards | format_aleo_credit }}
         {% endcall %}
         {% call data_line("Total solutions found") %}

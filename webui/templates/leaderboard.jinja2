@@ -49,7 +49,8 @@
                 <tr>
                     <th>Rank</th>
                     <th>Address</th>
-                    <th>Total rewards</th>
+                    <th>Total incentive reward</th>
+                    <th>Total coinbase reward</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -57,7 +58,9 @@
                     <tr>
                         <td>{{ loop.index + (page - 1) * 50 }}</td>
                         <td class="mono"><a href="/address?a={{ line.address }}">{{ line.address }}</a></td>
-                        <td>{{ line.total_rewards | format_aleo_credit }}</td></tr>
+                        <td>{{ line.total_incentive | format_aleo_credit }}</td>
+                        <td>{{ line.total_rewards | format_aleo_credit }}</td>
+                    </tr>
                 {% endfor %}
                 </tbody>
             </table>

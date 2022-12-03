@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
--- Dumped from database version 14.4 (Debian 14.4-1.pgdg120+1)
+-- Dumped from database version 15.1
 -- Dumped by pg_dump version 15.0
 
 SET statement_timeout = 0;
@@ -62,10 +62,12 @@ CREATE TYPE explorer.transition_data_type AS ENUM (
 
 CREATE FUNCTION explorer.get_block_target_sum(block_height bigint) RETURNS numeric
     LANGUAGE sql STABLE
-    AS $$SELECT SUM(target) FROM explorer.partial_solution ps
+    AS $$
+SELECT SUM(target) FROM explorer.partial_solution ps
 JOIN explorer.coinbase_solution cs ON cs.id = ps.coinbase_solution_id
 JOIN explorer.block b ON b.id = cs.block_id
-WHERE height = block_height$$;
+WHERE height = block_height
+$$;
 
 
 SET default_tablespace = '';
@@ -219,19 +221,8 @@ ALTER SEQUENCE explorer.fee_id_seq OWNED BY explorer.fee.id;
 
 CREATE TABLE explorer.leaderboard (
     address text NOT NULL,
-    total_reward numeric(20,0) DEFAULT 0 NOT NULL
-);
-
-
---
--- Name: leaderboard_log; Type: TABLE; Schema: explorer; Owner: -
---
-
-CREATE TABLE explorer.leaderboard_log (
-    height integer NOT NULL,
-    address text NOT NULL,
-    partial_solution_id integer NOT NULL,
-    reward integer NOT NULL
+    total_reward numeric(20,0) DEFAULT 0 NOT NULL,
+    total_incentive numeric(20,0) DEFAULT 0 NOT NULL
 );
 
 
@@ -254,7 +245,8 @@ CREATE TABLE explorer.partial_solution (
     address text NOT NULL,
     nonce numeric(20,0) NOT NULL,
     commitment text NOT NULL,
-    target numeric(20,0) NOT NULL
+    target numeric(20,0) NOT NULL,
+    reward integer NOT NULL
 );
 
 
@@ -618,14 +610,6 @@ ALTER TABLE ONLY explorer.fee
 
 
 --
--- Name: leaderboard_log leaderboard_log_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.leaderboard_log
-    ADD CONSTRAINT leaderboard_log_pk UNIQUE (partial_solution_id);
-
-
---
 -- Name: leaderboard leaderboard_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -748,31 +732,10 @@ CREATE INDEX leaderboard_address_index ON explorer.leaderboard USING btree (addr
 
 
 --
--- Name: leaderboard_log_address_index; Type: INDEX; Schema: explorer; Owner: -
+-- Name: leaderboard_total_incentive_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-CREATE INDEX leaderboard_log_address_index ON explorer.leaderboard_log USING btree (address text_pattern_ops);
-
-
---
--- Name: leaderboard_log_height_address_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX leaderboard_log_height_address_index ON explorer.leaderboard_log USING btree (height, address);
-
-
---
--- Name: leaderboard_log_height_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX leaderboard_log_height_index ON explorer.leaderboard_log USING btree (height);
-
-
---
--- Name: leaderboard_log_partial_solution_id_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX leaderboard_log_partial_solution_id_index ON explorer.leaderboard_log USING btree (partial_solution_id);
+CREATE INDEX leaderboard_total_incentive_index ON explorer.leaderboard USING btree (total_incentive);
 
 
 --
@@ -929,14 +892,6 @@ ALTER TABLE ONLY explorer.coinbase_solution
 
 ALTER TABLE ONLY explorer.fee
     ADD CONSTRAINT fee_transaction_id_fk FOREIGN KEY (transaction_id) REFERENCES explorer.transaction(id);
-
-
---
--- Name: leaderboard_log leaderboard_log_partial_solution_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.leaderboard_log
-    ADD CONSTRAINT leaderboard_log_partial_solution_id_fk FOREIGN KEY (partial_solution_id) REFERENCES explorer.partial_solution(id);
 
 
 --
