@@ -859,6 +859,10 @@ async def not_found(request: Request, exc: HTTPException):
 async def internal_error(request: Request, exc: HTTPException):
     return templates.TemplateResponse('500.jinja2', {'request': request, "exc": exc}, status_code=500)
 
+async def cloudflare_error_page(request: Request):
+    placeholder = request.query_params.get("placeholder")
+    return templates.TemplateResponse('cf.jinja2', {'request': request, "placeholder": placeholder})
+
 
 routes = [
     Route("/", index_route),
@@ -878,6 +882,7 @@ routes = [
     Route("/faq", faq_route),
     Route("/privacy", privacy_route),
     Route("/robots.txt", robots_route),
+    Route("/cf", cloudflare_error_page),
     Mount("/static", StaticFiles(directory="webui/static"), name="static"),
 ]
 
