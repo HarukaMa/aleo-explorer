@@ -844,6 +844,15 @@ async def privacy_route(request: Request):
     return templates.TemplateResponse('privacy.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'})
 
 
+async def calc_route(request: Request):
+    proof_target = (await db.get_latest_block()).header.metadata.proof_target
+    ctx = {
+        "request": request,
+        "proof_target": proof_target,
+    }
+    return templates.TemplateResponse('calc.jinja2', ctx, headers={'Cache-Control': 'public, max-age=60'})
+
+
 async def robots_route(_: Request):
     return FileResponse("webui/robots.txt", headers={'Cache-Control': 'public, max-age=3600'})
 
@@ -858,6 +867,7 @@ async def not_found(request: Request, exc: HTTPException):
 
 async def internal_error(request: Request, exc: HTTPException):
     return templates.TemplateResponse('500.jinja2', {'request': request, "exc": exc}, status_code=500)
+
 
 async def cloudflare_error_page(request: Request):
     placeholder = request.query_params.get("placeholder")
@@ -874,7 +884,7 @@ routes = [
     Route("/orphan", orphan_route),
     Route("/blocks", blocks_route),
     # Route("/miner", miner_stats),
-    # Route("/calc", calc),
+    Route("/calc", calc_route),
     Route("/leaderboard", leaderboard_route),
     Route("/address", address_route),
     Route("/address_solution", address_solution_route),

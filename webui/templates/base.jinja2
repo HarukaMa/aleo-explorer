@@ -140,7 +140,7 @@
                 <li><a href="/">Home</a></li>
                 <li><a href="/blocks">Blocks</a></li>
                 <li><a href="/leaderboard">Leaderboard</a></li>
-{#                <li><a href="/nodes">Nodes</a></li>#}
+                <li><a href="/calc">Calc</a></li>
                 <li><a href="/faq">FAQ</a></li>
             </ul>
         </div>
@@ -216,6 +216,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/foundation/6.7.4/js/foundation.min.js"
         integrity="sha512-+CnEgueYRDzx2s3IIAOpZd8HeOfrSbK3loeHw0jXJODAe3eFROHpBxEsun2kU+sZCaoAA0eFJrhfVV3RGG50GA=="
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+{% block content_script %}{% endblock %}
 <script>
     $(document).foundation()
 
