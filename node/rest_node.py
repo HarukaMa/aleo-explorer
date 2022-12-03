@@ -32,9 +32,9 @@ class RESTNode:
                             print("failed to get latest height")
                             continue
                         latest_height = int(await resp.text())
-                        print("remote latest height:", latest_height)
                         local_height = await self.explorer_request(explorer.Request.GetLatestHeight())
                         while latest_height > local_height:
+                            print("remote latest height:", latest_height)
                             start = local_height + 1
                             end = min(start + 50, latest_height + 1)
                             print(f"fetching blocks {start} to {end - 1}")
