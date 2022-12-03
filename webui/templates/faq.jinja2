@@ -33,7 +33,7 @@
         </p>
         <p>
             When solving a coinbase puzzle, the prover is actually grinding KZG10 commitments (you can read more about KZG10
-            <a href="https://taoa.io/posts/Understanding-KZG10-Polynomial-Commitments">here</a>). In the complete scheme
+            <a href="https://taoa.io/posts/Understanding-KZG10-Polynomial-Commitments" target="_blank">here</a>). In the complete scheme
             of KZG10 PCS, the prover would generate a commitment, then a proof of the evaluation. However, as the hashed
             value of the commitment is used to check if a solution is valid, the prover will skip the proof generation
             if the commitment doesn't satisfy the network requirement, and will continue to try the next nonce value.
