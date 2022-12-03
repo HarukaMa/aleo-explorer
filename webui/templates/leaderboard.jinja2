@@ -33,7 +33,7 @@
         Testnet Aleo credits rewarded: {{ total_credit | format_aleo_credit }} / {{ target_credit | format_aleo_credit }}
         <div class="primary progress" role="progressbar">
             <div class="progress-meter" style="width: {{ ratio }}%">
-            {% if ratio > 1 %}
+            {% if ratio > 5 %}
                 <p class="progress-meter-text">{{ "%.2f" % ratio }}%</p>
             {% endif %}
             </div>
