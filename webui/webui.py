@@ -527,7 +527,7 @@ async def leaderboard_route(request: Request):
             "total_rewards": line["total_reward"],
         })
     now = int(time.time())
-    total_credit = (await db.get_leaderboard_total() / 2)
+    total_credit = await db.get_leaderboard_total()
     target_credit = 37_500_000_000_000
     ratio = total_credit / target_credit * 100
     maintenance, info = await out_of_sync_check()

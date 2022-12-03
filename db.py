@@ -156,7 +156,7 @@ class Database:
                                 coinbase_solution_db_id, str(partial_solution.address), partial_solution.nonce,
                                 str(partial_solution.commitment), partial_solution.commitment.to_target()
                             )
-                            if reward > 0 and 1669939200 <= block.header.metadata.timestamp < 1674777600 and current_total_credit < 75_000_000_000_000:
+                            if reward > 0 and 1669939200 <= block.header.metadata.timestamp < 1674777600 and current_total_credit < 37_500_000_000_000:
                                 await conn.execute(
                                     "INSERT INTO leaderboard (address, total_reward) VALUES ($1, $2) "
                                     "ON CONFLICT (address) DO UPDATE SET total_reward = leaderboard.total_reward + $2",
@@ -166,10 +166,10 @@ class Database:
                                     "INSERT INTO leaderboard_log (height, address, partial_solution_id, reward) VALUES ($1, $2, $3, $4)",
                                     block.header.metadata.height, str(partial_solution.address), partial_solution_db_id, reward
                                 )
-                        if 1669939200 <= block.header.metadata.timestamp < 1674777600 and current_total_credit < 75_000_000_000_000:
+                        if 1669939200 <= block.header.metadata.timestamp < 1674777600 and current_total_credit < 37_500_000_000_000:
                             await conn.execute(
                                 "UPDATE leaderboard_total SET total_credit = leaderboard_total.total_credit + $1",
-                                coinbase_reward
+                                sum(reward for _, _, reward in solutions)
                             )
 
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseBlockAdded, block.header.metadata.height))
