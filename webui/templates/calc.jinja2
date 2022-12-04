@@ -17,7 +17,7 @@
         <p>
             The network difficulty is constantly changing, so the calculation below cannot be used as earning prediction.
             <br>
-            "Average credit per day" assumes 2.5 credit per solution.
+            "Average credit per day" assumes 2 credit per solution on average.
         </p>
 
         <form action="#">
@@ -76,7 +76,7 @@
         const proof_target = {{ proof_target }}
         const result = document.getElementById("result")
         const average = sec_to_human(proof_target / ps)
-        const daily = 2.5 * (86400 / (proof_target / ps))
+        const daily = 2 * (86400 / (proof_target / ps))
 
         const p_inv = 1 - (1 / proof_target)
         let cp = 1
