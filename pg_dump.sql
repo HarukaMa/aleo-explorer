@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
--- Dumped from database version 15.1
+-- Dumped from database version 14.4 (Debian 14.4-1.pgdg120+1)
 -- Dumped by pg_dump version 15.0
 
 SET statement_timeout = 0;
@@ -750,6 +750,13 @@ CREATE INDEX leaderboard_total_reward_index ON explorer.leaderboard USING btree 
 --
 
 CREATE INDEX partial_solution_address_index ON explorer.partial_solution USING btree (address text_pattern_ops);
+
+
+--
+-- Name: partial_solution_coinbase_solution_id_address_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX partial_solution_coinbase_solution_id_address_index ON explorer.partial_solution USING btree (coinbase_solution_id, address);
 
 
 --
