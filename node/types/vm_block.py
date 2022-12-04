@@ -2540,6 +2540,26 @@ class Signature(Serialize, Deserialize):
         return str(Bech32m(self.dump(), "sign"))
 
 
+def retarget(prev_target, prev_block_timestamp, block_timestamp, half_life, inverse, anchor_time):
+    drift = max(block_timestamp - prev_block_timestamp, 1) - anchor_time
+    if drift == 0:
+        return prev_target
+    if inverse:
+        drift = -drift
+    exponent = int((1 << 16) * drift / half_life)
+    integral = exponent >> 16
+    fractional = exponent - (integral << 16)
+    fractional_multiplier = (1 << 16) + ((195_766_423_245_049 * fractional + 971_821_376 * pow(fractional, 2) + 5_127 * pow(fractional, 3) + pow(2, 47)) >> 48)
+    candidate_target = prev_target * fractional_multiplier
+    shifts = integral - 16
+    if shifts < 0:
+        candidate_target = max(candidate_target >> -shifts, 1)
+    else:
+        candidate_target = max(candidate_target << shifts, 1)
+    candidate_target = min(candidate_target, 2 ** 64 - 1)
+    return candidate_target
+
+
 class Block(Serialize, Deserialize):
     version = u16()
 
@@ -2597,7 +2617,7 @@ class Block(Serialize, Deserialize):
         remaining_blocks = y10_anchor_height - self.header.metadata.height
         if remaining_blocks <= 0:
             return 0
-        return int((remaining_blocks * anchor_reward) * 2 ** (-1 * ((self.header.metadata.timestamp - last_timestamp) - 25) / 25))
+        return retarget(remaining_blocks * anchor_reward, last_timestamp, self.header.metadata.timestamp, 25, True, 25)
 
     def get_epoch_number(self) -> int:
         return self.header.metadata.height // 256
