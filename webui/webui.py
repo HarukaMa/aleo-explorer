@@ -60,6 +60,8 @@ def format_aleo_credit(gates):
     return "{:,}".format(Decimal(gates) / 1_000_000)
 
 def format_number(number):
+    if isinstance(number, float):
+        return f"{number:,.2f}"
     return "{:,}".format(number)
 
 templates.env.filters["get_env"] = get_env
