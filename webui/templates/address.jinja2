@@ -37,7 +37,7 @@
             <span class="mono">{{ address }}</span>
         {% endcall %}
         {% call data_line_safe("Total incentive reward (<span data-tooltip title=\"Testnet3 credits earned during incentive period (since block 130888). Divide by 5 to get converted mainnet reward amount.\">?</span>)") %}
-            {{ total_incentive | format_aleo_credit }} (Mainnet reward: {{ total_incentive // 5 | format_aleo_credit }})
+            {{ total_incentive | format_aleo_credit }} (Mainnet reward: {{ (total_incentive // 5) | format_aleo_credit }})
         {% endcall %}
         {% call data_line_safe("Total coinbase reward (<span data-tooltip title=\"Testnet3 credits earned since the start of the network.\">?</span>)") %}
             {{ total_rewards | format_aleo_credit }}
