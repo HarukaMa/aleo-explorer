@@ -59,9 +59,13 @@ def format_aleo_credit(gates):
         return "-"
     return "{:,}".format(Decimal(gates) / 1_000_000)
 
+def format_number(number):
+    return "{:,}".format(number)
+
 templates.env.filters["get_env"] = get_env
 templates.env.filters["format_time"] = format_time
 templates.env.filters["format_aleo_credit"] = format_aleo_credit
+templates.env.filters["format_number"] = format_number
 
 credits_functions = {
     "mint": [("address", "u64"), ("credits",), ()],

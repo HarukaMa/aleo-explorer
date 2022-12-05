@@ -71,13 +71,13 @@
                 <div class="cell large-auto ticker-cell">
                     <div class="grid-y ticker-cell-content">
                         <div class="cell ticker-cell-title">Proof target</div>
-                        <div class="cell auto ticker-cell-data">{{ latest_block.header.metadata.proof_target }}</div>
+                        <div class="cell auto ticker-cell-data">{{ latest_block.header.metadata.proof_target | format_number }}</div>
                     </div>
                 </div>
                 <div class="cell large-auto ticker-cell">
                     <div class="grid-y ticker-cell-content">
                         <div class="cell ticker-cell-title">Coinbase target</div>
-                        <div class="cell auto ticker-cell-data">{{ latest_block.header.metadata.coinbase_target }}</div>
+                        <div class="cell auto ticker-cell-data">{{ latest_block.header.metadata.coinbase_target | format_number }}</div>
                     </div>
                 </div>
             </div>
@@ -85,7 +85,7 @@
                 <div class="cell large-auto ticker-cell">
                     <div class="grid-y ticker-cell-content">
                         <div class="cell ticker-cell-title">Estimated network speed (15m)</div>
-                        <div class="cell auto ticker-cell-data">{{ "%.2f" % network_speed }}&nbsp;<span data-tooltip title='commitments per second, also known as "p/s" or "s/s"'>c/s</span></div>
+                        <div class="cell auto ticker-cell-data">{{ network_speed | format_number }}&nbsp;<span data-tooltip title='commitments per second, also known as "p/s" or "s/s"'>c/s</span></div>
                     </div>
                 </div>
             </div>
