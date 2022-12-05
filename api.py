@@ -40,10 +40,7 @@ async def commitment_route(request: Request):
     commitment = request.query_params.get("commitment")
     if not commitment:
         return HTTPException(400, "Missing commitment")
-    reward = await db.get_puzzle_commitment_reward(commitment)
-    if reward is None:
-        return JSONResponse(None)
-    return JSONResponse(reward)
+    return JSONResponse(await db.get_puzzle_commitment(commitment))
 
 routes = [
     Route("/commitment", commitment_route),

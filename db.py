@@ -808,11 +808,23 @@ class Database:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
-    async def get_puzzle_commitment_reward(self, commitment: str) -> int | None:
+    async def get_puzzle_commitment(self, commitment: str) -> dict | None:
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
             try:
-                return await conn.fetchval("SELECT reward FROM partial_solution WHERE commitment = $1", commitment)
+                row = await conn.fetchrow(
+                    "SELECT reward, height FROM partial_solution "
+                    "JOIN coinbase_solution cs on cs.id = partial_solution.coinbase_solution_id "
+                    "JOIN block b on b.id = cs.block_id "
+                    "WHERE commitment = $1",
+                    commitment
+                )
+                if row is None:
+                    return None
+                return {
+                    'reward': row['reward'],
+                    'height': row['height']
+                }
             except Exception as e:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
