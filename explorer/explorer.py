@@ -105,8 +105,8 @@ class Explorer:
         if block is Testnet3.genesis_block:
             await self.db.save_block(block)
             return
-        if block.previous_hash != self.latest_block_hash:
-            print(f"ignoring block {block} because previous block hash does not match")
+        # if block.previous_hash != self.latest_block_hash:
+        #     print(f"ignoring block {block} because previous block hash does not match")
         else:
             print(f"adding block {block}")
             await self.db.save_block(block)
