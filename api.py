@@ -9,7 +9,6 @@ import uvicorn
 from asgi_logger import AccessLoggerMiddleware
 from starlette.applications import Starlette
 from starlette.exceptions import HTTPException
-from starlette.middleware import Middleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
@@ -67,7 +66,7 @@ app = Starlette(
     debug=True if os.environ.get("DEBUG") else False,
     routes=routes,
     on_startup=[startup],
-    middleware=[Middleware(AccessLoggerMiddleware)]
+    # middleware=[Middleware(AccessLoggerMiddleware)]
 )
 db: Database
 
