@@ -808,6 +808,15 @@ class Database:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
+    async def get_puzzle_commitment_reward(self, commitment: str) -> int | None:
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                return await conn.fetchval("SELECT reward FROM partial_solution WHERE commitment = $1", commitment)
+            except Exception as e:
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                raise
+
 
     # migration method
     async def update_target_sum(self):
