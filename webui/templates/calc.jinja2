@@ -4,6 +4,10 @@
 
 {% block head %}
     <style>
+    .sup {
+        font-size: 1rem;
+        vertical-align: super;
+    }
     </style>
 
 {% endblock %}
@@ -17,7 +21,7 @@
         <p>
             The network difficulty is constantly changing, so the calculation below cannot be used as earning prediction.
             <br>
-            "Average credit per day" assumes 2 credit per solution on average.
+            "Average credit per day" assumes 2 credit per solution on average<span class="sup">*</span>.
         </p>
 
         <form action="#">
@@ -49,6 +53,11 @@
         <p>
             Time to find a solution (dd:hh:mm:ss):
             <br> <span id="result"></span><br>
+        </p>
+        <br>
+        <p class="note">
+            * Mathematical average from all valid solutions during testnet3. While it should be achieveable in the long
+            run, most solutions should have rewards around 0.5 - 1 credit.
         </p>
     </div>
 
