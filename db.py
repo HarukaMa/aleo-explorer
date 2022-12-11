@@ -642,7 +642,10 @@ class Database:
         async with self.pool.acquire() as conn:
             try:
                 return await conn.fetch(
-                    "SELECT * FROM leaderboard ORDER BY total_incentive DESC LIMIT $1 OFFSET $2", end - start, start
+                    "SELECT * FROM leaderboard "
+                    "ORDER BY total_incentive DESC, total_reward DESC "
+                    "LIMIT $1 OFFSET $2",
+                    end - start, start
                 )
             except Exception as e:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
