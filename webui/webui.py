@@ -569,6 +569,7 @@ async def address_route(request: Request):
         1800: "30 minutes",
         3600: "1 hour",
         14400: "4 hours",
+        43200: "12 hours",
         86400: "1 day",
     }
     data = []
