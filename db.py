@@ -665,12 +665,13 @@ class Database:
         async with self.pool.acquire() as conn:
             try:
                 return await conn.fetch(
-                    "SELECT b.height, b.timestamp, ps.nonce, ps.target, "
-                    "reward, cs.target_sum as target_sum "
+                    "SELECT b.height, b.timestamp, ps.nonce, ps.target, reward, cs.target_sum "
                     "FROM partial_solution ps "
                     "JOIN coinbase_solution cs ON cs.id = ps.coinbase_solution_id "
                     "JOIN block b ON b.id = cs.block_id "
-                    "WHERE ps.address = $1 ORDER BY b.height DESC LIMIT 30 ",
+                    "WHERE ps.address = $1 "
+                    "ORDER BY cs.id DESC "
+                    "LIMIT 30",
                     address
                 )
             except Exception as e:
@@ -693,16 +694,13 @@ class Database:
         async with self.pool.acquire() as conn:
             try:
                 return await conn.fetch(
-                    "WITH pp AS ("
-                    "  WITH p AS ("
-                    "    SELECT ps.nonce, ps.target, reward, cs.target_sum, cs.block_id "
-                    "    FROM partial_solution ps "
-                    "    JOIN coinbase_solution cs ON cs.id = ps.coinbase_solution_id "
-                    "    WHERE ps.address = $1)"
-                    "  SELECT b.height, b.timestamp, p.nonce, p.target, p.reward, p.target_sum "
-                    "  FROM block b "
-                    "  JOIN p ON p.block_id = b.id)"
-                    "SELECT * FROM pp ORDER BY height DESC LIMIT $2 OFFSET $3",
+                    "SELECT b.height, b.timestamp, ps.nonce, ps.target, reward, cs.target_sum "
+                    "FROM partial_solution ps "
+                    "JOIN coinbase_solution cs ON cs.id = ps.coinbase_solution_id "
+                    "JOIN block b ON b.id = cs.block_id "
+                    "WHERE ps.address = $1 "
+                    "ORDER BY cs.id DESC "
+                    "LIMIT $2 OFFSET $3",
                     address, end - start, start
                 )
             except Exception as e:
