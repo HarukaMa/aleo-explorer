@@ -23,6 +23,7 @@ class Explorer:
                            message_callback=self.message)
 
         # states
+        self.dev_mode = False
         self.latest_height = 0
         self.latest_block_hash = Testnet3.genesis_block.block_hash
         self.db_lock = asyncio.Lock()
@@ -106,8 +107,8 @@ class Explorer:
         if block is Testnet3.genesis_block:
             await self.db.save_block(block)
             return
-        # if block.previous_hash != self.latest_block_hash:
-        #     print(f"ignoring block {block} because previous block hash does not match")
+        if not self.dev_mode and block.previous_hash != self.latest_block_hash:
+            print(f"ignoring block {block} because previous block hash does not match")
         else:
             print(f"adding block {block}")
             await self.db.save_block(block)
@@ -122,6 +123,7 @@ class Explorer:
             with open("/tmp/explorer_dev_mode", "rb") as f:
                 from hashlib import md5
                 if md5(f.read()).hexdigest() == "1c28714e40263e4c4afa1aa7f7272a3f":
+                    self.dev_mode = True
                     i = 10
                     while i > 0:
                         print(f"!!! Clearing database in {i} seconds !!!          ", end="\r")
