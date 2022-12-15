@@ -65,6 +65,7 @@ class Explorer:
     async def main_loop(self):
         try:
             await self.db.connect()
+            await self.check_dev_mode()
             await self.check_genesis()
             self.latest_height = await self.db.get_latest_height()
             self.latest_block_hash = await self.db.get_block_hash_by_height(self.latest_height)
@@ -113,7 +114,21 @@ class Explorer:
             self.latest_height = block.header.metadata.height
             self.latest_block_hash = block.block_hash
 
-
-
     async def get_latest_block(self):
         return await self.db.get_latest_block()
+
+    async def check_dev_mode(self):
+        try:
+            with open("/tmp/explorer_dev_mode", "rb") as f:
+                from hashlib import md5
+                if md5(f.read()).hexdigest() == "1c28714e40263e4c4afa1aa7f7272a3f":
+                    i = 10
+                    while i > 0:
+                        print(f"!!! Clearing database in {i} seconds !!!          ", end="\r")
+                        await asyncio.sleep(1)
+                        i -= 1
+                    print("!!! Clearing database now !!!          ")
+                    await self.db.clear_database()
+        except:
+            pass
+

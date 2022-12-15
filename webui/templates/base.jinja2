@@ -307,6 +307,7 @@
         dispatch_advanced_event()
     }
 
+    {% if "MATOMO" | get_env %}
     _paq.push([function () {
         if (this.isUserOptedOut()) {
             $("#matomo-optout").text("Opt in")
@@ -326,6 +327,7 @@
             }
         }])
     }
+    {% endif %}
 
 </script>
 </body>

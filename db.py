@@ -854,3 +854,13 @@ class Database:
             except Exception as e:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
+
+    # debug method
+    async def clear_database(self):
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                await conn.execute("TRUNCATE TABLE block CASCADE")
+            except Exception as e:
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                raise
