@@ -47,7 +47,7 @@ class Message(Serialize, Deserialize, metaclass=ABCMeta):
 class BeaconPropose(Message):
     type = Message.Type.BeaconPropose
 
-    @type_check
+    # @type_check
     def __init__(self, version: u8, round_: u64, block_height: u32, block_hash: BlockHash, block: Block):
         self.version = version
         self.round = round_
@@ -60,7 +60,7 @@ class BeaconPropose(Message):
                self.block.dump()
 
     @classmethod
-    @type_check
+    # @type_check
     def load(cls, data: bytearray):
         version = u8.load(data)
         round_ = u64.load(data)
@@ -73,7 +73,7 @@ class BeaconPropose(Message):
 class BeaconTimeout(Message):
     type = Message.Type.BeaconTimeout
 
-    @type_check
+    # @type_check
     def __init__(self, version: u8, round_: u64, block_height: u32, block_hash: BlockHash, signature: Signature):
         self.version = version
         self.round = round_
@@ -86,7 +86,7 @@ class BeaconTimeout(Message):
                self.signature.dump()
 
     @classmethod
-    @type_check
+    # @type_check
     def load(cls, data: bytearray):
         version = u8.load(data)
         round_ = u64.load(data)
@@ -99,7 +99,7 @@ class BeaconTimeout(Message):
 class BeaconVote(Message):
     type = Message.Type.BeaconVote
 
-    @type_check
+    # @type_check
     def __init__(self, version: u8, round_: u64, block_height: u32, block_hash: BlockHash,
                  timestamp: u64, signature: Signature):
         self.version = version
@@ -114,7 +114,7 @@ class BeaconVote(Message):
                self.timestamp.dump() + self.signature.dump()
 
     @classmethod
-    @type_check
+    # @type_check
     def load(cls, data: bytearray):
         version = u8.load(data)
         round_ = u64.load(data)
@@ -128,7 +128,7 @@ class BeaconVote(Message):
 class BlockRequest(Message):
     type = Message.Type.BlockRequest
 
-    @type_check
+    # @type_check
     def __init__(self, *, start_height: u32, end_height: u32):
         self.start_height = start_height
         self.end_height = end_height
@@ -137,7 +137,7 @@ class BlockRequest(Message):
         return self.start_height.dump() + self.end_height.dump()
 
     @classmethod
-    @type_check
+    # @type_check
     def load(cls, data: bytearray):
         start_height = u32.load(data)
         end_height = u32.load(data)
@@ -147,7 +147,7 @@ class BlockRequest(Message):
 class BlockResponse(Message):
     type = Message.Type.BlockResponse
 
-    @type_check
+    # @type_check
     @generic_type_check
     def __init__(self, *, request: BlockRequest, blocks: Vec[Block, u8]):
         self.request = request
@@ -157,7 +157,7 @@ class BlockResponse(Message):
         return self.request.dump() + self.blocks.dump()
 
     @classmethod
-    @type_check
+    # @type_check
     def load(cls, data: bytearray):
         request = BlockRequest.load(data)
         blocks = Vec[Block, u8].load(data)
@@ -227,12 +227,12 @@ class YourPortIsClosed(int):
     def __new__(cls, **kwargs):
         return int.__new__(cls, 14)
 
-    @type_check
+    # @type_check
     def __init__(self, *, port: u16):
         self.port = port
 
     @classmethod
-    @type_check
+    # @type_check
     def load(cls, data: bytearray):
         port = u16.load(data)
         return cls(port=port)
@@ -262,7 +262,7 @@ class DisconnectReason(IntEnumu32):
     YourPortIsClosed = YourPortIsClosed(port=u16()),
 
     @classmethod
-    @type_check
+    # @type_check
     def load(cls, data: bytearray):
         if len(data) == 0:
             return cls(cls.NoReasonGiven)
@@ -275,7 +275,7 @@ class DisconnectReason(IntEnumu32):
 class Disconnect(Message):
     type = Message.Type.Disconnect
 
-    @type_check
+    # @type_check
     def __init__(self, *, reason: DisconnectReason):
         self.reason = reason
 
@@ -283,7 +283,7 @@ class Disconnect(Message):
         return self.reason.dump()
 
     @classmethod
-    @type_check
+    # @type_check
     def load(cls, data: bytearray):
         return cls(reason=DisconnectReason.load(data))
 
@@ -305,7 +305,7 @@ class PeerRequest(Message):
 class PeerResponse(Message):
     type = Message.Type.PeerResponse
 
-    @type_check
+    # @type_check
     def __init__(self, *, peers: Vec[SocketAddr, u64]):
         self.peers = peers
 
@@ -313,14 +313,14 @@ class PeerResponse(Message):
         raise NotImplementedError
 
     @classmethod
-    @type_check
+    # @type_check
     def load(cls, data: bytearray):
         peers = Vec[SocketAddr, u64].load(data)
         return cls(peers=peers)
 
 class BlockLocators(Serialize, Deserialize):
 
-    @type_check
+    # @type_check
     def __init__(self, *, recents, checkpoints):
         self.recents = recents
         self.checkpoints = checkpoints
@@ -335,7 +335,7 @@ class BlockLocators(Serialize, Deserialize):
         return res
 
     @classmethod
-    @type_check
+    # @type_check
     def load(cls, data: bytearray):
         num_locators = u64.load(data)
         recents = {}
@@ -425,7 +425,7 @@ class PuzzleRequest(Message):
 class PuzzleResponse(Message):
     type = Message.Type.PuzzleResponse
 
-    @type_check
+    # @type_check
     def __init__(self, *, epoch_challenge: EpochChallenge, block_header: BlockHeader):
         self.epoch_challenge = epoch_challenge
         self.block_header = block_header
@@ -434,7 +434,7 @@ class PuzzleResponse(Message):
         return self.epoch_challenge.dump() + self.block_header.dump()
 
     @classmethod
-    @type_check
+    # @type_check
     def load(cls, data: bytearray):
         epoch_challenge = EpochChallenge.load(data)
         block_header = BlockHeader.load(data)
@@ -444,7 +444,7 @@ class PuzzleResponse(Message):
 class UnconfirmedSolution(Message):
     type = Message.Type.UnconfirmedSolution
 
-    @type_check
+    # @type_check
     def __init__(self, *, puzzle_commitment: PuzzleCommitment, solution: ProverSolution):
         self.puzzle_commitment = puzzle_commitment
         self.solution = solution
@@ -453,7 +453,7 @@ class UnconfirmedSolution(Message):
         return self.puzzle_commitment.dump() + self.solution.dump()
 
     @classmethod
-    @type_check
+    # @type_check
     def load(cls, data: bytearray):
         puzzle_commitment = PuzzleCommitment.load(data)
         solution = ProverSolution.load(data)
@@ -463,7 +463,7 @@ class UnconfirmedSolution(Message):
 class UnconfirmedTransaction(Message):
     type = Message.Type.UnconfirmedTransaction
 
-    @type_check
+    # @type_check
     def __init__(self, *, transaction_id: TransactionID, transaction: Transaction):
         self.transaction_id = transaction_id
         self.transaction = transaction
@@ -472,7 +472,7 @@ class UnconfirmedTransaction(Message):
         return self.transaction_id.dump() + self.transaction.dump()
 
     @classmethod
-    @type_check
+    # @type_check
     def load(cls, data: bytearray):
         transaction_id = TransactionID.load(data)
         transaction = Transaction.load(data)

@@ -59,7 +59,7 @@ class Tuple(Generic, Serialize, Deserialize, Sequence):
             raise TypeError("value must be serializable")
         return b"".join(x.dump() for x in self.value)
 
-    @type_check
+    # @type_check
     def load(self, data: bytearray):
         if not all(issubclass(x, Deserialize) for x in self.types):
             raise TypeError("value must be deserializable")
@@ -109,7 +109,7 @@ class Vec(Generic, Serialize, Deserialize, Sequence):
             res += self.type.dump(item)
         return res
 
-    @type_check
+    # @type_check
     def load(self, data: bytearray):
         if not issubclass(self.type, Deserialize):
             raise TypeError(f"{self.type.__name__} must be Deserialize")
@@ -153,7 +153,7 @@ class VarInt(Generic, Serialize, Deserialize):
         else:
             raise ValueError("unreachable")
 
-    @type_check
+    # @type_check
     def load(self, data: bytearray):
         if len(data) == 0:
             raise ValueError("data is too short")
@@ -213,7 +213,7 @@ class Option(Generic, Serialize, Deserialize):
         else:
             return str(self.value)
 
-    @type_check
+    # @type_check
     def load(self, data: bytearray):
         is_some = bool_.load(data)
         if is_some:

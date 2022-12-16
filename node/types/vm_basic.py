@@ -30,7 +30,7 @@ class AleoID(Sized, Serialize, Deserialize, metaclass=ABCMeta):
         return self._data
 
     @classmethod
-    @type_check
+    # @type_check
     def load(cls, data: bytearray):
         if len(data) < cls.size:
             raise ValueError("incorrect length")
@@ -40,7 +40,7 @@ class AleoID(Sized, Serialize, Deserialize, metaclass=ABCMeta):
         return self
 
     @classmethod
-    @type_check
+    # @type_check
     def loads(cls, data: str):
         hrp, data, _ = bech32.bech32_decode(data)
         if hrp != cls._prefix:
@@ -94,7 +94,7 @@ class AleoObject(Sized, Serialize, Deserialize, metaclass=ABCMeta):
         return self._data
 
     @classmethod
-    @type_check
+    # @type_check
     def load(cls, data: bytearray):
         size = cls.size
         # noinspection PyTypeChecker
@@ -105,7 +105,7 @@ class AleoObject(Sized, Serialize, Deserialize, metaclass=ABCMeta):
         return self
 
     @classmethod
-    @type_check
+    # @type_check
     def loads(cls, data: str):
         hrp, data, _ = bech32.bech32_decode(data)
         if hrp != cls._prefix:
@@ -169,7 +169,7 @@ class Field(Serialize, Deserialize):
     # Fr, Fp256
     # Just store as a large integer now
     # Hopefully this will not be used later...
-    @type_check
+    # @type_check
     def __init__(self, data):
         if not isinstance(data, int):
             raise TypeError("data must be int")
@@ -179,7 +179,7 @@ class Field(Serialize, Deserialize):
         return self.data.to_bytes(32, "little")
 
     @classmethod
-    @type_check
+    # @type_check
     def load(cls, data: bytearray):
         if len(data) < 32:
             raise ValueError("incorrect length")
@@ -202,7 +202,7 @@ class Field(Serialize, Deserialize):
 
 class Group(Serialize, Deserialize):
     # This is definitely wrong, but we are not using the internals
-    @type_check
+    # @type_check
     def __init__(self, data):
         if not isinstance(data, int):
             raise TypeError("data must be int")
@@ -212,7 +212,7 @@ class Group(Serialize, Deserialize):
         return self.data.to_bytes(32, "little")
 
     @classmethod
-    @type_check
+    # @type_check
     def load(cls, data: bytearray):
         if len(data) < 32:
             raise ValueError("incorrect length")
@@ -230,7 +230,7 @@ class Group(Serialize, Deserialize):
 
 class Scalar(Serialize, Deserialize):
     # Could be wrong as well
-    @type_check
+    # @type_check
     def __init__(self, data):
         if not isinstance(data, int):
             raise TypeError("data must be int")
@@ -240,7 +240,7 @@ class Scalar(Serialize, Deserialize):
         return self.data.to_bytes(32, "little")
 
     @classmethod
-    @type_check
+    # @type_check
     def load(cls, data: bytearray):
         if len(data) < 32:
             raise ValueError("incorrect length")
@@ -258,7 +258,7 @@ class Scalar(Serialize, Deserialize):
 
 class Fq(Serialize, Deserialize):
     # Fp384, G1
-    @type_check
+    # @type_check
     def __init__(self, value: int):
         self.value = value
 
@@ -266,7 +266,7 @@ class Fq(Serialize, Deserialize):
         return self.value.to_bytes(48, "little")
 
     @classmethod
-    @type_check
+    # @type_check
     def load(cls, data: bytearray):
         if len(data) < 48:
             raise ValueError("incorrect length")
@@ -279,7 +279,7 @@ class Fq(Serialize, Deserialize):
 
 class G1Affine(Serialize, Deserialize):
 
-    @type_check
+    # @type_check
     def __init__(self, *, x: Fq, flags: bool):
         self.x = x
         self.flags = flags
@@ -290,7 +290,7 @@ class G1Affine(Serialize, Deserialize):
         return bytes(res)
 
     @classmethod
-    @type_check
+    # @type_check
     def load(cls, data: bytearray):
         data_ = data[:48]
         del data[:48]
@@ -299,7 +299,7 @@ class G1Affine(Serialize, Deserialize):
         return cls(x=Fq.load(data_), flags=flags)
 
     @classmethod
-    @type_check
+    # @type_check
     def load_json(cls, data: dict):
         x = Fq(value=int(data["x"]))
         # This is very wrong
@@ -308,7 +308,7 @@ class G1Affine(Serialize, Deserialize):
 
 class Fq2(Serialize, Deserialize):
 
-    @type_check
+    # @type_check
     def __init__(self, c0: Fq, c1: Fq, flags: bool):
         self.c0 = c0
         self.c1 = c1
@@ -320,7 +320,7 @@ class Fq2(Serialize, Deserialize):
         return res
 
     @classmethod
-    @type_check
+    # @type_check
     def load(cls, data: bytearray):
         data_ = data[:96]
         del data[:96]
@@ -332,7 +332,7 @@ class Fq2(Serialize, Deserialize):
 
 class G2Affine(Serialize, Deserialize):
 
-    @type_check
+    # @type_check
     def __init__(self, *, x: Fq2):
         self.x = x
 
@@ -340,14 +340,14 @@ class G2Affine(Serialize, Deserialize):
         return self.x.dump()
 
     @classmethod
-    @type_check
+    # @type_check
     def load(cls, data: bytearray):
         x = Fq2.load(data)
         return cls(x=x)
 
 class G2Prepared(Serialize, Deserialize):
 
-    @type_check
+    # @type_check
     @generic_type_check
     def __init__(self, *, ell_coeffs: Vec[Tuple[Fq2, Fq2, Fq2], u64], infinity: bool_):
         self.ell_coeffs = ell_coeffs
@@ -357,7 +357,7 @@ class G2Prepared(Serialize, Deserialize):
         return self.ell_coeffs.dump() + self.infinity.dump()
 
     @classmethod
-    @type_check
+    # @type_check
     def load(cls, data: bytearray):
         ell_coeffs = Vec.load(data)
         infinity = bool_.load(data)

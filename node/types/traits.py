@@ -42,7 +42,7 @@ class IntEnumu8(Serialize, Deserialize, IntEnum, metaclass=ABCEnumMeta):
         return struct.pack("<B", self.value)
 
     @classmethod
-    @type_check
+    # @type_check
     def load(cls, data: bytearray):
         if len(data) < 1:
             raise ValueError("incorrect length")
@@ -57,7 +57,7 @@ class IntEnumu16(Serialize, Deserialize, IntEnum, metaclass=ABCEnumMeta):
         return struct.pack("<H", self.value)
 
     @classmethod
-    @type_check
+    # @type_check
     def load(cls, data: bytearray):
         if len(data) < 2:
             raise ValueError("incorrect length")
@@ -72,7 +72,7 @@ class IntEnumu32(Serialize, Deserialize, IntEnum, metaclass=ABCEnumMeta):
         return struct.pack("<I", self.value)
 
     @classmethod
-    @type_check
+    # @type_check
     def load(cls, data: bytearray):
         if len(data) < 4:
             raise ValueError("incorrect length")
