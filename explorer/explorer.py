@@ -1,6 +1,7 @@
 import asyncio
 import os
 import traceback
+from sys import stdout
 
 import api
 import webui
@@ -71,9 +72,8 @@ class Explorer:
             self.latest_height = await self.db.get_latest_height()
             self.latest_block_hash = await self.db.get_block_hash_by_height(self.latest_height)
             print(f"latest height: {self.latest_height}")
-            self.node = Node(explorer_message=self.message, explorer_request=self.node_request,
-                             light_node_state=self.light_node_state)
-            await self.node.connect(os.environ.get("NODE_HOST", "127.0.0.1"), int(os.environ.get("NODE_PORT", "4132")))
+            self.node = Node(explorer_message=self.message, explorer_request=self.node_request)
+            await self.node.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4133")))
             asyncio.create_task(webui.run(self.light_node_state))
             asyncio.create_task(api.run())
             while True:
@@ -126,10 +126,12 @@ class Explorer:
                     self.dev_mode = True
                     i = 10
                     while i > 0:
-                        print(f"!!! Clearing database in {i} seconds !!!          ", end="\r")
+                        print(f"\x1b[G\x1b[2K!!! Clearing database in {i} seconds !!!", end="")
+                        stdout.flush()
                         await asyncio.sleep(1)
                         i -= 1
-                    print("!!! Clearing database now !!!          ")
+                    print("\x1b[G\x1b[2K!!! Clearing database now !!!")
+                    stdout.flush()
                     await self.db.clear_database()
         except:
             pass

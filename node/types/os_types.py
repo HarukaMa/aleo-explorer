@@ -160,7 +160,7 @@ class BlockResponse(Message):
     @type_check
     def load(cls, data: bytearray):
         request = BlockRequest.load(data)
-        blocks = Block.load(data)
+        blocks = Vec[Block, u8].load(data)
         return cls(request=request, blocks=blocks)
 
 
