@@ -1,4 +1,5 @@
 User-agent: MJ12bot
 User-agent: AhrefsBot
 User-agent: AhrefsSiteAudit
+User-agent: SemrushBot
 Disallow: /
