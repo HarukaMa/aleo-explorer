@@ -37,6 +37,8 @@ class Server(uvicorn.Server):
             thread.join()
 
 async def commitment_route(request: Request):
+    if time.time() >= 1674777600:
+        return JSONResponse(None)
     commitment = request.query_params.get("commitment")
     if not commitment:
         return HTTPException(400, "Missing commitment")
