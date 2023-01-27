@@ -162,12 +162,12 @@ class Database:
                                     "ON CONFLICT (address) DO UPDATE SET total_reward = leaderboard.total_reward + $2",
                                     str(partial_solution.address), reward
                                 )
-                                if block.header.metadata.height >= 130888 and block.header.metadata.timestamp < 1674777600 and current_total_credit < 37_500_000_000_000:
+                                if block.header.metadata.height >= 130888 and block.header.metadata.timestamp < 1675209600 and current_total_credit < 37_500_000_000_000:
                                     await conn.execute(
                                         "UPDATE leaderboard SET total_incentive = leaderboard.total_incentive + $1 WHERE address = $2",
                                         reward, str(partial_solution.address)
                                     )
-                        if block.header.metadata.height >= 130888 and block.header.metadata.timestamp < 1674777600 and current_total_credit < 37_500_000_000_000:
+                        if block.header.metadata.height >= 130888 and block.header.metadata.timestamp < 1675209600 and current_total_credit < 37_500_000_000_000:
                             await conn.execute(
                                 "UPDATE leaderboard_total SET total_credit = leaderboard_total.total_credit + $1",
                                 sum(reward for _, _, reward in solutions)
