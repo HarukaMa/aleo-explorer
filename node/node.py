@@ -239,7 +239,7 @@ class Node:
                 return
 
             start_block_height = latest_height + 1
-            end_block_height = min(self.peer_block_height, start_block_height + 1)
+            end_block_height = min(self.peer_block_height, start_block_height)
             print(f"Synchronizing from block {start_block_height} to {end_block_height}")
             self.is_syncing = True
 
