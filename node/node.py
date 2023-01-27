@@ -71,7 +71,7 @@ class Node:
                     frame = await self.reader.readexactly(size)
                 except:
                     raise Exception("connection closed")
-                await self.parse_message(Frame.load(frame))
+                await self.parse_message(Frame.load(bytearray(frame)))
         except Exception:
             traceback.print_exc()
             await self.explorer_message(explorer.Message(explorer.Message.Type.NodeDisconnected, None))
