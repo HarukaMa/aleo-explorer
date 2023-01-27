@@ -8,7 +8,6 @@ from typing import Callable
 import aleo
 
 import explorer
-from util.buffer import Buffer
 # from .light_node import LightNodeState
 from .testnet3.param import Testnet3
 from .types import *  # too many types
@@ -17,7 +16,6 @@ from .types import *  # too many types
 class Node:
     def __init__(self, explorer_message: Callable, explorer_request: Callable):
         self.reader, self.writer = None, None
-        self.buffer = Buffer()
         self.worker_task: asyncio.Task | None = None
         self.explorer_message = explorer_message
         self.explorer_request = explorer_request
@@ -64,21 +62,16 @@ class Node:
             )
             await self.send_message(challenge_request)
             while True:
-                data = await self.reader.read(4096)
-                if not data:
+                try:
+                    size = await self.reader.readexactly(4)
+                except:
                     raise Exception("connection closed")
-                self.buffer.write(data)
-                while self.buffer.count():
-                    if self.buffer.count() >= 4:
-                        size = int.from_bytes(self.buffer.peek(4), byteorder="little")
-                        if self.buffer.count() < size + 4:
-                            break
-                        self.buffer.read(4)
-                        frame = self.buffer.read(size)
-                        await self.parse_message(Frame.load(frame))
-                    else:
-                        print(f"buffer.count() < 4: {self.buffer.count()}")
-                        break
+                size = int.from_bytes(size, byteorder="little")
+                try:
+                    frame = await self.reader.readexactly(size)
+                except:
+                    raise Exception("connection closed")
+                await self.parse_message(Frame.load(frame))
         except Exception:
             traceback.print_exc()
             await self.explorer_message(explorer.Message(explorer.Message.Type.NodeDisconnected, None))
