@@ -245,7 +245,7 @@ class Node:
 
             self.block_requests.extend(range(start_block_height, end_block_height + 1))
             self.block_requests_deadline = time.time() + 30
-            msg = BlockRequest(start_height=u32(start_block_height), end_height=u32(start_block_height + 1))
+            msg = BlockRequest(start_height=u32(start_block_height), end_height=u32(end_block_height + 1))
             await self.send_message(msg)
 
     async def send_ping(self):
