@@ -72,6 +72,9 @@ templates.env.filters["format_number"] = format_number
 credits_functions = {
     "mint": [("address", "u64"), ("credits",), ()],
     "transfer": [("credits", "address", "u64"), ("credits", "credits"), ()],
+    "join": [("credits", "credits"), ("credits",), ()],
+    "split": [("credits", "u64"), ("credits", "credits"), ()],
+    "fee": [("credits", "u64"), ("credits",), ()],
 }
 
 async def out_of_sync_check():
