@@ -123,7 +123,7 @@ class Node:
                 if self.handshake_state != 0:
                     raise Exception("handshake is already done")
                 msg: ChallengeResponse = frame.message
-                if msg.genesis_header != Testnet3.genesis_block.header:
+                if msg.genesis_header != Testnet3.genesis_block.header and not await self.explorer_request(explorer.Request.GetDevMode()):
                     raise ValueError("peer has wrong genesis block")
                 self.handshake_state = 1
                 await self.send_ping()
@@ -183,7 +183,7 @@ class Node:
                         remote_hash = checkpoints[u32()]
 
                     local_hash = await self.explorer_request(explorer.Request.GetBlockHashByHeight(common_ancestor))
-                    if local_hash != remote_hash:
+                    if local_hash != remote_hash and not await self.explorer_request(explorer.Request.GetDevMode()):
                         is_fork = bool_(True)
                         raise ValueError("peer is on a fork")
 

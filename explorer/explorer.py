@@ -54,6 +54,8 @@ class Explorer:
                     return await self.db.get_block_header_by_height(request.height)
                 case Request.RevertToBlock:
                     await self.revert_to_block(request.height)
+                case Request.GetDevMode:
+                    return self.dev_mode
                 case _:
                     print("unhandled explorer request")
         finally:

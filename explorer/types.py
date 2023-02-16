@@ -50,4 +50,7 @@ class Request:
         def __init__(self, height: int):
             self.height = height
 
+    class GetDevMode:
+        pass
+
     # class
