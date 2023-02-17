@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from copy import deepcopy
 
 from .basic import *
 
@@ -106,21 +107,31 @@ class Vec(Generic, Serialize, Deserialize, Sequence):
         if hasattr(self, "size_type"):
             res += self.size_type.dump(self.size)
         for item in self._list:
-            res += self.type.dump(item)
+            res += item.dump()
         return res
 
     # @type_check
     def load(self, data: bytearray):
-        if not issubclass(self.type, Deserialize):
-            raise TypeError(f"{self.type.__name__} must be Deserialize")
+        if isinstance(self.type, type):
+            if not issubclass(self.type, Deserialize):
+                raise TypeError(f"{self.type.__name__} must be Deserialize")
+        else:
+            if not issubclass(type(self.type), Deserialize):
+                raise TypeError(f"{type(self.type).__name__} must be Deserialize")
         if hasattr(self, "size_type"):
             if len(data) < self.size_type.size:
                 raise ValueError("data is too short")
             self.size = self.size_type.load(data)
         self._list = []
         for i in range(self.size):
-            # noinspection PyArgumentList
-            self._list.append(self.type.load(data))
+            if isinstance(self.type, type):
+                self._list.append(self.type.load(data))
+            elif isinstance(self.type, Generic):
+                # Python version 3.10 does not support starred expressions in subscriptions
+                self._list.append(deepcopy(self.type).load(data))
+            else:
+                # What else can be here?
+                raise TypeError(f"cannot handle type {self.type} in Generic.load")
         return self
 
     def __iter__(self):
@@ -174,7 +185,6 @@ class VarInt(Generic, Serialize, Deserialize):
             del data[:9]
         else:
             self.value = u8.load(data)
-            del data[:1]
         self.value = self.type(self.value)
         return self
 

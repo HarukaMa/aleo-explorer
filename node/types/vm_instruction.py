@@ -1,4 +1,7 @@
+from types import NoneType
+
 from .vm_basic import *
+
 
 class StringType(Serialize, Deserialize):
 
@@ -191,7 +194,7 @@ class LocatorRegister(Register):
     @classmethod
     # @type_check
     def load(cls, data: bytearray):
-        locator = VarInt[u64].load()
+        locator = VarInt[u64].load(data)
         return cls(locator=locator)
 
 
@@ -320,10 +323,11 @@ class Literals(Generic, Serialize, Deserialize):
 
     # @type_check
     @generic_type_check
-    def __call__(self, *, operands: Vec[Operand, 3], destination: Register):
+    def __call__(self, *, operands: Vec[Operand | NoneType, 3], destination: Register):
         # the max operand count is 3, fill in the rest with None
         self.operands = operands
         self.destination = destination
+        return self
 
     def dump(self) -> bytes:
         res = b""
@@ -338,7 +342,7 @@ class Literals(Generic, Serialize, Deserialize):
         for i in range(self.num_operands):
             operands[i] = Operand.load(data)
         destination = Register.load(data)
-        return self(operands=Vec[Operand, 3](operands), destination=destination)
+        return self(operands=Vec[Operand | NoneType, 3](operands), destination=destination)
 
 
 class AssertInstruction(Generic, Serialize, Deserialize):
@@ -636,7 +640,7 @@ class Cast(Serialize, Deserialize):
 
 class Instruction(Serialize, Deserialize): # enum
 
-    class Type(IntEnumu8):
+    class Type(IntEnumu16):
         Abs = 0
         AbsWrapped = 1
         Add = 2

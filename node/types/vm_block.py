@@ -355,9 +355,6 @@ class FinalizeCommand(Serialize, Deserialize):
     @classmethod
     # @type_check
     def load(cls, data: bytearray):
-        variant = u8.load(data)
-        if variant != 0:
-            raise ValueError("Invalid variant")
         operands = Vec[Operand, u8].load(data)
         return cls(operands=operands)
 
@@ -677,19 +674,19 @@ class FunctionInput(Serialize, Deserialize):
 class FunctionOutput(Serialize, Deserialize):
 
     # @type_check
-    def __init__(self, *, register: Register, value_type: ValueType):
-        self.register = register
+    def __init__(self, *, operand: Operand, value_type: ValueType):
+        self.operand = operand
         self.value_type = value_type
 
     def dump(self) -> bytes:
-        return self.register.dump() + self.value_type.dump()
+        return self.operand.dump() + self.value_type.dump()
 
     @classmethod
     # @type_check
     def load(cls, data: bytearray):
-        register = Register.load(data)
+        operand = Operand.load(data)
         value_type = ValueType.load(data)
-        return cls(register=register, value_type=value_type)
+        return cls(operand=operand, value_type=value_type)
 
 
 class Function(Serialize, Deserialize):

@@ -359,6 +359,6 @@ class G2Prepared(Serialize, Deserialize):
     @classmethod
     # @type_check
     def load(cls, data: bytearray):
-        ell_coeffs = Vec.load(data)
+        ell_coeffs = Vec[Tuple[Fq2, Fq2, Fq2], u64].load(data)
         infinity = bool_.load(data)
         return cls(ell_coeffs=ell_coeffs, infinity=infinity)
