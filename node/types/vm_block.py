@@ -980,14 +980,6 @@ class KZGProof(Serialize, Deserialize):
         random_v = Option[Field].load(data)
         return cls(w=w, random_v=random_v)
 
-    @classmethod
-    # @type_check
-    def load_json(cls, data: dict):
-        w = G1Affine.load_json(data)
-        # This is wrong
-        random_v = Option[Field](None)
-        return cls(w=w, random_v=random_v)
-
 class BatchProof(Serialize, Deserialize):
 
     # @type_check
@@ -2054,29 +2046,6 @@ class Transition(Serialize, Deserialize):
         return cls(id_=id_, program_id=program_id, function_name=function_name, inputs=inputs, outputs=outputs,
                    finalize=finalize, proof=proof, tpk=tpk, tcm=tcm, fee=fee)
 
-    @classmethod
-    # @type_check
-    def load_json(cls, data: dict):
-        id_ = TransitionID.loads(data["id"])
-        program_id = ProgramID.loads(data["program"])
-        function_name = Identifier(value=data["function"])
-        inputs = []
-        for input_ in data["inputs"]:
-            inputs.append(TransitionInput.load_json(input_))
-        inputs = Vec[TransitionInput, u16](inputs)
-        outputs = []
-        for output in data["outputs"]:
-            outputs.append(TransitionOutput.load_json(output))
-        outputs = Vec[TransitionOutput, u16](outputs)
-        # This is wrong
-        finalize = Option[Vec[Value, u16]](None)
-        proof = Proof.load(bech32_to_bytes(data["proof"]))
-        tpk = Group.loads(data["tpk"])
-        tcm = Field.loads(data["tcm"])
-        fee = i64(data["fee"])
-        return cls(id_=id_, program_id=program_id, function_name=function_name, inputs=inputs, outputs=outputs,
-                   finalize=finalize, proof=proof, tpk=tpk, tcm=tcm, fee=fee)
-
 
 class Fee(Serialize, Deserialize):
     version = u16()
@@ -2222,15 +2191,6 @@ class ExecuteTransaction(Transaction):
         id_ = TransactionID.load(data)
         execution = Execution.load(data)
         additional_fee = Option[Fee].load(data)
-        return cls(id_=id_, execution=execution, additional_fee=additional_fee)
-
-    @classmethod
-    # @type_check
-    def load_json(cls, data: dict):
-        id_ = TransactionID.loads(data["id"])
-        execution = Execution.load_json(data["execution"])
-        # This is wrong
-        additional_fee = Option[Fee](None)
         return cls(id_=id_, execution=execution, additional_fee=additional_fee)
 
 

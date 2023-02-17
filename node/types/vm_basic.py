@@ -298,14 +298,6 @@ class G1Affine(Serialize, Deserialize):
         data_[-1] &= 0x7f
         return cls(x=Fq.load(data_), flags=flags)
 
-    @classmethod
-    # @type_check
-    def load_json(cls, data: dict):
-        x = Fq(value=int(data["x"]))
-        # This is very wrong
-        flags = False
-        return cls(x=x, flags=flags)
-
 class Fq2(Serialize, Deserialize):
 
     # @type_check
