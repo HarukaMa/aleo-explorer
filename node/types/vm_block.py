@@ -1044,8 +1044,8 @@ class Deployment(Serialize, Deserialize):
     def __init__(self, *, edition: u16, program: Program,
                  verifying_keys: Vec[Tuple[Identifier, VerifyingKey, Certificate], u16]):
         self.edition = edition
-        self.verifying_keys = verifying_keys
         self.program = program
+        self.verifying_keys = verifying_keys
 
     def dump(self) -> bytes:
         res = b""

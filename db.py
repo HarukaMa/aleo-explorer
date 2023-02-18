@@ -50,7 +50,32 @@ class Database:
                     for tx_index, transaction in enumerate(block.transactions):
                         match transaction.type:
                             case Transaction.Type.Deploy:
-                                raise NotImplementedError
+                                transaction: DeployTransaction
+                                transaction_id = transaction.id
+                                transaction_db_id = await conn.fetchval(
+                                    "INSERT INTO transaction (block_id, transaction_id, type) VALUES ($1, $2, $3) RETURNING id",
+                                    block_db_id, str(transaction_id), transaction.type.name
+                                )
+                                deploy_transaction_db_id = await conn.fetchval(
+                                    "INSERT INTO transaction_deploy (transaction_id, edition, index) "
+                                    "VALUES ($1, $2, $3) RETURNING id",
+                                    transaction_db_id, transaction.deployment.edition, tx_index
+                                )
+
+                                program: Program = transaction.deployment.program
+                                imports = [str(x.program_id) for x in program.imports]
+                                mappings = list(program.mappings.keys())
+                                interfaces = list(program.interfaces.keys())
+                                records = list(program.records.keys())
+                                closures = list(program.closures.keys())
+                                functions = list(program.functions.keys())
+                                await conn.execute(
+                                    "INSERT INTO program "
+                                    "(transaction_deploy_id, program_id, import, mapping, interface, record, closure, function, raw_data) "
+                                    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+                                    deploy_transaction_db_id, str(program.id), imports, mappings, interfaces, records,
+                                    closures, functions, program.dump()
+                                )
                             case Transaction.Type.Execute:
                                 transaction: ExecuteTransaction
                                 transaction_id = transaction.id

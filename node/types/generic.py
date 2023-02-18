@@ -215,7 +215,7 @@ class Option(Generic, Serialize, Deserialize):
         if self.value is None:
             return b"\x00"
         else:
-            return b"\x01" + self.type.dump(self.value)
+            return b"\x01" + self.value.dump()
 
     def dumps(self) -> str | None:
         if self.value is None:

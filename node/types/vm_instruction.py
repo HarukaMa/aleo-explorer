@@ -358,6 +358,7 @@ class AssertInstruction(Generic, Serialize, Deserialize):
     @generic_type_check
     def __call__(self, *, operands: Vec[Operand, 2]):
         self.operands = operands
+        return self
 
     def dump(self) -> bytes:
         return self.operands.dump()
