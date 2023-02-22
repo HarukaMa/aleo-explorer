@@ -13,6 +13,9 @@ from .testnet3.param import Testnet3
 from .types import *  # too many types
 
 
+PING_SLEEP_IN_SECS = 9
+
+
 class Node:
     def __init__(self, explorer_message: Callable, explorer_request: Callable):
         self.reader, self.writer = None, None
@@ -130,7 +133,7 @@ class Node:
 
                 async def ping_task():
                     while True:
-                        await asyncio.sleep(1)
+                        await asyncio.sleep(PING_SLEEP_IN_SECS)
                         await self.send_ping()
 
                 self.ping_task = asyncio.create_task(ping_task())
