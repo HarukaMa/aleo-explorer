@@ -7,19 +7,27 @@
 A blockchain explorer for Aleo.
 
 It contains a node that connects to another peer to fetch blockchain data. This node is NOT validating blocks. Only
-connect
-to peers that you trust.
+connect to peers that you trust.
 
-The node requires TCP port 14132 to be open, so it can accept the incoming connection from the other node.
+## Database update warning
 
-There is a database scheme file for Postgres. Unfortunately, you'll need to read the SQL file and manually create the
-tables for other databases. Note that the code uses `INSERT ... RETURNING`, so your choice of database software will
-need
-to support this.
+The database schema has been updated recently to support the latest blockchain feature (deployment). There was also a
+slight change in the `Transaction` table. It should be possible to manually fix the database schema, but you can always
+just resync the database from scratch.
 
-The code smells rusty as I'm recreating all types of the Rust code.
+No migration script is provided this time.
 
-*Maybe I should separate the node part as it's complicated enough*
+## Prerequisites
+
+* Postgres 12+
+* Rust latest stable
+* [aleo-explorer-rust](https://github.com/HarukaMa/aleo-explorer-rust)
+
+## Usage
+
+1. Import the database schema from `pg_dump.sql`.
+2. Configure through `.env` file. See `.env.example` for reference.
+3. Run `main.py`.
 
 ## A better frontend?
 
@@ -28,10 +36,6 @@ Yeah, I'm not really a frontend developer. I know it's ugly, but I'm focusing on
 You are welcome to contribute a better frontend, as long as you keep the current one as a function baseline reference.
 You can also create an entirely new frontend outside this repository; all you really need is the blockchain data in the
 database.
-
-## Special note to early adopters
-
-You might need to update some database indexes to make them usable for the prefix search. Check commit 0000030.
 
 ## License
 
