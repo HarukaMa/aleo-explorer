@@ -95,7 +95,7 @@ class Database:
                                     transition_db_id = await conn.fetchval(
                                         "INSERT INTO transition (transition_id, transaction_execute_id, fee_id, program_id, "
                                         "function_name, proof, tpk, tcm, fee, index) "
-                                        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id",
+                                        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id",
                                         str(transition.id), execute_transaction_db_id, None, str(transition.program_id),
                                         str(transition.function_name), str(transition.proof), str(transition.tpk),
                                         str(transition.tcm), transition.fee, ts_index
