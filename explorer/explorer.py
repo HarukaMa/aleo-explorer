@@ -7,7 +7,6 @@ import api
 import webui
 from db import Database
 from node import Node
-from node.light_node import LightNodeState
 from node.testnet3 import Testnet3
 from node.types import Block
 from .types import Request, Message
@@ -28,7 +27,7 @@ class Explorer:
         self.latest_height = 0
         self.latest_block_hash = Testnet3.genesis_block.block_hash
         self.db_lock = asyncio.Lock()
-        self.light_node_state = LightNodeState()
+        #self.light_node_state = LightNodeState()
 
     def start(self):
         self.task = asyncio.create_task(self.main_loop())
@@ -76,7 +75,7 @@ class Explorer:
             print(f"latest height: {self.latest_height}")
             self.node = Node(explorer_message=self.message, explorer_request=self.node_request)
             await self.node.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4133")))
-            asyncio.create_task(webui.run(self.light_node_state))
+            asyncio.create_task(webui.run(None))
             asyncio.create_task(api.run())
             while True:
                 msg = await self.message_queue.get()
