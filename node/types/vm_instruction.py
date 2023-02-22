@@ -385,6 +385,9 @@ class Locator(Serialize, Deserialize):
         resource = Identifier.load(data)
         return cls(id_=id_, resource=resource)
 
+    def __str__(self):
+        return f"{self.id}/{self.resource}"
+
 
 
 class CallOperator(Serialize, Deserialize): # enum

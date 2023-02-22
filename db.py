@@ -2,6 +2,7 @@ import time
 
 import asyncpg
 
+from disasm import valuetype_to_mode_type_str
 from explorer.types import Message as ExplorerMessage
 from node.types import *
 
@@ -64,18 +65,39 @@ class Database:
 
                                 program: Program = transaction.deployment.program
                                 imports = [str(x.program_id) for x in program.imports]
-                                mappings = list(program.mappings.keys())
-                                interfaces = list(program.interfaces.keys())
-                                records = list(program.records.keys())
-                                closures = list(program.closures.keys())
-                                functions = list(program.functions.keys())
-                                await conn.execute(
+                                mappings = list(map(str, program.mappings.keys()))
+                                interfaces = list(map(str, program.interfaces.keys()))
+                                records = list(map(str, program.records.keys()))
+                                closures = list(map(str, program.closures.keys()))
+                                functions = list(map(str, program.functions.keys()))
+                                program_db_id = await conn.fetchval(
                                     "INSERT INTO program "
                                     "(transaction_deploy_id, program_id, import, mapping, interface, record, closure, function, raw_data) "
-                                    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+                                    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id",
                                     deploy_transaction_db_id, str(program.id), imports, mappings, interfaces, records,
                                     closures, functions, program.dump()
                                 )
+                                for function in program.functions.values():
+                                    inputs = []
+                                    input_modes = []
+                                    i: FunctionInput
+                                    for i in function.inputs:
+                                        mode, _type = valuetype_to_mode_type_str(i.value_type)
+                                        inputs.append(_type)
+                                        input_modes.append(mode)
+                                    outputs = []
+                                    output_modes = []
+                                    o: FunctionOutput
+                                    for o in function.outputs:
+                                        mode, _type = valuetype_to_mode_type_str(o.value_type)
+                                        outputs.append(_type)
+                                        output_modes.append(mode)
+                                    await conn.execute(
+                                        "INSERT INTO program_function (program_id, name, input, input_mode, output, output_mode) "
+                                        "VALUES ($1, $2, $3, $4, $5, $6)",
+                                        program_db_id, str(function.name), inputs, input_modes, outputs, output_modes
+                                    )
+
                             case Transaction.Type.Execute:
                                 transaction: ExecuteTransaction
                                 transaction_id = transaction.id
@@ -231,6 +253,11 @@ class Database:
         txs = []
         for transaction in transactions:
             match transaction["type"]:
+                case Transaction.Type.Deploy.name:
+                    deploy_transaction = await conn.fetchrow(
+                        "SELECT * FROM transaction_deploy WHERE transaction_id = $1", transaction["id"]
+                    )
+
                 case Transaction.Type.Execute.name:
                     execute_transaction = await conn.fetchrow(
                         "SELECT * FROM transaction_execute WHERE transaction_id = $1", transaction["id"]
