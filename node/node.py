@@ -194,7 +194,8 @@ class Node:
                     is_fork=Option[bool_](is_fork),
                 )
                 await self.send_message(pong)
-                asyncio.create_task(self._sync())
+                if not self.is_syncing:
+                    await self._sync()
 
             case Message.Type.Pong:
                 if self.handshake_state != 1:
