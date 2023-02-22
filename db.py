@@ -53,13 +53,13 @@ class Database:
                                 transaction: DeployTransaction
                                 transaction_id = transaction.id
                                 transaction_db_id = await conn.fetchval(
-                                    "INSERT INTO transaction (block_id, transaction_id, type) VALUES ($1, $2, $3) RETURNING id",
-                                    block_db_id, str(transaction_id), transaction.type.name
+                                    "INSERT INTO transaction (block_id, transaction_id, type, index) VALUES ($1, $2, $3, $4) RETURNING id",
+                                    block_db_id, str(transaction_id), transaction.type.name, tx_index
                                 )
                                 deploy_transaction_db_id = await conn.fetchval(
-                                    "INSERT INTO transaction_deploy (transaction_id, edition, index) "
-                                    "VALUES ($1, $2, $3) RETURNING id",
-                                    transaction_db_id, transaction.deployment.edition, tx_index
+                                    "INSERT INTO transaction_deploy (transaction_id, edition) "
+                                    "VALUES ($1, $2) RETURNING id",
+                                    transaction_db_id, transaction.deployment.edition
                                 )
 
                                 program: Program = transaction.deployment.program
@@ -80,25 +80,25 @@ class Database:
                                 transaction: ExecuteTransaction
                                 transaction_id = transaction.id
                                 transaction_db_id = await conn.fetchval(
-                                    "INSERT INTO transaction (block_id, transaction_id, type) VALUES ($1, $2, $3) RETURNING id",
-                                    block_db_id, str(transaction_id), transaction.type.name
+                                    "INSERT INTO transaction (block_id, transaction_id, type, index) VALUES ($1, $2, $3, $4) RETURNING id",
+                                    block_db_id, str(transaction_id), transaction.type.name, tx_index
                                 )
                                 execute_transaction_db_id = await conn.fetchval(
-                                    "INSERT INTO transaction_execute (transaction_id, global_state_root, inclusion_proof, index) "
-                                    "VALUES ($1, $2, $3, $4) RETURNING id",
+                                    "INSERT INTO transaction_execute (transaction_id, global_state_root, inclusion_proof) "
+                                    "VALUES ($1, $2, $3) RETURNING id",
                                     transaction_db_id, str(transaction.execution.global_state_root),
-                                    transaction.execution.inclusion_proof.dumps(), tx_index
+                                    transaction.execution.inclusion_proof.dumps()
                                 )
 
                                 transition: Transition
-                                for transition in transaction.execution.transitions:
+                                for ts_index, transition in enumerate(transaction.execution.transitions):
                                     transition_db_id = await conn.fetchval(
                                         "INSERT INTO transition (transition_id, transaction_execute_id, fee_id, program_id, "
-                                        "function_name, proof, tpk, tcm, fee) "
+                                        "function_name, proof, tpk, tcm, fee, index) "
                                         "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id",
                                         str(transition.id), execute_transaction_db_id, None, str(transition.program_id),
                                         str(transition.function_name), str(transition.proof), str(transition.tpk),
-                                        str(transition.tcm), transition.fee
+                                        str(transition.tcm), transition.fee, ts_index
                                     )
 
                                     transition_input: TransitionInput
