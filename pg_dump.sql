@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
--- Dumped from database version 14.4 (Debian 14.4-1.pgdg120+1)
+-- Dumped from database version 15.1
 -- Dumped by pg_dump version 15.0
 
 SET statement_timeout = 0;
@@ -158,8 +158,7 @@ CREATE TABLE explorer.transaction_execute (
     id integer NOT NULL,
     transaction_id integer NOT NULL,
     global_state_root text NOT NULL,
-    inclusion_proof text,
-    index integer NOT NULL
+    inclusion_proof text
 );
 
 
@@ -303,6 +302,44 @@ ALTER SEQUENCE explorer.private_transition_input_id_seq OWNED BY explorer.transi
 
 
 --
+-- Name: program; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.program (
+    id integer NOT NULL,
+    transaction_deploy_id integer NOT NULL,
+    program_id text NOT NULL,
+    import text[],
+    mapping text[],
+    interface text[],
+    record text[],
+    closure text[],
+    function text[],
+    raw_data bytea NOT NULL
+);
+
+
+--
+-- Name: program_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.program_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: program_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.program_id_seq OWNED BY explorer.program.id;
+
+
+--
 -- Name: transaction; Type: TABLE; Schema: explorer; Owner: -
 --
 
@@ -310,8 +347,40 @@ CREATE TABLE explorer.transaction (
     id integer NOT NULL,
     block_id integer NOT NULL,
     transaction_id text NOT NULL,
-    type explorer.transaction_type NOT NULL
+    type explorer.transaction_type NOT NULL,
+    index integer NOT NULL
 );
+
+
+--
+-- Name: transaction_deploy; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.transaction_deploy (
+    id integer NOT NULL,
+    transaction_id integer NOT NULL,
+    edition integer NOT NULL
+);
+
+
+--
+-- Name: transaction_deployment_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.transaction_deployment_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: transaction_deployment_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.transaction_deployment_id_seq OWNED BY explorer.transaction_deploy.id;
 
 
 --
@@ -348,7 +417,8 @@ CREATE TABLE explorer.transition (
     proof text NOT NULL,
     tpk text NOT NULL,
     tcm text NOT NULL,
-    fee bigint NOT NULL
+    fee bigint NOT NULL,
+    index integer NOT NULL
 );
 
 
@@ -530,10 +600,24 @@ ALTER TABLE ONLY explorer.partial_solution ALTER COLUMN id SET DEFAULT nextval('
 
 
 --
+-- Name: program id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.program ALTER COLUMN id SET DEFAULT nextval('explorer.program_id_seq'::regclass);
+
+
+--
 -- Name: transaction id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
 ALTER TABLE ONLY explorer.transaction ALTER COLUMN id SET DEFAULT nextval('explorer.transaction_id_seq'::regclass);
+
+
+--
+-- Name: transaction_deploy id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transaction_deploy ALTER COLUMN id SET DEFAULT nextval('explorer.transaction_deployment_id_seq'::regclass);
 
 
 --
@@ -623,6 +707,22 @@ ALTER TABLE ONLY explorer.leaderboard
 
 ALTER TABLE ONLY explorer.partial_solution
     ADD CONSTRAINT partial_solution_pk PRIMARY KEY (id);
+
+
+--
+-- Name: program program_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.program
+    ADD CONSTRAINT program_pk PRIMARY KEY (id);
+
+
+--
+-- Name: transaction_deploy transaction_deployment_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transaction_deploy
+    ADD CONSTRAINT transaction_deployment_pk PRIMARY KEY (id);
 
 
 --
@@ -753,17 +853,24 @@ CREATE INDEX partial_solution_address_index ON explorer.partial_solution USING b
 
 
 --
--- Name: partial_solution_coinbase_solution_id_address_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX partial_solution_coinbase_solution_id_address_index ON explorer.partial_solution USING btree (coinbase_solution_id, address);
-
-
---
 -- Name: partial_solution_coinbase_solution_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
 CREATE INDEX partial_solution_coinbase_solution_id_index ON explorer.partial_solution USING btree (coinbase_solution_id);
+
+
+--
+-- Name: program_import_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX program_import_index ON explorer.program USING gin (import);
+
+
+--
+-- Name: program_program_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX program_program_id_index ON explorer.program USING btree (program_id text_pattern_ops);
 
 
 --
@@ -774,10 +881,10 @@ CREATE INDEX transaction_block_id_index ON explorer.transaction USING btree (blo
 
 
 --
--- Name: transaction_execute_index_index; Type: INDEX; Schema: explorer; Owner: -
+-- Name: transaction_deployment_transaction_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-CREATE INDEX transaction_execute_index_index ON explorer.transaction_execute USING btree (index);
+CREATE INDEX transaction_deployment_transaction_id_index ON explorer.transaction_deploy USING btree (transaction_id);
 
 
 --
@@ -785,6 +892,13 @@ CREATE INDEX transaction_execute_index_index ON explorer.transaction_execute USI
 --
 
 CREATE INDEX transaction_execute_transaction_id_index ON explorer.transaction_execute USING btree (transaction_id);
+
+
+--
+-- Name: transaction_index_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX transaction_index_index ON explorer.transaction USING btree (index);
 
 
 --
@@ -813,6 +927,13 @@ CREATE INDEX transition_fee_index ON explorer.transition USING btree (fee);
 --
 
 CREATE INDEX transition_function_name_index ON explorer.transition USING btree (function_name);
+
+
+--
+-- Name: transition_index_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX transition_index_index ON explorer.transition USING btree (index);
 
 
 --
@@ -910,11 +1031,27 @@ ALTER TABLE ONLY explorer.partial_solution
 
 
 --
+-- Name: program program_transaction_deployment_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.program
+    ADD CONSTRAINT program_transaction_deployment_id_fk FOREIGN KEY (transaction_deploy_id) REFERENCES explorer.transaction_deploy(id);
+
+
+--
 -- Name: transaction transaction_block_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
 ALTER TABLE ONLY explorer.transaction
     ADD CONSTRAINT transaction_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id);
+
+
+--
+-- Name: transaction_deploy transaction_deployment_transaction_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transaction_deploy
+    ADD CONSTRAINT transaction_deployment_transaction_id_fk FOREIGN KEY (transaction_id) REFERENCES explorer.transaction(id);
 
 
 --
