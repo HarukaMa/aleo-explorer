@@ -269,7 +269,7 @@ class Node:
         # reset states
         self.handshake_state = 0
         # noinspection PyArgumentList
-        self.peer_nonce = random.randint(0, 2 ** 64 - 1)
+        self.nonce = u64(random.randint(0, 2 ** 64 - 1))
         self.peer_block_height = 0
         self.peer_cumulative_weight = 0
         self.is_fork = False
