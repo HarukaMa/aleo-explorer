@@ -1,0 +1,6 @@
+version: "1.0"
+
+linter: jetbrains/qodana-python:2022.3-eap
+bootstrap: pip install -r requirements.txt
+include:
+  - name: CheckDependencyLicenses
