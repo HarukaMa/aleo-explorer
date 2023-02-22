@@ -2,8 +2,8 @@
 -- PostgreSQL database dump
 --
 
--- Dumped from database version 15.1
--- Dumped by pg_dump version 15.0
+-- Dumped from database version 15.2 (Debian 15.2-1)
+-- Dumped by pg_dump version 15.1
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -320,6 +320,41 @@ CREATE TABLE explorer.program (
 
 
 --
+-- Name: program_function; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.program_function (
+    id integer NOT NULL,
+    program_id integer NOT NULL,
+    name text NOT NULL,
+    input text[] NOT NULL,
+    input_mode text[] NOT NULL,
+    output text[] NOT NULL,
+    output_mode text[] NOT NULL
+);
+
+
+--
+-- Name: program_function_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.program_function_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: program_function_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.program_function_id_seq OWNED BY explorer.program_function.id;
+
+
+--
 -- Name: program_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
 --
 
@@ -607,6 +642,13 @@ ALTER TABLE ONLY explorer.program ALTER COLUMN id SET DEFAULT nextval('explorer.
 
 
 --
+-- Name: program_function id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.program_function ALTER COLUMN id SET DEFAULT nextval('explorer.program_function_id_seq'::regclass);
+
+
+--
 -- Name: transaction id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -707,6 +749,14 @@ ALTER TABLE ONLY explorer.leaderboard
 
 ALTER TABLE ONLY explorer.partial_solution
     ADD CONSTRAINT partial_solution_pk PRIMARY KEY (id);
+
+
+--
+-- Name: program_function program_function_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.program_function
+    ADD CONSTRAINT program_function_pk PRIMARY KEY (id);
 
 
 --
@@ -857,6 +907,13 @@ CREATE INDEX partial_solution_address_index ON explorer.partial_solution USING b
 --
 
 CREATE INDEX partial_solution_coinbase_solution_id_index ON explorer.partial_solution USING btree (coinbase_solution_id);
+
+
+--
+-- Name: program_function_name_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX program_function_name_index ON explorer.program_function USING btree (name);
 
 
 --
@@ -1028,6 +1085,14 @@ ALTER TABLE ONLY explorer.fee
 
 ALTER TABLE ONLY explorer.partial_solution
     ADD CONSTRAINT partial_solution_coinbase_solution_id_fk FOREIGN KEY (coinbase_solution_id) REFERENCES explorer.coinbase_solution(id);
+
+
+--
+-- Name: program_function program_function_program_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.program_function
+    ADD CONSTRAINT program_function_program_id_fk FOREIGN KEY (program_id) REFERENCES explorer.program(id);
 
 
 --
