@@ -23,11 +23,69 @@ class Database:
         try:
             self.pool = await asyncpg.create_pool(host=self.server, user=self.user, password=self.password,
                                                   database=self.database, server_settings={'search_path': self.schema},
-                                                  min_size=1, max_size=4)
+                                                  min_size=1, max_size=16)
         except Exception as e:
             await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseConnectError, e))
             return
         await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseConnected, None))
+
+    async def _insert_transition(self, conn: asyncpg.Connection, exe_tx_db_id: int | None, fee_db_id: int | None,
+                                 transition: Transition, ts_index: int):
+        transition_db_id = await conn.fetchval(
+            "INSERT INTO transition (transition_id, transaction_execute_id, fee_id, program_id, "
+            "function_name, proof, tpk, tcm, fee, index) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id",
+            str(transition.id), exe_tx_db_id, fee_db_id, str(transition.program_id),
+            str(transition.function_name), str(transition.proof), str(transition.tpk),
+            str(transition.tcm), transition.fee, ts_index
+        )
+
+        transition_input: TransitionInput
+        for input_index, transition_input in enumerate(transition.inputs):
+            transition_input_db_id = await conn.fetchval(
+                "INSERT INTO transition_input (transition_id, type) VALUES ($1, $2) RETURNING id",
+                transition_db_id, transition_input.type.name
+            )
+            match transition_input.type:
+                case TransitionInput.Type.Private:
+                    transition_input: PrivateTransitionInput
+                    await conn.execute(
+                        "INSERT INTO transition_input_private (transition_input_id, ciphertext_hash, ciphertext, index) "
+                        "VALUES ($1, $2, $3, $4)",
+                        transition_input_db_id, str(transition_input.ciphertext_hash),
+                        transition_input.ciphertext.dumps(), input_index
+                    )
+                case TransitionInput.Type.Record:
+                    transition_input: RecordTransitionInput
+                    await conn.execute(
+                        "INSERT INTO transition_input_record (transition_input_id, serial_number, tag, index) "
+                        "VALUES ($1, $2, $3, $4)",
+                        transition_input_db_id, str(transition_input.serial_number),
+                        str(transition_input.tag), input_index
+                    )
+                case _:
+                    raise NotImplementedError
+
+        transition_output: TransitionOutput
+        for output_index, transition_output in enumerate(transition.outputs):
+            transition_output_db_id = await conn.fetchval(
+                "INSERT INTO transition_output (transition_id, type) VALUES ($1, $2) RETURNING id",
+                transition_db_id, transition_output.type.name
+            )
+            match transition_output.type:
+                case TransitionOutput.Type.Record:
+                    transition_output: RecordTransitionOutput
+                    await conn.execute(
+                        "INSERT INTO transition_output_record (transition_output_id, commitment, checksum, record_ciphertext, index) "
+                        "VALUES ($1, $2, $3, $4, $5)",
+                        transition_output_db_id, str(transition_output.commitment),
+                        str(transition_output.checksum), transition_output.record_ciphertext.dumps(), output_index
+                    )
+                case _:
+                    raise NotImplementedError
+
+        if transition.finalize.value is not None:
+            raise NotImplementedError
 
     async def _save_block(self, block: Block):
         async with self.pool.acquire() as conn:
@@ -98,6 +156,13 @@ class Database:
                                         program_db_id, str(function.name), inputs, input_modes, outputs, output_modes
                                     )
 
+                                fee_db_id = await conn.fetchval(
+                                    "INSERT INTO fee (transaction_id, global_state_root, inclusion_proof) "
+                                    "VALUES ($1, $2, $3) RETURNING id",
+                                    transaction_db_id, str(transaction.fee.global_state_root), transaction.fee.inclusion_proof.dumps()
+                                )
+                                await self._insert_transition(conn, None, fee_db_id, transaction.fee.transition, 0)
+
                             case Transaction.Type.Execute:
                                 transaction: ExecuteTransaction
                                 transaction_id = transaction.id
@@ -114,61 +179,17 @@ class Database:
 
                                 transition: Transition
                                 for ts_index, transition in enumerate(transaction.execution.transitions):
-                                    transition_db_id = await conn.fetchval(
-                                        "INSERT INTO transition (transition_id, transaction_execute_id, fee_id, program_id, "
-                                        "function_name, proof, tpk, tcm, fee, index) "
-                                        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id",
-                                        str(transition.id), execute_transaction_db_id, None, str(transition.program_id),
-                                        str(transition.function_name), str(transition.proof), str(transition.tpk),
-                                        str(transition.tcm), transition.fee, ts_index
+                                    await self._insert_transition(conn, execute_transaction_db_id, None, transition, ts_index)
+
+                                if transaction.additional_fee.value is not None:
+                                    fee: Fee = transaction.additional_fee.value
+                                    fee_db_id = await conn.fetchval(
+                                        "INSERT INTO fee (transaction_id, global_state_root, inclusion_proof) "
+                                        "VALUES ($1, $2, $3) RETURNING id",
+                                        transaction_db_id, str(fee.global_state_root), fee.inclusion_proof.dumps()
                                     )
+                                    await self._insert_transition(conn, None, fee_db_id, fee.transition, 0)
 
-                                    transition_input: TransitionInput
-                                    for input_index, transition_input in enumerate(transition.inputs):
-                                        transition_input_db_id = await conn.fetchval(
-                                            "INSERT INTO transition_input (transition_id, type) VALUES ($1, $2) RETURNING id",
-                                            transition_db_id, transition_input.type.name
-                                        )
-                                        match transition_input.type:
-                                            case TransitionInput.Type.Private:
-                                                transition_input: PrivateTransitionInput
-                                                await conn.execute(
-                                                    "INSERT INTO transition_input_private (transition_input_id, ciphertext_hash, ciphertext, index) "
-                                                    "VALUES ($1, $2, $3, $4)",
-                                                    transition_input_db_id, str(transition_input.ciphertext_hash),
-                                                    transition_input.ciphertext.dumps(), input_index
-                                                )
-                                            case TransitionInput.Type.Record:
-                                                transition_input: RecordTransitionInput
-                                                await conn.execute(
-                                                    "INSERT INTO transition_input_record (transition_input_id, serial_number, tag, index) "
-                                                    "VALUES ($1, $2, $3, $4)",
-                                                    transition_input_db_id, str(transition_input.serial_number),
-                                                    str(transition_input.tag), input_index
-                                                )
-                                            case _:
-                                                raise NotImplementedError
-
-                                    transition_output: TransitionOutput
-                                    for output_index, transition_output in enumerate(transition.outputs):
-                                        transition_output_db_id = await conn.fetchval(
-                                            "INSERT INTO transition_output (transition_id, type) VALUES ($1, $2) RETURNING id",
-                                            transition_db_id, transition_output.type.name
-                                        )
-                                        match transition_output.type:
-                                            case TransitionOutput.Type.Record:
-                                                transition_output: RecordTransitionOutput
-                                                await conn.execute(
-                                                    "INSERT INTO transition_output_record (transition_output_id, commitment, checksum, record_ciphertext, index) "
-                                                    "VALUES ($1, $2, $3, $4, $5)",
-                                                    transition_output_db_id, str(transition_output.commitment),
-                                                    str(transition_output.checksum), transition_output.record_ciphertext.dumps(), output_index
-                                                )
-                                            case _:
-                                                raise NotImplementedError
-
-                                    if transition.finalize.value is not None:
-                                        raise NotImplementedError
 
                     if block.coinbase.value is not None:
                         coinbase_reward = block.get_coinbase_reward((await self.get_latest_block()).header.metadata.last_coinbase_timestamp)
