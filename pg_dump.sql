@@ -419,6 +419,37 @@ ALTER SEQUENCE explorer.transaction_deployment_id_seq OWNED BY explorer.transact
 
 
 --
+-- Name: transition_finalize_record; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.transition_finalize_record (
+    id integer NOT NULL,
+    transition_finalize_id integer NOT NULL,
+    record text NOT NULL
+);
+
+
+--
+-- Name: transaction_finalize_record_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.transaction_finalize_record_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: transaction_finalize_record_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.transaction_finalize_record_id_seq OWNED BY explorer.transition_finalize_record.id;
+
+
+--
 -- Name: transaction_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
 --
 
@@ -464,7 +495,7 @@ CREATE TABLE explorer.transition (
 CREATE TABLE explorer.transition_finalize (
     id integer NOT NULL,
     transition_id integer NOT NULL,
-    plaintext text NOT NULL,
+    type explorer.finalize_value_type NOT NULL,
     index integer NOT NULL
 );
 
@@ -487,6 +518,37 @@ CREATE SEQUENCE explorer.transition_finalize_id_seq
 --
 
 ALTER SEQUENCE explorer.transition_finalize_id_seq OWNED BY explorer.transition_finalize.id;
+
+
+--
+-- Name: transition_finalize_plaintext; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.transition_finalize_plaintext (
+    id integer NOT NULL,
+    transition_finalize_id integer NOT NULL,
+    plaintext bytea NOT NULL
+);
+
+
+--
+-- Name: transition_finalize_plaintext_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.transition_finalize_plaintext_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: transition_finalize_plaintext_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.transition_finalize_plaintext_id_seq OWNED BY explorer.transition_finalize_plaintext.id;
 
 
 --
@@ -549,7 +611,7 @@ CREATE TABLE explorer.transition_input_public (
     id integer NOT NULL,
     transition_input_id integer NOT NULL,
     plaintext_hash text NOT NULL,
-    plaintext text
+    plaintext bytea
 );
 
 
@@ -677,7 +739,7 @@ CREATE TABLE explorer.transition_output_public (
     id integer NOT NULL,
     transition_output_id integer NOT NULL,
     plaintext_hash text NOT NULL,
-    plaintext text
+    plaintext bytea
 );
 
 
@@ -812,6 +874,20 @@ ALTER TABLE ONLY explorer.transition_finalize ALTER COLUMN id SET DEFAULT nextva
 
 
 --
+-- Name: transition_finalize_plaintext id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transition_finalize_plaintext ALTER COLUMN id SET DEFAULT nextval('explorer.transition_finalize_plaintext_id_seq'::regclass);
+
+
+--
+-- Name: transition_finalize_record id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transition_finalize_record ALTER COLUMN id SET DEFAULT nextval('explorer.transaction_finalize_record_id_seq'::regclass);
+
+
+--
 -- Name: transition_input id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -940,6 +1016,14 @@ ALTER TABLE ONLY explorer.transaction_execute
 
 
 --
+-- Name: transition_finalize_record transaction_finalize_record_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transition_finalize_record
+    ADD CONSTRAINT transaction_finalize_record_pk PRIMARY KEY (id);
+
+
+--
 -- Name: transaction transaction_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -953,6 +1037,14 @@ ALTER TABLE ONLY explorer.transaction
 
 ALTER TABLE ONLY explorer.transition_finalize
     ADD CONSTRAINT transition_finalize_pk PRIMARY KEY (id);
+
+
+--
+-- Name: transition_finalize_plaintext transition_finalize_plaintext_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transition_finalize_plaintext
+    ADD CONSTRAINT transition_finalize_plaintext_pk PRIMARY KEY (id);
 
 
 --
@@ -1154,6 +1246,13 @@ CREATE INDEX transaction_execute_transaction_id_index ON explorer.transaction_ex
 
 
 --
+-- Name: transaction_finalize_record_transaction_finalize_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX transaction_finalize_record_transaction_finalize_id_index ON explorer.transition_finalize_record USING btree (transition_finalize_id);
+
+
+--
 -- Name: transaction_index_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -1186,6 +1285,13 @@ CREATE INDEX transition_fee_index ON explorer.transition USING btree (fee);
 --
 
 CREATE INDEX transition_finalize_index_index ON explorer.transition_finalize USING btree (index);
+
+
+--
+-- Name: transition_finalize_plaintext_transition_finalize_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX transition_finalize_plaintext_transition_finalize_id_index ON explorer.transition_finalize_plaintext USING btree (transition_finalize_id);
 
 
 --
@@ -1365,11 +1471,27 @@ ALTER TABLE ONLY explorer.transaction_execute
 
 
 --
+-- Name: transition_finalize_record transaction_finalize_record_transition_finalize_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transition_finalize_record
+    ADD CONSTRAINT transaction_finalize_record_transition_finalize_id_fk FOREIGN KEY (transition_finalize_id) REFERENCES explorer.transition_finalize(id);
+
+
+--
 -- Name: transition transition_fee_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
 ALTER TABLE ONLY explorer.transition
     ADD CONSTRAINT transition_fee_id_fk FOREIGN KEY (fee_id) REFERENCES explorer.fee(id);
+
+
+--
+-- Name: transition_finalize_plaintext transition_finalize_plaintext_transition_finalize_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transition_finalize_plaintext
+    ADD CONSTRAINT transition_finalize_plaintext_transition_finalize_id_fk FOREIGN KEY (transition_finalize_id) REFERENCES explorer.transition_finalize(id);
 
 
 --

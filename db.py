@@ -111,11 +111,26 @@ class Database:
 
         if transition.finalize.value is not None:
             for finalize_index, finalize in enumerate(transition.finalize.value):
-                finalize: PlaintextValue
-                await conn.execute(
-                   "INSERT INTO transition_finalize (transition_id, plaintext, index) VALUES ($1, $2, $3)",
-                   transition_db_id, finalize.plaintext.dump(), finalize_index
+                transition_finalize_db_id = await conn.fetchval(
+                   "INSERT INTO transition_finalize (transition_id, type, index) VALUES ($1, $2, $3) "
+                   "RETURNING id",
+                   transition_db_id, finalize.type.name, finalize_index
                 )
+                match finalize.type:
+                    case Value.Type.Plaintext:
+                        finalize: PlaintextValue
+                        await conn.execute(
+                            "INSERT INTO transition_finalize_plaintext (transition_finalize_id, plaintext) "
+                            "VALUES ($1, $2)",
+                            transition_finalize_db_id, finalize.plaintext.dump()
+                        )
+                    case Value.Type.Record:
+                        finalize: RecordValue
+                        await conn.execute(
+                            "INSERT INTO transition_finalize_record (transition_finalize_id, record) "
+                            "VALUES ($1, $2)",
+                            transition_finalize_db_id, str(finalize.record)
+                        )
 
     async def _save_block(self, block: Block):
         async with self.pool.acquire() as conn:
@@ -406,14 +421,43 @@ class Database:
                     raise NotImplementedError
         tos.sort(key=lambda x: x[1])
         tos = [x[0] for x in tos]
+
+        transition_finalizes = await conn.fetch(
+            "SELECT * FROM transition_finalize WHERE transition_id = $1",
+            transition["id"]
+        )
+        if len(transition_finalizes) == 0:
+            finalize = None
+        else:
+            finalize = []
+            for transition_finalize in transition_finalizes:
+                match transition_finalize["type"]:
+                    case Value.Type.Plaintext.name:
+                        transition_finalize_plaintext = await conn.fetchrow(
+                            "SELECT * FROM transition_finalize_plaintext WHERE transition_finalize_id = $1",
+                            transition_finalize["id"]
+                        )
+                        finalize.append((PlaintextValue(
+                            plaintext=Plaintext.load(bytearray(transition_finalize_plaintext["plaintext"]))
+                        ), transition_finalize["index"]))
+                    case Value.Type.Record.name:
+                        transition_finalize_record = await conn.fetchrow(
+                            "SELECT * FROM transition_finalize_record WHERE transition_finalize_id = $1",
+                            transition_finalize["id"]
+                        )
+                        finalize.append((RecordValue(
+                            record=Record[Plaintext].loads(transition_finalize_record["record"])
+                        ), transition_finalize["index"]))
+            finalize.sort(key=lambda x: x[1])
+            finalize = Vec[Value, u16]([x[0] for x in finalize])
+
         return Transition(
             id_=TransitionID.loads(transition["transition_id"]),
             program_id=ProgramID.loads(transition["program_id"]),
             function_name=Identifier.loads(transition["function_name"]),
             inputs=Vec[TransitionInput, u16](tis),
             outputs=Vec[TransitionOutput, u16](tos),
-            # This is wrong
-            finalize=Option[Vec[Value, u16]](None),
+            finalize=Option[Vec[Value, u16]](finalize),
             proof=Proof.loads(transition["proof"]),
             tpk=Group.loads(transition["tpk"]),
             tcm=Field.loads(transition["tcm"]),
