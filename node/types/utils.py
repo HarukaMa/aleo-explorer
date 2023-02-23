@@ -2,6 +2,8 @@ from abc import ABCMeta
 from enum import EnumMeta
 from typing import get_type_hints
 
+import aleo
+
 
 # Metaclass Helper
 
@@ -41,7 +43,4 @@ def type_check(func):
     return wrapper
 
 def bech32_to_bytes(s: str) -> bytearray:
-    """Convert a bech32 string to bytes."""
-    import thirdparty.bech32 as bech32
-    hrp, data, _ = bech32.bech32_decode(s)
-    return bytearray(bech32.convertbits(data, 5, 8)[:-1])
+    return bytearray(aleo.bech32_decode(s)[1])

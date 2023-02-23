@@ -42,13 +42,12 @@ class AleoID(Sized, Serialize, Deserialize, metaclass=ABCMeta):
     @classmethod
     # @type_check
     def loads(cls, data: str):
-        hrp, data, _ = bech32.bech32_decode(data)
+        hrp, data = aleo.bech32_decode(data)
         if hrp != cls._prefix:
             raise ValueError("incorrect hrp")
-        data = bytes(bech32.convertbits(data, 5, 8)[:-1])
         if len(data) != cls.size:
             raise ValueError("incorrect length")
-        return cls(data)
+        return cls(bytes(data))
 
     def __str__(self):
         return str(self._bech32m)
@@ -107,13 +106,12 @@ class AleoObject(Sized, Serialize, Deserialize, metaclass=ABCMeta):
     @classmethod
     # @type_check
     def loads(cls, data: str):
-        hrp, data, _ = bech32.bech32_decode(data)
+        hrp, data = aleo.bech32_decode(data)
         if hrp != cls._prefix:
             raise ValueError("incorrect hrp")
-        data = bytes(bech32.convertbits(data, 5, 8)[:-1])
         if len(data) != cls.size:
             raise ValueError("incorrect length")
-        return cls(data)
+        return cls(bytes(data))
 
     def __str__(self):
         return str(self._bech32m)

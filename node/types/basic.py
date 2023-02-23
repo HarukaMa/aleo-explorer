@@ -1,7 +1,6 @@
 import socket
 from decimal import Decimal
 
-from thirdparty import bech32
 from .traits import *
 
 
@@ -16,7 +15,7 @@ class Bech32m:
         self.prefix = prefix
 
     def __str__(self):
-        return bech32.bech32_encode(self.prefix, bech32.convertbits(list(self.data), 8, 5), bech32.Encoding.BECH32M)
+        return aleo.bech32_encode(self.prefix, self.data)
 
     def __repr__(self):
         return str(self)
