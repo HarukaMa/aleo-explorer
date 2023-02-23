@@ -24,7 +24,7 @@ from db import Database
 from node.light_node import LightNodeState
 from node.types import u32, Transaction, Transition, ExecuteTransaction, TransitionInput, PrivateTransitionInput, \
     RecordTransitionInput, TransitionOutput, RecordTransitionOutput, Record, KZGProof, Proof, WitnessCommitments, \
-    G1Affine, Ciphertext, Owner, Balance, Entry
+    G1Affine, Ciphertext, Owner, Balance, Entry, DeployTransaction
 
 
 class Server(uvicorn.Server):
@@ -165,7 +165,12 @@ async def block_route(request: Request):
         tx: Transaction
         match tx.type:
             case Transaction.Type.Deploy:
-                raise NotImplementedError
+                tx: DeployTransaction
+                t = {
+                    "tx_id": tx.id,
+                    "type": "Deploy",
+                }
+                txs.append(t)
             case Transaction.Type.Execute:
                 tx: ExecuteTransaction
                 t = {
@@ -204,7 +209,11 @@ async def transaction_route(request: Request):
     for tx in block.transactions.transactions:
         match tx.type:
             case Transaction.Type.Deploy:
-                raise NotImplementedError
+                tx: DeployTransaction
+                transaction_type = "Deploy"
+                if str(tx.id) == tx_id:
+                    transaction = tx
+                    break
             case Transaction.Type.Execute:
                 tx: ExecuteTransaction
                 transaction_type = "Execute"
@@ -213,17 +222,6 @@ async def transaction_route(request: Request):
                     break
     if transaction is None:
         raise HTTPException(status_code=550, detail="Transaction not found in block")
-    global_state_root = transaction.execution.global_state_root
-    inclusion_proof = transaction.execution.inclusion_proof.value
-    total_fee = 0
-    transitions = []
-    for transition in transaction.execution.transitions:
-        transition: Transition
-        transitions.append({
-            "transition_id": transition.id,
-            "action": await function_signature(transition),
-            "fee": transition.fee,
-        })
 
     maintenance, info = await out_of_sync_check()
     ctx = {
@@ -233,13 +231,40 @@ async def transaction_route(request: Request):
         "block": block,
         "transaction": transaction,
         "type": transaction_type,
-        "global_state_root": global_state_root,
-        "inclusion_proof": inclusion_proof,
-        "total_fee": total_fee,
-        "transitions": transitions,
         "maintenance": maintenance,
         "info": info,
     }
+
+    if transaction.type == Transaction.Type.Deploy:
+        transaction: DeployTransaction
+        ctx.update({
+            "total_fee": 0,
+        })
+    elif transaction.type == Transaction.Type.Execute:
+        transaction: ExecuteTransaction
+        global_state_root = transaction.execution.global_state_root
+        inclusion_proof = transaction.execution.inclusion_proof.value
+        total_fee = 0
+        transitions = []
+        for transition in transaction.execution.transitions:
+            transition: Transition
+            transitions.append({
+                "transition_id": transition.id,
+                "action": await function_signature(transition),
+                "fee": transition.fee,
+            })
+        ctx.update({
+            "request": request,
+            "tx_id": tx_id,
+            "tx_id_trunc": str(tx_id)[:12] + "..." + str(tx_id)[-6:],
+            "block": block,
+            "transaction": transaction,
+            "type": transaction_type,
+            "global_state_root": global_state_root,
+            "inclusion_proof": inclusion_proof,
+            "total_fee": total_fee,
+            "transitions": transitions,
+        })
     return templates.TemplateResponse('transaction.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'})
 
 

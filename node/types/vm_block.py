@@ -350,7 +350,7 @@ class FinalizeCommand(Serialize, Deserialize):
         self.operands = operands
 
     def dump(self) -> bytes:
-        return u8().dump() + self.operands.dump()
+        return self.operands.dump()
 
     @classmethod
     # @type_check
@@ -497,19 +497,19 @@ class FinalizeInput(Serialize, Deserialize):
 class FinalizeOutput(Serialize, Deserialize):
 
     # @type_check
-    def __init__(self, *, register: Register, finalize_type: FinalizeType):
-        self.register = register
+    def __init__(self, *, operand: Operand, finalize_type: FinalizeType):
+        self.operand = operand
         self.finalize_type = finalize_type
 
     def dump(self) -> bytes:
-        return self.register.dump() + self.finalize_type.dump()
+        return self.operand.dump() + self.finalize_type.dump()
 
     @classmethod
     # @type_check
     def load(cls, data: bytearray):
-        register = Register.load(data)
+        operand = Operand.load(data)
         finalize_type = FinalizeType.load(data)
-        return cls(register=register, finalize_type=finalize_type)
+        return cls(operand=operand, finalize_type=finalize_type)
 
 
 class Finalize(Serialize, Deserialize):

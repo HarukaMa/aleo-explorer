@@ -35,6 +35,10 @@ class Int(Sized, Serialize, Deserialize, int, metaclass=ABCMeta):
     def __init__(self, _):
         raise NotImplementedError
 
+    @classmethod
+    def loads(cls, value: int):
+        return cls(value)
+
 
 class IntEnumu8(Serialize, Deserialize, IntEnum, metaclass=ABCEnumMeta):
 

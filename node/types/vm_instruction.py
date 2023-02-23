@@ -15,12 +15,20 @@ class StringType(Serialize, Deserialize):
             raise ValueError("string too long")
         return u16(len(bytes_)).dump() + bytes_
 
+    @classmethod
     # @type_check
-    def load(self, data: bytearray):
+    def load(cls, data: bytearray):
         length = u16.load(data)
-        self.string = data[:length].decode("utf-8")
+        string = data[:length].decode("utf-8")
         del data[:length]
-        return self
+        return cls(string=string)
+
+    @classmethod
+    def loads(cls, data: str):
+        return cls(string=data)
+
+    def __str__(self):
+        return self.string
 
 class Literal(Serialize, Deserialize): # enum
 
@@ -69,12 +77,19 @@ class Literal(Serialize, Deserialize): # enum
     def dump(self) -> bytes:
         return self.type.dump() + self.primitive.dump()
 
+    def dumps(self) -> str:
+        return str(self.primitive)
+
     @classmethod
     # @type_check
     def load(cls, data: bytearray):
         type_ = cls.Type.load(data)
         primitive = cls.primitive_type_map[type_].load(data)
         return cls(type_=type_, primitive=primitive)
+
+    @classmethod
+    def loads(cls, type_: Type, data: str):
+        return cls.primitive_type_map[type_].loads(data)
 
 
 class Identifier(Serialize, Deserialize):
@@ -256,7 +271,7 @@ class LiteralOperand(Operand):
         self.literal = literal
 
     def dump(self) -> bytes:
-        return self.literal.dump()
+        return self.type.dump() + self.literal.dump()
 
     @classmethod
     # @type_check
@@ -272,7 +287,7 @@ class RegisterOperand(Operand):
         self.register = register
 
     def dump(self) -> bytes:
-        return self.register.dump()
+        return self.type.dump() + self.register.dump()
 
     @classmethod
     # @type_check
@@ -288,7 +303,7 @@ class ProgramIDOperand(Operand):
         self.program_id = program_id
 
     def dump(self) -> bytes:
-        return self.program_id.dump()
+        return self.type.dump() + self.program_id.dump()
 
     @classmethod
     # @type_check
@@ -304,7 +319,7 @@ class CallerOperand(Operand):
         pass
 
     def dump(self) -> bytes:
-        return b""
+        return self.type.dump()
 
     @classmethod
     # @type_check

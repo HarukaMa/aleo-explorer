@@ -1,5 +1,6 @@
 from collections.abc import Sequence
 from copy import deepcopy
+from types import UnionType
 
 from .basic import *
 
@@ -43,6 +44,7 @@ class Tuple(Generic, Serialize, Deserialize, Sequence):
             if not isinstance(v, t):
                 raise TypeError(f"value[{i}] must be {t}")
         self.value = tuple(value)
+        return self
 
     def __len__(self):
         return len(self.value)
@@ -85,8 +87,12 @@ class Vec(Generic, Serialize, Deserialize, Sequence):
     def __call__(self, value):
         if not isinstance(value, list):
             raise TypeError("value must be list")
-        if not all(isinstance(x, self.type) for x in value):
-            raise TypeError("value must be of type {}".format(self.type))
+        if isinstance(self.type, type) or isinstance(self.type, UnionType):
+            if not all(isinstance(x, self.type) for x in value):
+                raise TypeError("value must be of type {}".format(self.type))
+        else:
+            if not all(isinstance(x, type(self.type)) for x in value):
+                raise TypeError("value must be of type {}".format(type(self.type)))
         if hasattr(self, "size") and len(value) != self.size:
             raise ValueError("value must be of size {}".format(self.size))
         self._list = value
@@ -222,6 +228,12 @@ class Option(Generic, Serialize, Deserialize):
             return None
         else:
             return str(self.value)
+
+    def dump_nullable(self):
+        if self.value is None:
+            return None
+        else:
+            return self.value.dump()
 
     # @type_check
     def load(self, data: bytearray):

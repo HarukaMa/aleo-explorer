@@ -257,6 +257,14 @@ class bool_(Int):
         del data[:1]
         return self
 
+    @classmethod
+    def loads(cls, data: str):
+        if data.lower() == "true":
+            return True
+        if data.lower() == "false":
+            return False
+        raise ValueError("invalid value for bool")
+
     def __str__(self):
         if self:
             return "true"

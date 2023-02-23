@@ -2,7 +2,7 @@ import time
 
 import asyncpg
 
-from disasm import valuetype_to_mode_type_str
+from disasm import value_type_to_mode_type_str, finalize_type_to_str
 from explorer.types import Message as ExplorerMessage
 from node.types import *
 
@@ -29,7 +29,8 @@ class Database:
             return
         await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseConnected, None))
 
-    async def _insert_transition(self, conn: asyncpg.Connection, exe_tx_db_id: int | None, fee_db_id: int | None,
+    @staticmethod
+    async def _insert_transition(conn: asyncpg.Connection, exe_tx_db_id: int | None, fee_db_id: int | None,
                                  transition: Transition, ts_index: int):
         transition_db_id = await conn.fetchval(
             "INSERT INTO transition (transition_id, transaction_execute_id, fee_id, program_id, "
@@ -43,25 +44,33 @@ class Database:
         transition_input: TransitionInput
         for input_index, transition_input in enumerate(transition.inputs):
             transition_input_db_id = await conn.fetchval(
-                "INSERT INTO transition_input (transition_id, type) VALUES ($1, $2) RETURNING id",
-                transition_db_id, transition_input.type.name
+                "INSERT INTO transition_input (transition_id, type, index) VALUES ($1, $2, $3) RETURNING id",
+                transition_db_id, transition_input.type.name, input_index
             )
             match transition_input.type:
+                case TransitionInput.Type.Public:
+                    transition_input: PublicTransitionInput
+                    await conn.execute(
+                        "INSERT INTO transition_input_public (transition_input_id, plaintext_hash, plaintext) "
+                        "VALUES ($1, $2, $3)",
+                        transition_input_db_id, str(transition_input.plaintext_hash),
+                        transition_input.plaintext.dump_nullable()
+                    )
                 case TransitionInput.Type.Private:
                     transition_input: PrivateTransitionInput
                     await conn.execute(
-                        "INSERT INTO transition_input_private (transition_input_id, ciphertext_hash, ciphertext, index) "
-                        "VALUES ($1, $2, $3, $4)",
+                        "INSERT INTO transition_input_private (transition_input_id, ciphertext_hash, ciphertext) "
+                        "VALUES ($1, $2, $3)",
                         transition_input_db_id, str(transition_input.ciphertext_hash),
-                        transition_input.ciphertext.dumps(), input_index
+                        transition_input.ciphertext.dumps()
                     )
                 case TransitionInput.Type.Record:
                     transition_input: RecordTransitionInput
                     await conn.execute(
-                        "INSERT INTO transition_input_record (transition_input_id, serial_number, tag, index) "
-                        "VALUES ($1, $2, $3, $4)",
+                        "INSERT INTO transition_input_record (transition_input_id, serial_number, tag) "
+                        "VALUES ($1, $2, $3)",
                         transition_input_db_id, str(transition_input.serial_number),
-                        str(transition_input.tag), input_index
+                        str(transition_input.tag)
                     )
                 case _:
                     raise NotImplementedError
@@ -69,23 +78,44 @@ class Database:
         transition_output: TransitionOutput
         for output_index, transition_output in enumerate(transition.outputs):
             transition_output_db_id = await conn.fetchval(
-                "INSERT INTO transition_output (transition_id, type) VALUES ($1, $2) RETURNING id",
-                transition_db_id, transition_output.type.name
+                "INSERT INTO transition_output (transition_id, type, index) VALUES ($1, $2, $3) RETURNING id",
+                transition_db_id, transition_output.type.name, output_index
             )
             match transition_output.type:
+                case TransitionOutput.Type.Public:
+                    transition_output: PublicTransitionOutput
+                    await conn.execute(
+                        "INSERT INTO transition_output_public (transition_output_id, plaintext_hash, plaintext) "
+                        "VALUES ($1, $2, $3)",
+                        transition_output_db_id, str(transition_output.plaintext_hash),
+                        transition_output.plaintext.dump_nullable()
+                    )
+                case TransitionOutput.Type.Private:
+                    transition_output: PrivateTransitionOutput
+                    await conn.execute(
+                        "INSERT INTO transition_output_private (transition_output_id, ciphertext_hash, ciphertext) "
+                        "VALUES ($1, $2, $3)",
+                        transition_output_db_id, str(transition_output.ciphertext_hash),
+                        transition_output.ciphertext.dumps()
+                    )
                 case TransitionOutput.Type.Record:
                     transition_output: RecordTransitionOutput
                     await conn.execute(
-                        "INSERT INTO transition_output_record (transition_output_id, commitment, checksum, record_ciphertext, index) "
-                        "VALUES ($1, $2, $3, $4, $5)",
+                        "INSERT INTO transition_output_record (transition_output_id, commitment, checksum, record_ciphertext) "
+                        "VALUES ($1, $2, $3, $4)",
                         transition_output_db_id, str(transition_output.commitment),
-                        str(transition_output.checksum), transition_output.record_ciphertext.dumps(), output_index
+                        str(transition_output.checksum), transition_output.record_ciphertext.dumps()
                     )
                 case _:
                     raise NotImplementedError
 
         if transition.finalize.value is not None:
-            raise NotImplementedError
+            for finalize_index, finalize in enumerate(transition.finalize.value):
+                finalize: PlaintextValue
+                await conn.execute(
+                   "INSERT INTO transition_finalize (transition_id, plaintext, index) VALUES ($1, $2, $3)",
+                   transition_db_id, finalize.plaintext.dump(), finalize_index
+                )
 
     async def _save_block(self, block: Block):
         async with self.pool.acquire() as conn:
@@ -140,20 +170,25 @@ class Database:
                                     input_modes = []
                                     i: FunctionInput
                                     for i in function.inputs:
-                                        mode, _type = valuetype_to_mode_type_str(i.value_type)
+                                        mode, _type = value_type_to_mode_type_str(i.value_type)
                                         inputs.append(_type)
                                         input_modes.append(mode)
                                     outputs = []
                                     output_modes = []
                                     o: FunctionOutput
                                     for o in function.outputs:
-                                        mode, _type = valuetype_to_mode_type_str(o.value_type)
+                                        mode, _type = value_type_to_mode_type_str(o.value_type)
                                         outputs.append(_type)
                                         output_modes.append(mode)
+                                    finalizes = []
+                                    if function.finalize.value is not None:
+                                        f: FinalizeInput
+                                        for f in function.finalize.value[1].inputs:
+                                            finalizes.append(finalize_type_to_str(f.finalize_type))
                                     await conn.execute(
-                                        "INSERT INTO program_function (program_id, name, input, input_mode, output, output_mode) "
-                                        "VALUES ($1, $2, $3, $4, $5, $6)",
-                                        program_db_id, str(function.name), inputs, input_modes, outputs, output_modes
+                                        "INSERT INTO program_function (program_id, name, input, input_mode, output, output_mode, finalize) "
+                                        "VALUES ($1, $2, $3, $4, $5, $6, $7)",
+                                        program_db_id, str(function.name), inputs, input_modes, outputs, output_modes, finalizes
                                     )
 
                                 fee_db_id = await conn.fetchval(
@@ -269,6 +304,123 @@ class Database:
         )
 
     @staticmethod
+    async def _get_transition(transition: dict, conn: asyncpg.Connection):
+        transition_inputs = await conn.fetch(
+            "SELECT * FROM transition_input WHERE transition_id = $1",
+            transition["id"]
+        )
+        tis = []
+        for transition_input in transition_inputs:
+            match transition_input["type"]:
+                case TransitionInput.Type.Public.name:
+                    transition_input_public = await conn.fetchrow(
+                        "SELECT * FROM transition_input_public WHERE transition_input_id = $1",
+                        transition_input["id"]
+                    )
+                    if transition_input_public["plaintext"] is None:
+                        plaintext = None
+                    else:
+                        plaintext = Plaintext.load(bytearray(transition_input_public["plaintext"]))
+                    tis.append((PublicTransitionInput(
+                        plaintext_hash=Field.loads(transition_input_public["plaintext_hash"]),
+                        plaintext=Option[Plaintext](plaintext)
+                    ), transition_input["index"]))
+
+                case TransitionInput.Type.Private.name:
+                    transition_input_private = await conn.fetchrow(
+                        "SELECT * FROM transition_input_private WHERE transition_input_id = $1",
+                        transition_input["id"]
+                    )
+                    if transition_input_private["ciphertext"] is None:
+                        ciphertext = None
+                    else:
+                        ciphertext = Ciphertext.loads(transition_input_private["ciphertext"])
+                    tis.append((PrivateTransitionInput(
+                        ciphertext_hash=Field.loads(transition_input_private["ciphertext_hash"]),
+                        ciphertext=Option[Ciphertext](ciphertext)
+                    ), transition_input["index"]))
+
+                case TransitionInput.Type.Record.name:
+                    transition_input_record = await conn.fetchrow(
+                        "SELECT * FROM transition_input_record WHERE transition_input_id = $1",
+                        transition_input["id"]
+                    )
+                    tis.append((RecordTransitionInput(
+                        serial_number=Field.loads(transition_input_record["serial_number"]),
+                        tag=Field.loads(transition_input_record["tag"])
+                    ), transition_input["index"]))
+
+                case _:
+                    raise NotImplementedError
+        tis.sort(key=lambda x: x[1])
+        tis = [x[0] for x in tis]
+
+        transition_outputs = await conn.fetch(
+            "SELECT * FROM transition_output WHERE transition_id = $1",
+            transition["id"]
+        )
+        tos = []
+        for transition_output in transition_outputs:
+            match transition_output["type"]:
+                case TransitionOutput.Type.Public.name:
+                    transition_output_public = await conn.fetchrow(
+                        "SELECT * FROM transition_output_public WHERE transition_output_id = $1",
+                        transition_output["id"]
+                    )
+                    if transition_output_public["plaintext"] is None:
+                        plaintext = None
+                    else:
+                        plaintext = Plaintext.load(bytearray(transition_output_public["plaintext"]))
+                    tos.append((PublicTransitionOutput(
+                        plaintext_hash=Field.loads(transition_output_public["plaintext_hash"]),
+                        plaintext=Option[Plaintext](plaintext)
+                    ), transition_output["index"]))
+                case TransitionOutput.Type.Private.name:
+                    transition_output_private = await conn.fetchrow(
+                        "SELECT * FROM transition_output_private WHERE transition_output_id = $1",
+                        transition_output["id"]
+                    )
+                    if transition_output_private["ciphertext"] is None:
+                        ciphertext = None
+                    else:
+                        ciphertext = Ciphertext.loads(transition_output_private["ciphertext"])
+                    tos.append((PrivateTransitionOutput(
+                        ciphertext_hash=Field.loads(transition_output_private["ciphertext_hash"]),
+                        ciphertext=Option[Ciphertext](ciphertext)
+                    ), transition_output["index"]))
+                case TransitionOutput.Type.Record.name:
+                    transition_output_record = await conn.fetchrow(
+                        "SELECT * FROM transition_output_record WHERE transition_output_id = $1",
+                        transition_output["id"]
+                    )
+                    if transition_output_record["record_ciphertext"] is None:
+                        record_ciphertext = None
+                    else:
+                        record_ciphertext = Record[Ciphertext].loads(transition_output_record["record_ciphertext"])
+                    tos.append((RecordTransitionOutput(
+                        commitment=Field.loads(transition_output_record["commitment"]),
+                        checksum=Field.loads(transition_output_record["checksum"]),
+                        record_ciphertext=Option[Record[Ciphertext]](record_ciphertext)
+                    ), transition_output["index"]))
+                case _:
+                    raise NotImplementedError
+        tos.sort(key=lambda x: x[1])
+        tos = [x[0] for x in tos]
+        return Transition(
+            id_=TransitionID.loads(transition["transition_id"]),
+            program_id=ProgramID.loads(transition["program_id"]),
+            function_name=Identifier.loads(transition["function_name"]),
+            inputs=Vec[TransitionInput, u16](tis),
+            outputs=Vec[TransitionOutput, u16](tos),
+            # This is wrong
+            finalize=Option[Vec[Value, u16]](None),
+            proof=Proof.loads(transition["proof"]),
+            tpk=Group.loads(transition["tpk"]),
+            tcm=Field.loads(transition["tcm"]),
+            fee=i64(transition["fee"]),
+        )
+
+    @staticmethod
     async def _get_full_block(block: dict, conn: asyncpg.Connection):
         transactions = await conn.fetch("SELECT * FROM transaction WHERE block_id = $1", block['id'])
         txs = []
@@ -278,7 +430,36 @@ class Database:
                     deploy_transaction = await conn.fetchrow(
                         "SELECT * FROM transaction_deploy WHERE transaction_id = $1", transaction["id"]
                     )
-
+                    program = await conn.fetchval(
+                        "SELECT raw_data FROM program WHERE transaction_deploy_id = $1",
+                        deploy_transaction["id"]
+                    )
+                    deployment = Deployment(
+                        edition=u16(deploy_transaction["edition"]),
+                        program=Program.load(bytearray(program)),
+                        verifying_keys=Vec[Tuple[Identifier, VerifyingKey, Certificate], u16]([]),
+                    )
+                    fee = await conn.fetchrow(
+                        "SELECT * FROM fee WHERE transaction_id = $1", transaction["id"]
+                    )
+                    fee_transition = await conn.fetchrow(
+                        "SELECT * FROM transition WHERE fee_id = $1", fee["id"]
+                    )
+                    if fee_transition is None:
+                        raise ValueError("fee transition not found")
+                    proof = None
+                    if fee["inclusion_proof"] is not None:
+                        proof = Proof.loads(fee["inclusion_proof"])
+                    fee = Fee(
+                        transition=await Database._get_transition(fee_transition, conn),
+                        global_state_root=StateRoot.loads(fee["global_state_root"]),
+                        inclusion_proof=Option[Proof](proof),
+                    )
+                    txs.append(DeployTransaction(
+                        id_=TransactionID.loads(transaction["transaction_id"]),
+                        deployment=deployment,
+                        fee=fee,
+                    ))
                 case Transaction.Type.Execute.name:
                     execute_transaction = await conn.fetchrow(
                         "SELECT * FROM transaction_execute WHERE transaction_id = $1", transaction["id"]
@@ -289,85 +470,26 @@ class Database:
                     )
                     tss = []
                     for transition in transitions:
-                        transition_inputs = await conn.fetch(
-                            "SELECT * FROM transition_input WHERE transition_id = $1",
-                            transition["id"]
-                        )
-                        tis = []
-                        for transition_input in transition_inputs:
-                            match transition_input["type"]:
-                                case TransitionInput.Type.Private.name:
-                                    transition_input_private = await conn.fetchrow(
-                                        "SELECT * FROM transition_input_private WHERE transition_input_id = $1",
-                                        transition_input["id"]
-                                    )
-                                    if transition_input_private is None:
-                                        ciphertext = None
-                                    else:
-                                        ciphertext = Ciphertext.loads(transition_input_private["ciphertext"])
-                                    tis.append((PrivateTransitionInput(
-                                        ciphertext_hash=Field.loads(transition_input_private["ciphertext_hash"]),
-                                        ciphertext=Option[Ciphertext](ciphertext)
-                                    ), transition_input_private["index"]))
-                                case TransitionInput.Type.Record.name:
-                                    transition_input_record = await conn.fetchrow(
-                                        "SELECT * FROM transition_input_record WHERE transition_input_id = $1",
-                                        transition_input["id"]
-                                    )
-                                    tis.append((RecordTransitionInput(
-                                        serial_number=Field.loads(transition_input_record["serial_number"]),
-                                        tag=Field.loads(transition_input_record["tag"])
-                                    ), transition_input_record["index"]))
-                                case _:
-                                    raise NotImplementedError
-                        tis.sort(key=lambda x: x[1])
-                        tis = [x[0] for x in tis]
-
-                        transition_outputs = await conn.fetch(
-                            "SELECT * FROM transition_output WHERE transition_id = $1",
-                            transition["id"]
-                        )
-                        tos = []
-                        for transition_output in transition_outputs:
-                            match transition_output["type"]:
-                                case TransitionOutput.Type.Record.name:
-                                    transition_output_record = await conn.fetchrow(
-                                        "SELECT * FROM transition_output_record WHERE transition_output_id = $1",
-                                        transition_output["id"]
-                                    )
-                                    if transition_output_record["record_ciphertext"] is None:
-                                        record_ciphertext = None
-                                    else:
-                                        record_ciphertext = Record[Ciphertext].loads(transition_output_record["record_ciphertext"])
-                                    tos.append((RecordTransitionOutput(
-                                        commitment=Field.loads(transition_output_record["commitment"]),
-                                        checksum=Field.loads(transition_output_record["checksum"]),
-                                        record_ciphertext=Option[Record[Ciphertext]](record_ciphertext)
-                                    ), transition_output_record["index"]))
-                                case _:
-                                    raise NotImplementedError
-                        tos.sort(key=lambda x: x[1])
-                        tos = [x[0] for x in tos]
-                        tss.append(Transition(
-                            id_=TransitionID.loads(transition["transition_id"]),
-                            program_id=ProgramID.loads(transition["program_id"]),
-                            function_name=Identifier.loads(transition["function_name"]),
-                            inputs=Vec[TransitionInput, u16](tis),
-                            outputs=Vec[TransitionOutput, u16](tos),
-                            # This is wrong
-                            finalize=Option[Vec[Value, u16]](None),
-                            proof=Proof.loads(transition["proof"]),
-                            tpk=Group.loads(transition["tpk"]),
-                            tcm=Field.loads(transition["tcm"]),
-                            fee=i64(transition["fee"]),
-                        ))
+                        tss.append(await Database._get_transition(transition, conn))
                     additional_fee = await conn.fetchrow(
                         "SELECT * FROM fee WHERE transaction_id = $1", transaction["id"]
                     )
                     if additional_fee is None:
                         fee = None
                     else:
-                        raise NotImplementedError
+                        fee_transition = await conn.fetchrow(
+                            "SELECT * FROM transition WHERE fee_id = $1", additional_fee["id"]
+                        )
+                        if fee_transition is None:
+                            raise ValueError("fee transition not found")
+                        proof = None
+                        if additional_fee["inclusion_proof"] is not None:
+                            proof = Proof.loads(additional_fee["inclusion_proof"])
+                        fee = Fee(
+                            transition=await Database._get_transition(fee_transition, conn),
+                            global_state_root=StateRoot.loads(additional_fee["global_state_root"]),
+                            inclusion_proof=Option[Proof](proof),
+                        )
                     if execute_transaction["inclusion_proof"] is None:
                         proof = None
                     else:
