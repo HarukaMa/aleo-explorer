@@ -1110,6 +1110,32 @@ class Database:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
+    async def get_program_count(self) -> int:
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                return await conn.fetchval("SELECT COUNT(*) FROM program")
+            except Exception as e:
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                raise
+
+    async def get_programs(self, start, end) -> list:
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                return await conn.fetch(
+                    "SELECT program_id, b.height, t.transaction_id FROM program "
+                    "JOIN transaction_deploy td on program.transaction_deploy_id = td.id "
+                    "JOIN transaction t on td.transaction_id = t.id "
+                    "JOIN block b on t.block_id = b.id "
+                    "ORDER BY b.height DESC "
+                    "LIMIT $1 OFFSET $2",
+                    end - start, start
+                )
+            except Exception as e:
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                raise
+
 
     # migration method
     async def update_target_sum(self):

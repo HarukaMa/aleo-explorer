@@ -1,0 +1,49 @@
+{% extends "base.jinja2" %}
+
+{% block title %}Program Registry - Haruka's Aleo Explorer{% endblock %}
+
+{% block head %}
+    <style>
+
+    </style>
+{% endblock %}
+
+{% from "macros.jinja2" import nav %}
+
+{% block content %}
+
+    <div class="content">
+
+        <div id="header">
+            <h3>Program Registry</h3>
+        </div>
+
+        <div id="blocks">
+
+            {{ nav(page, total_pages, "/programs?") }}
+
+            <table class="unstriped">
+                <thead>
+                <tr>
+                    <th>Program ID</th>
+                    <th>Block Height</th>
+                    <th>Transaction ID</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for program in programs %}
+                    <tr>
+                        <td><span class="mono">{{ program.program_id }}</span></td>
+                        <td><a href="/block?h={{ program.height }}">{{ program.height }}</a></td>
+                        <td><span class="mono"><a href="/transaction?id={{ program.transaction_id }}">{{ program.transaction_id }}</a></span></td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+
+            {{ nav(page, total_pages, "/programs?") }}
+
+        </div>
+    </div>
+
+{% endblock %}

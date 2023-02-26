@@ -578,6 +578,34 @@ async def blocks_route(request: Request):
     return templates.TemplateResponse('blocks.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
 
 
+async def programs_route(request: Request):
+    try:
+        page = request.query_params.get("p")
+        if page is None:
+            page = 1
+        else:
+            page = int(page)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid page")
+    total_programs = await db.get_program_count()
+    total_pages = (total_programs // 50) + 1
+    if page < 1 or page > total_pages:
+        raise HTTPException(status_code=400, detail="Invalid page")
+    start = 50 * (page - 1)
+    programs = await db.get_programs(start, start + 50)
+
+    maintenance, info = await out_of_sync_check()
+    ctx = {
+        "request": request,
+        "programs": programs,
+        "page": page,
+        "total_pages": total_pages,
+        "maintenance": maintenance,
+        "info": info,
+    }
+    return templates.TemplateResponse('programs.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
+
+
 async def leaderboard_route(request: Request):
     try:
         page = request.query_params.get("p")
@@ -946,6 +974,7 @@ async def cloudflare_error_page(request: Request):
 
 routes = [
     Route("/", index_route),
+    # Blockchain
     Route("/block", block_route),
     Route("/transaction", transaction_route),
     Route("/transition", transition_route),
@@ -953,11 +982,13 @@ routes = [
     Route("/nodes", nodes_route),
     Route("/orphan", orphan_route),
     Route("/blocks", blocks_route),
-    # Route("/miner", miner_stats),
+    Route("/programs", programs_route),
+    # Proving
     Route("/calc", calc_route),
     Route("/leaderboard", leaderboard_route),
     Route("/address", address_route),
     Route("/address_solution", address_solution_route),
+    # Other
     Route("/advanced", advanced_route),
     Route("/faq", faq_route),
     Route("/privacy", privacy_route),
