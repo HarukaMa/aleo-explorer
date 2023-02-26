@@ -843,9 +843,9 @@ async def advanced_route(request: Request):
                         data = get_ciphertext_data(record.owner.owner)
                     elif field == "gates":
                         if record.gates.type == Balance.Type.Public:
-                            raise HTTPException(status_code=400, detail="Gates are public")
+                            raise HTTPException(status_code=400, detail="Gates is public")
                         if record.gates.Private != Ciphertext:
-                            raise HTTPException(status_code=400, detail="Gates are not a ciphertext")
+                            raise HTTPException(status_code=400, detail="Gates is not a ciphertext")
                         id_ = str(record.gates.balance)
                         data = get_ciphertext_data(record.gates.balance)
                     else:
