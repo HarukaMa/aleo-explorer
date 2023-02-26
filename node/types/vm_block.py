@@ -303,19 +303,19 @@ class ClosureInput(Serialize, Deserialize):
 class ClosureOutput(Serialize, Deserialize):
 
     # @type_check
-    def __init__(self, *, register: Register, register_type: RegisterType):
-        self.register = register
+    def __init__(self, *, operand: Operand, register_type: RegisterType):
+        self.operand = operand
         self.register_type = register_type
 
     def dump(self) -> bytes:
-        return self.register.dump() + self.register_type.dump()
+        return self.operand.dump() + self.register_type.dump()
 
     @classmethod
     # @type_check
     def load(cls, data: bytearray):
-        register = Register.load(data)
+        operand = Operand.load(data)
         register_type = RegisterType.load(data)
-        return cls(register=register, register_type=register_type)
+        return cls(operand=operand, register_type=register_type)
 
 
 class Closure(Serialize, Deserialize):
