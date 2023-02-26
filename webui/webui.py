@@ -186,7 +186,6 @@ async def block_route(request: Request):
                 }
                 txs.append(t)
 
-    maintenance, info = await out_of_sync_check()
     ctx = {
         "request": request,
         "block": block,
@@ -196,8 +195,6 @@ async def block_route(request: Request):
         "transactions": txs,
         "coinbase_solutions": css,
         "target_sum": target_sum,
-        "maintenance": maintenance,
-        "info": info,
     }
     return templates.TemplateResponse('block.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'})
 
@@ -229,7 +226,6 @@ async def transaction_route(request: Request):
     if transaction is None:
         raise HTTPException(status_code=550, detail="Transaction not found in block")
 
-    maintenance, info = await out_of_sync_check()
     ctx = {
         "request": request,
         "tx_id": tx_id,
@@ -237,8 +233,6 @@ async def transaction_route(request: Request):
         "block": block,
         "transaction": transaction,
         "type": transaction_type,
-        "maintenance": maintenance,
-        "info": info,
     }
 
     if transaction.type == Transaction.Type.Deploy:
@@ -390,7 +384,6 @@ async def transition_route(request: Request):
 
     finalize = []
 
-    maintenance, info = await out_of_sync_check()
     ctx = {
         "request": request,
         "ts_id": ts_id,
@@ -408,8 +401,6 @@ async def transition_route(request: Request):
         "inputs": inputs,
         "outputs": outputs,
         "finalize": finalize,
-        "maintenance": maintenance,
-        "info": info,
     }
     return templates.TemplateResponse('transition.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'})
 
@@ -910,21 +901,15 @@ async def advanced_route(request: Request):
 
 
 async def faq_route(request: Request):
-    maintenance, info = await out_of_sync_check()
     ctx = {
         "request": request,
-        "maintenance": maintenance,
-        "info": info,
     }
     return templates.TemplateResponse('faq.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'})
 
 
 async def privacy_route(request: Request):
-    maintenance, info = await out_of_sync_check()
     ctx = {
         "request": request,
-        "maintenance": maintenance,
-        "info": info,
     }
     return templates.TemplateResponse('privacy.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'})
 
