@@ -176,7 +176,7 @@ async def block_route(request: Request):
                 t = {
                     "tx_id": tx.id,
                     "type": "Execute",
-                    "transitions_count": len(tx.execution.transitions),
+                    "transitions_count": len(tx.execution.transitions) + bool(tx.additional_fee.value is not None),
                 }
                 txs.append(t)
 
@@ -238,7 +238,7 @@ async def transaction_route(request: Request):
     if transaction.type == Transaction.Type.Deploy:
         transaction: DeployTransaction
         ctx.update({
-            "total_fee": 0,
+            "total_fee": int(transaction.fee.transition.fee),
         })
     elif transaction.type == Transaction.Type.Execute:
         transaction: ExecuteTransaction
@@ -252,6 +252,15 @@ async def transaction_route(request: Request):
                 "transition_id": transition.id,
                 "action": await function_signature(transition),
                 "fee": transition.fee,
+            })
+            if transition.fee != 0:
+                total_fee += transition.fee
+        if transaction.additional_fee.value is not None:
+            total_fee += transaction.additional_fee.value.transition.fee
+            transitions.append({
+                "transition_id": transaction.additional_fee.value.transition.id,
+                "action": await function_signature(transaction.additional_fee.value.transition),
+                "fee": transaction.additional_fee.value.transition.fee,
             })
         ctx.update({
             "request": request,
@@ -282,6 +291,12 @@ async def transition_route(request: Request):
         tx: ExecuteTransaction
         for ts in tx.execution.transitions:
             ts: Transition
+            if str(ts.id) == ts_id:
+                transition = ts
+                transaction_id = tx.id
+                break
+        if transaction_id is None and tx.additional_fee.value is not None:
+            ts: Transition = tx.additional_fee.value.transition
             if str(ts.id) == ts_id:
                 transition = ts
                 transaction_id = tx.id
