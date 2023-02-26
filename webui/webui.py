@@ -24,7 +24,7 @@ from db import Database
 from node.light_node import LightNodeState
 from node.types import u32, Transaction, Transition, ExecuteTransaction, TransitionInput, PrivateTransitionInput, \
     RecordTransitionInput, TransitionOutput, RecordTransitionOutput, Record, KZGProof, Proof, WitnessCommitments, \
-    G1Affine, Ciphertext, Owner, Balance, Entry, DeployTransaction
+    G1Affine, Ciphertext, Owner, Balance, Entry, DeployTransaction, Deployment, Program
 
 
 class Server(uvicorn.Server):
@@ -88,19 +88,24 @@ async def out_of_sync_check():
         return False, get_relative_time(last_timestamp)
     return None, None
 
-async def function_signature(transition: Transition):
+async def function_signature(program_id: str, function_name: str):
 
-    if str(transition.program_id) != "credits.aleo":
-        return f"Unknown program {transition.program_id}"
-    if str(transition.function_name) not in credits_functions:
-        return f"Unknown function {transition.program_id}/{transition.function_name}"
-
-    inputs, outputs, _ = credits_functions[str(transition.function_name)]
-    result = f"{transition.program_id}/{transition.function_name}({', '.join(inputs)})"
+    if program_id == "credits.aleo":
+        if function_name not in credits_functions:
+            return f"Unknown function {program_id}/{function_name}"
+        inputs, outputs, finalizes = credits_functions[str(function_name)]
+    else:
+        data = await db.get_function_definition(program_id, function_name)
+        if data is None:
+            return f"Unknown function {program_id}/{function_name}"
+        inputs, outputs, finalizes = data
+    result = f"{program_id}/{function_name}({', '.join(inputs)})"
     if len(outputs) == 1:
         result += f" -> {outputs[0]}"
     else:
         result += f" -> ({', '.join(outputs)})"
+    if len(finalizes) != 0:
+        result += f" finalize({', '.join(finalizes)})"
     return result
 
 async def function_definition(transition: Transition):
@@ -169,6 +174,7 @@ async def block_route(request: Request):
                 t = {
                     "tx_id": tx.id,
                     "type": "Deploy",
+                    "transitions_count": 1,
                 }
                 txs.append(t)
             case Transaction.Type.Execute:
@@ -237,8 +243,27 @@ async def transaction_route(request: Request):
 
     if transaction.type == Transaction.Type.Deploy:
         transaction: DeployTransaction
+        deployment: Deployment = transaction.deployment
+        program: Program = deployment.program
+        functions = []
+        for f in program.functions.keys():
+            functions.append((await function_signature(str(program.id), str(f))).split("/")[-1])
+        fee_transition = transaction.fee.transition
         ctx.update({
-            "total_fee": int(transaction.fee.transition.fee),
+            "edition": int(deployment.edition),
+            "program_id": str(program.id),
+            "imports": list(map(str, program.imports)),
+            "mappings": list(map(str, program.mappings.keys())),
+            "interfaces": list(map(str, program.interfaces.keys())),
+            "records": list(map(str, program.records.keys())),
+            "closures": list(map(str, program.closures.keys())),
+            "functions": functions,
+            "total_fee": int(fee_transition.fee),
+            "transitions": [{
+                "transition_id": transaction.fee.transition.id,
+                "action": await function_signature(str(fee_transition.program_id), str(fee_transition.function_name)),
+                "fee": transaction.fee.transition.fee,
+            }],
         })
     elif transaction.type == Transaction.Type.Execute:
         transaction: ExecuteTransaction
@@ -250,17 +275,18 @@ async def transaction_route(request: Request):
             transition: Transition
             transitions.append({
                 "transition_id": transition.id,
-                "action": await function_signature(transition),
+                "action": await function_signature(str(transition.program_id), str(transition.function_name)),
                 "fee": transition.fee,
             })
             if transition.fee != 0:
                 total_fee += transition.fee
         if transaction.additional_fee.value is not None:
-            total_fee += transaction.additional_fee.value.transition.fee
+            transition = transaction.additional_fee.value.transition
+            total_fee += transition.fee
             transitions.append({
-                "transition_id": transaction.additional_fee.value.transition.id,
-                "action": await function_signature(transaction.additional_fee.value.transition),
-                "fee": transaction.additional_fee.value.transition.fee,
+                "transition_id": transition.id,
+                "action": await function_signature(str(transition.program_id), str(transition.function_name)),
+                "fee": transition.fee,
             })
         ctx.update({
             "request": request,
@@ -288,19 +314,26 @@ async def transition_route(request: Request):
     transaction_id = None
     transition = None
     for tx in block.transactions.transactions:
-        tx: ExecuteTransaction
-        for ts in tx.execution.transitions:
-            ts: Transition
-            if str(ts.id) == ts_id:
-                transition = ts
+        if tx.type == Transaction.Type.Deploy:
+            tx: DeployTransaction
+            if str(tx.fee.transition.id) == ts_id:
+                transition = tx.fee.transition
                 transaction_id = tx.id
                 break
-        if transaction_id is None and tx.additional_fee.value is not None:
-            ts: Transition = tx.additional_fee.value.transition
-            if str(ts.id) == ts_id:
-                transition = ts
-                transaction_id = tx.id
-                break
+        elif tx.type == Transaction.Type.Execute:
+            tx: ExecuteTransaction
+            for ts in tx.execution.transitions:
+                ts: Transition
+                if str(ts.id) == ts_id:
+                    transition = ts
+                    transaction_id = tx.id
+                    break
+            if transaction_id is None and tx.additional_fee.value is not None:
+                ts: Transition = tx.additional_fee.value.transition
+                if str(ts.id) == ts_id:
+                    transition = ts
+                    transaction_id = tx.id
+                    break
     if transaction_id is None:
         raise HTTPException(status_code=550, detail="Transition not found in block")
 
@@ -370,7 +403,7 @@ async def transition_route(request: Request):
         "tcm": tcm,
         "fee": fee,
         "proof": proof,
-        "function_signature": await function_signature(transition),
+        "function_signature": await function_signature(str(transition.program_id), str(transition.function_name)),
         "function_definition": await function_definition(transition),
         "inputs": inputs,
         "outputs": outputs,
