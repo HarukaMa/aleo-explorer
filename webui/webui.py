@@ -24,7 +24,8 @@ from db import Database
 from node.light_node import LightNodeState
 from node.types import u32, Transaction, Transition, ExecuteTransaction, TransitionInput, PrivateTransitionInput, \
     RecordTransitionInput, TransitionOutput, RecordTransitionOutput, Record, KZGProof, Proof, WitnessCommitments, \
-    G1Affine, Ciphertext, Owner, Balance, Entry, DeployTransaction, Deployment, Program
+    G1Affine, Ciphertext, Owner, Balance, Entry, DeployTransaction, Deployment, Program, PublicTransitionInput, \
+    PublicTransitionOutput, PrivateTransitionOutput
 
 
 class Server(uvicorn.Server):
@@ -342,6 +343,13 @@ async def transition_route(request: Request):
     for input_ in transition.inputs:
         input_: TransitionInput
         match input_.type:
+            case TransitionInput.Type.Public:
+                input_: PublicTransitionInput
+                inputs.append({
+                    "type": "Public",
+                    "plaintext_hash": input_.plaintext_hash,
+                    "plaintext": input_.plaintext.value,
+                })
             case TransitionInput.Type.Private:
                 input_: PrivateTransitionInput
                 inputs.append({
@@ -361,6 +369,20 @@ async def transition_route(request: Request):
     for output in transition.outputs:
         output: TransitionOutput
         match output.type:
+            case TransitionOutput.Type.Public:
+                output: PublicTransitionOutput
+                outputs.append({
+                    "type": "Public",
+                    "plaintext_hash": output.plaintext_hash,
+                    "plaintext": output.plaintext.value,
+                })
+            case TransitionOutput.Type.Private:
+                output: PrivateTransitionOutput
+                outputs.append({
+                    "type": "Private",
+                    "ciphertext_hash": output.ciphertext_hash,
+                    "ciphertext": output.ciphertext.value,
+                })
             case TransitionOutput.Type.Record:
                 output: RecordTransitionOutput
                 output_data = {
