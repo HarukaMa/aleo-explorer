@@ -1,10 +1,9 @@
 import asyncio
-import contextlib
 import copy
 import datetime
 import logging
+import multiprocessing
 import os
-import threading
 import time
 from decimal import Decimal
 
@@ -28,23 +27,18 @@ from node.types import u32, Transaction, Transition, ExecuteTransaction, Transit
     PublicTransitionOutput, PrivateTransitionOutput
 
 
-class Server(uvicorn.Server):
-    # https://stackoverflow.com/a/64521239
-    def install_signal_handlers(self):
-        pass
+class UvicornServer(multiprocessing.Process):
 
-    @contextlib.contextmanager
-    def run_in_thread(self):
-        thread = threading.Thread(target=self.run)
-        thread.start()
-        try:
-            while not self.started:
-                time.sleep(1e-3)
-            yield
-        finally:
-            self.should_exit = True
-            thread.join()
+    def __init__(self, config: uvicorn.Config):
+        super().__init__()
+        self.server = uvicorn.Server(config=config)
+        self.config = config
 
+    def stop(self):
+        self.terminate()
+
+    def run(self, *args, **kwargs):
+        self.server.run()
 
 templates = Jinja2Templates(directory='webui/templates', trim_blocks=True, lstrip_blocks=True)
 
@@ -1095,10 +1089,10 @@ lns: LightNodeState | None = None
 async def run(_):
     config = uvicorn.Config("webui:app", reload=True, log_level="info", port=int(os.environ.get("PORT", 8000)))
     logging.getLogger("uvicorn.access").handlers = []
-    server = Server(config=config)
+    server = UvicornServer(config=config)
     global lns
     # lns = light_node_state
 
-    with server.run_in_thread():
-        while True:
-            await asyncio.sleep(3600)
+    server.start()
+    while True:
+        await asyncio.sleep(3600)
