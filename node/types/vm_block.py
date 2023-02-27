@@ -1,3 +1,4 @@
+import json
 from hashlib import sha256
 
 from .vm_instruction import *
@@ -1299,6 +1300,9 @@ class LiteralPlaintext(Plaintext):
         literal = Literal.load(data)
         return cls(literal=literal)
 
+    def __str__(self):
+        return self.literal.dumps()
+
 
 class StructPlaintext(Plaintext):
     type = Plaintext.Type.Struct
@@ -1330,6 +1334,9 @@ class StructPlaintext(Plaintext):
             del data[:num_bytes]
             members.append(Tuple[Identifier, Plaintext]([identifier, plaintext]))
         return cls(members=Vec[Tuple[Identifier, Plaintext], u8](members))
+
+    def __str__(self):
+        return json.dumps(self.members)
 
 
 class Owner(TypeParameter, Serialize, Deserialize):  # enum
