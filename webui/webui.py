@@ -91,7 +91,7 @@ async def out_of_sync_check():
 
 async def function_signature(program_id: str, function_name: str):
     definition = await function_definition(program_id, function_name)
-    if isinstance(str, definition):
+    if isinstance(definition, str):
         return definition
     inputs, outputs, finalizes = definition
     result = f"{program_id}/{function_name}({', '.join(inputs)})"
