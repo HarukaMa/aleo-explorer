@@ -72,6 +72,7 @@ class Explorer:
             await self.check_genesis()
             self.latest_height = await self.db.get_latest_height()
             self.latest_block_hash = await self.db.get_block_hash_by_height(self.latest_height)
+            await self.db.migrate()
             print(f"latest height: {self.latest_height}")
             self.node = Node(explorer_message=self.message, explorer_request=self.node_request)
             await self.node.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4133")))

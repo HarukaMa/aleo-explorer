@@ -75,6 +75,15 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
+-- Name: _migration; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer._migration (
+    migrated_id integer NOT NULL
+);
+
+
+--
 -- Name: block; Type: TABLE; Schema: explorer; Owner: -
 --
 
@@ -330,7 +339,8 @@ CREATE TABLE explorer.program_function (
     input_mode text[] NOT NULL,
     output text[] NOT NULL,
     output_mode text[] NOT NULL,
-    finalize text[] NOT NULL
+    finalize text[] NOT NULL,
+    called integer DEFAULT 0 NOT NULL
 );
 
 

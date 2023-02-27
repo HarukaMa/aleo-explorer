@@ -1137,22 +1137,41 @@ class Database:
                 raise
 
 
-    # migration method
-    async def update_target_sum(self):
+    # migration methods
+    async def migrate(self):
+        migrations = [
+            (1, self.migrate_1_update_function_called_time)
+        ]
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
             try:
-                latest_height = await self.get_latest_height()
-                for height in range(latest_height):
-                    target_sum = await conn.fetchval("SELECT get_block_target_sum($1)", height)
-                    if target_sum is not None:
-                        print(f"Updating target sum for height {height}")
-                        coinbase_solution_id = await conn.fetchval(
-                            "SELECT cs.id FROM coinbase_solution cs "
-                            "JOIN block b ON b.id = cs.block_id "
-                            "WHERE b.height = $1", height
-                        )
-                        await conn.execute("UPDATE coinbase_solution SET target_sum = $1 WHERE id = $2", target_sum, coinbase_solution_id)
+                for migrated_id, method in migrations:
+                    if await conn.fetchval("SELECT COUNT(*) FROM _migration WHERE migrated_id = $1", migrated_id) == 0:
+                        print(f"DB migrating {migrated_id}")
+                        await method()
+                        await conn.execute("INSERT INTO _migration (migrated_id) VALUES ($1)", migrated_id)
+            except Exception as e:
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                raise
+
+    async def migrate_1_update_function_called_time(self):
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                functions = await conn.fetch(
+                    "SELECT pf.id, p.program_id, pf.name FROM program_function pf "
+                    "JOIN program p ON pf.program_id = p.id"
+                )
+                for function in functions:
+                    called_time = await conn.fetchval(
+                        "SELECT COUNT(*) FROM transition "
+                        "WHERE program_id = $1 AND function_name = $2",
+                        function["program_id"], function["name"]
+                    )
+                    await conn.execute(
+                        "UPDATE program_function SET called = $1 WHERE id = $2",
+                        called_time, function["id"]
+                    )
             except Exception as e:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
