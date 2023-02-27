@@ -1505,8 +1505,10 @@ class Entry(Generic, Serialize, Deserialize):  # enum
         Public = 1
         Private = 2
 
+    # Entry is a generic type and needs to be directly instantiated,
+    # so we can't enforce abstract methods here
     @property
-    @abstractmethod
+    # @abstractmethod
     def type(self):
         raise NotImplementedError
 
@@ -1521,6 +1523,10 @@ class Entry(Generic, Serialize, Deserialize):  # enum
             return PrivateEntry[self.Private].load(data)
         else:
             raise ValueError("invalid type")
+
+    # same as above
+    def dump(self) -> bytes:
+        raise NotImplementedError
 
 
 class ConstantEntry(Entry):
