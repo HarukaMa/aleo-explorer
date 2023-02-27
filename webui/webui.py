@@ -415,7 +415,7 @@ async def transition_route(request: Request):
         "fee": fee,
         "proof": proof,
         "function_signature": await function_signature(str(transition.program_id), str(transition.function_name)),
-        "function_definition": await function_definition(transition),
+        "function_definition": await function_definition(str(transition.program_id), str(transition.function_name)),
         "inputs": inputs,
         "outputs": outputs,
         "finalize": finalize,
