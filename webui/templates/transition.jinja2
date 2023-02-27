@@ -71,9 +71,16 @@
         {% for input in inputs %}
             <h5>Input #{{ loop.index }}</h5>
             {% call data_line("Type") %}
-                {{ input.type }} <span class="mono">{{ function_definition[0][loop.index0] }}</span>
+                {{ input.type }} <span class="mono">{{ function_definition["input"][loop.index0] }}</span>
             {% endcall %}
-        {% if input.type == "Private" %}
+        {% if input.type == "Public" %}
+            {% call data_line("Plaintext hash") %}
+                <span class="mono">{{ input.plaintext_hash }}</span>
+            {% endcall %}
+            {% call data_line("Plaintext") %}
+                <span class="mono">{{ input.plaintext }}</span>
+            {% endcall %}
+        {% elif input.type == "Private" %}
             {% call data_line("Ciphertext hash") %}
                 <span class="mono">{{ input.ciphertext_hash }}</span>
             {% endcall %}
@@ -96,9 +103,25 @@
             {% set outer_loop = loop %}
             <h5>Output #{{ loop.index }}</h5>
             {% call data_line("Type") %}
-                {{ output.type }} <span class="mono">{{ function_definition[1][loop.index0] }}</span>
+                {{ output.type }} <span class="mono">{{ function_definition["output"][loop.index0] }}</span>
             {% endcall %}
-        {% if output.type == "Record" %}
+        {% if output.type == "Public" %}
+            {% call data_line("Plaintext hash") %}
+                <span class="mono">{{ output.plaintext_hash }}</span>
+            {% endcall %}
+            {% call data_line("Plaintext") %}
+                <span class="mono">{{ output.plaintext }}</span>
+            {% endcall %}
+        {% elif output.type == "Private" %}
+            {% call data_line("Ciphertext hash") %}
+                <span class="mono">{{ output.ciphertext_hash }}</span>
+            {% endcall %}
+            {% call data_line("Ciphertext") %}
+                <advanced-link scope="transition" object="{{ ts_id }}" type="output_private" index="{{ loop.index0 }}">
+                    <span class="mono">{{ output.ciphertext }}</span>
+                </advanced-link>
+            {% endcall %}
+        {% elif output.type == "Record" %}
             {% call data_line("Commitment") %}
                 <span class="mono">{{ output.commitment }}</span>
             {% endcall %}
