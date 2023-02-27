@@ -1124,7 +1124,7 @@ class Database:
         async with self.pool.acquire() as conn:
             try:
                 return await conn.fetch(
-                    "SELECT p.program_id, b.height, t.transaction_id, SUM(pf.called) "
+                    "SELECT p.program_id, b.height, t.transaction_id, SUM(pf.called) as called "
                     "FROM program p "
                     "JOIN transaction_deploy td on p.transaction_deploy_id = td.id "
                     "JOIN transaction t on td.transaction_id = t.id "
