@@ -28,6 +28,7 @@
                     <th>Program ID</th>
                     <th>Block Height</th>
                     <th>Transaction ID</th>
+                    <th>Times called</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -36,6 +37,7 @@
                         <td><span class="mono">{{ program.program_id }}</span></td>
                         <td><a href="/block?h={{ program.height }}">{{ program.height }}</a></td>
                         <td><span class="mono"><a href="/transaction?id={{ program.transaction_id }}">{{ program.transaction_id }}</a></span></td>
+                        <td>{{ program.times_called }}</td>
                     </tr>
                 {% endfor %}
                 </tbody>

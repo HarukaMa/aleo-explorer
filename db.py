@@ -1124,10 +1124,13 @@ class Database:
         async with self.pool.acquire() as conn:
             try:
                 return await conn.fetch(
-                    "SELECT program_id, b.height, t.transaction_id FROM program "
-                    "JOIN transaction_deploy td on program.transaction_deploy_id = td.id "
+                    "SELECT p.program_id, b.height, t.transaction_id, SUM(pf.called) "
+                    "FROM program p "
+                    "JOIN transaction_deploy td on p.transaction_deploy_id = td.id "
                     "JOIN transaction t on td.transaction_id = t.id "
                     "JOIN block b on t.block_id = b.id "
+                    "JOIN program_function pf on p.id = pf.program_id "
+                    "GROUP BY p.program_id, b.height, t.transaction_id "
                     "ORDER BY b.height DESC "
                     "LIMIT $1 OFFSET $2",
                     end - start, start
