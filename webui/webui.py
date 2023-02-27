@@ -90,16 +90,10 @@ async def out_of_sync_check():
     return None, None
 
 async def function_signature(program_id: str, function_name: str):
-
-    if program_id == "credits.aleo":
-        if function_name not in credits_functions:
-            return f"Unknown function {program_id}/{function_name}"
-        inputs, outputs, finalizes = credits_functions[str(function_name)]
-    else:
-        data = await db.get_function_definition(program_id, function_name)
-        if data is None:
-            return f"Unknown function {program_id}/{function_name}"
-        inputs, outputs, finalizes = data
+    definition = await function_definition(program_id, function_name)
+    if isinstance(str, definition):
+        return definition
+    inputs, outputs, finalizes = definition
     result = f"{program_id}/{function_name}({', '.join(inputs)})"
     if len(outputs) == 1:
         result += f" -> {outputs[0]}"
@@ -109,14 +103,16 @@ async def function_signature(program_id: str, function_name: str):
         result += f" finalize({', '.join(finalizes)})"
     return result
 
-async def function_definition(transition: Transition):
-    if str(transition.program_id) != "credits.aleo":
-        return f"Unknown program {transition.program_id}"
-    if str(transition.function_name) not in credits_functions:
-        return f"Unknown function {transition.program_id}/{transition.function_name}"
-
-    return credits_functions[str(transition.function_name)]
-
+async def function_definition(program_id: str, function_name: str):
+    if program_id == "credits.aleo":
+        if function_name not in credits_functions:
+            return f"Unknown program {program_id}"
+        return credits_functions[function_name]
+    else:
+        data = await db.get_function_definition(program_id, function_name)
+        if data is None:
+            return f"Unknown function {program_id}/{function_name}"
+        return data
 
 async def index_route(request: Request):
     recent_blocks = await db.get_recent_blocks_fast()
