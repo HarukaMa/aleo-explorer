@@ -71,11 +71,41 @@ templates.env.filters["format_aleo_credit"] = format_aleo_credit
 templates.env.filters["format_number"] = format_number
 
 credits_functions = {
-    "mint": [("address", "u64"), ("credits",), ()],
-    "transfer": [("credits", "address", "u64"), ("credits", "credits"), ()],
-    "join": [("credits", "credits"), ("credits",), ()],
-    "split": [("credits", "u64"), ("credits", "credits"), ()],
-    "fee": [("credits", "u64"), ("credits",), ()],
+    "mint": {
+        "input": ["address", "u64"],
+        "input_mode": ["private", "private"],
+        "output": ["credits"],
+        "output_mode": ["private"],
+        "finalize": [],
+    },
+    "transfer": {
+        "input": ["credits", "address", "u64"],
+        "input_mode": ["private", "private", "private"],
+        "output": ["credits", "credits"],
+        "output_mode": ["private", "private"],
+        "finalize": [],
+    },
+    "join": {
+        "input": ["credits", "credits"],
+        "input_mode": ["private", "private"],
+        "output": ["credits"],
+        "output_mode": ["private"],
+        "finalize": [],
+    },
+    "split": {
+        "input": ["credits", "u64"],
+        "input_mode": ["private", "private"],
+        "output": ["credits", "credits"],
+        "output_mode": ["private", "private"],
+        "finalize": [],
+    },
+    "fee": {
+        "input": ["credits", "u64"],
+        "input_mode": ["private", "private"],
+        "output": ["credits"],
+        "output_mode": ["private"],
+        "finalize": [],
+    },
 }
 
 async def out_of_sync_check():
