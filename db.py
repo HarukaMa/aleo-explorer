@@ -1073,39 +1073,16 @@ class Database:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
-    async def get_function_definition(self, program_id: str, function_name: str) -> list | None:
+    async def get_function_definition(self, program_id: str, function_name: str) -> dict | None:
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
             try:
-                row = await conn.fetchrow(
+                return await conn.fetchrow(
                     "SELECT * FROM program_function "
                     "JOIN program ON program.id = program_function.program_id "
                     "WHERE program.program_id = $1 AND name = $2",
                     program_id, function_name
                 )
-                if row is None:
-                    return None
-                inputs = []
-                for i in range(len(row["input"])):
-                    name = row["input"][i]
-                    mode = row["input_mode"][i]
-                    if mode == "private":
-                        inputs.append(name)
-                    else:
-                        inputs.append(f"{mode} {name}")
-                outputs = []
-                for i in range(len(row["output"])):
-                    name = row["output"][i]
-                    mode = row["output_mode"][i]
-                    if mode == "private":
-                        outputs.append(name)
-                    else:
-                        outputs.append(f"{mode} {name}")
-                return [
-                    inputs,
-                    outputs,
-                    row["finalize"]
-                ]
             except Exception as e:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise

@@ -90,10 +90,26 @@ async def out_of_sync_check():
     return None, None
 
 async def function_signature(program_id: str, function_name: str):
-    definition = await function_definition(program_id, function_name)
-    if isinstance(definition, str):
-        return definition
-    inputs, outputs, finalizes = definition
+    data = await function_definition(program_id, function_name)
+    if isinstance(data, str):
+        return data
+    inputs = []
+    for i in range(len(data["input"])):
+        name = data["input"][i]
+        mode = data["input_mode"][i]
+        if mode == "private":
+            inputs.append(name)
+        else:
+            inputs.append(f"{mode} {name}")
+    outputs = []
+    for i in range(len(data["output"])):
+        name = data["output"][i]
+        mode = data["output_mode"][i]
+        if mode == "private":
+            outputs.append(name)
+        else:
+            outputs.append(f"{mode} {name}")
+    finalizes = data["finalizes"]
     result = f"{program_id}/{function_name}({', '.join(inputs)})"
     if len(outputs) == 1:
         result += f" -> {outputs[0]}"
