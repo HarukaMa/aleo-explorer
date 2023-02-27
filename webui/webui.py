@@ -109,7 +109,7 @@ async def function_signature(program_id: str, function_name: str):
             outputs.append(name)
         else:
             outputs.append(f"{mode} {name}")
-    finalizes = data["finalizes"]
+    finalizes = data["finalize"]
     result = f"{program_id}/{function_name}({', '.join(inputs)})"
     if len(outputs) == 1:
         result += f" -> {outputs[0]}"
