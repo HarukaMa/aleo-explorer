@@ -132,6 +132,14 @@ class Database:
                             transition_finalize_db_id, str(finalize.record)
                         )
 
+        program_db_id = await conn.fetchval(
+            "SELECT id FROM program WHERE program_id = $1", str(transition.program_id)
+        )
+        await conn.execute(
+            "UPDATE program_function SET called = called + 1 WHERE program_id = $1 AND name = $2",
+            program_db_id, str(transition.function_name)
+        )
+
     async def _save_block(self, block: Block):
         async with self.pool.acquire() as conn:
             async with conn.transaction():
