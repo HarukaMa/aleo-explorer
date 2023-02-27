@@ -974,6 +974,7 @@ async def advanced_route(request: Request):
                                 id_ = str(entry.plaintext)
                                 data = get_ciphertext_data(entry.plaintext)
                                 break
+                    if id_ == "":
                         raise HTTPException(status_code=400, detail="Invalid field")
                 else:
                     raise HTTPException(status_code=550, detail="Not Implemented")
