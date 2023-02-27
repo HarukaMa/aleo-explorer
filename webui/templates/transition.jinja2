@@ -54,6 +54,7 @@
         </div>
 
         <div class="data">
+            <a href="#" class="button primary" id="wallet-connect-button" style="display: none">Connect Wallet</a>
             <h4>Function call</h4>
             {% call data_line("Function signature") %}
                 <span class="mono">{{ function_signature }}</span>
@@ -97,7 +98,7 @@
                 <span class="mono">{{ output.checksum }}</span>
             {% endcall %}
             {% call data_line("Record data") %}
-                <span class="mono">{{ output.record }}</span>
+                <span class="mono record">{{ output.record }}</span>
             {% endcall %}
             {% call sub_data_line("owner") %}
                 <advanced-link scope="transition" object="{{ ts_id }}" type="output_record" index="{{ loop.index0 }}" field="owner">
@@ -124,4 +125,57 @@
     </div>
 
     <script src="static/leo_wallet.js"></script>
+    <script>
+        const button = document.getElementById("wallet-connect-button")
+        let wallet = null
+        if (window.LeoWallet !== undefined) {
+            wallet = new window.LeoWallet.LeoWalletAdapter({appName: "Haruka's Aleo Explorer"})
+            if (wallet) {
+                button.style.display = ""
+            }
+        }
+
+        button.addEventListener("click", connect)
+
+        async function connect(e) {
+            e.preventDefault()
+            if (wallet.connected) {
+                await wallet.disconnect()
+                button.className = "button primary"
+                button.innerText = "Connect Wallet"
+                const records = document.getElementsByClassName("record")
+                for (const re of records) {
+                    for (const c of re.children) {
+                        re.removeChild(c)
+                    }
+                }
+
+                return
+            }
+            try {
+                await wallet.connect(window.AleoWalletBase.DecryptPermission.AutoDecrypt, window.AleoWalletBase.WalletAdapterNetwork.Mainnet)
+            } catch (e) {
+                button.className = "button alert"
+                button.innerText = "Connect failed"
+            }
+            if (wallet.connected) {
+                button.className = "button success"
+                const address = wallet.publicKey
+                button.innerHTML = `Connected to address <span class="mono">${address.substring(0, 9) + "..." + address.substring(address.length - 6)}</span>`
+                const records = document.getElementsByClassName("record")
+                for (const re of records) {
+                    console.log(re.innerHTML)
+                    console.log(re.children)
+                    try {
+                        const plaintext = await wallet.decrypt(re.innerHTML)
+                        const element = document.createElement("span")
+                        element.innerHTML = `<br>${plaintext.replaceAll("\n", "<br>").replaceAll(" ", "&nbsp;")}`
+                        re.appendChild(element)
+                    } catch (e) {}
+                }
+            } else {
+                button.className = "button alert"
+            }
+        }
+    </script>
 {% endblock %}
