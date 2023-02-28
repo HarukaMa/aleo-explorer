@@ -1116,7 +1116,7 @@ class Database:
                     "JOIN block b on t.block_id = b.id "
                     "JOIN program_function pf on p.id = pf.program_id "
                     "GROUP BY p.program_id, b.height, t.transaction_id "
-                    "ORDER BY b.height DESC "
+                    "ORDER BY called DESC, b.height DESC "
                     "LIMIT $1 OFFSET $2",
                     end - start, start
                 )
