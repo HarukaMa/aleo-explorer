@@ -162,7 +162,7 @@
         let wallet = null
         if (window.LeoWallet !== undefined) {
             wallet = new window.LeoWallet.LeoWalletAdapter({appName: "Haruka's Aleo Explorer"})
-            if (wallet) {
+            if (wallet && wallet.readyState !== "NotDetected") {
                 button.style.display = ""
             }
         }
