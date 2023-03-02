@@ -791,5 +791,5 @@ class Instruction(Serialize, Deserialize): # enum
     # @type_check
     def load(cls, data: bytearray):
         type_ = cls.Type.load(data)
-        literals = cls.type_map[type_].load(data)
+        literals = deepcopy(cls.type_map[type_]).load(data)
         return cls(type_=type_, literals=literals)
