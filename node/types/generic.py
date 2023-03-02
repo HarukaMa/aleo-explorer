@@ -194,6 +194,9 @@ class VarInt(Generic, Serialize, Deserialize):
         self.value = self.type(self.value)
         return self
 
+    def __str__(self):
+        return str(self.value)
+
 class Option(Generic, Serialize, Deserialize):
 
     def __init__(self, types):

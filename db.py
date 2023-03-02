@@ -2,7 +2,7 @@ import time
 
 import asyncpg
 
-from disasm import value_type_to_mode_type_str, finalize_type_to_str
+from disasm.utils import value_type_to_mode_type_str, finalize_type_to_str
 from explorer.types import Message as ExplorerMessage
 from node.types import *
 

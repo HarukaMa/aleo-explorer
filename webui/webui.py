@@ -18,6 +18,7 @@ from starlette.routing import Route, Mount
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 
+import disasm.aleo
 from db import Database
 # from node.light_node import LightNodeState
 from node.light_node import LightNodeState
@@ -295,6 +296,7 @@ async def transaction_route(request: Request):
                 "action": await function_signature(str(fee_transition.program_id), str(fee_transition.function_name)),
                 "fee": transaction.fee.transition.fee,
             }],
+            "source": disasm.aleo.disassemble_program(program),
         })
     elif transaction.type == Transaction.Type.Execute:
         transaction: ExecuteTransaction

@@ -132,7 +132,9 @@
                 {% endfor %}
                 </span>
             {% endcall %}
-
+            {% call data_line("Source code (Aleo instructions)") %}
+                <pre>{{ source }}</pre>
+            {% endcall %}
         </div>
     {% endif %}
 

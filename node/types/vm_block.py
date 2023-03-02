@@ -1301,7 +1301,7 @@ class LiteralPlaintext(Plaintext):
         return cls(literal=literal)
 
     def __str__(self):
-        return self.literal.dumps()
+        return str(self.literal)
 
 
 class StructPlaintext(Plaintext):

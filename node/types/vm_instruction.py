@@ -77,9 +77,6 @@ class Literal(Serialize, Deserialize): # enum
     def dump(self) -> bytes:
         return self.type.dump() + self.primitive.dump()
 
-    def dumps(self) -> str:
-        return str(self.primitive)
-
     @classmethod
     # @type_check
     def load(cls, data: bytearray):
@@ -90,6 +87,10 @@ class Literal(Serialize, Deserialize): # enum
     @classmethod
     def loads(cls, type_: Type, data: str):
         return cls.primitive_type_map[type_].loads(data)
+
+    def __str__(self):
+        import disasm.aleo
+        return disasm.aleo.disasm_literal(self)
 
 
 class Identifier(Serialize, Deserialize):
@@ -717,7 +718,7 @@ class Instruction(Serialize, Deserialize): # enum
         Ternary = 54
         Xor = 55
 
-    # Some times are not implemented as Literals originally,
+    # Some types are not implemented as Literals originally,
     # but binary wise they have the same behavior (operands, destination)
     type_map = {
         Type.Abs: Literals[1],
@@ -779,12 +780,12 @@ class Instruction(Serialize, Deserialize): # enum
     }
 
     # @type_check
-    def __init__(self, *, type_: Type, literals: Literals):
-        self.type_ = type_
+    def __init__(self, *, type_: Type, literals: Literals | AssertInstruction | Call | Cast):
+        self.type = type_
         self.literals = literals
 
     def dump(self) -> bytes:
-        return self.type_.dump() + self.literals.dump()
+        return self.type.dump() + self.literals.dump()
 
     @classmethod
     # @type_check
