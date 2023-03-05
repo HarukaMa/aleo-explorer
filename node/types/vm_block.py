@@ -1336,7 +1336,10 @@ class StructPlaintext(Plaintext):
         return cls(members=Vec[Tuple[Identifier, Plaintext], u8](members))
 
     def __str__(self):
-        return json.dumps(self.members)
+        data = {}
+        for identifier, plaintext in self.members:
+            data[str(identifier)] = str(plaintext)
+        return json.dumps(data)
 
 
 class Owner(TypeParameter, Serialize, Deserialize):  # enum
