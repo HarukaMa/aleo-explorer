@@ -185,7 +185,7 @@
                 return
             }
             try {
-                await wallet.connect(window.AleoWalletBase.DecryptPermission.AutoDecrypt, window.AleoWalletBase.WalletAdapterNetwork.Mainnet)
+                await wallet.connect(window.AleoWalletBase.DecryptPermission.AutoDecrypt, window.AleoWalletBase.WalletAdapterNetwork.Testnet)
             } catch (e) {
                 button.className = "button alert"
                 button.innerText = "Connect failed"
