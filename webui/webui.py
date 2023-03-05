@@ -552,7 +552,24 @@ async def search_route(request: Request):
             "too_many": too_many,
         }
         return templates.TemplateResponse('search_result.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
-
+    else:
+        # have to do this to support program name prefix search
+        programs = await db.search_program(query)
+        if programs:
+            if len(programs) == 1:
+                return RedirectResponse(f"/program?id={programs[0]}", status_code=302)
+            too_many = False
+            if len(programs) > 50:
+                programs = programs[:50]
+                too_many = True
+            ctx = {
+                "request": request,
+                "query": query,
+                "type": "program",
+                "programs": programs,
+                "too_many": too_many,
+            }
+            return templates.TemplateResponse('search_result.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
     raise HTTPException(status_code=404, detail="Unknown object type or searching is not supported")
 
 

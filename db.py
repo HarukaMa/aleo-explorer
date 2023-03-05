@@ -1176,6 +1176,20 @@ class Database:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
+    async def search_program(self, program_id: str) -> [str]:
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                result = await conn.fetch(
+                    "SELECT program_id FROM program WHERE program_id LIKE $1", f"{program_id}%"
+                )
+                if result is None:
+                    return []
+                return list(map(lambda x: x['program_id'], result))
+            except Exception as e:
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                raise
+
 
     # migration methods
     async def migrate(self):

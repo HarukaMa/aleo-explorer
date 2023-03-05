@@ -44,6 +44,11 @@
                     <span class="mono"><a href="/address?a={{ address }}">{{ address }}</a></span>
                 </li>
             {% endfor %}
+            {% for program in programs %}
+                <li>
+                    <span class="mono"><a href="/program?id={{ program }}">{{ program }}</a></span>
+                </li>
+            {% endfor %}
         </ul>
     </div>
 
