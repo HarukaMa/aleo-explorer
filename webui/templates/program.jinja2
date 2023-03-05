@@ -126,7 +126,7 @@
                     {% for call in recent_calls %}
                         <tr>
                             <td><a href="/block?h={{ call.height }}">{{ call.height }}</a></td>
-                            <td>{{ call.timestamp | format_time }}</td>
+                            <td>{{ call.timestamp | format_time | safe }}</td>
                             <td><a href="/transition?id={{ call.transition_id }}">{{ call.transition_id }}</a></td>
                             <td><span class="mono">{{ call.function_call }}</span></td>
                         </tr>
