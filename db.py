@@ -1122,6 +1122,58 @@ class Database:
                 )
             except Exception as e:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+
+
+    async def get_block_by_program_id(self, program_id: str) -> Block | None:
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                height = await conn.fetchval(
+                    "SELECT height FROM transaction tx "
+                    "JOIN transaction_deploy td on tx.id = td.transaction_id "
+                    "JOIN program p on td.id = p.transaction_deploy_id "
+                    "JOIN block b on tx.block_id = b.id "
+                    "WHERE p.program_id = $1",
+                    program_id
+                )
+                return await self.get_block_by_height(height)
+            except Exception as e:
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                raise
+
+
+    async def get_program_called_times(self, program_id: str) -> int:
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                return await conn.fetchval(
+                    "SELECT called FROM program_function "
+                    "JOIN program ON program.id = program_function.program_id "
+                    "WHERE program.program_id = $1",
+                    program_id
+                )
+            except Exception as e:
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                raise
+
+
+    async def get_program_calls(self, program_id: str, start: int, end: int) -> list:
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                return await conn.fetch(
+                    "SELECT b.height, b.timestamp, ts.transition_id, function_name "
+                    "FROM transition ts "
+                    "JOIN transaction_execute te on te.id = ts.transaction_execute_id "
+                    "JOIN transaction t on te.transaction_id = t.id "
+                    "JOIN block b on t.block_id = b.id "
+                    "WHERE ts.program_id = $1 "
+                    "ORDER BY b.height DESC "
+                    "LIMIT $2 OFFSET $3",
+                    program_id, end - start, start
+                )
+            except Exception as e:
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
 

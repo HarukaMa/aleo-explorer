@@ -1,0 +1,140 @@
+{% extends "base.jinja2" %}
+
+{% block title %}Program {{ program_id }} - Haruka's Aleo Explorer{% endblock %}
+
+{% block head %}
+
+    <style>
+
+        #data {
+            margin: 20px 4px;
+        }
+
+        #transitions, #structure {
+            margin-top: 20px;
+        }
+
+        .text-alert {
+            color: #cc4b37;
+        }
+
+    </style>
+
+{% endblock %}
+
+{% from "macros.jinja2" import data_line %}
+
+{% block content %}
+
+    <div class="content">
+        <div class="header">
+            <h3>Program {{ program_id }}</h3>
+        </div>
+
+        <div id="data">
+            {% call data_line("Program ID") %}
+                <span class="mono">{{ program_id }}</span>
+            {% endcall %}
+            {% call data_line("Deployment transaction") %}
+                <a href="/transaction?id={{ transaction_id }}">{{ transaction_id }}</a>
+            {% endcall %}
+            {% call data_line("Times called") %}
+                {{ times_called }}
+            {% endcall %}
+
+            <div id="structure">
+                <h5>Program Structure</h5>
+                {% call data_line("Imports") %}
+                    <span class="mono">
+                {% if imports %}
+                    {% for import in imports %}
+                        {{ import }}<br>
+                    {% endfor %}
+                {% else %}
+                    -
+                {% endif %}
+                </span>
+                {% endcall %}
+                {% call data_line("Mappings") %}
+                    <span class="mono">
+                {% if mappings %}
+                    {% for mapping in mappings %}
+                        {{ mapping }}<br>
+                    {% endfor %}
+                {% else %}
+                    -
+                {% endif %}
+                </span>
+                {% endcall %}
+                {% call data_line("Structs") %}
+                    <span class="mono">
+                {% if interfaces %}
+                    {% for struct in interfaces %}
+                        {{ struct }}<br>
+                    {% endfor %}
+                {% else %}
+                    -
+                {% endif %}
+                </span>
+                {% endcall %}
+                {% call data_line("Records") %}
+                    <span class="mono">
+                {% if records %}
+                    {% for record in records %}
+                        {{ record }}<br>
+                    {% endfor %}
+                {% else %}
+                    -
+                {% endif %}
+                </span>
+                {% endcall %}
+                {% call data_line("Functions") %}
+                    <span class="mono">
+                {% if closures %}
+                    {% for function in closures %}
+                        {{ function }}<br>
+                    {% endfor %}
+                {% else %}
+                    -
+                {% endif %}
+                </span>
+                {% endcall %}
+                {% call data_line("Transitions") %}
+                    <span class="mono">
+                {% for transition in functions %}
+                    {{ transition }}<br>
+                {% endfor %}
+                </span>
+                {% endcall %}
+                {% call data_line("Source code (Aleo instructions)") %}
+                    <pre>{{ source }}</pre>
+                {% endcall %}
+            </div>
+
+            <div id="transitions">
+                <h4>Recent calls</h4>
+                <table id="transitions-table">
+                    <thead>
+                    <tr>
+                        <td>Block height</td>
+                        <td>Timestamp</td>
+                        <td>Transition ID</td>
+                        <td>Function call</td>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for call in recent_calls %}
+                        <tr>
+                            <td><a href="/block?h={{ call.height }}">{{ call.height }}</a></td>
+                            <td>{{ call.timestamp | format_time }}</td>
+                            <td><a href="/transition?id={{ call.transition_id }}">{{ call.transition_id }}</a></td>
+                            <td><span class="mono">{{ call.function_call }}</span></td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+{% endblock %}

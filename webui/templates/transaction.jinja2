@@ -10,7 +10,7 @@
             margin: 20px 4px;
         }
 
-        #transitions, #program {
+        #transitions {
             margin-top: 20px;
         }
 
@@ -58,85 +58,14 @@
             {% call data_line("Edition") %}
                 {{ edition }}
             {% endcall %}
+            {% call data_line("Deployed program ID") %}
+                <a href="/program?id={{ program_id }}"><span class="mono">{{ program_id }}</span></a>
+            {% endcall %}
         {% endif %}
         {% call data_line("Total fee") %}
             {{ total_fee | format_aleo_credit }} Aleo credits
         {% endcall %}
         </div>
-
-    {% if type == "Deploy" %}
-        <div id="program">
-            <h4>Deployed program</h4>
-            {% call data_line("Program ID") %}
-                <span class="mono">{{ program_id }}</span>
-            {% endcall %}
-            {% call data_line("Imports") %}
-                <span class="mono">
-                {% if imports %}
-                    {% for import in imports %}
-                        {{ import }}<br>
-                    {% endfor %}
-                {% else %}
-                    -
-                {% endif %}
-                </span>
-            {% endcall %}
-            {% call data_line("Mappings") %}
-                <span class="mono">
-                {% if mappings %}
-                    {% for mapping in mappings %}
-                        {{ mapping }}<br>
-                    {% endfor %}
-                {% else %}
-                    -
-                {% endif %}
-                </span>
-            {% endcall %}
-            {% call data_line("Structs") %}
-                <span class="mono">
-                {% if interfaces %}
-                    {% for struct in interfaces %}
-                        {{ struct }}<br>
-                    {% endfor %}
-                {% else %}
-                    -
-                {% endif %}
-                </span>
-            {% endcall %}
-            {% call data_line("Records") %}
-                <span class="mono">
-                {% if records %}
-                    {% for record in records %}
-                        {{ record }}<br>
-                    {% endfor %}
-                {% else %}
-                    -
-                {% endif %}
-                </span>
-            {% endcall %}
-            {% call data_line("Functions") %}
-                <span class="mono">
-                {% if closures %}
-                    {% for function in closures %}
-                        {{ function }}<br>
-                    {% endfor %}
-                {% else %}
-                    -
-                {% endif %}
-                </span>
-            {% endcall %}
-            {% call data_line("Transitions") %}
-                <span class="mono">
-                {% for transition in functions %}
-                    {{ transition }}<br>
-                {% endfor %}
-                </span>
-            {% endcall %}
-            {% call data_line("Source code (Aleo instructions)") %}
-                <pre>{{ source }}</pre>
-            {% endcall %}
-        </div>
-    {% endif %}
 
         <div id="transitions">
             <h4>{% if type == "Deploy" %}Fee transition{% else %}Transitions{% endif %}</h4>

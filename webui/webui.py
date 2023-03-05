@@ -277,26 +277,16 @@ async def transaction_route(request: Request):
         transaction: DeployTransaction
         deployment: Deployment = transaction.deployment
         program: Program = deployment.program
-        functions = []
-        for f in program.functions.keys():
-            functions.append((await function_signature(str(program.id), str(f))).split("/")[-1])
         fee_transition = transaction.fee.transition
         ctx.update({
             "edition": int(deployment.edition),
             "program_id": str(program.id),
-            "imports": list(map(str, program.imports)),
-            "mappings": list(map(str, program.mappings.keys())),
-            "interfaces": list(map(str, program.interfaces.keys())),
-            "records": list(map(str, program.records.keys())),
-            "closures": list(map(str, program.closures.keys())),
-            "functions": functions,
             "total_fee": int(fee_transition.fee),
             "transitions": [{
                 "transition_id": transaction.fee.transition.id,
                 "action": await function_signature(str(fee_transition.program_id), str(fee_transition.function_name)),
                 "fee": transaction.fee.transition.fee,
             }],
-            "source": disasm.aleo.disassemble_program(program),
         })
     elif transaction.type == Transaction.Type.Execute:
         transaction: ExecuteTransaction
@@ -646,6 +636,44 @@ async def programs_route(request: Request):
         "info": info,
     }
     return templates.TemplateResponse('programs.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
+
+
+async def program_route(request: Request):
+    program_id = request.query_params.get("id")
+    if program_id is None:
+        raise HTTPException(status_code=400, detail="Missing program id")
+    block = await db.get_block_by_program_id(program_id)
+    if block is None:
+        raise HTTPException(status_code=404, detail="Program not found")
+    transaction: DeployTransaction | None = None
+    for tx in block.transactions:
+        if tx.type == Transaction.Type.Deploy:
+            tx: DeployTransaction
+            if str(tx.deployment.program.id) == program_id:
+                transaction = tx
+                break
+    if transaction is None:
+        raise HTTPException(status_code=550, detail="Deploy transaction not found")
+    deployment: Deployment = transaction.deployment
+    program: Program = deployment.program
+    functions = []
+    for f in program.functions.keys():
+        functions.append((await function_signature(str(program.id), str(f))).split("/")[-1])
+    ctx = {
+        "request": request,
+        "program_id": str(program.id),
+        "transaction_id": str(transaction.id),
+        "times_called": await db.get_program_called_times(program_id),
+        "imports": list(map(str, program.imports)),
+        "mappings": list(map(str, program.mappings.keys())),
+        "interfaces": list(map(str, program.interfaces.keys())),
+        "records": list(map(str, program.records.keys())),
+        "closures": list(map(str, program.closures.keys())),
+        "functions": functions,
+        "source": disasm.aleo.disassemble_program(program),
+        "recent_calls": await db.get_program_calls(program_id, 0, 30),
+    }
+    return templates.TemplateResponse('program.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
 
 
 async def leaderboard_route(request: Request):
@@ -1034,6 +1062,7 @@ routes = [
     Route("/nodes", nodes_route),
     Route("/blocks", blocks_route),
     Route("/programs", programs_route),
+    Route("/program", program_route),
     # Proving
     Route("/calc", calc_route),
     Route("/leaderboard", leaderboard_route),
