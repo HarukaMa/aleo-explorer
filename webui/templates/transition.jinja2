@@ -151,6 +151,16 @@
         {% endif %}
             <br>
         {% endfor %}
+        {% for input in finalizes %}
+            <h5>Finalize input #{{ loop.index }}</h5>
+            {% call data_line("Type") %}
+                <span class="mono">{{ function_definition["finalize"][loop.index0] }}</span>
+            {% endcall %}
+            {% call data_line("Plaintext") %}
+                <span class="mono">{{ input }}</span>
+            {% endcall %}
+            <br>
+        {% endfor %}
         </div>
 
     </div>

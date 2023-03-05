@@ -25,7 +25,7 @@ from node.light_node import LightNodeState
 from node.types import u32, Transaction, Transition, ExecuteTransaction, TransitionInput, PrivateTransitionInput, \
     RecordTransitionInput, TransitionOutput, RecordTransitionOutput, Record, KZGProof, Proof, WitnessCommitments, \
     G1Affine, Ciphertext, Owner, Balance, Entry, DeployTransaction, Deployment, Program, PublicTransitionInput, \
-    PublicTransitionOutput, PrivateTransitionOutput
+    PublicTransitionOutput, PrivateTransitionOutput, Value, PlaintextValue
 
 
 class UvicornServer(multiprocessing.Process):
@@ -442,7 +442,16 @@ async def transition_route(request: Request):
                     output_data["record_data"] = record_data
                 outputs.append(output_data)
 
-    finalize = []
+    finalizes = []
+    if transition.finalize.value is not None:
+        for finalize in transition.finalize.value:
+            finalize: Value
+            match finalize.type:
+                case Value.Type.Plaintext:
+                    finalize: PlaintextValue
+                    finalizes.append(str(finalize.plaintext))
+                case Value.Type.Record:
+                    raise NotImplementedError
 
     ctx = {
         "request": request,
@@ -460,7 +469,7 @@ async def transition_route(request: Request):
         "function_definition": await function_definition(str(transition.program_id), str(transition.function_name)),
         "inputs": inputs,
         "outputs": outputs,
-        "finalize": finalize,
+        "finalizes": finalizes,
     }
     return templates.TemplateResponse('transition.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'})
 
