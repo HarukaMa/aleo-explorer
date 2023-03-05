@@ -1,4 +1,3 @@
-from node.types.vm_block import *
 from .utils import *
 
 
@@ -65,6 +64,20 @@ def disasm_value_type(value: ValueType) -> str:
         case ValueType.Type.ExternalRecord:
             value: ExternalRecordValueType
             return str(value.locator) + ".record"
+
+def disasm_command(value: Command) -> str:
+    match value.type:
+        case Command.Type.Decrement:
+            value: DecrementCommand
+            decrement = value.decrement
+            return f"decrement {decrement.mapping}[{disasm_operand(decrement.first)}] by {disasm_operand(decrement.second)}"
+        case Command.Type.Instruction:
+            value: InstructionCommand
+            return disasm_instruction(value.instruction)
+        case Command.Type.Increment:
+            value: IncrementCommand
+            increment = value.increment
+            return f"increment {increment.mapping}[{disasm_operand(increment.first)}] by {disasm_operand(increment.second)}"
 
 def disasm_literal(value: Literal) -> str:
     T = Literal.Type
@@ -189,6 +202,24 @@ def disassemble_program(program: Program) -> str:
         for o in f.outputs:
             o: FunctionOutput
             res.insert_line(f"output {disasm_operand(o.operand)} as {disasm_value_type(o.value_type)};")
+        if f.finalize.value is not None:
+            finalize: Finalize
+            finalize_command: FinalizeCommand
+            finalize_command, finalize = f.finalize.value
+            res.insert_line(f"finalize {' '.join(map(disasm_operand, finalize_command.operands))};")
+            res.unindent()
+            res.insert_line("")
+            res.insert_line(f"finalize {finalize.name}:")
+            res.indent()
+            for i in finalize.inputs:
+                i: FinalizeInput
+                res.insert_line(f"input {disasm_register(i.register)} as {disasm_finalize_type(i.finalize_type)};")
+            for i in finalize.instructions:
+                i: Command
+                res.insert_line(f"{disasm_command(i)};")
+            for o in finalize.outputs:
+                o: FinalizeOutput
+                res.insert_line(f"output {disasm_operand(o.operand)} as {disasm_finalize_type(o.finalize_type)};")
         res.unindent()
         res.insert_line("")
 
