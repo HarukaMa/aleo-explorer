@@ -204,7 +204,7 @@ async def block_route(request: Request):
             target_sum += solution["target"]
 
     txs = []
-    for tx in block.transactions.transactions:
+    for tx in block.transactions:
         tx: Transaction
         match tx.type:
             case Transaction.Type.Deploy:
@@ -247,7 +247,7 @@ async def transaction_route(request: Request):
 
     transaction: DeployTransaction | ExecuteTransaction | None = None
     transaction_type = ""
-    for tx in block.transactions.transactions:
+    for tx in block.transactions:
         match tx.type:
             case Transaction.Type.Deploy:
                 tx: DeployTransaction
@@ -346,7 +346,7 @@ async def transition_route(request: Request):
 
     transaction_id = None
     transition = None
-    for tx in block.transactions.transactions:
+    for tx in block.transactions:
         if tx.type == Transaction.Type.Deploy:
             tx: DeployTransaction
             if str(tx.fee.transition.id) == ts_id:
@@ -843,7 +843,7 @@ async def advanced_route(request: Request):
         block = await db.get_block_from_transaction_id(obj)
         if block is None:
             raise HTTPException(status_code=404, detail="Transaction not found")
-        for tx in block.transactions.transactions:
+        for tx in block.transactions:
             match tx.type:
                 case Transaction.Type.Execute:
                     tx: ExecuteTransaction
@@ -871,7 +871,7 @@ async def advanced_route(request: Request):
         block = await db.get_block_from_transition_id(obj)
         if block is None:
             raise HTTPException(status_code=404, detail="Transition not found")
-        for tx in block.transactions.transactions:
+        for tx in block.transactions:
             if tx.type == Transaction.Type.Execute:
                 tx: ExecuteTransaction
                 for ts in tx.execution.transitions:

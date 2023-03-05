@@ -2220,6 +2220,9 @@ class Transactions(Serialize, Deserialize):
         transactions = Vec[Transaction, u32].load(data)
         return cls(transactions=transactions)
 
+    def __iter__(self):
+        return iter(self.transactions)
+
 
 class BlockHeaderMetadata(Serialize, Deserialize):
     version = u16()
