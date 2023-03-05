@@ -128,7 +128,7 @@
                             <td><a href="/block?h={{ call.height }}">{{ call.height }}</a></td>
                             <td>{{ call.timestamp | format_time | safe }}</td>
                             <td><a href="/transition?id={{ call.transition_id }}">{{ call.transition_id }}</a></td>
-                            <td><span class="mono">{{ call.function_call }}</span></td>
+                            <td><span class="mono">{{ call.function_name }}</span></td>
                         </tr>
                     {% endfor %}
                     </tbody>
