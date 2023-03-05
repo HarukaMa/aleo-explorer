@@ -1117,6 +1117,7 @@ class Commitments(Serialize, Deserialize):
         res += self.h_2.dump()
         return res
 
+    # noinspection PyMethodOverriding
     @classmethod
     # @type_check
     def load(cls, data: bytearray, batch_size: usize):
@@ -1157,6 +1158,7 @@ class Evaluations(Serialize, Deserialize):
         res += self.g_c_eval.dump()
         return res
 
+    # noinspection PyMethodOverriding
     @classmethod
     # @type_check
     def load(cls, data: bytearray, batch_size: usize):
@@ -2122,19 +2124,6 @@ class Execution(Serialize, Deserialize):
         inclusion_proof = Option[Proof].load(data)
         return cls(transitions=transitions, global_state_root=global_state_root, inclusion_proof=inclusion_proof)
 
-    @classmethod
-    # @type_check
-    def load_json(cls, data: dict):
-        transitions = []
-        for transition in data['transitions']:
-            transitions.append(Transition.load_json(transition))
-        global_state_root = StateRoot.loads(data['global_state_root'])
-        if "inclusion" in data:
-            inclusion_proof = Option[Proof](Proof.load(bech32_to_bytes(data['inclusion'])))
-        else:
-            inclusion_proof = Option[Proof](None)
-        return cls(transitions=Vec[Transition, u16](transitions), global_state_root=global_state_root, inclusion_proof=inclusion_proof)
-
 
 class Transaction(Serialize, Deserialize):  # Enum
     version = u16()
@@ -2230,23 +2219,6 @@ class Transactions(Serialize, Deserialize):
         # noinspection PyArgumentList
         transactions = Vec[Transaction, u32].load(data)
         return cls(transactions=transactions)
-
-    @classmethod
-    # @type_check
-    def load_json(cls, data: list):
-        transactions = []
-        for transaction in data:
-            if transaction["type"] == "deploy":
-                # crash here as we are not anticipating deploy transactions
-                transactions.append(DeployTransaction.load_json(transaction))
-            elif transaction["type"] == "execute":
-                transactions.append(ExecuteTransaction.load_json(transaction))
-            else:
-                raise ValueError("invalid transaction type")
-        return cls(transactions=Vec[Transaction, u32](transactions))
-
-    def __iter__(self):
-        return iter(self.transactions)
 
 
 class BlockHeaderMetadata(Serialize, Deserialize):
@@ -2456,16 +2428,6 @@ class CoinbaseSolution(Serialize, Deserialize):
         proof = PuzzleProof.load(data)
         return cls(partial_solutions=partial_solutions, proof=proof)
 
-    @classmethod
-    # @type_check
-    def load_json(cls, data: dict):
-        partial_solutions = []
-        for partial_solution in data['partial_solutions']:
-            partial_solutions.append(PartialSolution.load_json(partial_solution))
-        partial_solutions = Vec[PartialSolution, u32](partial_solutions)
-        proof = PuzzleProof.load_json(data['proof.w'])
-        return cls(partial_solutions=partial_solutions, proof=proof)
-
 
 class ComputeKey(Serialize, Deserialize):
 
@@ -2565,19 +2527,6 @@ class Block(Serialize, Deserialize):
         return cls(block_hash=block_hash, previous_hash=previous_hash, header=header, transactions=transactions,
                    coinbase=coinbase, signature=signature)
 
-    @classmethod
-    def load_json(cls, data: dict):
-        block_hash = BlockHash.loads(data["block_hash"])
-        previous_hash = BlockHash.loads(data["previous_hash"])
-        header = BlockHeader.load_json(data["header"])
-        transactions = Transactions.load_json(data["transactions"])
-        if "coinbase" in data:
-            coinbase = Option[CoinbaseSolution](CoinbaseSolution.load_json(data["coinbase"]))
-        else:
-            coinbase = Option[CoinbaseSolution](None)
-        signature = Signature.load(bech32_to_bytes(data["signature"]))
-        return cls(block_hash=block_hash, previous_hash=previous_hash, header=header, transactions=transactions,
-                   coinbase=coinbase, signature=signature)
 
     def __str__(self):
         return f"Block {self.header.metadata.height} ({str(self.block_hash)[:16]}...)"

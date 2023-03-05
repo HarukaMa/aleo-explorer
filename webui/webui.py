@@ -245,7 +245,7 @@ async def transaction_route(request: Request):
     if block is None:
         raise HTTPException(status_code=404, detail="Transaction not found")
 
-    transaction = None
+    transaction: DeployTransaction | ExecuteTransaction | None = None
     transaction_type = ""
     for tx in block.transactions.transactions:
         match tx.type:
@@ -583,33 +583,6 @@ async def nodes_route(request: Request):
     return templates.TemplateResponse('nodes.jinja2', ctx, headers={'Cache-Control': 'no-cache'})
 
 
-async def orphan_route(request: Request):
-    height = request.query_params.get("h")
-    if height is None:
-        raise HTTPException(status_code=400, detail="Missing height")
-    blocks = await db.get_orphaned_blocks_on_height_fast(int(height))
-    data = []
-    for block in blocks:
-        owner = await db.get_miner_from_block_hash(block["block_hash"])
-        b = {
-            "timestamp": block["timestamp"],
-            "height": block["height"],
-            "transactions": block["transaction_count"],
-            "transitions": block["transition_count"],
-            "owner": owner,
-            "owner_trunc": owner[:14] + "..." + owner[-6:],
-            "block_hash": block["block_hash"],
-            "block_hash_trunc": block["block_hash"][:12] + "..." + block["block_hash"][-6:],
-        }
-        data.append(b)
-    ctx = {
-        "request": request,
-        "blocks": data,
-        "height": height,
-    }
-    return templates.TemplateResponse('orphan.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
-
-
 async def blocks_route(request: Request):
     try:
         page = request.query_params.get("p")
@@ -870,7 +843,7 @@ async def advanced_route(request: Request):
         block = await db.get_block_from_transaction_id(obj)
         if block is None:
             raise HTTPException(status_code=404, detail="Transaction not found")
-        for tx in block.transactions:
+        for tx in block.transactions.transactions:
             match tx.type:
                 case Transaction.Type.Execute:
                     tx: ExecuteTransaction
@@ -898,12 +871,17 @@ async def advanced_route(request: Request):
         block = await db.get_block_from_transition_id(obj)
         if block is None:
             raise HTTPException(status_code=404, detail="Transition not found")
-        for tx in block.transactions:
-            if tx.type != Transaction.Type.Execute:
-                continue
-            for tr in tx.execution.transitions:
-                if str(tr.id) == obj:
-                    transition = tr
+        for tx in block.transactions.transactions:
+            if tx.type == Transaction.Type.Execute:
+                tx: ExecuteTransaction
+                for ts in tx.execution.transitions:
+                    if str(ts.id) == obj:
+                        transition = ts
+                        break
+            elif tx.type == Transaction.Type.Deploy:
+                tx: DeployTransaction
+                if str(tx.fee.transition.id) == obj:
+                    transition = tx.fee.transition
                     break
         type_ = request.query_params.get("type")
         if type_ is None:
@@ -951,14 +929,18 @@ async def advanced_route(request: Request):
                             raise HTTPException(status_code=400, detail="Owner is public")
                         if record.owner.Private != Ciphertext:
                             raise HTTPException(status_code=400, detail="Owner is not a ciphertext")
+                        # noinspection PyUnresolvedReferences
                         id_ = str(record.owner.owner)
+                        # noinspection PyUnresolvedReferences
                         data = get_ciphertext_data(record.owner.owner)
                     elif field == "gates":
                         if record.gates.type == Balance.Type.Public:
                             raise HTTPException(status_code=400, detail="Gates is public")
                         if record.gates.Private != Ciphertext:
                             raise HTTPException(status_code=400, detail="Gates is not a ciphertext")
+                        # noinspection PyUnresolvedReferences
                         id_ = str(record.gates.balance)
+                        # noinspection PyUnresolvedReferences
                         data = get_ciphertext_data(record.gates.balance)
                     else:
                         for identifier, entry in record.data:
@@ -1041,7 +1023,6 @@ routes = [
     Route("/transition", transition_route),
     Route("/search", search_route),
     Route("/nodes", nodes_route),
-    Route("/orphan", orphan_route),
     Route("/blocks", blocks_route),
     Route("/programs", programs_route),
     # Proving
