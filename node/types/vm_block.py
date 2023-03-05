@@ -1339,7 +1339,7 @@ class StructPlaintext(Plaintext):
         data = {}
         for identifier, plaintext in self.members:
             data[str(identifier)] = str(plaintext)
-        return json.dumps(data)
+        return json.dumps(data).replace('"', '')
 
 
 class Owner(TypeParameter, Serialize, Deserialize):  # enum
