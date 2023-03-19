@@ -16,11 +16,22 @@
 
         <div id="header">
             <h3>Program Registry</h3>
+            {% if no_helloworld %}
+                <p>Showing all programs except the default "Hello World" program. <a href="/programs">Show all programs</a></p>
+            {% else %}
+                <p>Showing all programs, including the default "Hello World" program. <a href="/programs?no_helloworld=1">Don't show "Hello World" programs</a></p>
+            {% endif %}
         </div>
 
         <div id="blocks">
 
-            {{ nav(page, total_pages, "/programs?") }}
+            {% if no_helloworld %}
+                {% set nav_path = "/programs?no_helloworld=1&" %}
+            {% else %}
+                {% set nav_path = "/programs?" %}
+            {% endif %}
+
+            {{ nav(page, total_pages, nav_path) }}
 
             <table class="unstriped">
                 <thead>
@@ -43,7 +54,7 @@
                 </tbody>
             </table>
 
-            {{ nav(page, total_pages, "/programs?") }}
+            {{ nav(page, total_pages, nav_path) }}
 
         </div>
     </div>

@@ -183,10 +183,10 @@ class Database:
                                 functions = list(map(str, program.functions.keys()))
                                 program_db_id = await conn.fetchval(
                                     "INSERT INTO program "
-                                    "(transaction_deploy_id, program_id, import, mapping, interface, record, closure, function, raw_data) "
-                                    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id",
+                                    "(transaction_deploy_id, program_id, import, mapping, interface, record, closure, function, raw_data, is_helloworld) "
+                                    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id",
                                     deploy_transaction_db_id, str(program.id), imports, mappings, interfaces, records,
-                                    closures, functions, program.dump()
+                                    closures, functions, program.dump(), program.is_helloworld()
                                 )
                                 for function in program.functions.values():
                                     inputs = []
@@ -1095,19 +1095,22 @@ class Database:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
-    async def get_program_count(self) -> int:
+    async def get_program_count(self, no_helloworld: bool = False) -> int:
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
             try:
+                if no_helloworld:
+                    return await conn.fetchval("SELECT COUNT(*) FROM program WHERE is_helloworld = false")
                 return await conn.fetchval("SELECT COUNT(*) FROM program")
             except Exception as e:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
-    async def get_programs(self, start, end) -> list:
+    async def get_programs(self, start, end, no_helloworld: bool = False) -> list:
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
             try:
+                where = "WHERE is_helloworld = false " if no_helloworld else ""
                 return await conn.fetch(
                     "SELECT p.program_id, b.height, t.transaction_id, SUM(pf.called) as called "
                     "FROM program p "
@@ -1115,6 +1118,7 @@ class Database:
                     "JOIN transaction t on td.transaction_id = t.id "
                     "JOIN block b on t.block_id = b.id "
                     "JOIN program_function pf on p.id = pf.program_id "
+                    f"{where}"
                     "GROUP BY p.program_id, b.height, t.transaction_id "
                     "ORDER BY called DESC, b.height DESC "
                     "LIMIT $1 OFFSET $2",
@@ -1194,7 +1198,8 @@ class Database:
     # migration methods
     async def migrate(self):
         migrations = [
-            (1, self.migrate_1_update_function_called_time)
+            (1, self.migrate_1_update_function_called_time),
+            (2, self.migrate_2_add_hello_world_filter),
         ]
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
@@ -1211,24 +1216,47 @@ class Database:
     async def migrate_1_update_function_called_time(self):
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
-            try:
-                functions = await conn.fetch(
-                    "SELECT pf.id, p.program_id, pf.name FROM program_function pf "
-                    "JOIN program p ON pf.program_id = p.id"
-                )
-                for function in functions:
-                    called_time = await conn.fetchval(
-                        "SELECT COUNT(*) FROM transition "
-                        "WHERE program_id = $1 AND function_name = $2",
-                        function["program_id"], function["name"]
+            async with conn.transaction():
+                try:
+                    functions = await conn.fetch(
+                        "SELECT pf.id, p.program_id, pf.name FROM program_function pf "
+                        "JOIN program p ON pf.program_id = p.id"
                     )
+                    for function in functions:
+                        called_time = await conn.fetchval(
+                            "SELECT COUNT(*) FROM transition "
+                            "WHERE program_id = $1 AND function_name = $2",
+                            function["program_id"], function["name"]
+                        )
+                        await conn.execute(
+                            "UPDATE program_function SET called = $1 WHERE id = $2",
+                            called_time, function["id"]
+                        )
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def migrate_2_add_hello_world_filter(self):
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                try:
                     await conn.execute(
-                        "UPDATE program_function SET called = $1 WHERE id = $2",
-                        called_time, function["id"]
+                        "ALTER TABLE program ADD is_helloworld BOOL DEFAULT false NOT NULL"
                     )
-            except Exception as e:
-                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
-                raise
+                    programs = await conn.fetch(
+                        "SELECT id, raw_data FROM program"
+                    )
+                    for program in programs:
+                        p = Program.load(bytearray(program["raw_data"]))
+                        if p.is_helloworld():
+                            await conn.execute(
+                                "UPDATE program SET is_helloworld = true WHERE id = $1",
+                                program["id"]
+                            )
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
 
     # debug method
     async def clear_database(self):

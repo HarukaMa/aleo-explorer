@@ -811,6 +811,13 @@ class Program(Serialize, Deserialize):
         return cls(id_=id_, imports=imports, mappings=mappings, interfaces=interfaces, records=records,
                    closures=closures, functions=functions)
 
+    def is_helloworld(self) -> bool:
+        header_length = len(self.version.dump() + self.id.dump())
+        body = self.dump()[header_length:]
+        if body == b'\x00\x01\x00\x04\x04main\x02\x00\x00\x00\x01\x00\x0b\x00\x00\x01\x02\x00\x0b\x00\x01\x00\x00\x00\x02\x00\x01\x00\x00\x01\x00\x01\x00\x02\x01\x00\x01\x00\x02\x02\x00\x0b\x00\x00':
+            return True
+        return False
+
 
 class CircuitInfo(Serialize, Deserialize):
 

@@ -636,12 +636,17 @@ async def programs_route(request: Request):
             page = int(page)
     except:
         raise HTTPException(status_code=400, detail="Invalid page")
-    total_programs = await db.get_program_count()
+    no_helloworld = request.query_params.get("no_helloworld")
+    try:
+        no_helloworld = bool(int(no_helloworld))
+    except:
+        no_helloworld = False
+    total_programs = await db.get_program_count(no_helloworld=no_helloworld)
     total_pages = (total_programs // 50) + 1
     if page < 1 or page > total_pages:
         raise HTTPException(status_code=400, detail="Invalid page")
     start = 50 * (page - 1)
-    programs = await db.get_programs(start, start + 50)
+    programs = await db.get_programs(start, start + 50, no_helloworld=no_helloworld)
 
     maintenance, info = await out_of_sync_check()
     ctx = {
@@ -649,6 +654,7 @@ async def programs_route(request: Request):
         "programs": programs,
         "page": page,
         "total_pages": total_pages,
+        "no_helloworld": no_helloworld,
         "maintenance": maintenance,
         "info": info,
     }
