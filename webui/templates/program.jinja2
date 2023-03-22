@@ -41,6 +41,9 @@
             {% call data_line("Times called") %}
                 {{ times_called }}
             {% endcall %}
+            {% call data_line("Similar programs") %}
+                <a href="/similar?id={{ program_id }}">{{ similar_count }}</a>
+            {% endcall %}
 
             <div id="structure">
                 <h5>Program Structure</h5>

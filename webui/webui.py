@@ -695,8 +695,43 @@ async def program_route(request: Request):
         "functions": functions,
         "source": disasm.aleo.disassemble_program(program),
         "recent_calls": await db.get_program_calls(program_id, 0, 30),
+        "similar_count": await db.get_program_similar_count(program_id),
     }
     return templates.TemplateResponse('program.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
+
+
+async def similar_programs_route(request: Request):
+    try:
+        page = request.query_params.get("p")
+        if page is None:
+            page = 1
+        else:
+            page = int(page)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid page")
+    program_id = request.query_params.get("id")
+    if program_id is None:
+        raise HTTPException(status_code=400, detail="Missing program id")
+    feature_hash = await db.get_program_feature_hash(program_id)
+    if feature_hash is None:
+        raise HTTPException(status_code=404, detail="Program not found")
+    total_programs = await db.get_program_similar_count(program_id)
+    total_pages = (total_programs // 50) + 1
+    if page < 1 or page > total_pages:
+        raise HTTPException(status_code=400, detail="Invalid page")
+    start = 50 * (page - 1)
+    programs = await db.get_programs_with_feature_hash(feature_hash, start, start + 50)
+
+    maintenance, info = await out_of_sync_check()
+    ctx = {
+        "request": request,
+        "programs": programs,
+        "page": page,
+        "total_pages": total_pages,
+        "maintenance": maintenance,
+        "info": info,
+    }
+    return templates.TemplateResponse('similar_programs.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
 
 
 async def leaderboard_route(request: Request):

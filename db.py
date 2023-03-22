@@ -1127,6 +1127,27 @@ class Database:
             except Exception as e:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
 
+    async def get_programs_with_feature_hash(self, feature_hash: bytes, start, end) -> list:
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                return await conn.fetch(
+                    "SELECT p.program_id, b.height, t.transaction_id, SUM(pf.called) as called "
+                    "FROM program p "
+                    "JOIN transaction_deploy td on p.transaction_deploy_id = td.id "
+                    "JOIN transaction t on td.transaction_id = t.id "
+                    "JOIN block b on t.block_id = b.id "
+                    "JOIN program_function pf on p.id = pf.program_id "
+                    "WHERE feature_hash = $1 "
+                    "GROUP BY p.program_id, b.height, t.transaction_id "
+                    "ORDER BY called DESC, b.height DESC "
+                    "LIMIT $2 OFFSET $3",
+                    feature_hash, end - start, start
+                )
+            except Exception as e:
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                raise
+
 
     async def get_block_by_program_id(self, program_id: str) -> Block | None:
         conn: asyncpg.Connection
@@ -1175,6 +1196,31 @@ class Database:
                     "ORDER BY b.height DESC "
                     "LIMIT $2 OFFSET $3",
                     program_id, end - start, start
+                )
+            except Exception as e:
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                raise
+
+    async def get_program_similar_count(self, program_id: str) -> int:
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                return (await conn.fetchval(
+                    "SELECT COUNT(*) FROM program "
+                    "WHERE feature_hash = (SELECT feature_hash FROM program WHERE program_id = $1)",
+                    program_id
+                ) - 1)
+            except Exception as e:
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                raise
+
+    async def get_program_feature_hash(self, program_id: str) -> bytes:
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            try:
+                return await conn.fetchval(
+                    "SELECT feature_hash FROM program WHERE program_id = $1",
+                    program_id
                 )
             except Exception as e:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
