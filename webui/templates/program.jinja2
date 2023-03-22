@@ -42,7 +42,11 @@
                 {{ times_called }}
             {% endcall %}
             {% call data_line("Similar programs") %}
-                <a href="/similar?id={{ program_id }}">{{ similar_count }}</a>
+                {% if similar_count == 0 %}
+                    0
+                {% else %}
+                    <a href="/similar_programs?id={{ program_id }}">{{ similar_count }}</a>
+                {% endif %}
             {% endcall %}
 
             <div id="structure">
