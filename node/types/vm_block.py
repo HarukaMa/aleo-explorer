@@ -1,5 +1,5 @@
 import json
-from hashlib import sha256
+from hashlib import sha256, md5
 
 from .vm_instruction import *
 
@@ -341,6 +341,9 @@ class Closure(Serialize, Deserialize):
         instructions = Vec[Instruction, u32].load(data)
         outputs = Vec[ClosureOutput, u16].load(data)
         return cls(name=name, inputs=inputs, instructions=instructions, outputs=outputs)
+
+    def instruction_feature_string(self) -> str:
+        return " ".join(inst.type.name for inst in self.instructions)
 
 
 class FinalizeCommand(Serialize, Deserialize):
@@ -721,6 +724,9 @@ class Function(Serialize, Deserialize):
         finalize = Option[Tuple[FinalizeCommand, Finalize]].load(data)
         return cls(name=name, inputs=inputs, instructions=instructions, outputs=outputs, finalize=finalize)
 
+    def instruction_feature_string(self) -> str:
+        return " ".join(inst.type.name for inst in self.instructions)
+
 
 class ProgramDefinition(IntEnumu8):
     Mapping = 0
@@ -819,6 +825,14 @@ class Program(Serialize, Deserialize):
         elif body == b'\x00\x01\x00\x04\x05hello\x02\x00\x00\x00\x01\x00\x0b\x00\x00\x01\x02\x00\x0b\x00\x01\x00\x00\x00\x02\x00\x01\x00\x00\x01\x00\x01\x00\x02\x01\x00\x01\x00\x02\x02\x00\x0b\x00\x00':
             return True
         return False
+
+    def feature_hash(self) -> bytes:
+        feature_string = " ".join(
+            [c.instruction_feature_string() for c in self.closures.values()] +
+            [f.instruction_feature_string() for f in self.functions.values()]
+        )
+        return md5(feature_string.encode()).digest()
+
 
 
 class CircuitInfo(Serialize, Deserialize):

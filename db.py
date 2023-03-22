@@ -1200,6 +1200,7 @@ class Database:
         migrations = [
             (1, self.migrate_1_update_function_called_time),
             (2, self.migrate_2_add_hello_world_filter),
+            (3, self.migrate_3_add_program_feature_hash),
         ]
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
@@ -1254,6 +1255,27 @@ class Database:
                                 "UPDATE program SET is_helloworld = true WHERE id = $1",
                                 program["id"]
                             )
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def migrate_3_add_program_feature_hash(self):
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                try:
+                    await conn.execute(
+                        "ALTER TABLE program ADD feature_hash BYTEA"
+                    )
+                    programs = await conn.fetch(
+                        "SELECT id, raw_data FROM program"
+                    )
+                    for program in programs:
+                        p = Program.load(bytearray(program["raw_data"]))
+                        await conn.execute(
+                            "UPDATE program SET feature_hash = $1 WHERE id = $2",
+                            p.feature_hash(), program["id"]
+                        )
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
