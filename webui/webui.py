@@ -725,6 +725,7 @@ async def similar_programs_route(request: Request):
     maintenance, info = await out_of_sync_check()
     ctx = {
         "request": request,
+        "program_id": program_id,
         "programs": programs,
         "page": page,
         "total_pages": total_pages,

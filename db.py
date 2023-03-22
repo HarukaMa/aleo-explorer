@@ -1140,7 +1140,7 @@ class Database:
                     "JOIN program_function pf on p.id = pf.program_id "
                     "WHERE feature_hash = $1 "
                     "GROUP BY p.program_id, b.height, t.transaction_id "
-                    "ORDER BY called DESC, b.height DESC "
+                    "ORDER BY b.height "
                     "LIMIT $2 OFFSET $3",
                     feature_hash, end - start, start
                 )
