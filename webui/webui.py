@@ -1121,6 +1121,7 @@ routes = [
     Route("/blocks", blocks_route),
     Route("/programs", programs_route),
     Route("/program", program_route),
+    Route("/similar_programs", similar_programs_route),
     # Proving
     Route("/calc", calc_route),
     Route("/leaderboard", leaderboard_route),
