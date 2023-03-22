@@ -183,10 +183,10 @@ class Database:
                                 functions = list(map(str, program.functions.keys()))
                                 program_db_id = await conn.fetchval(
                                     "INSERT INTO program "
-                                    "(transaction_deploy_id, program_id, import, mapping, interface, record, closure, function, raw_data, is_helloworld) "
-                                    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id",
+                                    "(transaction_deploy_id, program_id, import, mapping, interface, record, closure, function, raw_data, is_helloworld, feature_hash) "
+                                    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id",
                                     deploy_transaction_db_id, str(program.id), imports, mappings, interfaces, records,
-                                    closures, functions, program.dump(), program.is_helloworld()
+                                    closures, functions, program.dump(), program.is_helloworld(), program.feature_hash()
                                 )
                                 for function in program.functions.values():
                                     inputs = []
