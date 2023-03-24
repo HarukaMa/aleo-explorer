@@ -72,6 +72,14 @@ class Database:
                         transition_input_db_id, str(transition_input.serial_number),
                         str(transition_input.tag)
                     )
+                case TransitionInput.Type.ExternalRecord:
+                    transition_input: ExternalRecordTransitionInput
+                    await conn.execute(
+                        "INSERT INTO transition_input_external_record (transition_input_id, commitment) "
+                        "VALUES ($1, $2)",
+                        transition_input_db_id, str(transition_input.input_commitment)
+                    )
+
                 case _:
                     raise NotImplementedError
 
@@ -105,6 +113,13 @@ class Database:
                         "VALUES ($1, $2, $3, $4)",
                         transition_output_db_id, str(transition_output.commitment),
                         str(transition_output.checksum), transition_output.record_ciphertext.dumps()
+                    )
+                case TransitionOutput.Type.ExternalRecord:
+                    transition_output: ExternalRecordTransitionOutput
+                    await conn.execute(
+                        "INSERT INTO transition_output_external_record (transition_output_id, commitment) "
+                        "VALUES ($1, $2)",
+                        transition_output_db_id, str(transition_output.commitment)
                     )
                 case _:
                     raise NotImplementedError
@@ -1247,6 +1262,7 @@ class Database:
             (1, self.migrate_1_update_function_called_time),
             (2, self.migrate_2_add_hello_world_filter),
             (3, self.migrate_3_add_program_feature_hash),
+            (4, self.migrate_4_add_external_record_input_output),
         ]
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
@@ -1322,6 +1338,35 @@ class Database:
                             "UPDATE program SET feature_hash = $1 WHERE id = $2",
                             p.feature_hash(), program["id"]
                         )
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def migrate_4_add_external_record_input_output(self):
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                try:
+                    await conn.execute(
+                        "CREATE TABLE transition_input_external_record ( "
+                        "id serial NOT NULL CONSTRAINT transition_input_external_record_pk PRIMARY KEY, "
+                        "transition_input_id integer NOT NULL CONSTRAINT transition_input_external_record_transition_input_id_fk REFERENCES transition_input(id), "
+                        "commitment text NOT NULL)"
+                    )
+                    await conn.execute(
+                        "CREATE INDEX transition_input_external_record_transition_input_id_index "
+                        "ON transition_input_external_record (transition_input_id)"
+                    )
+                    await conn.execute(
+                        "CREATE TABLE transition_output_external_record ( "
+                        "id serial NOT NULL CONSTRAINT transition_output_external_record_pk PRIMARY KEY, "
+                        "transition_output_id integer NOT NULL CONSTRAINT transition_output_external_record_transition_output_id_fk REFERENCES transition_output(id), "
+                        "commitment text NOT NULL)"
+                    )
+                    await conn.execute(
+                        "CREATE INDEX transition_output_external_record_transition_output_id_index "
+                        "ON transition_output_external_record (transition_output_id)"
+                    )
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
