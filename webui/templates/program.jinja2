@@ -55,7 +55,7 @@
                     <span class="mono">
                 {% if imports %}
                     {% for import in imports %}
-                        {{ import }}<br>
+                        <a href="/program?id={{ import }}">{{ import }}</a><br>
                     {% endfor %}
                 {% else %}
                     -
