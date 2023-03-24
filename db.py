@@ -388,6 +388,15 @@ class Database:
                         tag=Field.loads(transition_input_record["tag"])
                     ), transition_input["index"]))
 
+                case TransitionInput.Type.ExternalRecord.name:
+                    transition_input_external_record = await conn.fetchrow(
+                        "SELECT * FROM transition_input_external_record WHERE transition_input_id = $1",
+                        transition_input["id"]
+                    )
+                    tis.append((ExternalRecordTransitionInput(
+                        input_commitment=Field.loads(transition_input_external_record["commitment"]),
+                    ), transition_input["index"]))
+
                 case _:
                     raise NotImplementedError
         tis.sort(key=lambda x: x[1])
@@ -439,6 +448,14 @@ class Database:
                         commitment=Field.loads(transition_output_record["commitment"]),
                         checksum=Field.loads(transition_output_record["checksum"]),
                         record_ciphertext=Option[Record[Ciphertext]](record_ciphertext)
+                    ), transition_output["index"]))
+                case TransitionOutput.Type.ExternalRecord.name:
+                    transition_output_external_record = await conn.fetchrow(
+                        "SELECT * FROM transition_output_external_record WHERE transition_output_id = $1",
+                        transition_output["id"]
+                    )
+                    tos.append((ExternalRecordTransitionOutput(
+                        commitment=Field.loads(transition_output_external_record["commitment"]),
                     ), transition_output["index"]))
                 case _:
                     raise NotImplementedError

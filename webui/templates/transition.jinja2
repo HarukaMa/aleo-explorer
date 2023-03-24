@@ -96,6 +96,10 @@
             {% call data_line("Tag") %}
                 <span class="mono">{{ input.tag }}</span>
             {% endcall %}
+        {% elif input.type == "ExternalRecord" %}
+            {% call data_line("Commitment") %}
+                <span class="mono">{{ input.input_commitment }}</span>
+            {% endcall %}
         {% endif %}
             <br>
         {% endfor %}
@@ -148,6 +152,10 @@
                     </advanced-link>
                 {% endcall %}
             {% endfor %}
+        {% elif output.type == "ExternalRecord" %}
+            {% call data_line("Commitment") %}
+                <span class="mono">{{ output.commitment }}</span>
+            {% endcall %}
         {% endif %}
             <br>
         {% endfor %}
