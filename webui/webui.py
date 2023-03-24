@@ -25,7 +25,8 @@ from node.light_node import LightNodeState
 from node.types import u32, Transaction, Transition, ExecuteTransaction, TransitionInput, PrivateTransitionInput, \
     RecordTransitionInput, TransitionOutput, RecordTransitionOutput, Record, KZGProof, Proof, WitnessCommitments, \
     G1Affine, Ciphertext, Owner, Balance, Entry, DeployTransaction, Deployment, Program, PublicTransitionInput, \
-    PublicTransitionOutput, PrivateTransitionOutput, Value, PlaintextValue
+    PublicTransitionOutput, PrivateTransitionOutput, Value, PlaintextValue, ExternalRecordTransitionInput, \
+    ExternalRecordTransitionOutput
 
 
 class UvicornServer(multiprocessing.Process):
@@ -392,6 +393,12 @@ async def transition_route(request: Request):
                     "serial_number": input_.serial_number,
                     "tag": input_.tag,
                 })
+            case TransitionInput.Type.ExternalRecord:
+                input_: ExternalRecordTransitionInput
+                inputs.append({
+                    "type": "ExternalRecord",
+                    "commitment": input_.input_commitment,
+                })
 
     outputs = []
     for output in transition.outputs:
@@ -431,6 +438,12 @@ async def transition_route(request: Request):
                     record_data["data"] = data
                     output_data["record_data"] = record_data
                 outputs.append(output_data)
+            case TransitionOutput.Type.ExternalRecord:
+                output: ExternalRecordTransitionOutput
+                outputs.append({
+                    "type": "ExternalRecord",
+                    "commitment": output.commitment,
+                })
 
     finalizes = []
     if transition.finalize.value is not None:
