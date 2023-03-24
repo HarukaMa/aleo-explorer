@@ -146,7 +146,7 @@
                 </advanced-link>
             {% endcall %}
             {% for identifier, entry in output.record_data.data %}
-                {% call sub_data_line('<span class="mono">' + identifier + "</span>") %}
+                {% call sub_data_line('<span class="mono">' + (identifier | string) + "</span>") %}
                     <advanced-link scope="transition" object="{{ ts_id }}" type="output_record" index="{{ outer_loop.index0 }}" field="{{ identifier }}">
                         <span class="mono">{{ entry }}</span>
                     </advanced-link>
