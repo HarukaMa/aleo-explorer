@@ -396,7 +396,7 @@ async def transition_route(request: Request):
             case TransitionInput.Type.ExternalRecord:
                 input_: ExternalRecordTransitionInput
                 inputs.append({
-                    "type": "ExternalRecord",
+                    "type": "External record",
                     "commitment": input_.input_commitment,
                 })
 
@@ -441,7 +441,7 @@ async def transition_route(request: Request):
             case TransitionOutput.Type.ExternalRecord:
                 output: ExternalRecordTransitionOutput
                 outputs.append({
-                    "type": "ExternalRecord",
+                    "type": "External record",
                     "commitment": output.commitment,
                 })
 
