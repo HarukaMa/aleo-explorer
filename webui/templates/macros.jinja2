@@ -60,6 +60,17 @@
     </div>
 {% endmacro %}
 
+{% macro sub_data_line_safe(title) %}
+    <div class="sub-data-line grid-x grid-padding-x">
+        <div class="cell small-3 block-data-line-label">
+            {{ title | safe }}
+        </div>
+        <div class="cell auto data-line-value">
+            {{ caller() }}
+        </div>
+    </div>
+{% endmacro %}
+
 {% macro sub_data_line(title) %}
     <div class="sub-data-line grid-x grid-padding-x">
         <div class="cell small-3 block-data-line-label">
