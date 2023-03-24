@@ -140,13 +140,13 @@
                     <span class="mono">{{ output.record_data.owner }}</span>
                 </advanced-link>
             {% endcall %}
-            {% call sub_data_line('<span class="mono">gates</span>') %}
+            {% call sub_data_line_safe('<span class="mono">gates</span>') %}
                 <advanced-link scope="transition" object="{{ ts_id }}" type="output_record" index="{{ loop.index0 }}" field="gates">
                     <span class="mono">{{ output.record_data.gates }}</span>
                 </advanced-link>
             {% endcall %}
             {% for identifier, entry in output.record_data.data %}
-                {% call sub_data_line('<span class="mono">' + (identifier | string) + "</span>") %}
+                {% call sub_data_line_safe('<span class="mono">' + (identifier | string) + "</span>") %}
                     <advanced-link scope="transition" object="{{ ts_id }}" type="output_record" index="{{ outer_loop.index0 }}" field="{{ identifier }}">
                         <span class="mono">{{ entry }}</span>
                     </advanced-link>
