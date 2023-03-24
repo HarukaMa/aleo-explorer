@@ -681,7 +681,7 @@ async def program_route(request: Request):
     program: Program = deployment.program
     functions = []
     for f in program.functions.keys():
-        functions.append((await function_signature(str(program.id), str(f))).split("/")[-1])
+        functions.append((await function_signature(str(program.id), str(f))).split("/", 1)[-1])
     ctx = {
         "request": request,
         "program_id": str(program.id),
