@@ -1132,7 +1132,7 @@ class Database:
         async with self.pool.acquire() as conn:
             try:
                 if no_helloworld:
-                    return await conn.fetchval("SELECT COUNT(*) FROM program WHERE is_helloworld = false")
+                    return await conn.fetchval("SELECT COUNT(*) FROM program WHERE feature_hash != '\\x30781F1FC2F9342CEB1AD2F6F35A51DB'")
                 return await conn.fetchval("SELECT COUNT(*) FROM program")
             except Exception as e:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
