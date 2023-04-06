@@ -841,8 +841,10 @@ class Program(Serialize, Deserialize):
 
     def feature_hash(self) -> bytes:
         feature_string = "".join(
-            [c.instruction_feature_string() for c in self.closures.values()] +
-            [f.instruction_feature_string() for f in self.functions.values()]
+            ["S"] * len(self.interfaces) +
+            ["R"] * len(self.records) +
+            [("C" + c.instruction_feature_string()) for c in self.closures.values()] +
+            [("F" + f.instruction_feature_string()) for f in self.functions.values()]
         )
         return md5(feature_string.encode()).digest()
 
