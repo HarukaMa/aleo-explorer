@@ -1152,7 +1152,7 @@ class Database:
                     "JOIN program_function pf on p.id = pf.program_id "
                     f"{where}"
                     "GROUP BY p.program_id, b.height, t.transaction_id "
-                    "ORDER BY called DESC, b.height DESC "
+                    "ORDER BY b.height DESC "
                     "LIMIT $1 OFFSET $2",
                     end - start, start
                 )
