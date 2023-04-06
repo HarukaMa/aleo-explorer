@@ -21,7 +21,7 @@
 
         <div id="blocks">
 
-            {{ nav(page, total_pages, "/similar_programs") }}
+            {{ nav(page, total_pages, "/similar_programs?id=" + program_id + "&") }}
 
             <table class="unstriped">
                 <thead>
@@ -44,7 +44,7 @@
                 </tbody>
             </table>
 
-            {{ nav(page, total_pages, "/similar_programs") }}
+            {{ nav(page, total_pages, "/similar_programs?id=" + program_id + "&") }}
 
         </div>
     </div>
