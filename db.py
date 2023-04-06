@@ -1142,7 +1142,7 @@ class Database:
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
             try:
-                where = "WHERE feature_hash != \\x30781F1FC2F9342CEB1AD2F6F35A51DB" if no_helloworld else ""
+                where = "WHERE feature_hash != \\x30781F1FC2F9342CEB1AD2F6F35A51DB " if no_helloworld else ""
                 return await conn.fetch(
                     "SELECT p.program_id, b.height, t.transaction_id, SUM(pf.called) as called "
                     "FROM program p "
