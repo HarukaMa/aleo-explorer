@@ -8,6 +8,8 @@ from .vm_instruction import *
 
 def feature_string_from_instructions(instructions: [Instruction]) -> str:
     s = [Instruction.feature_map[inst.type] for inst in instructions]
+    if len(s) == 0:
+        return ""
     res = [s[0]]
     for i in range(1, len(s)):
         if s[i] == s[i - 1]:
