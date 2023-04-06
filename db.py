@@ -1280,6 +1280,7 @@ class Database:
             (2, self.migrate_2_add_hello_world_filter),
             (3, self.migrate_3_add_program_feature_hash),
             (4, self.migrate_4_add_external_record_input_output),
+            (5, self.migrate_5_recalc_feature_hash),
         ]
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
@@ -1384,6 +1385,24 @@ class Database:
                         "CREATE INDEX transition_output_external_record_transition_output_id_index "
                         "ON transition_output_external_record (transition_output_id)"
                     )
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def migrate_5_recalc_feature_hash(self):
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                try:
+                    programs = await conn.fetch(
+                        "SELECT id, raw_data FROM program"
+                    )
+                    for program in programs:
+                        p = Program.load(bytearray(program["raw_data"]))
+                        await conn.execute(
+                            "UPDATE program SET feature_hash = $1 WHERE id = $2",
+                            p.feature_hash(), program["id"]
+                        )
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise

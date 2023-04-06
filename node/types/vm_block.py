@@ -4,6 +4,17 @@ from hashlib import sha256, md5
 from .vm_instruction import *
 
 
+# util functions
+
+def feature_string_from_instructions(instructions: [Instruction]) -> str:
+    s = [Instruction.feature_map[inst.type] for inst in instructions]
+    res = [s[0]]
+    for i in range(1, len(s)):
+        if s[i] == s[i - 1]:
+            continue
+        res.append(s[i])
+    return "".join(res)
+
 class EvaluationDomain(Serialize, Deserialize):
 
     # @type_check
@@ -343,7 +354,7 @@ class Closure(Serialize, Deserialize):
         return cls(name=name, inputs=inputs, instructions=instructions, outputs=outputs)
 
     def instruction_feature_string(self) -> str:
-        return " ".join(inst.type.name for inst in self.instructions)
+        return feature_string_from_instructions(self.instructions)
 
 
 class FinalizeCommand(Serialize, Deserialize):
@@ -725,7 +736,7 @@ class Function(Serialize, Deserialize):
         return cls(name=name, inputs=inputs, instructions=instructions, outputs=outputs, finalize=finalize)
 
     def instruction_feature_string(self) -> str:
-        return " ".join(inst.type.name for inst in self.instructions)
+        return feature_string_from_instructions(self.instructions)
 
 
 class ProgramDefinition(IntEnumu8):
@@ -827,7 +838,7 @@ class Program(Serialize, Deserialize):
         return False
 
     def feature_hash(self) -> bytes:
-        feature_string = " ".join(
+        feature_string = "".join(
             [c.instruction_feature_string() for c in self.closures.values()] +
             [f.instruction_feature_string() for f in self.functions.values()]
         )
