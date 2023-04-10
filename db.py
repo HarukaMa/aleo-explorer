@@ -1419,6 +1419,10 @@ class Database:
                         "CREATE TABLE program_filter_hash( "
                         "hash BYTEA NOT NULL)"
                     )
+                    await conn.execute(
+                        "CREATE INDEX program_filter_hash_hash_index "
+                        "ON program_filter_hash (hash)"
+                    )
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
