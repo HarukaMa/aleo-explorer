@@ -1132,7 +1132,9 @@ class Database:
         async with self.pool.acquire() as conn:
             try:
                 if no_helloworld:
-                    return await conn.fetchval("SELECT COUNT(*) FROM program WHERE feature_hash != '\\x30781F1FC2F9342CEB1AD2F6F35A51DB'")
+                    return await conn.fetchval(
+                        "SELECT COUNT(*) FROM program "
+                        "WHERE feature_hash IN (SELECT hash FROM program_filter_hash)")
                 return await conn.fetchval("SELECT COUNT(*) FROM program")
             except Exception as e:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
@@ -1142,7 +1144,7 @@ class Database:
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
             try:
-                where = "WHERE feature_hash != '\\x30781F1FC2F9342CEB1AD2F6F35A51DB' " if no_helloworld else ""
+                where = "WHERE feature_hash IN (SELECT hash FROM program_filter_hash) " if no_helloworld else ""
                 return await conn.fetch(
                     "SELECT p.program_id, b.height, t.transaction_id, SUM(pf.called) as called "
                     "FROM program p "
@@ -1281,6 +1283,7 @@ class Database:
             (3, self.migrate_3_add_program_feature_hash),
             (4, self.migrate_4_add_external_record_input_output),
             (5, self.migrate_5_recalc_feature_hash),
+            (6, self.migrate_6_add_program_filter_hash_table),
         ]
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
@@ -1403,6 +1406,19 @@ class Database:
                             "UPDATE program SET feature_hash = $1 WHERE id = $2",
                             p.feature_hash(), program["id"]
                         )
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def migrate_6_add_program_filter_hash_table(self):
+        conn: asyncpg.Connection
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                try:
+                    await conn.execute(
+                        "CREATE TABLE program_filter_hash( "
+                        "hash BYTEA NOT NULL)"
+                    )
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
