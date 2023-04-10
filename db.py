@@ -1204,7 +1204,7 @@ class Database:
         async with self.pool.acquire() as conn:
             try:
                 return await conn.fetchval(
-                    "SELECT called FROM program_function "
+                    "SELECT sum(called) FROM program_function "
                     "JOIN program ON program.id = program_function.program_id "
                     "WHERE program.program_id = $1",
                     program_id
