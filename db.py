@@ -1134,7 +1134,7 @@ class Database:
                 if no_helloworld:
                     return await conn.fetchval(
                         "SELECT COUNT(*) FROM program "
-                        "WHERE feature_hash IN (SELECT hash FROM program_filter_hash)")
+                        "WHERE feature_hash NOT IN (SELECT hash FROM program_filter_hash)")
                 return await conn.fetchval("SELECT COUNT(*) FROM program")
             except Exception as e:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
@@ -1144,7 +1144,7 @@ class Database:
         conn: asyncpg.Connection
         async with self.pool.acquire() as conn:
             try:
-                where = "WHERE feature_hash IN (SELECT hash FROM program_filter_hash) " if no_helloworld else ""
+                where = "WHERE feature_hash NOT IN (SELECT hash FROM program_filter_hash) " if no_helloworld else ""
                 return await conn.fetch(
                     "SELECT p.program_id, b.height, t.transaction_id, SUM(pf.called) as called "
                     "FROM program p "
