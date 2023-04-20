@@ -67,7 +67,6 @@ app = Starlette(
     on_startup=[startup],
     # middleware=[Middleware(AccessLoggerMiddleware)]
 )
-db: Database
 
 
 async def run():

@@ -1176,7 +1176,6 @@ app = Starlette(
     exception_handlers=exc_handlers,
     middleware=[Middleware(AccessLoggerMiddleware)]
 )
-db: Database
 lns: LightNodeState | None = None
 
 
