@@ -160,14 +160,15 @@ class Database:
                                 (transition_finalize_db_id, str(finalize.record))
                             )
 
-            await cur.execute(
-                "SELECT id FROM program WHERE program_id = %s", (str(transition.program_id),)
-            )
-            program_db_id = (await cur.fetchone())["id"]
-            await cur.execute(
-                "UPDATE program_function SET called = called + 1 WHERE program_id = %s AND name = %s",
-                (program_db_id, str(transition.function_name))
-            )
+            if str(transition.program_id) != "credits.aleo":
+                await cur.execute(
+                    "SELECT id FROM program WHERE program_id = %s", (str(transition.program_id),)
+                )
+                program_db_id = (await cur.fetchone())["id"]
+                await cur.execute(
+                    "UPDATE program_function SET called = called + 1 WHERE program_id = %s AND name = %s",
+                    (program_db_id, str(transition.function_name))
+                )
 
     async def _save_block(self, block: Block):
         async with self.pool.connection() as conn:
