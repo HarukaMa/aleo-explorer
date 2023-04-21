@@ -5,13 +5,10 @@ import traceback
 from collections import OrderedDict
 from typing import Callable
 
-import aleo
-
 import explorer
 # from .light_node import LightNodeState
 from .testnet3.param import Testnet3
 from .types import *  # too many types
-
 
 PING_SLEEP_IN_SECS = 9
 
@@ -110,8 +107,8 @@ class Node:
                 await self._sync()
 
             case Message.Type.ChallengeRequest:
-                if self.handshake_state != 0:
-                    raise Exception("handshake is already done")
+                if self.handshake_state != 2:
+                    raise Exception("incorrect handshake state")
                 msg: ChallengeRequest = frame.message
                 if msg.version < Testnet3.version:
                     raise ValueError("peer is outdated")
@@ -120,15 +117,8 @@ class Node:
                     genesis_header=Testnet3.genesis_block.header,
                     signature=Signature.load(bytearray(aleo.sign_nonce("APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH", nonce.dump()))),
                 )
-                await self.send_message(response)
-
-            case Message.Type.ChallengeResponse:
-                if self.handshake_state != 0:
-                    raise Exception("handshake is already done")
-                msg: ChallengeResponse = frame.message
-                if msg.genesis_header != Testnet3.genesis_block.header and not await self.explorer_request(explorer.Request.GetDevMode()):
-                    raise ValueError("peer has wrong genesis block")
                 self.handshake_state = 1
+                await self.send_message(response)
                 await self.send_ping()
 
                 async def ping_task():
@@ -137,6 +127,14 @@ class Node:
                         await self.send_ping()
 
                 self.ping_task = asyncio.create_task(ping_task())
+
+            case Message.Type.ChallengeResponse:
+                if self.handshake_state != 0:
+                    raise Exception("incorrect handshake state")
+                msg: ChallengeResponse = frame.message
+                if msg.genesis_header != Testnet3.genesis_block.header and not await self.explorer_request(explorer.Request.GetDevMode()):
+                    raise ValueError("peer has wrong genesis block")
+                self.handshake_state = 2
 
             case Message.Type.Ping:
                 if self.handshake_state != 1:
