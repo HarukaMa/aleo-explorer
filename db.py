@@ -317,10 +317,12 @@ class Database:
                             )
                             coinbase_solution_db_id = (await cur.fetchone())["id"]
                             await cur.execute("SELECT total_credit FROM leaderboard_total")
-                            current_total_credit = (await cur.fetchone())["total_credit"]
+                            current_total_credit = await cur.fetchone()
                             if current_total_credit is None:
                                 await cur.execute("INSERT INTO leaderboard_total (total_credit) VALUES (0)")
                                 current_total_credit = 0
+                            else:
+                                current_total_credit = current_total_credit["total_credit"]
                             partial_solution: PartialSolution
                             for partial_solution, target, reward in solutions:
                                 await cur.execute(
@@ -333,7 +335,7 @@ class Database:
                                     await cur.execute(
                                         "INSERT INTO leaderboard (address, total_reward) VALUES (%s, %s) "
                                         "ON CONFLICT (address) DO UPDATE SET total_reward = leaderboard.total_reward + %s",
-                                        (str(partial_solution.address), reward)
+                                        (str(partial_solution.address), reward, reward)
                                     )
                                     if block.header.metadata.height >= 130888 and block.header.metadata.timestamp < 1675209600 and current_total_credit < 37_500_000_000_000:
                                         await cur.execute(
@@ -360,11 +362,14 @@ class Database:
         return BlockHeader(
             previous_state_root=Field.loads(block["previous_state_root"]),
             transactions_root=Field.loads(block["transactions_root"]),
+            finalize_root=Field.loads(block["finalize_root"]),
             coinbase_accumulator_point=Field.loads(block["coinbase_accumulator_point"]),
             metadata=BlockHeaderMetadata(
                 network=u16(3),
                 round_=u64(block["round"]),
                 height=u32(block["height"]),
+                total_supply_in_microcredits=u64(block["total_supply"]),
+                cumulative_proof_target=u128(block["cumulative_proof_target"]),
                 coinbase_target=u64(block["coinbase_target"]),
                 proof_target=u64(block["proof_target"]),
                 last_coinbase_target=u64(block["last_coinbase_target"]),
@@ -535,19 +540,18 @@ class Database:
                                 record=Record[Plaintext].loads(transition_finalize_record["record"])
                             ), transition_finalize["index"]))
                 finalize.sort(key=lambda x: x[1])
-                finalize = Vec[Value, u16]([x[0] for x in finalize])
+                finalize = Vec[Value, u8]([x[0] for x in finalize])
 
             return Transition(
                 id_=TransitionID.loads(transition["transition_id"]),
                 program_id=ProgramID.loads(transition["program_id"]),
                 function_name=Identifier.loads(transition["function_name"]),
-                inputs=Vec[TransitionInput, u16](tis),
-                outputs=Vec[TransitionOutput, u16](tos),
-                finalize=Option[Vec[Value, u16]](finalize),
+                inputs=Vec[TransitionInput, u8](tis),
+                outputs=Vec[TransitionOutput, u8](tos),
+                finalize=Option[Vec[Value, u8]](finalize),
                 proof=Proof.loads(transition["proof"]),
                 tpk=Group.loads(transition["tpk"]),
                 tcm=Field.loads(transition["tcm"]),
-                fee=i64(transition["fee"]),
             )
 
     @staticmethod
