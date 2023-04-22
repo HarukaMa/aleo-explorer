@@ -2207,21 +2207,24 @@ class DeployTransaction(Transaction):
     type = Transaction.Type.Deploy
 
     # @type_check
-    def __init__(self, *, id_: TransactionID, deployment: Deployment, fee: Fee):
+    def __init__(self, *, id_: TransactionID, owner: ProgramOwner, deployment: Deployment, fee: Fee):
         self.id = id_
+        self.owner = owner
         self.deployment = deployment
         self.fee = fee
 
     def dump(self) -> bytes:
-        return self.version.dump() + self.type.dump() + self.id.dump() + self.deployment.dump() + self.fee.dump()
+        return self.version.dump() + self.type.dump() + self.id.dump() \
+            + self.owner.dump() + self.deployment.dump() + self.fee.dump()
 
     @classmethod
     # @type_check
     def load(cls, data: bytearray):
         id_ = TransactionID.load(data)
+        owner = ProgramOwner.load(data)
         deployment = Deployment.load(data)
         fee = Fee.load(data)
-        return cls(id_=id_, deployment=deployment, fee=fee)
+        return cls(id_=id_, owner=owner, deployment=deployment, fee=fee)
 
 
 class ExecuteTransaction(Transaction):
