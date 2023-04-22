@@ -218,29 +218,29 @@ class Node:
             self.block_requests.clear()
             self.block_requests_deadline = float("inf")
             self.is_syncing = False
+        locators = self.peer_block_locators
+        if locators is None:
+            return
+        recents = locators.recents
+        self.peer_block_height = max(recents.keys())
         if self.is_syncing:
             next_block = self.block_requests[0]
             self.block_requests_deadline = time.time() + 30
-            msg = BlockRequest(start_height=u32(next_block), end_height=u32(next_block + 100))
+            msg = BlockRequest(start_height=u32(next_block), end_height=u32(min(max(self.block_requests), next_block + 100)))
             await self.send_message(msg)
         else:
-            locators = self.peer_block_locators
-            if locators is None:
-                return
-            recents = locators.recents
-            self.peer_block_height = max(recents.keys())
             latest_height = await self.explorer_request(explorer.Request.GetLatestHeight())
             if latest_height == self.peer_block_height:
                 return
 
             start_block_height = latest_height + 1
-            end_block_height = min(self.peer_block_height, start_block_height)
+            end_block_height = min(self.peer_block_height, start_block_height + 100)
             print(f"Synchronizing from block {start_block_height} to {end_block_height}")
             self.is_syncing = True
 
-            self.block_requests.extend(range(start_block_height, end_block_height + 100))
+            self.block_requests.extend(range(start_block_height, end_block_height))
             self.block_requests_deadline = time.time() + 30
-            msg = BlockRequest(start_height=u32(start_block_height), end_height=u32(end_block_height + 100))
+            msg = BlockRequest(start_height=u32(start_block_height), end_height=u32(end_block_height))
             await self.send_message(msg)
 
     async def send_ping(self):

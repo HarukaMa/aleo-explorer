@@ -276,24 +276,21 @@ class RecordType(Serialize, Deserialize):
 
     # @type_check
     @generic_type_check
-    def __init__(self, *, name: Identifier, owner: PublicOrPrivate, gates: PublicOrPrivate,
-                 entries: Vec[Tuple[Identifier, EntryType], u16]):
+    def __init__(self, *, name: Identifier, owner: PublicOrPrivate, entries: Vec[Tuple[Identifier, EntryType], u16]):
         self.name = name
         self.owner = owner
-        self.gates = gates
         self.entries = entries
 
     def dump(self) -> bytes:
-        return self.name.dump() + self.owner.dump() + self.gates.dump() + self.entries.dump()
+        return self.name.dump() + self.owner.dump() + self.entries.dump()
 
     @classmethod
     # @type_check
     def load(cls, data: bytearray):
         name = Identifier.load(data)
         owner = PublicOrPrivate.load(data)
-        gates = PublicOrPrivate.load(data)
         entries = Vec[Tuple[Identifier, EntryType], u16].load(data)
-        return cls(name=name, owner=owner, gates=gates, entries=entries)
+        return cls(name=name, owner=owner, entries=entries)
 
 
 class ClosureInput(Serialize, Deserialize):
@@ -903,14 +900,11 @@ class KZGCommitment(Serialize, Deserialize):
 class KZGVerifierKey(Serialize, Deserialize):
 
     # @type_check
-    def __init__(self, *, g: G1Affine, gamma_g: G1Affine, h: G2Affine, beta_h: G2Affine,
-                 prepared_h: G2Prepared, prepared_beta_h: G2Prepared):
+    def __init__(self, *, g: G1Affine, gamma_g: G1Affine, h: G2Affine, beta_h: G2Affine):
         self.g = g
         self.gamma_g = gamma_g
         self.h = h
         self.beta_h = beta_h
-        self.prepared_h = prepared_h
-        self.prepared_beta_h = prepared_beta_h
 
     def dump(self) -> bytes:
         res = b""
@@ -918,8 +912,6 @@ class KZGVerifierKey(Serialize, Deserialize):
         res += self.gamma_g.dump()
         res += self.h.dump()
         res += self.beta_h.dump()
-        res += self.prepared_h.dump()
-        res += self.prepared_beta_h.dump()
         return res
 
     @classmethod
@@ -929,9 +921,7 @@ class KZGVerifierKey(Serialize, Deserialize):
         gamma_g = G1Affine.load(data)
         h = G2Affine.load(data)
         beta_h = G2Affine.load(data)
-        prepared_h = G2Prepared.load(data)
-        prepared_beta_h = G2Prepared.load(data)
-        return cls(g=g, gamma_g=gamma_g, h=h, beta_h=beta_h, prepared_h=prepared_h, prepared_beta_h=prepared_beta_h)
+        return cls(g=g, gamma_g=gamma_g, h=h, beta_h=beta_h)
 
 
 class SonicVerifierKey(Serialize, Deserialize):
@@ -2198,6 +2188,9 @@ class ProgramOwner(Serialize, Deserialize):
     @classmethod
     # @type_check
     def load(cls, data: bytearray):
+        version = u8.load(data)
+        if version != cls.version:
+            raise ValueError(f"version mismatch: expected {cls.version}, got {version}")
         address = Address.load(data)
         signature = Signature.load(data)
         return cls(address=address, signature=signature)

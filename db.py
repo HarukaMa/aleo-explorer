@@ -226,7 +226,7 @@ class Database:
                                         "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
                                         (deploy_transaction_db_id, str(program.id), imports, mappings, interfaces, records,
                                         closures, functions, program.dump(), program.is_helloworld(), program.feature_hash(),
-                                         str(program.owner), str(program.signature))
+                                        str(transaction.owner.address), str(transaction.owner.signature))
                                     )
                                     program_db_id = (await cur.fetchone())["id"]
                                     for function in program.functions.values():
