@@ -1107,7 +1107,7 @@ class Database:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT address FROM leaderboard WHERE address LIKE %s", f"{address}%"
+                        "SELECT address FROM leaderboard WHERE address LIKE %s", (f"{address}%",)
                     )
                     return list(map(lambda x: x['address'], await cur.fetchall()))
                 except Exception as e:
@@ -1309,8 +1309,10 @@ class Database:
                         "WHERE p.program_id = %s",
                         (program_id,)
                     )
-                    height = (await cur.fetchone())['height']
-                    return await self.get_block_by_height(height)
+                    height = await cur.fetchone()
+                    if height is None:
+                        return None
+                    return await self.get_block_by_height(height["height"])
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
