@@ -69,7 +69,7 @@ templates.env.filters["format_number"] = format_number
 credits_functions = {
     "mint": {
         "input": ["address", "u64"],
-        "input_mode": ["private", "private"],
+        "input_mode": ["public", "public"],
         "output": ["credits"],
         "output_mode": ["private"],
         "finalize": [],
@@ -97,7 +97,7 @@ credits_functions = {
     },
     "fee": {
         "input": ["credits", "u64"],
-        "input_mode": ["private", "private"],
+        "input_mode": ["private", "public"],
         "output": ["credits"],
         "output_mode": ["private"],
         "finalize": [],
