@@ -51,10 +51,10 @@ def format_time(epoch):
     time_str = datetime.datetime.fromtimestamp(epoch, tz=datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     return f"""<span class="time">{time_str}</span>"""
 
-def format_aleo_credit(gates):
-    if gates == "-":
+def format_aleo_credit(mc):
+    if mc == "-":
         return "-"
-    return "{:,}".format(Decimal(gates) / 1_000_000)
+    return "{:,}".format(Decimal(mc) / 1_000_000)
 
 def format_number(number):
     if isinstance(number, Decimal):

@@ -39,7 +39,11 @@
             <span class="mono"><a href="/transaction?id={{ transaction_id }}">{{ transaction_id }}</a></span>
         {% endcall %}
         {% call data_line("Program ID") %}
-            <span class="mono"><a href="/program?id={{ program_id }}">{{ program_id }}</a></span>
+            {% if program_id | string == "credits.aleo" %}
+                <span class="mono">{{ program_id }}</span>
+            {% else %}
+                <span class="mono"><a href="/program?id={{ program_id }}">{{ program_id }}</a></span>
+            {% endif %}
         {% endcall %}
         {% call data_line("Function name") %}
             <span class="mono">{{ function_name }}</span>
@@ -49,9 +53,6 @@
         {% endcall %}
         {% call data_line("Transition commitment") %}
             <span class="mono">{{ tcm }}</span>
-        {% endcall %}
-        {% call data_line("Fee") %}
-            {{ fee | format_aleo_credit }} Aleo credit
         {% endcall %}
         {% call data_line("Proof") %}
             <advanced-link scope="transition" object="{{ ts_id }}" type="proof">
@@ -138,11 +139,6 @@
             {% call sub_data_line_safe('<span class="mono">owner</span>') %}
                 <advanced-link scope="transition" object="{{ ts_id }}" type="output_record" index="{{ loop.index0 }}" field="owner">
                     <span class="mono">{{ output.record_data.owner }}</span>
-                </advanced-link>
-            {% endcall %}
-            {% call sub_data_line_safe('<span class="mono">gates</span>') %}
-                <advanced-link scope="transition" object="{{ ts_id }}" type="output_record" index="{{ loop.index0 }}" field="gates">
-                    <span class="mono">{{ output.record_data.gates }}</span>
                 </advanced-link>
             {% endcall %}
             {% for identifier, entry in output.record_data.data %}

@@ -74,7 +74,6 @@
                 <tr>
                     <td>Transition ID</td>
                     <td>Program / Function call</td>
-                    <td>Fee</td>
                 </tr>
                 </thead>
                 <tbody>
@@ -84,7 +83,6 @@
                             <span class="mono"><a href="/transition?id={{ transition.transition_id }}">{{ transition.transition_id }}</a></span>
                         </td>
                         <td><span class="mono">{{ transition.action }}</span></td>
-                        <td>{{ transition.fee | format_aleo_credit }}</td>
                     </tr>
                 {% endfor %}
                 </tbody>

@@ -884,7 +884,7 @@ class Database:
                         "JOIN transaction_execute te ON tx.id = te.transaction_id "
                         "JOIN transition ts ON te.id = ts.transaction_execute_id "
                         "WHERE ts.transition_id = %s",
-                        str(transition_id)
+                        (str(transition_id),)
                     )
                     transaction_id = await cur.fetchone()
                     if transaction_id is None:
@@ -893,7 +893,7 @@ class Database:
                             "JOIN fee ON tx.id = fee.transaction_id "
                             "JOIN transition ts ON fee.id = ts.fee_id "
                             "WHERE ts.transition_id = %s",
-                            str(transition_id)
+                            (str(transition_id),)
                         )
                         transaction_id = await cur.fetchone()
                     if transaction_id is None:
@@ -908,7 +908,7 @@ class Database:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
-                    await cur.execute("SELECT block_hash FROM block WHERE block_hash LIKE %s", f"{block_hash}%")
+                    await cur.execute("SELECT block_hash FROM block WHERE block_hash LIKE %s", (f"{block_hash}%",))
                     result = await cur.fetchall()
                     return list(map(lambda x: x['block_hash'], result))
                 except Exception as e:
@@ -920,7 +920,7 @@ class Database:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
-                    await cur.execute("SELECT transaction_id FROM transaction WHERE transaction_id LIKE %s", f"{transaction_id}%")
+                    await cur.execute("SELECT transaction_id FROM transaction WHERE transaction_id LIKE %s", (f"{transaction_id}%",))
                     result = await cur.fetchall()
                     return list(map(lambda x: x['transaction_id'], result))
                 except Exception as e:
@@ -932,7 +932,7 @@ class Database:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
-                    await cur.execute("SELECT transition_id FROM transition WHERE transition_id LIKE %s", f"{transition_id}%")
+                    await cur.execute("SELECT transition_id FROM transition WHERE transition_id LIKE %s", (f"{transition_id}%",))
                     result = await cur.fetchall()
                     return list(map(lambda x: x['transition_id'], result))
                 except Exception as e:
