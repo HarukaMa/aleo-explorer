@@ -43,11 +43,11 @@ class Database:
         async with conn.cursor() as cur:
             await cur.execute(
                 "INSERT INTO transition (transition_id, transaction_execute_id, fee_id, program_id, "
-                "function_name, proof, tpk, tcm, fee, index) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                "function_name, proof, tpk, tcm, index) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
                 (str(transition.id), exe_tx_db_id, fee_db_id, str(transition.program_id),
                 str(transition.function_name), str(transition.proof), str(transition.tpk),
-                str(transition.tcm), transition.fee, ts_index)
+                str(transition.tcm), ts_index)
             )
             transition_db_id = (await cur.fetchone())["id"]
 
@@ -179,15 +179,18 @@ class Database:
                         await cur.execute(
                             "INSERT INTO block (height, block_hash, previous_hash, previous_state_root, transactions_root, "
                             "coinbase_accumulator_point, round, coinbase_target, proof_target, last_coinbase_target, "
-                            "last_coinbase_timestamp, timestamp, signature) "
-                            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                            "last_coinbase_timestamp, timestamp, signature, total_supply, cumulative_proof_target, "
+                            "finalize_root) "
+                            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
                             "RETURNING id",
                             (block.header.metadata.height, str(block.block_hash), str(block.previous_hash),
                             str(block.header.previous_state_root), str(block.header.transactions_root),
                             str(block.header.coinbase_accumulator_point), block.header.metadata.round,
                             block.header.metadata.coinbase_target, block.header.metadata.proof_target,
                             block.header.metadata.last_coinbase_target, block.header.metadata.last_coinbase_timestamp,
-                            block.header.metadata.timestamp, str(block.signature))
+                            block.header.metadata.timestamp, str(block.signature),
+                            block.header.metadata.total_supply_in_microcredits,
+                            block.header.metadata.cumulative_proof_target, str(block.header.finalize_root))
                         )
                         block_db_id = (await cur.fetchone())["id"]
 
@@ -218,10 +221,12 @@ class Database:
                                     functions = list(map(str, program.functions.keys()))
                                     await cur.execute(
                                         "INSERT INTO program "
-                                        "(transaction_deploy_id, program_id, import, mapping, interface, record, closure, function, raw_data, is_helloworld, feature_hash) "
-                                        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                                        "(transaction_deploy_id, program_id, import, mapping, interface, record, "
+                                        "closure, function, raw_data, is_helloworld, feature_hash, owner, signature) "
+                                        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
                                         (deploy_transaction_db_id, str(program.id), imports, mappings, interfaces, records,
-                                        closures, functions, program.dump(), program.is_helloworld(), program.feature_hash())
+                                        closures, functions, program.dump(), program.is_helloworld(), program.feature_hash(),
+                                         str(program.owner), str(program.signature))
                                     )
                                     program_db_id = (await cur.fetchone())["id"]
                                     for function in program.functions.values():
@@ -1390,14 +1395,7 @@ class Database:
 
     # migration methods
     async def migrate(self):
-        migrations = [
-            (1, self.migrate_1_update_function_called_time),
-            (2, self.migrate_2_add_hello_world_filter),
-            (3, self.migrate_3_add_program_feature_hash),
-            (4, self.migrate_4_add_external_record_input_output),
-            (5, self.migrate_5_recalc_feature_hash),
-            (6, self.migrate_6_add_program_filter_hash_table),
-        ]
+        migrations = []
         conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -1413,141 +1411,12 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def migrate_1_update_function_called_time(self):
-        conn: psycopg.AsyncConnection
-        async with self.pool.connection() as conn:
-            async with conn.cursor() as cur:
-                try:
-                    await cur.execute(
-                        "SELECT pf.id, p.program_id, pf.name FROM program_function pf "
-                        "JOIN program p ON pf.program_id = p.id"
-                    )
-                    functions = await cur.fetchall()
-                    for function in functions:
-                        await cur.execute(
-                            "SELECT COUNT(*) FROM transition "
-                            "WHERE program_id = %s AND function_name = %s",
-                            (function["program_id"], function["name"])
-                        )
-                        called_time = (await cur.fetchone())['count']
-                        await cur.execute(
-                            "UPDATE program_function SET called = %s WHERE id = %s",
-                            (called_time, function["id"])
-                        )
-                except Exception as e:
-                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
-                    raise
-
-    async def migrate_2_add_hello_world_filter(self):
-        conn: psycopg.AsyncConnection
-        async with self.pool.connection() as conn:
-            async with conn.cursor() as cur:
-                try:
-                    await cur.execute(
-                        "ALTER TABLE program ADD is_helloworld BOOL DEFAULT false NOT NULL"
-                    )
-                    await cur.execute("SELECT id, raw_data FROM program")
-                    programs = await cur.fetchall()
-                    for program in programs:
-                        p = Program.load(bytearray(program["raw_data"]))
-                        if p.is_helloworld():
-                            await cur.execute(
-                                "UPDATE program SET is_helloworld = true WHERE id = %s",
-                                (program["id"],)
-                            )
-                except Exception as e:
-                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
-                    raise
-
-    async def migrate_3_add_program_feature_hash(self):
-        conn: psycopg.AsyncConnection
-        async with self.pool.connection() as conn:
-            async with conn.cursor() as cur:
-                try:
-                    await cur.execute(
-                        "ALTER TABLE program ADD feature_hash BYTEA"
-                    )
-                    await cur.execute("SELECT id, raw_data FROM program")
-                    programs = await cur.fetchall()
-                    for program in programs:
-                        p = Program.load(bytearray(program["raw_data"]))
-                        await cur.execute(
-                            "UPDATE program SET feature_hash = %s WHERE id = %s",
-                            (p.feature_hash(), program["id"])
-                        )
-                except Exception as e:
-                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
-                    raise
-
-    async def migrate_4_add_external_record_input_output(self):
-        conn: psycopg.AsyncConnection
-        async with self.pool.connection() as conn:
-            async with conn.cursor() as cur:
-                try:
-                    await cur.execute(
-                        "CREATE TABLE transition_input_external_record ( "
-                        "id serial NOT NULL CONSTRAINT transition_input_external_record_pk PRIMARY KEY, "
-                        "transition_input_id integer NOT NULL CONSTRAINT transition_input_external_record_transition_input_id_fk REFERENCES transition_input(id), "
-                        "commitment text NOT NULL)"
-                    )
-                    await cur.execute(
-                        "CREATE INDEX transition_input_external_record_transition_input_id_index "
-                        "ON transition_input_external_record (transition_input_id)"
-                    )
-                    await cur.execute(
-                        "CREATE TABLE transition_output_external_record ( "
-                        "id serial NOT NULL CONSTRAINT transition_output_external_record_pk PRIMARY KEY, "
-                        "transition_output_id integer NOT NULL CONSTRAINT transition_output_external_record_transition_output_id_fk REFERENCES transition_output(id), "
-                        "commitment text NOT NULL)"
-                    )
-                    await cur.execute(
-                        "CREATE INDEX transition_output_external_record_transition_output_id_index "
-                        "ON transition_output_external_record (transition_output_id)"
-                    )
-                except Exception as e:
-                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
-                    raise
-
-    async def migrate_5_recalc_feature_hash(self):
-        conn: psycopg.AsyncConnection
-        async with self.pool.connection() as conn:
-            async with conn.cursor() as cur:
-                try:
-                    await cur.execute("SELECT id, raw_data FROM program")
-                    programs = await cur.fetchall()
-                    for program in programs:
-                        p = Program.load(bytearray(program["raw_data"]))
-                        await cur.execute(
-                            "UPDATE program SET feature_hash = %s WHERE id = %s",
-                            (p.feature_hash(), program["id"])
-                        )
-                except Exception as e:
-                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
-                    raise
-
-    async def migrate_6_add_program_filter_hash_table(self):
-        conn: psycopg.AsyncConnection
-        async with self.pool.connection() as conn:
-            async with conn.cursor() as cur:
-                try:
-                    await cur.execute(
-                        "CREATE TABLE program_filter_hash( "
-                        "hash BYTEA NOT NULL)"
-                    )
-                    await cur.execute(
-                        "CREATE INDEX program_filter_hash_hash_index "
-                        "ON program_filter_hash (hash)"
-                    )
-                except Exception as e:
-                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
-                    raise
-
     # debug method
     async def clear_database(self):
         conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             try:
-                await conn.execute("TRUNCATE TABLE block CASCADE")
+                await conn.execute("TRUNCATE TABLE block RESTART IDENTITY CASCADE")
             except Exception as e:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise

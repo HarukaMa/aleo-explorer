@@ -2,8 +2,8 @@
 -- PostgreSQL database dump
 --
 
--- Dumped from database version 15.2 (Debian 15.2-1)
--- Dumped by pg_dump version 15.1
+-- Dumped from database version 15.1
+-- Dumped by pg_dump version 15.0
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -102,7 +102,10 @@ CREATE TABLE explorer.block (
     last_coinbase_timestamp bigint NOT NULL,
     "timestamp" bigint NOT NULL,
     signature text NOT NULL,
-    coinbase_reward numeric(20,0)
+    coinbase_reward numeric(20,0),
+    total_supply numeric(20,0) NOT NULL,
+    cumulative_proof_target numeric(40,0) NOT NULL,
+    finalize_root text NOT NULL
 );
 
 
@@ -323,7 +326,20 @@ CREATE TABLE explorer.program (
     record text[],
     closure text[],
     function text[],
-    raw_data bytea NOT NULL
+    raw_data bytea NOT NULL,
+    is_helloworld boolean DEFAULT false NOT NULL,
+    feature_hash bytea NOT NULL,
+    owner text NOT NULL,
+    signature text NOT NULL
+);
+
+
+--
+-- Name: program_filter_hash; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.program_filter_hash (
+    hash bytea NOT NULL
 );
 
 
@@ -493,7 +509,6 @@ CREATE TABLE explorer.transition (
     proof text NOT NULL,
     tpk text NOT NULL,
     tcm text NOT NULL,
-    fee bigint NOT NULL,
     index integer NOT NULL
 );
 
@@ -594,6 +609,37 @@ CREATE TABLE explorer.transition_input (
 
 
 --
+-- Name: transition_input_external_record; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.transition_input_external_record (
+    id integer NOT NULL,
+    transition_input_id integer NOT NULL,
+    commitment text NOT NULL
+);
+
+
+--
+-- Name: transition_input_external_record_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.transition_input_external_record_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: transition_input_external_record_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.transition_input_external_record_id_seq OWNED BY explorer.transition_input_external_record.id;
+
+
+--
 -- Name: transition_input_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
 --
 
@@ -687,6 +733,37 @@ CREATE TABLE explorer.transition_output (
     type explorer.transition_data_type NOT NULL,
     index integer NOT NULL
 );
+
+
+--
+-- Name: transition_output_external_record; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.transition_output_external_record (
+    id integer NOT NULL,
+    transition_output_id integer NOT NULL,
+    commitment text NOT NULL
+);
+
+
+--
+-- Name: transition_output_external_record_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.transition_output_external_record_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: transition_output_external_record_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.transition_output_external_record_id_seq OWNED BY explorer.transition_output_external_record.id;
 
 
 --
@@ -905,6 +982,13 @@ ALTER TABLE ONLY explorer.transition_input ALTER COLUMN id SET DEFAULT nextval('
 
 
 --
+-- Name: transition_input_external_record id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transition_input_external_record ALTER COLUMN id SET DEFAULT nextval('explorer.transition_input_external_record_id_seq'::regclass);
+
+
+--
 -- Name: transition_input_private id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -930,6 +1014,13 @@ ALTER TABLE ONLY explorer.transition_input_record ALTER COLUMN id SET DEFAULT ne
 --
 
 ALTER TABLE ONLY explorer.transition_output ALTER COLUMN id SET DEFAULT nextval('explorer.transition_output_id_seq'::regclass);
+
+
+--
+-- Name: transition_output_external_record id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transition_output_external_record ALTER COLUMN id SET DEFAULT nextval('explorer.transition_output_external_record_id_seq'::regclass);
 
 
 --
@@ -1058,6 +1149,14 @@ ALTER TABLE ONLY explorer.transition_finalize_plaintext
 
 
 --
+-- Name: transition_input_external_record transition_input_external_record_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transition_input_external_record
+    ADD CONSTRAINT transition_input_external_record_pk PRIMARY KEY (id);
+
+
+--
 -- Name: transition_input transition_input_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -1087,6 +1186,14 @@ ALTER TABLE ONLY explorer.transition_input_public
 
 ALTER TABLE ONLY explorer.transition_input_record
     ADD CONSTRAINT transition_input_record_pk PRIMARY KEY (id);
+
+
+--
+-- Name: transition_output_external_record transition_output_external_record_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transition_output_external_record
+    ADD CONSTRAINT transition_output_external_record_pk PRIMARY KEY (id);
 
 
 --
@@ -1200,6 +1307,13 @@ CREATE INDEX partial_solution_coinbase_solution_id_index ON explorer.partial_sol
 
 
 --
+-- Name: program_filter_hash_hash_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX program_filter_hash_hash_index ON explorer.program_filter_hash USING btree (hash);
+
+
+--
 -- Name: program_function_name_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -1284,13 +1398,6 @@ CREATE INDEX transition_fee_id_index ON explorer.transition USING btree (fee_id)
 
 
 --
--- Name: transition_fee_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX transition_fee_index ON explorer.transition USING btree (fee);
-
-
---
 -- Name: transition_finalize_index_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -1326,6 +1433,13 @@ CREATE INDEX transition_index_index ON explorer.transition USING btree (index);
 
 
 --
+-- Name: transition_input_external_record_transition_input_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX transition_input_external_record_transition_input_id_index ON explorer.transition_input_external_record USING btree (transition_input_id);
+
+
+--
 -- Name: transition_input_index_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -1358,6 +1472,13 @@ CREATE INDEX transition_input_record_transition_input_id_index ON explorer.trans
 --
 
 CREATE INDEX transition_input_transition_id_index ON explorer.transition_input USING btree (transition_id);
+
+
+--
+-- Name: transition_output_external_record_transition_output_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX transition_output_external_record_transition_output_id_index ON explorer.transition_output_external_record USING btree (transition_output_id);
 
 
 --
@@ -1513,6 +1634,14 @@ ALTER TABLE ONLY explorer.transition_finalize
 
 
 --
+-- Name: transition_input_external_record transition_input_external_record_transition_input_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transition_input_external_record
+    ADD CONSTRAINT transition_input_external_record_transition_input_id_fk FOREIGN KEY (transition_input_id) REFERENCES explorer.transition_input(id);
+
+
+--
 -- Name: transition_input_private transition_input_private_transition_input_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -1542,6 +1671,14 @@ ALTER TABLE ONLY explorer.transition_input_record
 
 ALTER TABLE ONLY explorer.transition_input
     ADD CONSTRAINT transition_input_transition_id_fk FOREIGN KEY (transition_id) REFERENCES explorer.transition(id);
+
+
+--
+-- Name: transition_output_external_record transition_output_external_record_transition_output_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transition_output_external_record
+    ADD CONSTRAINT transition_output_external_record_transition_output_id_fk FOREIGN KEY (transition_output_id) REFERENCES explorer.transition_output(id);
 
 
 --
