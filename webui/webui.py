@@ -24,7 +24,7 @@ from db import Database
 from node.light_node import LightNodeState
 from node.types import u32, Transaction, Transition, ExecuteTransaction, TransitionInput, PrivateTransitionInput, \
     RecordTransitionInput, TransitionOutput, RecordTransitionOutput, Record, KZGProof, Proof, WitnessCommitments, \
-    G1Affine, Ciphertext, Owner, Balance, Entry, DeployTransaction, Deployment, Program, PublicTransitionInput, \
+    G1Affine, Ciphertext, Owner, Entry, DeployTransaction, Deployment, Program, PublicTransitionInput, \
     PublicTransitionOutput, PrivateTransitionOutput, Value, PlaintextValue, ExternalRecordTransitionInput, \
     ExternalRecordTransitionOutput
 
@@ -282,36 +282,32 @@ async def transaction_route(request: Request):
         ctx.update({
             "edition": int(deployment.edition),
             "program_id": str(program.id),
-            "total_fee": int(fee_transition.fee),
+            "total_fee": int(fee_transition.inputs[1].plaintext.value.literal.primitive),
             "transitions": [{
                 "transition_id": transaction.fee.transition.id,
                 "action": await function_signature(str(fee_transition.program_id), str(fee_transition.function_name)),
-                "fee": transaction.fee.transition.fee,
             }],
         })
     elif transaction.type == Transaction.Type.Execute:
         transaction: ExecuteTransaction
         global_state_root = transaction.execution.global_state_root
         inclusion_proof = transaction.execution.inclusion_proof.value
-        total_fee = 0
         transitions = []
         for transition in transaction.execution.transitions:
             transition: Transition
             transitions.append({
                 "transition_id": transition.id,
                 "action": await function_signature(str(transition.program_id), str(transition.function_name)),
-                "fee": transition.fee,
             })
-            if transition.fee != 0:
-                total_fee += transition.fee
         if transaction.additional_fee.value is not None:
             transition = transaction.additional_fee.value.transition
-            total_fee += transition.fee
+            total_fee = int(transition.inputs[1].plaintext.value.literal.primitive)
             transitions.append({
                 "transition_id": transition.id,
                 "action": await function_signature(str(transition.program_id), str(transition.function_name)),
-                "fee": transition.fee,
             })
+        else:
+            total_fee = 0
         ctx.update({
             "request": request,
             "tx_id": tx_id,
@@ -366,7 +362,6 @@ async def transition_route(request: Request):
     tpk = transition.tpk
     tcm = transition.tcm
     proof = transition.proof
-    fee = transition.fee
 
     inputs = []
     for input_ in transition.inputs:
@@ -430,7 +425,6 @@ async def transition_route(request: Request):
                 if record is not None:
                     record_data = {
                         "owner": record.owner,
-                        "gates": record.gates,
                     }
                     data = []
                     for identifier, entry in record.data:
@@ -466,7 +460,6 @@ async def transition_route(request: Request):
         "function_name": function_name,
         "tpk": tpk,
         "tcm": tcm,
-        "fee": fee,
         "proof": proof,
         "function_signature": await function_signature(str(transition.program_id), str(transition.function_name)),
         "function_definition": await function_definition(str(transition.program_id), str(transition.function_name)),
@@ -1042,15 +1035,6 @@ async def advanced_route(request: Request):
                         id_ = str(record.owner.owner)
                         # noinspection PyUnresolvedReferences
                         data = get_ciphertext_data(record.owner.owner)
-                    elif field == "gates":
-                        if record.gates.type == Balance.Type.Public:
-                            raise HTTPException(status_code=400, detail="Gates is public")
-                        if record.gates.Private != Ciphertext:
-                            raise HTTPException(status_code=400, detail="Gates is not a ciphertext")
-                        # noinspection PyUnresolvedReferences
-                        id_ = str(record.gates.balance)
-                        # noinspection PyUnresolvedReferences
-                        data = get_ciphertext_data(record.gates.balance)
                     else:
                         for identifier, entry in record.data:
                             if str(identifier) == field:
