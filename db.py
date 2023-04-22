@@ -1135,7 +1135,7 @@ class Database:
                         heights = list(map(lambda x: x['height'], partial_solutions))
                         ref_heights = list(map(lambda x: x - 1, set(heights)))
                         await cur.execute(
-                            "SELECT height, proof_target FROM block WHERE height = ANY(%s::bigint[])", ref_heights
+                            "SELECT height, proof_target FROM block WHERE height = ANY(%s::bigint[])", (ref_heights,)
                         )
                         ref_proof_targets = await cur.fetchall()
                         ref_proof_target_dict = dict(map(lambda x: (x['height'], x['proof_target']), ref_proof_targets))
