@@ -56,9 +56,14 @@
         {% call data_line("Proof target") %}
             {{ block.header.metadata.proof_target }}
         {% endcall %}
+        {% call data_line("Cumulative proof target") %}
+            {{ block.header.metadata.cumulative_proof_target }}
+        {% endcall %}
         {% call data_line("Coinbase reward") %}
             {% if coinbase_reward %}{{ (coinbase_reward // 2) | format_aleo_credit }}{% else %}-{% endif %}
         {% endcall %}
+        {% call data_line("Total supply") %}
+            {{ block.header.metadata.total_supply_in_microcredits | format_aleo_credit }}
         {% call data_line("Block hash") %}
             <span class="mono">{{ block.block_hash }}</span>
         {% endcall %}
@@ -70,6 +75,9 @@
         {% endcall %}
         {% call data_line("Transactions root") %}
             <span class="mono">{{ block.header.transactions_root }}</span>
+        {% endcall %}
+        {% call data_line("Finalizer root") %}
+            <span class="mono">{{ block.header.finalizer_root }}</span>
         {% endcall %}
         {% call data_line("Coinbase accumulator point") %}
             <span class="mono">{{ block.header.coinbase_accumulator_point }}</span>
