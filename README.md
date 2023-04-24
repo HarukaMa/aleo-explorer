@@ -11,11 +11,10 @@ connect to peers that you trust.
 
 ## Database update warning
 
-The database schema has been updated recently to support the latest blockchain feature (deployment). There was also a
-slight change in the `Transaction` table. It should be possible to manually fix the database schema, but you can always
-just resync the database from scratch.
+The database schema has been updated at the start of testnet 3 phase 3. It's recommended to start clean and import the
+database schema from `pg_dump.sql`.
 
-No migration script is provided this time.
+Further schema updates will be provided as database migrations.
 
 ## Prerequisites
 
