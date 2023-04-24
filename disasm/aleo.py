@@ -169,7 +169,6 @@ def disassemble_program(program: Program) -> str:
         res.insert_line(f"record {r.name}:")
         res.indent()
         res.insert_line(f"owner as address.{public_or_private_to_str(r.owner)};")
-        res.insert_line(f"gates as u64.{public_or_private_to_str(r.gates)};")
         for identifier, entry in r.entries:
             res.insert_line(f"{identifier} as {disasm_entry_type(entry)};")
         res.unindent()
