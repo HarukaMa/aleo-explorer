@@ -126,7 +126,7 @@ class Explorer:
                 from hashlib import md5
                 if md5(f.read()).hexdigest() == "1c28714e40263e4c4afa1aa7f7272a3f":
                     self.dev_mode = True
-                    i = 1
+                    i = 10
                     while i > 0:
                         print(f"\x1b[G\x1b[2K!!! Clearing database in {i} seconds !!!", end="")
                         stdout.flush()
