@@ -45,7 +45,7 @@
             {{ block.header.metadata.height }}
         {% endcall %}
         {% call data_line("Epoch") %}
-            {{ block.header.metadata.height // 256 }} <span class="note">{{ block.header.metadata.height % 256 }} / 256
+            {{ block.header.metadata.height // 256 }} <span class="note">{{ block.header.metadata.height % 256 }} / 256</span>
         {% endcall %}
         {% call data_line("Timestamp") %}
             {{ block.header.metadata.timestamp | format_time | safe }}
@@ -64,6 +64,7 @@
         {% endcall %}
         {% call data_line("Total supply") %}
             {{ block.header.metadata.total_supply_in_microcredits | format_aleo_credit }}
+        {% endcall %}
         {% call data_line("Block hash") %}
             <span class="mono">{{ block.block_hash }}</span>
         {% endcall %}
