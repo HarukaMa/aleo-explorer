@@ -692,6 +692,8 @@ async def program_route(request: Request):
         "request": request,
         "program_id": str(program.id),
         "transaction_id": str(transaction.id),
+        "owner": str(transaction.owner.address),
+        "signature": str(transaction.owner.signature),
         "times_called": await db.get_program_called_times(program_id),
         "imports": list(map(lambda i: str(i.program_id), program.imports)),
         "mappings": list(map(str, program.mappings.keys())),

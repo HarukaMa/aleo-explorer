@@ -36,7 +36,13 @@
                 <span class="mono">{{ program_id }}</span>
             {% endcall %}
             {% call data_line("Deployment transaction") %}
-                <a href="/transaction?id={{ transaction_id }}">{{ transaction_id }}</a>
+                <span class="mono"><a href="/transaction?id={{ transaction_id }}">{{ transaction_id }}</a></span>
+            {% endcall %}
+            {% call data_line("Program owner") %}
+                <span class="mono"><a href="/address?a={{ owner }}">{{ owner }}</a></span>
+            {% endcall %}
+            {% call data_line("Owner signature") %}
+                <span class="mono">{{ signature }}</span>
             {% endcall %}
             {% call data_line("Times called") %}
                 {{ times_called }}
