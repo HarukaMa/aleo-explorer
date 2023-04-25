@@ -66,7 +66,7 @@
             {{ total_fee | format_aleo_credit }} Aleo credits
         {% endcall %}
         {% call data_line("Total supply") %}
-            {{ block.header.metadata.total_supply_in_microcredits | format_aleo_credit }}
+            {{ block.header.metadata.total_supply_in_microcredits | format_aleo_credit }} Aleo credits
         {% endcall %}
         {% call data_line("Block hash") %}
             <span class="mono">{{ block.block_hash }}</span>
@@ -105,7 +105,7 @@
                         <td class="mono"><a href="/transaction?id={{ tx.tx_id }}">{{ tx.tx_id }}</a></td>
                         <td>{{ tx.type }}</td>
                         <td>{{ tx.transitions_count }}</td>
-                        <td>{{ tx.fee | format_aleo_credit }}</td>
+                        <td>{{ tx.fee | format_aleo_credit }}</td> Aleo credits
                     </tr>
                 {% endfor %}
                 </tbody>
