@@ -85,6 +85,30 @@
             {% endif %}
         </div>
 
+        <div id="programs">
+            <h4>Deployed programs</h4>
+            <table class="unstriped">
+                <thead>
+                <tr>
+                    <th>Program</th>
+                    <th>Block</th>
+                    <th>Timestamp</th>
+                    <th>Transaction ID</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for program in programs %}
+                    <tr>
+                        <td><a href="/program?id={{ program.program_id }}">{{ program.program_id }}</a></td>
+                        <td><a href="/block?h={{ program.height }}">{{ program.height }}</a></td>
+                        <td>{{ program.timestamp | format_time | safe }}</td>
+                        <td><a href="/transaction?id={{ program.tx_id }}">{{ program.transaction_id }}</a></td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
     </div>
 
 {% endblock %}

@@ -802,11 +802,19 @@ async def address_route(request: Request):
     if address is None:
         raise HTTPException(status_code=400, detail="Missing address")
     solutions = await db.get_recent_solutions_by_address(address)
-    if len(solutions) == 0:
+    programs = await db.get_recent_programs_by_address(address)
+    if len(solutions) == 0 and len(programs) == 0:
         raise HTTPException(status_code=404, detail="Address not found")
-    solution_count = await db.get_solution_count_by_address(address)
-    total_rewards, total_incentive = await db.get_leaderboard_rewards_by_address(address)
-    speed, interval = await db.get_address_speed(address)
+    if len(solutions) > 0:
+        solution_count = await db.get_solution_count_by_address(address)
+        total_rewards, total_incentive = await db.get_leaderboard_rewards_by_address(address)
+        speed, interval = await db.get_address_speed(address)
+    else:
+        solution_count = 0
+        total_rewards = 0
+        total_incentive = 0
+        speed = 0
+        interval = 0
     interval_text = {
         0: "never",
         900: "15 minutes",
@@ -816,9 +824,9 @@ async def address_route(request: Request):
         43200: "12 hours",
         86400: "1 day",
     }
-    data = []
+    recent_solutions = []
     for solution in solutions:
-        data.append({
+        recent_solutions.append({
             "height": solution["height"],
             "timestamp": solution["timestamp"],
             "reward": solution["reward"],
@@ -826,12 +834,29 @@ async def address_route(request: Request):
             "target": solution["target"],
             "target_sum": solution["target_sum"],
         })
+    recent_programs = []
+    for program in programs:
+        program_block = await db.get_block_by_program_id(program)
+        program_tx = None
+        for tx in program_block.transactions.transactions:
+            if tx.type == Transaction.Type.Deploy and str(tx.deployment.program.id) == program:
+                program_tx = tx
+                break
+        if program_tx is None:
+            raise HTTPException(status_code=500, detail="Program transaction not found")
+        recent_programs.append({
+            "program_id": program,
+            "height": program_block.header.metadata.height,
+            "timestamp": program_block.header.metadata.timestamp,
+            "transaction_id": program_tx.id,
+        })
     maintenance, info = await out_of_sync_check()
     ctx = {
         "request": request,
         "address": address,
         "address_trunc": address[:14] + "..." + address[-6:],
-        "solutions": data,
+        "solutions": recent_solutions,
+        "programs": recent_programs,
         "total_rewards": total_rewards,
         "total_incentive": total_incentive,
         "total_solutions": solution_count,
