@@ -62,6 +62,9 @@
         {% call data_line("Coinbase reward") %}
             {% if coinbase_reward %}{{ (coinbase_reward // 2) | format_aleo_credit }}{% else %}-{% endif %}
         {% endcall %}
+        {% call data_line("Total fee") %}
+            {{ total_fee | format_aleo_credit }} Aleo credits
+        {% endcall %}
         {% call data_line("Total supply") %}
             {{ block.header.metadata.total_supply_in_microcredits | format_aleo_credit }}
         {% endcall %}
@@ -93,6 +96,7 @@
                     <td>Transaction ID</td>
                     <td>Type</td>
                     <td>Transitions</td>
+                    <td>Fee</td>
                 </tr>
                 </thead>
                 <tbody>
@@ -101,6 +105,7 @@
                         <td class="mono"><a href="/transaction?id={{ tx.tx_id }}">{{ tx.tx_id }}</a></td>
                         <td>{{ tx.type }}</td>
                         <td>{{ tx.transitions_count }}</td>
+                        <td>{{ tx.fee | format_aleo_credit }}</td>
                     </tr>
                 {% endfor %}
                 </tbody>

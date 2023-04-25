@@ -205,25 +205,36 @@ async def block_route(request: Request):
             target_sum += solution["target"]
 
     txs = []
+    total_fee = 0
     for tx in block.transactions:
         tx: Transaction
         match tx.type:
             case Transaction.Type.Deploy:
                 tx: DeployTransaction
+                fee = int(tx.fee.transition.inputs[1].plaintext.value.literal.primitive)
                 t = {
                     "tx_id": tx.id,
                     "type": "Deploy",
                     "transitions_count": 1,
+                    "fee": fee,
                 }
                 txs.append(t)
+                total_fee += fee
             case Transaction.Type.Execute:
                 tx: ExecuteTransaction
+                fee_transition = tx.additional_fee.value
+                if fee_transition is not None:
+                    fee = int(fee_transition.transition.inputs[1].plaintext.value.literal.primitive)
+                else:
+                    fee = 0
                 t = {
                     "tx_id": tx.id,
                     "type": "Execute",
                     "transitions_count": len(tx.execution.transitions) + bool(tx.additional_fee.value is not None),
+                    "fee": fee,
                 }
                 txs.append(t)
+                total_fee += fee
 
     ctx = {
         "request": request,
@@ -234,6 +245,7 @@ async def block_route(request: Request):
         "transactions": txs,
         "coinbase_solutions": css,
         "target_sum": target_sum,
+        "total_fee": total_fee,
     }
     return templates.TemplateResponse('block.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'})
 
