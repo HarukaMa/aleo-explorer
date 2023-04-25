@@ -815,6 +815,7 @@ async def address_route(request: Request):
         total_incentive = 0
         speed = 0
         interval = 0
+    program_count = await db.get_program_count_by_address(address)
     interval_text = {
         0: "never",
         900: "15 minutes",
@@ -860,6 +861,7 @@ async def address_route(request: Request):
         "total_rewards": total_rewards,
         "total_incentive": total_incentive,
         "total_solutions": solution_count,
+        "total_programs": program_count,
         "speed": speed,
         "timespan": interval_text[interval],
         "maintenance": maintenance,

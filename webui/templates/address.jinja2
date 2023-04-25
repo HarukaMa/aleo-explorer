@@ -42,8 +42,11 @@
         {% call data_line_safe("Total coinbase reward (<span data-tooltip title=\"Testnet3 credits earned since the start of the network.\">?</span>)") %}
             {{ total_rewards | format_aleo_credit }}
         {% endcall %}
-        {% call data_line("Total solutions found") %}
+        {% call data_line("Solutions found") %}
             {{ total_solutions }}
+        {% endcall %}
+        {% call data_line("Programs deployed") %}
+            {{ total_programs }}
         {% endcall %}
         {% call data_line("Estimated speed") %}
             {% if speed != 0 %}

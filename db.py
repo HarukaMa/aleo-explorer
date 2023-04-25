@@ -1416,6 +1416,17 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
+    async def get_program_count_by_address(self, address: str) -> int:
+        conn: psycopg.AsyncConnection
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute("SELECT COUNT(*) FROM program WHERE owner = %s", (address,))
+                    return (await cur.fetchone())['count']
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
     # migration methods
     async def migrate(self):
         migrations = []
