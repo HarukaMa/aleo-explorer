@@ -569,10 +569,11 @@ class Database:
                         )
                         deploy_transaction = await cur.fetchone()
                         await cur.execute(
-                            "SELECT raw_data FROM program WHERE transaction_deploy_id = %s",
+                            "SELECT raw_data, owner, signature FROM program WHERE transaction_deploy_id = %s",
                             (deploy_transaction["id"],)
                         )
-                        program = (await cur.fetchone())["raw_data"]
+                        program_data = await cur.fetchone()
+                        program = program_data["raw_data"]
                         deployment = Deployment(
                             edition=u16(deploy_transaction["edition"]),
                             program=Program.load(bytearray(program)),
@@ -602,6 +603,10 @@ class Database:
                             id_=TransactionID.loads(transaction["transaction_id"]),
                             deployment=deployment,
                             fee=fee,
+                            owner=ProgramOwner(
+                                address=Address.loads(program_data["owner"]),
+                                signature=Signature.loads(program_data["signature"])
+                            )
                         ))
                     case Transaction.Type.Execute.name:
                         await cur.execute(
@@ -647,7 +652,7 @@ class Database:
                         txs.append(ExecuteTransaction(
                             id_=TransactionID.loads(transaction["transaction_id"]),
                             execution=Execution(
-                                transitions=Vec[Transition, u16](tss),
+                                transitions=Vec[Transition, u8](tss),
                                 global_state_root=StateRoot.loads(execute_transaction["global_state_root"]),
                                 inclusion_proof=Option[Proof](proof),
                             ),
@@ -1227,7 +1232,7 @@ class Database:
                         "WHERE program.program_id = %s AND name = %s",
                         (program_id, function_name)
                     )
-                    row = await cur.fetchone()
+                    return await cur.fetchone()
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
