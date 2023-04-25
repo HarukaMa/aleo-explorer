@@ -105,7 +105,7 @@
                         <td class="mono"><a href="/transaction?id={{ tx.tx_id }}">{{ tx.tx_id }}</a></td>
                         <td>{{ tx.type }}</td>
                         <td>{{ tx.transitions_count }}</td>
-                        <td>{{ tx.fee | format_aleo_credit }}</td> Aleo credits
+                        <td>{{ tx.fee | format_aleo_credit }} Aleo credits</td>
                     </tr>
                 {% endfor %}
                 </tbody>
