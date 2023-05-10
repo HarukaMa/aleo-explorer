@@ -253,7 +253,7 @@ def generic_type_check(func):
         for v, t in hints.items():
             arg = kwargs.get(v)
             if isinstance(t, Vec):
-                if arg.type != t.type and not (isinstance(arg.type, Tuple) and isinstance(t.type, Tuple)):
+                if arg.type != t.type and not (isinstance(arg.type, Tuple) and isinstance(t.type, Tuple)) and not (isinstance(arg.type, Vec) and isinstance(t.type, Vec)):
                     raise TypeError(f"{v} should be {t}, but got {type(arg)}")
             if isinstance(t, Tuple):
                 if arg.types != t.types:

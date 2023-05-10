@@ -747,7 +747,7 @@ class ProgramDefinition(IntEnumu8):
 
 
 class Program(Serialize, Deserialize):
-    version = u16()
+    version = u8()
 
     # @type_check
     @generic_type_check
@@ -796,7 +796,7 @@ class Program(Serialize, Deserialize):
     @classmethod
     # @type_check
     def load(cls, data: bytearray):
-        version = u16.load(data)
+        version = u8.load(data)
         if version != cls.version:
             raise ValueError("Invalid version")
         id_ = ProgramID.load(data)
@@ -956,7 +956,7 @@ class SonicVerifierKey(Serialize, Deserialize):
 
 
 class VerifyingKey(Serialize, Deserialize):
-    version = u16()
+    version = u8()
 
     # Skipping a layer of marlin::CircuitVerifyingKey
     # @type_check
@@ -978,7 +978,7 @@ class VerifyingKey(Serialize, Deserialize):
     @classmethod
     # @type_check
     def load(cls, data: bytearray):
-        version = u16.load(data)
+        version = u8.load(data)
         if version != cls.version:
             raise ValueError("Invalid version")
         circuit_info = CircuitInfo.load(data)
@@ -1040,7 +1040,7 @@ class BatchLCProof(Serialize, Deserialize):
 
 
 class Certificate(Serialize, Deserialize):
-    version = u16()
+    version = u8()
 
     # Skipping a layer of marlin::Certificate
     # @type_check
@@ -1053,7 +1053,7 @@ class Certificate(Serialize, Deserialize):
     @classmethod
     # @type_check
     def load(cls, data: bytearray):
-        version = u16.load(data)
+        version = u8.load(data)
         if version != cls.version:
             raise ValueError("Invalid version")
         pc_proof = BatchLCProof.load(data)
@@ -1061,7 +1061,7 @@ class Certificate(Serialize, Deserialize):
 
 
 class Deployment(Serialize, Deserialize):
-    version = u16()
+    version = u8()
 
     # @type_check
     @generic_type_check
@@ -1082,7 +1082,7 @@ class Deployment(Serialize, Deserialize):
     @classmethod
     # @type_check
     def load(cls, data: bytearray):
-        version = u16.load(data)
+        version = u8.load(data)
         if version != cls.version:
             raise ValueError("Invalid version")
         edition = u16.load(data)
@@ -1115,16 +1115,16 @@ class Commitments(Serialize, Deserialize):
 
     # @type_check
     @generic_type_check
-    def __init__(self, *, witness_commitments: Vec[WitnessCommitments, usize], mask_poly: Option[KZGCommitment],
-                 g_1: KZGCommitment, h_1: KZGCommitment, g_a: KZGCommitment, g_b: KZGCommitment,
-                 g_c: KZGCommitment, h_2: KZGCommitment):
+    def __init__(self, *, witness_commitments: Vec[WitnessCommitments, u64], mask_poly: Option[KZGCommitment],
+                 g_1: KZGCommitment, h_1: KZGCommitment, g_a_commitments: Vec[KZGCommitment, u64],
+                 g_b_commitments: Vec[KZGCommitment, u64], g_c_commitments: Vec[KZGCommitment, u64], h_2: KZGCommitment):
         self.witness_commitments = witness_commitments
         self.mask_poly = mask_poly
         self.g_1 = g_1
         self.h_1 = h_1
-        self.g_a = g_a
-        self.g_b = g_b
-        self.g_c = g_c
+        self.g_a_commitments = g_a_commitments
+        self.g_b_commitments = g_b_commitments
+        self.g_c_commitments = g_c_commitments
         self.h_2 = h_2
 
     def dump(self) -> bytes:
@@ -1134,69 +1134,98 @@ class Commitments(Serialize, Deserialize):
         res += self.mask_poly.dump()
         res += self.g_1.dump()
         res += self.h_1.dump()
-        res += self.g_a.dump()
-        res += self.g_b.dump()
-        res += self.g_c.dump()
+        for g_a_commitment in self.g_a_commitments:
+            res += g_a_commitment.dump()
+        for g_b_commitment in self.g_b_commitments:
+            res += g_b_commitment.dump()
+        for g_c_commitment in self.g_c_commitments:
+            res += g_c_commitment.dump()
         res += self.h_2.dump()
         return res
 
     # noinspection PyMethodOverriding
     @classmethod
     # @type_check
-    def load(cls, data: bytearray, batch_size: usize):
+    def load(cls, data: bytearray, batch_sizes: Vec[u64, u64]):
         witness_commitments = []
-        for _ in range(batch_size):
+        for _ in range(sum(batch_sizes)):
             witness_commitments.append(WitnessCommitments.load(data))
-        witness_commitments = Vec[WitnessCommitments, usize](witness_commitments)
+        witness_commitments = Vec[WitnessCommitments, u64](witness_commitments)
         mask_poly = Option[KZGCommitment].load(data)
         g_1 = KZGCommitment.load(data)
         h_1 = KZGCommitment.load(data)
-        g_a = KZGCommitment.load(data)
-        g_b = KZGCommitment.load(data)
-        g_c = KZGCommitment.load(data)
+        commitments = []
+        for _ in range(len(batch_sizes)):
+            commitments.append(KZGCommitment.load(data))
+        g_a_commitments = Vec[KZGCommitment, u64](commitments)
+        commitments = []
+        for _ in range(len(batch_sizes)):
+            commitments.append(KZGCommitment.load(data))
+        g_b_commitments = Vec[KZGCommitment, u64](commitments)
+        commitments = []
+        for _ in range(len(batch_sizes)):
+            commitments.append(KZGCommitment.load(data))
+        g_c_commitments = Vec[KZGCommitment, u64](commitments)
         h_2 = KZGCommitment.load(data)
-        return cls(witness_commitments=witness_commitments, mask_poly=mask_poly, g_1=g_1, h_1=h_1, g_a=g_a, g_b=g_b,
-                   g_c=g_c, h_2=h_2)
+        return cls(witness_commitments=witness_commitments, mask_poly=mask_poly, g_1=g_1, h_1=h_1,
+                   g_a_commitments=g_a_commitments, g_b_commitments=g_b_commitments,
+                   g_c_commitments=g_c_commitments, h_2=h_2)
 
 
 class Evaluations(Serialize, Deserialize):
 
     # @type_check
     @generic_type_check
-    def __init__(self, *, z_b_evals: Vec[Field, usize], g_1_eval: Field, g_a_eval: Field,
-                 g_b_eval: Field, g_c_eval: Field):
+    def __init__(self, *, z_b_evals: Vec[Vec[Field, u64], u64], g_1_eval: Field, g_a_evals: Vec[Field, u64],
+                 g_b_evals: Vec[Field, u64], g_c_evals: Vec[Field, u64]):
         self.z_b_evals = z_b_evals
         self.g_1_eval = g_1_eval
-        self.g_a_eval = g_a_eval
-        self.g_b_eval = g_b_eval
-        self.g_c_eval = g_c_eval
+        self.g_a_evals = g_a_evals
+        self.g_b_evals = g_b_evals
+        self.g_c_evals = g_c_evals
 
     def dump(self) -> bytes:
         res = b""
         for z_b_eval in self.z_b_evals:
-            res += z_b_eval.dump()
+            for e in z_b_eval:
+                res += e.dump()
         res += self.g_1_eval.dump()
-        res += self.g_a_eval.dump()
-        res += self.g_b_eval.dump()
-        res += self.g_c_eval.dump()
+        for g_a_eval in self.g_a_evals:
+            res += g_a_eval.dump()
+        for g_b_eval in self.g_b_evals:
+            res += g_b_eval.dump()
+        for g_c_eval in self.g_c_evals:
+            res += g_c_eval.dump()
         return res
 
     # noinspection PyMethodOverriding
     @classmethod
     # @type_check
-    def load(cls, data: bytearray, batch_size: usize):
+    def load(cls, data: bytearray, batch_sizes: Vec[u64, u64]):
         z_b_evals = []
-        for _ in range(batch_size):
-            z_b_evals.append(Field.load(data))
-        z_b_evals = Vec[Field, usize](z_b_evals)
+        for batch_size in batch_sizes:
+            batch = []
+            for _ in range(batch_size):
+                batch.append(Field.load(data))
+            z_b_evals.append(Vec[Field, u64](batch))
+        z_b_evals = Vec[Vec[Field, u64], u64](z_b_evals)
         g_1_eval = Field.load(data)
-        g_a_eval = Field.load(data)
-        g_b_eval = Field.load(data)
-        g_c_eval = Field.load(data)
-        return cls(z_b_evals=z_b_evals, g_1_eval=g_1_eval, g_a_eval=g_a_eval, g_b_eval=g_b_eval, g_c_eval=g_c_eval)
+        evals = []
+        for _ in range(len(batch_sizes)):
+            evals.append(Field.load(data))
+        g_a_evals = Vec[Field, u64](evals)
+        evals = []
+        for _ in range(len(batch_sizes)):
+            evals.append(Field.load(data))
+        g_b_evals = Vec[Field, u64](evals)
+        evals = []
+        for _ in range(len(batch_sizes)):
+            evals.append(Field.load(data))
+        g_c_evals = Vec[Field, u64](evals)
+        return cls(z_b_evals=z_b_evals, g_1_eval=g_1_eval, g_a_evals=g_a_evals, g_b_evals=g_b_evals, g_c_evals=g_c_evals)
 
 
-class ThirdMessage(Serialize, Deserialize):
+class MatrixSums(Serialize, Deserialize):
 
     # @type_check
     def __init__(self, *, sum_a: Field, sum_b: Field, sum_c: Field):
@@ -1216,14 +1245,33 @@ class ThirdMessage(Serialize, Deserialize):
         return cls(sum_a=sum_a, sum_b=sum_b, sum_c=sum_c)
 
 
+class ThirdMessage(Serialize, Deserialize):
+
+    # @type_check
+    def __init__(self, *, sums: Vec[MatrixSums, u64]):
+        self.sums = sums
+
+    def dump(self) -> bytes:
+        res = b""
+        for s in self.sums:
+            res += s.dump()
+        return res
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        sums = Vec[MatrixSums, u64].load(data)
+        return cls(sums=sums)
+
+
 class Proof(Serialize, Deserialize):
-    version = u16()
+    version = u8()
 
     # Skipping a layer of marlin::Proof
     # @type_check
-    def __init__(self, *, batch_size: usize, commitments: Commitments, evaluations: Evaluations, msg: ThirdMessage,
+    def __init__(self, *, batch_sizes: Vec[u64, u64], commitments: Commitments, evaluations: Evaluations, msg: ThirdMessage,
                  pc_proof: BatchLCProof):
-        self.batch_size = batch_size
+        self.batch_sizes = batch_sizes
         self.commitments = commitments
         self.evaluations = evaluations
         self.msg = msg
@@ -1232,7 +1280,7 @@ class Proof(Serialize, Deserialize):
     def dump(self) -> bytes:
         res = b""
         res += self.version.dump()
-        res += self.batch_size.dump()
+        res += self.batch_sizes.dump()
         res += self.commitments.dump()
         res += self.evaluations.dump()
         res += self.msg.dump()
@@ -1242,15 +1290,15 @@ class Proof(Serialize, Deserialize):
     @classmethod
     # @type_check
     def load(cls, data: bytearray):
-        version = u16.load(data)
+        version = u8.load(data)
         if version != cls.version:
             raise Exception("Invalid proof version")
-        batch_size = usize.load(data)
-        commitments = Commitments.load(data, batch_size=batch_size)
-        evaluations = Evaluations.load(data, batch_size=batch_size)
+        batch_sizes = Vec[u64, u64].load(data)
+        commitments = Commitments.load(data, batch_sizes=batch_sizes)
+        evaluations = Evaluations.load(data, batch_sizes=batch_sizes)
         msg = ThirdMessage.load(data)
         pc_proof = BatchLCProof.load(data)
-        return cls(batch_size=batch_size, commitments=commitments, evaluations=evaluations, msg=msg, pc_proof=pc_proof)
+        return cls(batch_sizes=batch_sizes, commitments=commitments, evaluations=evaluations, msg=msg, pc_proof=pc_proof)
 
     @classmethod
     # @type_check
@@ -2033,7 +2081,7 @@ class ExternalRecordTransitionOutput(TransitionOutput):
 
 
 class Transition(Serialize, Deserialize):
-    version = u16()
+    version = u8()
 
     @generic_type_check
     def __init__(self, *, id_: TransitionID, program_id: ProgramID, function_name: Identifier,
@@ -2066,7 +2114,7 @@ class Transition(Serialize, Deserialize):
     @classmethod
     # @type_check
     def load(cls, data: bytearray):
-        version = u16.load(data)
+        version = u8.load(data)
         if version != cls.version:
             raise ValueError(f"version mismatch: expected {cls.version}, got {version}")
         id_ = TransitionID.load(data)
@@ -2240,13 +2288,254 @@ class ExecuteTransaction(Transaction):
         additional_fee = Option[Fee].load(data)
         return cls(id_=id_, execution=execution, additional_fee=additional_fee)
 
+class ConfirmedTransaction(Serialize, Deserialize):
+    class Type(IntEnumu8):
+        AcceptedDeploy = 0
+        AcceptedExecute = 1
+        RejectedDeploy = 2
+        RejectedExecute = 3
+
+    @property
+    @abstractmethod
+    def type(self):
+        raise NotImplementedError
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        type_ = cls.Type(data[0])
+        del data[0]
+        if type_ == cls.Type.AcceptedDeploy:
+            return AcceptedDeploy.load(data)
+        elif type_ == cls.Type.AcceptedExecute:
+            return AcceptedExecute.load(data)
+        elif type_ == cls.Type.RejectedDeploy:
+            return RejectedDeploy.load(data)
+        elif type_ == cls.Type.RejectedExecute:
+            return RejectedExecute.load(data)
+        else:
+            raise ValueError("incorrect type")
+
+
+class FinalizeOperation(Serialize, Deserialize):
+    class Type(IntEnumu8):
+        InitializeMapping = 0
+        InsertKeyValue = 1
+        UpdateKeyValue = 2
+        RemoveKeyValue = 3
+        RemoveMapping = 4
+
+    @property
+    @abstractmethod
+    def type(self):
+        raise NotImplementedError
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        type_ = cls.Type(data[0])
+        del data[0]
+        if type_ == cls.Type.InitializeMapping:
+            return InitializeMapping.load(data)
+        elif type_ == cls.Type.InsertKeyValue:
+            return InsertKeyValue.load(data)
+        elif type_ == cls.Type.UpdateKeyValue:
+            return UpdateKeyValue.load(data)
+        elif type_ == cls.Type.RemoveKeyValue:
+            return RemoveKeyValue.load(data)
+        elif type_ == cls.Type.RemoveMapping:
+            return RemoveMapping.load(data)
+        else:
+            raise ValueError("incorrect type")
+
+
+class InitializeMapping(FinalizeOperation):
+    type = FinalizeOperation.Type.InitializeMapping
+
+    # @type_check
+    def __init__(self, *, mapping_id: Field):
+        self.mapping_id = mapping_id
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.mapping_id.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        mapping_id = Field.load(data)
+        return cls(mapping_id=mapping_id)
+
+
+class InsertKeyValue(FinalizeOperation):
+    type = FinalizeOperation.Type.InsertKeyValue
+
+    # @type_check
+    def __init__(self, *, mapping_id: Field, key_id: Field, value_id: Field):
+        self.mapping_id = mapping_id
+        self.key_id = key_id
+        self.value_id = value_id
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.mapping_id.dump() + self.key_id.dump() + self.value_id.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        mapping_id = Field.load(data)
+        key_id = Field.load(data)
+        value_id = Field.load(data)
+        return cls(mapping_id=mapping_id, key_id=key_id, value_id=value_id)
+
+
+class UpdateKeyValue(FinalizeOperation):
+    type = FinalizeOperation.Type.UpdateKeyValue
+
+    # @type_check
+    def __init__(self, *, mapping_id: Field, index: u64, key_id: Field, value_id: Field):
+        self.mapping_id = mapping_id
+        self.index = index
+        self.key_id = key_id
+        self.value_id = value_id
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.mapping_id.dump() + self.index.dump() + self.key_id.dump() + self.value_id.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        mapping_id = Field.load(data)
+        index = u64.load(data)
+        key_id = Field.load(data)
+        value_id = Field.load(data)
+        return cls(mapping_id=mapping_id, index=index, key_id=key_id, value_id=value_id)
+
+
+class RemoveKeyValue(FinalizeOperation):
+    type = FinalizeOperation.Type.RemoveKeyValue
+
+    # @type_check
+    def __init__(self, *, mapping_id: Field, index: u64):
+        self.mapping_id = mapping_id
+        self.index = index
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.mapping_id.dump() + self.index.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        mapping_id = Field.load(data)
+        index = u64.load(data)
+        return cls(mapping_id=mapping_id, index=index)
+
+
+class RemoveMapping(FinalizeOperation):
+    type = FinalizeOperation.Type.RemoveMapping
+
+    # @type_check
+    def __init__(self, *, mapping_id: Field):
+        self.mapping_id = mapping_id
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.mapping_id.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        mapping_id = Field.load(data)
+        return cls(mapping_id=mapping_id)
+
+
+class AcceptedDeploy(Serialize, Deserialize):
+    type = ConfirmedTransaction.Type.AcceptedDeploy
+
+    # @type_check
+    def __init__(self, *, index: u32, transaction: Transaction, finalize: Vec[FinalizeOperation, u16]):
+        self.index = index
+        self.transaction = transaction
+        self.finalize = finalize
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.index.dump() + self.transaction.dump() + self.finalize.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        index = u32.load(data)
+        transaction = Transaction.load(data)
+        finalize = Vec[FinalizeOperation, u16].load(data)
+        return cls(index=index, transaction=transaction, finalize=finalize)
+
+
+class AcceptedExecute(Serialize, Deserialize):
+    type = ConfirmedTransaction.Type.AcceptedExecute
+
+    # @type_check
+    def __init__(self, *, index: u32, transaction: Transaction, finalize: Vec[FinalizeOperation, u16]):
+        self.index = index
+        self.transaction = transaction
+        self.finalize = finalize
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.index.dump() + self.transaction.dump() + self.finalize.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        index = u32.load(data)
+        transaction = Transaction.load(data)
+        finalize = Vec[FinalizeOperation, u16].load(data)
+        return cls(index=index, transaction=transaction, finalize=finalize)
+
+
+class RejectedDeploy(Serialize, Deserialize):
+    type = ConfirmedTransaction.Type.RejectedDeploy
+
+    # @type_check
+    def __init__(self, *, index: u32, transaction: Transaction, rejected: Deployment):
+        self.index = index
+        self.transaction = transaction
+        self.rejected = rejected
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.index.dump() + self.transaction.dump() + self.rejected.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        index = u32.load(data)
+        transaction = Transaction.load(data)
+        rejected = Deployment.load(data)
+        return cls(index=index, transaction=transaction, rejected=rejected)
+
+
+class RejectedExecute(Serialize, Deserialize):
+    type = ConfirmedTransaction.Type.RejectedExecute
+
+    # @type_check
+    def __init__(self, *, index: u32, transaction: Transaction, rejected: Execution):
+        self.index = index
+        self.transaction = transaction
+        self.rejected = rejected
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.index.dump() + self.transaction.dump() + self.rejected.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        index = u32.load(data)
+        transaction = Transaction.load(data)
+        rejected = Execution.load(data)
+        return cls(index=index, transaction=transaction, rejected=rejected)
+
 
 class Transactions(Serialize, Deserialize):
     version = u8()
 
     # @type_check
     @generic_type_check
-    def __init__(self, *, transactions: Vec[Transaction, u32]):  # we probably don't need IDs here so using Vec
+    def __init__(self, *, transactions: Vec[ConfirmedTransaction, u32]):  # we probably don't need IDs here so using Vec
         self.transactions = transactions
 
     def dump(self) -> bytes:
@@ -2259,7 +2548,7 @@ class Transactions(Serialize, Deserialize):
         if version != cls.version:
             raise ValueError("invalid transactions version")
         # noinspection PyArgumentList
-        transactions = Vec[Transaction, u32].load(data)
+        transactions = Vec[ConfirmedTransaction, u32].load(data)
         return cls(transactions=transactions)
 
     def __iter__(self):
@@ -2267,7 +2556,7 @@ class Transactions(Serialize, Deserialize):
 
 
 class BlockHeaderMetadata(Serialize, Deserialize):
-    version = u16()
+    version = u8()
 
     # @type_check
     def __init__(self, *, network: u16, round_: u64, height: u32, total_supply_in_microcredits: u64,
@@ -2294,7 +2583,7 @@ class BlockHeaderMetadata(Serialize, Deserialize):
     @classmethod
     # @type_check
     def load(cls, data: bytearray):
-        version = u16.load(data)
+        version = u8.load(data)
         if version != cls.version:
             raise ValueError("invalid metadata version")
         network = u16.load(data)
@@ -2339,7 +2628,7 @@ class BlockHeaderMetadata(Serialize, Deserialize):
 
 
 class BlockHeader(Serialize, Deserialize):
-    version = u16()
+    version = u8()
 
     # @type_check
     def __init__(self, *, previous_state_root: Field, transactions_root: Field, coinbase_accumulator_point: Field,
@@ -2357,7 +2646,7 @@ class BlockHeader(Serialize, Deserialize):
     @classmethod
     # @type_check
     def load(cls, data: bytearray):
-        version = u16.load(data)
+        version = u8.load(data)
         previous_state_root = Field.load(data)
         transactions_root = Field.load(data)
         finalize_root = Field.load(data)

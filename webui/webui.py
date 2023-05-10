@@ -916,7 +916,7 @@ def get_proof_data(proof: Proof):
     def G1Affine_to_html(affine: G1Affine, depth: int) -> str:
         return "{<br>" + "&nbsp;" * depth * 2 + f"x: {affine.x},<br>" + "&nbsp;" * depth * 2 + "y: Not implemented<br>" + "&nbsp;" * (depth - 1) * 2 + "}"
 
-    data = {"Batch size": proof.batch_size}
+    data = {"Batch size": proof.batch_sizes}
     commitments = {}
     witness_commitments = proof.commitments.witness_commitments
     witness_commitment_list = []
