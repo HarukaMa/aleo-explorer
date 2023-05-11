@@ -866,10 +866,12 @@ async def address_route(request: Request):
     for program in programs:
         program_block = await db.get_block_by_program_id(program)
         program_tx = None
-        for tx in program_block.transactions.transactions:
-            if tx.type == Transaction.Type.Deploy and str(tx.deployment.program.id) == program:
-                program_tx = tx
-                break
+        for ct in program_block.transactions.transactions:
+            if ct.type == ConfirmedTransaction.Type.AcceptedDeploy:
+                tx = ct.tx
+                if tx.type == Transaction.Type.Deploy and str(tx.deployment.program.id) == program:
+                    program_tx = tx
+                    break
         if program_tx is None:
             raise HTTPException(status_code=550, detail="Program transaction not found")
         recent_programs.append({
