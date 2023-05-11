@@ -506,7 +506,7 @@ class PlaintextType(Serialize, Deserialize): # enum
 
     class Type(IntEnumu8):
         Literal = 0
-        Interface = 1
+        Struct = 1
 
     @property
     @abstractmethod
@@ -522,8 +522,8 @@ class PlaintextType(Serialize, Deserialize): # enum
         del data[0]
         if type_ == cls.Type.Literal:
             return LiteralPlaintextType.load(data)
-        if type_ == cls.Type.Interface:
-            return InterfacePlaintextType.load(data)
+        if type_ == cls.Type.Struct:
+            return StructPlaintextType.load(data)
         raise ValueError("unknown type")
 
 
@@ -544,21 +544,21 @@ class LiteralPlaintextType(PlaintextType):
         return cls(literal_type=literal_type)
 
 
-class InterfacePlaintextType(PlaintextType):
-    type = PlaintextType.Type.Interface
+class StructPlaintextType(PlaintextType):
+    type = PlaintextType.Type.Struct
 
     # @type_check
-    def __init__(self, *, interface: Identifier):
-        self.interface = interface
+    def __init__(self, *, struct_: Identifier):
+        self.struct = struct_
 
     def dump(self) -> bytes:
-        return self.type.dump() + self.interface.dump()
+        return self.type.dump() + self.struct.dump()
 
     @classmethod
     # @type_check
     def load(cls, data: bytearray):
-        interface = Identifier.load(data)
-        return cls(interface=interface)
+        struct_ = Identifier.load(data)
+        return cls(struct_=struct_)
 
 class RegisterType(Serialize, Deserialize): # enum
 

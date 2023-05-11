@@ -1,17 +1,6 @@
 from .utils import *
 
 
-def disasm_finalize_type(value: FinalizeType) -> str:
-    match value.type:
-        case FinalizeType.Type.Public:
-            value: PublicFinalize
-            return plaintext_type_to_str(value.plaintext_type) + ".public"
-        case FinalizeType.Type.Record:
-            value: RecordFinalize
-            return str(value.identifier) + ".record"
-        case FinalizeType.Type.ExternalRecord:
-            raise NotImplementedError
-
 def disasm_entry_type(value: EntryType) -> str:
     match value.type:
         case EntryType.Type.Constant:
@@ -67,17 +56,18 @@ def disasm_value_type(value: ValueType) -> str:
 
 def disasm_command(value: Command) -> str:
     match value.type:
-        case Command.Type.Decrement:
-            value: DecrementCommand
-            decrement = value.decrement
-            return f"decrement {decrement.mapping}[{disasm_operand(decrement.first)}] by {disasm_operand(decrement.second)}"
         case Command.Type.Instruction:
             value: InstructionCommand
             return disasm_instruction(value.instruction)
-        case Command.Type.Increment:
-            value: IncrementCommand
-            increment = value.increment
-            return f"increment {increment.mapping}[{disasm_operand(increment.first)}] by {disasm_operand(increment.second)}"
+        case Command.Type.Get:
+            value: GetCommand
+            return f"get {value.mapping}[{disasm_operand(value.key)}] into {disasm_register(value.destination)}"
+        case Command.Type.GetOrInit:
+            value: GetOrInitCommand
+            return f"get.or_init {value.mapping}[{disasm_operand(value.key)}] {disasm_operand(value.default)} into {disasm_register(value.destination)}"
+        case Command.Type.Set:
+            value: SetCommand
+            return f"set {value.value} into {value.mapping}[{disasm_operand(value.key)}]"
 
 def disasm_literal(value: Literal) -> str:
     T = Literal.Type
@@ -152,12 +142,12 @@ def disassemble_program(program: Program) -> str:
         m: Mapping
         res.insert_line(f"mapping {m.name}:")
         res.indent()
-        res.insert_line(f"key {m.key.name} as {disasm_finalize_type(m.key.finalize_type)};")
-        res.insert_line(f"value {m.value.name} as {disasm_finalize_type(m.value.finalize_type)};")
+        res.insert_line(f"key {m.key.name} as {plaintext_type_to_str(m.key.plaintext_type)};")
+        res.insert_line(f"value {m.value.name} as {plaintext_type_to_str(m.value.plaintext_type)};")
         res.unindent()
         res.insert_line("")
-    for i in program.interfaces.values():
-        i: Interface
+    for i in program.structs.values():
+        i: Struct
         res.insert_line(f"struct {i.name}:")
         res.indent()
         for m, t in i.members:
@@ -212,13 +202,10 @@ def disassemble_program(program: Program) -> str:
             res.indent()
             for i in finalize.inputs:
                 i: FinalizeInput
-                res.insert_line(f"input {disasm_register(i.register)} as {disasm_finalize_type(i.finalize_type)};")
-            for i in finalize.instructions:
-                i: Command
-                res.insert_line(f"{disasm_command(i)};")
-            for o in finalize.outputs:
-                o: FinalizeOutput
-                res.insert_line(f"output {disasm_operand(o.operand)} as {disasm_finalize_type(o.finalize_type)};")
+                res.insert_line(f"input {disasm_register(i.register)} as {plaintext_type_to_str(i.plaintext_type)};")
+            for c in finalize.commands:
+                c: Command
+                res.insert_line(f"{disasm_command(c)};")
         res.unindent()
         res.insert_line("")
 

@@ -4,7 +4,7 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 
-from disasm.utils import value_type_to_mode_type_str, finalize_type_to_str
+from disasm.utils import value_type_to_mode_type_str, plaintext_type_to_str
 from explorer.types import Message as ExplorerMessage
 from node.types import *
 
@@ -224,7 +224,7 @@ class Database:
                                     program: Program = transaction.deployment.program
                                     imports = [str(x.program_id) for x in program.imports]
                                     mappings = list(map(str, program.mappings.keys()))
-                                    interfaces = list(map(str, program.interfaces.keys()))
+                                    interfaces = list(map(str, program.structs.keys()))
                                     records = list(map(str, program.records.keys()))
                                     closures = list(map(str, program.closures.keys()))
                                     functions = list(map(str, program.functions.keys()))
@@ -257,7 +257,7 @@ class Database:
                                         if function.finalize.value is not None:
                                             f: FinalizeInput
                                             for f in function.finalize.value[1].inputs:
-                                                finalizes.append(finalize_type_to_str(f.finalize_type))
+                                                finalizes.append(plaintext_type_to_str(f.plaintext_type))
                                         await cur.execute(
                                             "INSERT INTO program_function (program_id, name, input, input_mode, output, output_mode, finalize) "
                                             "VALUES (%s, %s, %s, %s, %s, %s, %s)",

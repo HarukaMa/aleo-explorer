@@ -89,120 +89,41 @@ class EpochChallenge(Serialize, Deserialize):
         return cls(epoch_number=epoch_number, epoch_block_hash=epoch_block_hash, epoch_polynomial=epoch_polynomial,
                    epoch_polynomial_evaluations=epoch_polynomial_evaluations)
 
-class FinalizeType(Serialize, Deserialize):  # enum
-
-    class Type(IntEnumu8):
-        Public = 0
-        Record = 1
-        ExternalRecord = 2
-
-    @property
-    @abstractmethod
-    def type(self):
-        raise NotImplementedError
-
-    @classmethod
-    # @type_check
-    def load(cls, data: bytearray):
-        if len(data) < 1:
-            raise ValueError("incorrect length")
-        type_ = cls.Type(data[0])
-        del data[0]
-        if type_ == cls.Type.Public:
-            return PublicFinalize.load(data)
-        elif type_ == cls.Type.Record:
-            return RecordFinalize.load(data)
-        elif type_ == cls.Type.ExternalRecord:
-            return ExternalRecordFinalize.load(data)
-        else:
-            raise ValueError("incorrect type")
-
-
-class PublicFinalize(FinalizeType):
-    type = FinalizeType.Type.Public
-
-    # @type_check
-    def __init__(self, *, plaintext_type: PlaintextType):
-        self.plaintext_type = plaintext_type
-
-    def dump(self) -> bytes:
-        return self.type.dump() + self.plaintext_type.dump()
-
-    @classmethod
-    # @type_check
-    def load(cls, data: bytearray):
-        plaintext_type = PlaintextType.load(data)
-        return cls(plaintext_type=plaintext_type)
-
-
-class RecordFinalize(FinalizeType):
-    type = FinalizeType.Type.Record
-
-    # @type_check
-    def __init__(self, *, identifier: Identifier):
-        self.identifier = identifier
-
-    def dump(self) -> bytes:
-        return self.type.dump() + self.identifier.dump()
-
-    @classmethod
-    # @type_check
-    def load(cls, data: bytearray):
-        identifier = Identifier.load(data)
-        return cls(identifier=identifier)
-
-
-class ExternalRecordFinalize(FinalizeType):
-    type = FinalizeType.Type.ExternalRecord
-
-    # @type_check
-    def __init__(self, *, locator: Locator):
-        self.locator = locator
-
-    def dump(self) -> bytes:
-        return self.type.dump() + self.locator.dump()
-
-    @classmethod
-    # @type_check
-    def load(cls, data: bytearray):
-        locator = Locator.load(data)
-        return cls(locator=locator)
-
 
 class MapKey(Serialize, Deserialize):
 
     # @type_check
-    def __init__(self, *, name: Identifier, finalize_type: FinalizeType):
+    def __init__(self, *, name: Identifier, plaintext_type: PlaintextType):
         self.name = name
-        self.finalize_type = finalize_type
+        self.plaintext_type = plaintext_type
 
     def dump(self) -> bytes:
-        return self.name.dump() + self.finalize_type.dump()
+        return self.name.dump() + self.plaintext_type.dump()
 
     @classmethod
     # @type_check
     def load(cls, data: bytearray):
         name = Identifier.load(data)
-        finalize_type = FinalizeType.load(data)
-        return cls(name=name, finalize_type=finalize_type)
+        plaintext_type = PlaintextType.load(data)
+        return cls(name=name, plaintext_type=plaintext_type)
 
 
 class MapValue(Serialize, Deserialize):
 
     # @type_check
-    def __init__(self, *, name: Identifier, finalize_type: FinalizeType):
+    def __init__(self, *, name: Identifier, plaintext_type: PlaintextType):
         self.name = name
-        self.finalize_type = finalize_type
+        self.plaintext_type = plaintext_type
 
     def dump(self) -> bytes:
-        return self.name.dump() + self.finalize_type.dump()
+        return self.name.dump() + self.plaintext_type.dump()
 
     @classmethod
     # @type_check
     def load(cls, data: bytearray):
         name = Identifier.load(data)
-        finalize_type = FinalizeType.load(data)
-        return cls(name=name, finalize_type=finalize_type)
+        plaintext_type = PlaintextType.load(data)
+        return cls(name=name, plaintext_type=plaintext_type)
 
 
 class Mapping(Serialize, Deserialize):
@@ -225,7 +146,7 @@ class Mapping(Serialize, Deserialize):
         return cls(name=name, key=key, value=value)
 
 
-class Interface(Serialize, Deserialize):
+class Struct(Serialize, Deserialize):
 
     # @type_check
     @generic_type_check
@@ -416,9 +337,10 @@ class Increment(Serialize, Deserialize):
 class Command(Serialize, Deserialize):  # enum
 
     class Type(IntEnumu8):
-        Decrement = 0
-        Instruction = 1
-        Increment = 2
+        Instruction = 0
+        Get = 1
+        GetOrInit = 2
+        Set = 3
 
     @property
     @abstractmethod
@@ -429,32 +351,16 @@ class Command(Serialize, Deserialize):  # enum
     # @type_check
     def load(cls, data: bytearray):
         type_ = cls.Type.load(data)
-        if type_ == cls.Type.Decrement:
-            return DecrementCommand.load(data)
-        elif type_ == cls.Type.Instruction:
+        if type_ == cls.Type.Instruction:
             return InstructionCommand.load(data)
-        elif type_ == cls.Type.Increment:
-            return IncrementCommand.load(data)
+        elif type_ == cls.Type.Get:
+            return GetCommand.load(data)
+        elif type_ == cls.Type.GetOrInit:
+            return GetOrInitCommand.load(data)
+        elif type_ == cls.Type.Set:
+            return SetCommand.load(data)
         else:
             raise ValueError("Invalid variant")
-
-
-class DecrementCommand(Command):
-    type = Command.Type.Decrement
-
-    # @type_check
-    def __init__(self, *, decrement: Decrement):
-        self.decrement = decrement
-
-    def dump(self) -> bytes:
-        return self.type.dump() + self.decrement.dump()
-
-    @classmethod
-    # @type_check
-    def load(cls, data: bytearray):
-        decrement = Decrement.load(data)
-        return cls(decrement=decrement)
-
 
 class InstructionCommand(Command):
     type = Command.Type.Instruction
@@ -473,81 +379,106 @@ class InstructionCommand(Command):
         return cls(instruction=instruction)
 
 
-class IncrementCommand(Command):
-    type = Command.Type.Increment
+class GetCommand(Command):
+    type = Command.Type.Get
 
     # @type_check
-    def __init__(self, *, increment: Increment):
-        self.increment = increment
+    def __init__(self, *, mapping: Identifier, key: Operand, destination: Register):
+        self.mapping = mapping
+        self.key = key
+        self.destination = destination
 
     def dump(self) -> bytes:
-        return self.type.dump() + self.increment.dump()
+        return self.type.dump() + self.mapping.dump() + self.key.dump() + self.destination.dump()
 
     @classmethod
     # @type_check
     def load(cls, data: bytearray):
-        increment = Increment.load(data)
-        return cls(increment=increment)
+        mapping = Identifier.load(data)
+        key = Operand.load(data)
+        destination = Register.load(data)
+        return cls(mapping=mapping, key=key, destination=destination)
+
+
+class GetOrInitCommand(Command):
+    type = Command.Type.GetOrInit
+
+    # @type_check
+    def __init__(self, *, mapping: Identifier, key: Operand, default: Operand, destination: Register):
+        self.mapping = mapping
+        self.key = key
+        self.default = default
+        self.destination = destination
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.mapping.dump() + self.key.dump() + self.default.dump() + self.destination.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        mapping = Identifier.load(data)
+        key = Operand.load(data)
+        default = Operand.load(data)
+        destination = Register.load(data)
+        return cls(mapping=mapping, key=key, default=default, destination=destination)
+
+class SetCommand(Command):
+    type = Command.Type.Set
+
+    # @type_check
+    def __init__(self, *, mapping: Identifier, key: Operand, value: Operand):
+        self.mapping = mapping
+        self.key = key
+        self.value = value
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.mapping.dump() + self.key.dump() + self.value.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        mapping = Identifier.load(data)
+        key = Operand.load(data)
+        value = Operand.load(data)
+        return cls(mapping=mapping, key=key, value=value)
 
 
 class FinalizeInput(Serialize, Deserialize):
 
     # @type_check
-    def __init__(self, *, register: Register, finalize_type: FinalizeType):
+    def __init__(self, *, register: Register, plaintext_type: PlaintextType):
         self.register = register
-        self.finalize_type = finalize_type
+        self.plaintext_type = plaintext_type
 
     def dump(self) -> bytes:
-        return self.register.dump() + self.finalize_type.dump()
+        return self.register.dump() + self.plaintext_type.dump()
 
     @classmethod
     # @type_check
     def load(cls, data: bytearray):
         register = Register.load(data)
-        finalize_type = FinalizeType.load(data)
-        return cls(register=register, finalize_type=finalize_type)
-
-
-class FinalizeOutput(Serialize, Deserialize):
-
-    # @type_check
-    def __init__(self, *, operand: Operand, finalize_type: FinalizeType):
-        self.operand = operand
-        self.finalize_type = finalize_type
-
-    def dump(self) -> bytes:
-        return self.operand.dump() + self.finalize_type.dump()
-
-    @classmethod
-    # @type_check
-    def load(cls, data: bytearray):
-        operand = Operand.load(data)
-        finalize_type = FinalizeType.load(data)
-        return cls(operand=operand, finalize_type=finalize_type)
-
+        plaintext_type = PlaintextType.load(data)
+        return cls(register=register, plaintext_type=plaintext_type)
 
 class Finalize(Serialize, Deserialize):
 
     # @type_check
     @generic_type_check
-    def __init__(self, *, name: Identifier, inputs: Vec[FinalizeInput, u16], instructions: Vec[Command, u16],
-                 outputs: Vec[FinalizeOutput, u16]):
+    def __init__(self, *, name: Identifier, inputs: Vec[FinalizeInput, u16], commands: Vec[Command, u16]):
         self.name = name
         self.inputs = inputs
-        self.instructions = instructions
-        self.outputs = outputs
+        self.commands = commands
 
     def dump(self) -> bytes:
-        return self.name.dump() + self.inputs.dump() + self.instructions.dump() + self.outputs.dump()
+        return self.name.dump() + self.inputs.dump() + self.commands.dump()
 
     @classmethod
     # @type_check
     def load(cls, data: bytearray):
         name = Identifier.load(data)
         inputs = Vec[FinalizeInput, u16].load(data)
-        instructions = Vec[Command, u16].load(data)
-        outputs = Vec[FinalizeOutput, u16].load(data)
-        return cls(name=name, inputs=inputs, instructions=instructions, outputs=outputs)
+        commands = Vec[Command, u16].load(data)
+        return cls(name=name, inputs=inputs, commands=commands)
 
 
 class ValueType(Serialize, Deserialize): # enum
@@ -740,7 +671,7 @@ class Function(Serialize, Deserialize):
 
 class ProgramDefinition(IntEnumu8):
     Mapping = 0
-    Interface = 1
+    Struct = 1
     Record = 2
     Closure = 3
     Function = 4
@@ -752,20 +683,20 @@ class Program(Serialize, Deserialize):
     # @type_check
     @generic_type_check
     def __init__(self, *, id_: ProgramID, imports: Vec[Import, u8], mappings: dict[Identifier, Mapping],
-                 interfaces: dict[Identifier, Interface], records: dict[Identifier, RecordType],
+                 structs: dict[Identifier, Struct], records: dict[Identifier, RecordType],
                  closures: dict[Identifier, Closure], functions: dict[Identifier, Function]):
         self.id = id_
         self.imports = imports
         self.mappings = mappings
-        self.interfaces = interfaces
+        self.structs = structs
         self.records = records
         self.closures = closures
         self.functions = functions
         self.identifiers: dict[Identifier, ProgramDefinition] = {}
         for i in self.mappings:
             self.identifiers[i] = ProgramDefinition.Mapping
-        for i in self.interfaces:
-            self.identifiers[i] = ProgramDefinition.Interface
+        for i in self.structs:
+            self.identifiers[i] = ProgramDefinition.Struct
         for i in self.records:
             self.identifiers[i] = ProgramDefinition.Record
         for i in self.closures:
@@ -783,8 +714,8 @@ class Program(Serialize, Deserialize):
             res += d.dump()
             if d == ProgramDefinition.Mapping:
                 res += self.mappings[i].dump()
-            elif d == ProgramDefinition.Interface:
-                res += self.interfaces[i].dump()
+            elif d == ProgramDefinition.Struct:
+                res += self.structs[i].dump()
             elif d == ProgramDefinition.Record:
                 res += self.records[i].dump()
             elif d == ProgramDefinition.Closure:
@@ -802,7 +733,7 @@ class Program(Serialize, Deserialize):
         id_ = ProgramID.load(data)
         imports = Vec[Import, u8].load(data)
         mappings = {}
-        interfaces = {}
+        structs = {}
         records = {}
         closures = {}
         functions = {}
@@ -812,9 +743,9 @@ class Program(Serialize, Deserialize):
             if d == ProgramDefinition.Mapping:
                 m = Mapping.load(data)
                 mappings[m.name] = m
-            elif d == ProgramDefinition.Interface:
-                i = Interface.load(data)
-                interfaces[i.name] = i
+            elif d == ProgramDefinition.Struct:
+                i = Struct.load(data)
+                structs[i.name] = i
             elif d == ProgramDefinition.Record:
                 r = RecordType.load(data)
                 records[r.name] = r
@@ -824,7 +755,7 @@ class Program(Serialize, Deserialize):
             elif d == ProgramDefinition.Function:
                 f = Function.load(data)
                 functions[f.name] = f
-        return cls(id_=id_, imports=imports, mappings=mappings, interfaces=interfaces, records=records,
+        return cls(id_=id_, imports=imports, mappings=mappings, structs=structs, records=records,
                    closures=closures, functions=functions)
 
     def is_helloworld(self) -> bool:
@@ -838,7 +769,7 @@ class Program(Serialize, Deserialize):
 
     def feature_hash(self) -> bytes:
         feature_string = "".join(
-            ["S"] * len(self.interfaces) +
+            ["S"] * len(self.structs) +
             ["R"] * len(self.records) +
             [("C" + c.instruction_feature_string()) for c in self.closures.values()] +
             [("F" + f.instruction_feature_string()) for f in self.functions.values()]

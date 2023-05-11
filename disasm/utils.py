@@ -32,9 +32,9 @@ def plaintext_type_to_str(value: PlaintextType):
         case PlaintextType.Type.Literal:
             value: LiteralPlaintextType
             return value.literal_type.name.lower()
-        case PlaintextType.Type.Interface:
-            value: InterfacePlaintextType
-            return str(value.interface)
+        case PlaintextType.Type.Struct:
+            value: StructPlaintextType
+            return str(value.struct)
 
 
 def value_type_to_mode_type_str(value: ValueType):
@@ -54,18 +54,6 @@ def value_type_to_mode_type_str(value: ValueType):
         case _:
             raise NotImplementedError
     return mode, t
-
-def finalize_type_to_str(value: FinalizeType):
-    match value.type:
-        case FinalizeType.Type.Public:
-            value: PublicFinalize
-            return plaintext_type_to_str(value.plaintext_type)
-        case FinalizeType.Type.Record:
-            value: RecordFinalize
-            return str(value.identifier)
-        case FinalizeType.Type.ExternalRecord:
-            value: ExternalRecordFinalize
-            return str(value.locator)
 
 def public_or_private_to_str(value: PublicOrPrivate):
     if value == PublicOrPrivate.Public:

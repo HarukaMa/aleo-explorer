@@ -730,7 +730,7 @@ async def program_route(request: Request):
         "times_called": await db.get_program_called_times(program_id),
         "imports": list(map(lambda i: str(i.program_id), program.imports)),
         "mappings": list(map(str, program.mappings.keys())),
-        "interfaces": list(map(str, program.interfaces.keys())),
+        "structs": list(map(str, program.structs.keys())),
         "records": list(map(str, program.records.keys())),
         "closures": list(map(str, program.closures.keys())),
         "functions": functions,
