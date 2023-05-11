@@ -67,7 +67,7 @@ def disasm_command(value: Command) -> str:
             return f"get.or_init {value.mapping}[{disasm_operand(value.key)}] {disasm_operand(value.default)} into {disasm_register(value.destination)}"
         case Command.Type.Set:
             value: SetCommand
-            return f"set {value.value} into {value.mapping}[{disasm_operand(value.key)}]"
+            return f"set {disasm_operand(value.value)} into {value.mapping}[{disasm_operand(value.key)}]"
 
 def disasm_literal(value: Literal) -> str:
     T = Literal.Type
