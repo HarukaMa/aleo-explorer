@@ -36,6 +36,19 @@ CREATE TYPE explorer.confirmed_transaction_type AS ENUM (
 
 
 --
+-- Name: finalize_operation_type; Type: TYPE; Schema: explorer; Owner: -
+--
+
+CREATE TYPE explorer.finalize_operation_type AS ENUM (
+    'InitializeMapping',
+    'InsertKeyValue',
+    'UpdateKeyValue',
+    'RemoveKeyValue',
+    'RemoveMapping'
+);
+
+
+--
 -- Name: finalize_value_type; Type: TYPE; Schema: explorer; Owner: -
 --
 
@@ -268,6 +281,198 @@ CREATE SEQUENCE explorer.fee_id_seq
 --
 
 ALTER SEQUENCE explorer.fee_id_seq OWNED BY explorer.fee.id;
+
+
+--
+-- Name: finalize_operation; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.finalize_operation (
+    id integer NOT NULL,
+    confirmed_transaction_id integer NOT NULL,
+    type explorer.finalize_operation_type NOT NULL
+);
+
+
+--
+-- Name: finalize_operation_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.finalize_operation_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: finalize_operation_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.finalize_operation_id_seq OWNED BY explorer.finalize_operation.id;
+
+
+--
+-- Name: finalize_operation_initialize_mapping; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.finalize_operation_initialize_mapping (
+    id integer NOT NULL,
+    finalize_operation_id integer NOT NULL,
+    mapping_id text NOT NULL
+);
+
+
+--
+-- Name: finalize_operation_initialize_mapping_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.finalize_operation_initialize_mapping_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: finalize_operation_initialize_mapping_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.finalize_operation_initialize_mapping_id_seq OWNED BY explorer.finalize_operation_initialize_mapping.id;
+
+
+--
+-- Name: finalize_operation_insert_kv; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.finalize_operation_insert_kv (
+    id integer NOT NULL,
+    finalize_operation_id integer NOT NULL,
+    mapping_id text NOT NULL,
+    key_id text NOT NULL,
+    value_id text NOT NULL
+);
+
+
+--
+-- Name: finalize_operation_insert_kv_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.finalize_operation_insert_kv_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: finalize_operation_insert_kv_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.finalize_operation_insert_kv_id_seq OWNED BY explorer.finalize_operation_insert_kv.id;
+
+
+--
+-- Name: finalize_operation_remove_kv; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.finalize_operation_remove_kv (
+    id integer NOT NULL,
+    finalize_operation_id integer NOT NULL,
+    mapping_id text NOT NULL,
+    index numeric(20,0) NOT NULL
+);
+
+
+--
+-- Name: finalize_operation_remove_kv_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.finalize_operation_remove_kv_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: finalize_operation_remove_kv_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.finalize_operation_remove_kv_id_seq OWNED BY explorer.finalize_operation_remove_kv.id;
+
+
+--
+-- Name: finalize_operation_remove_mapping; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.finalize_operation_remove_mapping (
+    id integer NOT NULL,
+    finalize_operation_id integer NOT NULL,
+    mapping_id text NOT NULL
+);
+
+
+--
+-- Name: finalize_operation_remove_mapping_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.finalize_operation_remove_mapping_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: finalize_operation_remove_mapping_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.finalize_operation_remove_mapping_id_seq OWNED BY explorer.finalize_operation_remove_mapping.id;
+
+
+--
+-- Name: finalize_operation_update_kv; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.finalize_operation_update_kv (
+    id integer NOT NULL,
+    finalize_operation_id integer NOT NULL,
+    mapping_id text NOT NULL,
+    index numeric(20,0) NOT NULL,
+    key_id text NOT NULL,
+    value_id text NOT NULL
+);
+
+
+--
+-- Name: finalize_operation_update_kv_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.finalize_operation_update_kv_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: finalize_operation_update_kv_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.finalize_operation_update_kv_id_seq OWNED BY explorer.finalize_operation_update_kv.id;
 
 
 --
@@ -955,6 +1160,48 @@ ALTER TABLE ONLY explorer.fee ALTER COLUMN id SET DEFAULT nextval('explorer.fee_
 
 
 --
+-- Name: finalize_operation id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.finalize_operation ALTER COLUMN id SET DEFAULT nextval('explorer.finalize_operation_id_seq'::regclass);
+
+
+--
+-- Name: finalize_operation_initialize_mapping id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.finalize_operation_initialize_mapping ALTER COLUMN id SET DEFAULT nextval('explorer.finalize_operation_initialize_mapping_id_seq'::regclass);
+
+
+--
+-- Name: finalize_operation_insert_kv id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.finalize_operation_insert_kv ALTER COLUMN id SET DEFAULT nextval('explorer.finalize_operation_insert_kv_id_seq'::regclass);
+
+
+--
+-- Name: finalize_operation_remove_kv id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.finalize_operation_remove_kv ALTER COLUMN id SET DEFAULT nextval('explorer.finalize_operation_remove_kv_id_seq'::regclass);
+
+
+--
+-- Name: finalize_operation_remove_mapping id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.finalize_operation_remove_mapping ALTER COLUMN id SET DEFAULT nextval('explorer.finalize_operation_remove_mapping_id_seq'::regclass);
+
+
+--
+-- Name: finalize_operation_update_kv id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.finalize_operation_update_kv ALTER COLUMN id SET DEFAULT nextval('explorer.finalize_operation_update_kv_id_seq'::regclass);
+
+
+--
 -- Name: partial_solution id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -1124,6 +1371,54 @@ ALTER TABLE ONLY explorer.confirmed_transaction
 
 ALTER TABLE ONLY explorer.fee
     ADD CONSTRAINT fee_pk PRIMARY KEY (id);
+
+
+--
+-- Name: finalize_operation_initialize_mapping finalize_operation_initialize_mapping_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.finalize_operation_initialize_mapping
+    ADD CONSTRAINT finalize_operation_initialize_mapping_pk PRIMARY KEY (id);
+
+
+--
+-- Name: finalize_operation_insert_kv finalize_operation_insert_kv_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.finalize_operation_insert_kv
+    ADD CONSTRAINT finalize_operation_insert_kv_pk PRIMARY KEY (id);
+
+
+--
+-- Name: finalize_operation finalize_operation_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.finalize_operation
+    ADD CONSTRAINT finalize_operation_pk PRIMARY KEY (id);
+
+
+--
+-- Name: finalize_operation_remove_kv finalize_operation_remove_kv_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.finalize_operation_remove_kv
+    ADD CONSTRAINT finalize_operation_remove_kv_pk PRIMARY KEY (id);
+
+
+--
+-- Name: finalize_operation_remove_mapping finalize_operation_remove_mapping_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.finalize_operation_remove_mapping
+    ADD CONSTRAINT finalize_operation_remove_mapping_pk PRIMARY KEY (id);
+
+
+--
+-- Name: finalize_operation_update_kv finalize_operation_update_kv_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.finalize_operation_update_kv
+    ADD CONSTRAINT finalize_operation_update_kv_pk PRIMARY KEY (id);
 
 
 --
@@ -1348,6 +1643,90 @@ CREATE INDEX confirmed_transaction_type_index ON explorer.confirmed_transaction 
 --
 
 CREATE INDEX fee_transaction_id_index ON explorer.fee USING btree (transaction_id);
+
+
+--
+-- Name: finalize_operation_confirmed_transaction_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX finalize_operation_confirmed_transaction_id_index ON explorer.finalize_operation USING btree (confirmed_transaction_id);
+
+
+--
+-- Name: finalize_operation_initialize_mapping_finalize_operation_id_ind; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX finalize_operation_initialize_mapping_finalize_operation_id_ind ON explorer.finalize_operation_initialize_mapping USING btree (finalize_operation_id);
+
+
+--
+-- Name: finalize_operation_initialize_mapping_mapping_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX finalize_operation_initialize_mapping_mapping_id_index ON explorer.finalize_operation_initialize_mapping USING btree (mapping_id);
+
+
+--
+-- Name: finalize_operation_insert_kv_finalize_operation_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX finalize_operation_insert_kv_finalize_operation_id_index ON explorer.finalize_operation_insert_kv USING btree (finalize_operation_id);
+
+
+--
+-- Name: finalize_operation_insert_kv_mapping_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX finalize_operation_insert_kv_mapping_id_index ON explorer.finalize_operation_insert_kv USING btree (mapping_id);
+
+
+--
+-- Name: finalize_operation_remove_kv_finalize_operation_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX finalize_operation_remove_kv_finalize_operation_id_index ON explorer.finalize_operation_remove_kv USING btree (finalize_operation_id);
+
+
+--
+-- Name: finalize_operation_remove_kv_mapping_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX finalize_operation_remove_kv_mapping_id_index ON explorer.finalize_operation_remove_kv USING btree (mapping_id);
+
+
+--
+-- Name: finalize_operation_remove_mapping_finalize_operation_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX finalize_operation_remove_mapping_finalize_operation_id_index ON explorer.finalize_operation_remove_mapping USING btree (finalize_operation_id);
+
+
+--
+-- Name: finalize_operation_remove_mapping_mapping_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX finalize_operation_remove_mapping_mapping_id_index ON explorer.finalize_operation_remove_mapping USING btree (mapping_id);
+
+
+--
+-- Name: finalize_operation_type_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX finalize_operation_type_index ON explorer.finalize_operation USING btree (type);
+
+
+--
+-- Name: finalize_operation_update_kv_finalize_operation_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX finalize_operation_update_kv_finalize_operation_id_index ON explorer.finalize_operation_update_kv USING btree (finalize_operation_id);
+
+
+--
+-- Name: finalize_operation_update_kv_mapping_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX finalize_operation_update_kv_mapping_id_index ON explorer.finalize_operation_update_kv USING btree (mapping_id);
 
 
 --
@@ -1631,6 +2010,54 @@ ALTER TABLE ONLY explorer.confirmed_transaction
 
 ALTER TABLE ONLY explorer.fee
     ADD CONSTRAINT fee_transaction_id_fk FOREIGN KEY (transaction_id) REFERENCES explorer.transaction(id);
+
+
+--
+-- Name: finalize_operation finalize_operation_confirmed_transaction_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.finalize_operation
+    ADD CONSTRAINT finalize_operation_confirmed_transaction_id_fk FOREIGN KEY (confirmed_transaction_id) REFERENCES explorer.confirmed_transaction(id);
+
+
+--
+-- Name: finalize_operation_initialize_mapping finalize_operation_initialize_mapping_finalize_operation_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.finalize_operation_initialize_mapping
+    ADD CONSTRAINT finalize_operation_initialize_mapping_finalize_operation_id_fk FOREIGN KEY (finalize_operation_id) REFERENCES explorer.finalize_operation(id);
+
+
+--
+-- Name: finalize_operation_insert_kv finalize_operation_insert_kv_finalize_operation_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.finalize_operation_insert_kv
+    ADD CONSTRAINT finalize_operation_insert_kv_finalize_operation_id_fk FOREIGN KEY (finalize_operation_id) REFERENCES explorer.finalize_operation(id);
+
+
+--
+-- Name: finalize_operation_remove_kv finalize_operation_remove_kv_finalize_operation_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.finalize_operation_remove_kv
+    ADD CONSTRAINT finalize_operation_remove_kv_finalize_operation_id_fk FOREIGN KEY (finalize_operation_id) REFERENCES explorer.finalize_operation(id);
+
+
+--
+-- Name: finalize_operation_remove_mapping finalize_operation_remove_mapping_finalize_operation_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.finalize_operation_remove_mapping
+    ADD CONSTRAINT finalize_operation_remove_mapping_finalize_operation_id_fk FOREIGN KEY (finalize_operation_id) REFERENCES explorer.finalize_operation(id);
+
+
+--
+-- Name: finalize_operation_update_kv finalize_operation_update_kv_finalize_operation_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.finalize_operation_update_kv
+    ADD CONSTRAINT finalize_operation_update_kv_finalize_operation_id_fk FOREIGN KEY (finalize_operation_id) REFERENCES explorer.finalize_operation(id);
 
 
 --
