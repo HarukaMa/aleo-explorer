@@ -727,7 +727,7 @@ class Database:
                     case _:
                         raise NotImplementedError
 
-                cur.execute("SELECT * FROM finalize_operation WHERE confirmed_transaction_id = %s", (confirmed_transaction["id"],))
+                await cur.execute("SELECT * FROM finalize_operation WHERE confirmed_transaction_id = %s", (confirmed_transaction["id"],))
                 finalize_operations = await cur.fetchall()
                 f = []
                 for finalize_operation in finalize_operations:
