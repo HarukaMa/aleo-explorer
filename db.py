@@ -179,30 +179,39 @@ class Database:
                         await cur.execute(
                             "INSERT INTO block (height, block_hash, previous_hash, previous_state_root, transactions_root, "
                             "coinbase_accumulator_point, round, coinbase_target, proof_target, last_coinbase_target, "
-                            "last_coinbase_timestamp, timestamp, signature, total_supply, cumulative_proof_target, "
+                            "last_coinbase_timestamp, timestamp, signature, total_supply, cumulative_weight, "
                             "finalize_root) "
                             "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
                             "RETURNING id",
                             (block.header.metadata.height, str(block.block_hash), str(block.previous_hash),
-                            str(block.header.previous_state_root), str(block.header.transactions_root),
-                            str(block.header.coinbase_accumulator_point), block.header.metadata.round,
-                            block.header.metadata.coinbase_target, block.header.metadata.proof_target,
-                            block.header.metadata.last_coinbase_target, block.header.metadata.last_coinbase_timestamp,
-                            block.header.metadata.timestamp, str(block.signature),
-                            block.header.metadata.total_supply_in_microcredits,
-                            block.header.metadata.cumulative_proof_target, str(block.header.finalize_root))
+                             str(block.header.previous_state_root), str(block.header.transactions_root),
+                             str(block.header.coinbase_accumulator_point), block.header.metadata.round,
+                             block.header.metadata.coinbase_target, block.header.metadata.proof_target,
+                             block.header.metadata.last_coinbase_target, block.header.metadata.last_coinbase_timestamp,
+                             block.header.metadata.timestamp, str(block.signature),
+                             block.header.metadata.total_supply_in_microcredits,
+                             block.header.metadata.cumulative_weight, str(block.header.finalize_root))
                         )
                         block_db_id = (await cur.fetchone())["id"]
 
-                        transaction: Transaction
-                        for tx_index, transaction in enumerate(block.transactions):
-                            match transaction.type:
-                                case Transaction.Type.Deploy:
+                        confirmed_transaction: ConfirmedTransaction
+                        for confirmed_transaction in block.transactions:
+                            await cur.execute(
+                                "INSERT INTO confirmed_transaction (block_id, index, type) VALUES (%s, %s, %s) RETURNING id",
+                                (block_db_id, confirmed_transaction.index, confirmed_transaction.type.name)
+                            )
+                            confirmed_transaction_db_id = (await cur.fetchone())["id"]
+                            match confirmed_transaction.type:
+                                case ConfirmedTransaction.Type.AcceptedDeploy:
+                                    confirmed_transaction: AcceptedDeploy
+                                    transaction: Transaction = confirmed_transaction.transaction
+                                    if transaction.type != Transaction.Type.Deploy:
+                                        raise ValueError("expected deploy transaction")
                                     transaction: DeployTransaction
                                     transaction_id = transaction.id
                                     await cur.execute(
-                                        "INSERT INTO transaction (block_id, transaction_id, type, index) VALUES (%s, %s, %s, %s) RETURNING id",
-                                        (block_db_id, str(transaction_id), transaction.type.name, tx_index)
+                                        "INSERT INTO transaction (confimed_transaction_id, transaction_id, type) VALUES (%s, %s, %s) RETURNING id",
+                                        (confirmed_transaction_db_id, str(transaction_id), transaction.type.name)
                                     )
                                     transaction_db_id = (await cur.fetchone())["id"]
                                     await cur.execute(
@@ -263,12 +272,16 @@ class Database:
                                     fee_db_id = (await cur.fetchone())["id"]
                                     await self._insert_transition(conn, None, fee_db_id, transaction.fee.transition, 0)
 
-                                case Transaction.Type.Execute:
+                                case ConfirmedTransaction.Type.AcceptedExecute:
+                                    confirmed_transaction: AcceptedExecute
+                                    transaction: Transaction = confirmed_transaction.transaction
+                                    if transaction.type != Transaction.Type.Execute:
+                                        raise ValueError("expected execute transaction")
                                     transaction: ExecuteTransaction
                                     transaction_id = transaction.id
                                     await cur.execute(
-                                        "INSERT INTO transaction (block_id, transaction_id, type, index) VALUES (%s, %s, %s, %s) RETURNING id",
-                                        (block_db_id, str(transaction_id), transaction.type.name, tx_index)
+                                        "INSERT INTO transaction (confimed_transaction_id, transaction_id, type) VALUES (%s, %s, %s) RETURNING id",
+                                        (confirmed_transaction_db_id, str(transaction_id), transaction.type.name)
                                     )
                                     transaction_db_id = (await cur.fetchone())["id"]
                                     await cur.execute(
@@ -293,6 +306,57 @@ class Database:
                                         fee_db_id = (await cur.fetchone())["id"]
                                         await self._insert_transition(conn, None, fee_db_id, fee.transition, 0)
 
+                                case _:
+                                    raise ValueError("transaction type not implemented")
+
+                            for finalize_operation in confirmed_transaction.finalize:
+                                finalize_operation: FinalizeOperation
+                                await cur.execute(
+                                    "INSERT INTO finalize_operation (confirmed_transaction_id, type) "
+                                    "VALUES (%s, %s) RETURNING id",
+                                    (confirmed_transaction_db_id, finalize_operation.type.name)
+                                )
+                                finalize_operation_db_id = (await cur.fetchone())["id"]
+                                match finalize_operation.type:
+                                    case FinalizeOperation.Type.InitializeMapping:
+                                        finalize_operation: InitializeMapping
+                                        await cur.execute(
+                                            "INSERT INTO finalize_operation_initialize_mapping (finalize_operation_id, "
+                                            "mapping_id) VALUES (%s, %s)",
+                                            (finalize_operation_db_id, str(finalize_operation.mapping_id))
+                                        )
+                                    case FinalizeOperation.Type.InsertKeyValue:
+                                        finalize_operation: InsertKeyValue
+                                        await cur.execute(
+                                            "INSERT INTO finalize_operation_insert_kv (finalize_operation_id, "
+                                            "mapping_id, key_id, value_id) VALUES (%s, %s, %s, %s)",
+                                            (finalize_operation_db_id, str(finalize_operation.mapping_id),
+                                            str(finalize_operation.key_id), str(finalize_operation.value_id))
+                                        )
+                                    case FinalizeOperation.Type.UpdateKeyValue:
+                                        finalize_operation: UpdateKeyValue
+                                        await cur.execute(
+                                            "INSERT INTO finalize_operation_update_kv (finalize_operation_id, "
+                                            "mapping_id, index, key_id, value_id) VALUES (%s, %s, %s, %s, %s)",
+                                            (finalize_operation_db_id, str(finalize_operation.mapping_id),
+                                            finalize_operation.index, str(finalize_operation.key_id),
+                                            str(finalize_operation.value_id))
+                                        )
+                                    case FinalizeOperation.Type.RemoveKeyValue:
+                                        finalize_operation: RemoveKeyValue
+                                        await cur.execute(
+                                            "INSERT INTO finalize_operation_remove_kv (finalize_operation_id, "
+                                            "mapping_id, index) VALUES (%s, %s, %s)",
+                                            (finalize_operation_db_id, str(finalize_operation.mapping_id),
+                                            finalize_operation.index)
+                                        )
+                                    case FinalizeOperation.Type.RemoveMapping:
+                                        finalize_operation: RemoveMapping
+                                        await cur.execute(
+                                            "INSERT INTO finalize_operation_remove_mapping (finalize_operation_id, "
+                                            "mapping_id) VALUES (%s, %s)",
+                                            (finalize_operation_db_id, str(finalize_operation.mapping_id))
+                                        )
 
                         if block.coinbase.value is not None:
                             coinbase_reward = block.get_coinbase_reward((await self.get_latest_block()).header.metadata.last_coinbase_timestamp)
@@ -369,7 +433,7 @@ class Database:
                 round_=u64(block["round"]),
                 height=u32(block["height"]),
                 total_supply_in_microcredits=u64(block["total_supply"]),
-                cumulative_proof_target=u128(block["cumulative_proof_target"]),
+                cumulative_weight=u128(block["cumulative_weight"]),
                 coinbase_target=u64(block["coinbase_target"]),
                 proof_target=u64(block["proof_target"]),
                 last_coinbase_target=u64(block["last_coinbase_target"]),
@@ -557,10 +621,12 @@ class Database:
     @staticmethod
     async def _get_full_block(block: dict, conn: psycopg.AsyncConnection):
         async with conn.cursor() as cur:
-            await cur.execute("SELECT * FROM transaction WHERE block_id = %s", (block['id'],))
-            transactions = await cur.fetchall()
-            txs = []
-            for transaction in transactions:
+            await cur.execute("SELECT * FROM confirmed_transaction WHERE block_id = %s", (block['id'],))
+            confirmed_transactions = await cur.fetchall()
+            ctxs = []
+            for confirmed_transaction in confirmed_transactions:
+                await cur.execute("SELECT * FROM transaction WHERE confimed_transaction_id = %s", (confirmed_transaction["id"],))
+                transaction = await cur.fetchone()
                 match transaction["type"]:
                     case Transaction.Type.Deploy.name:
                         await cur.execute(
@@ -599,7 +665,7 @@ class Database:
                             global_state_root=StateRoot.loads(fee["global_state_root"]),
                             inclusion_proof=Option[Proof](proof),
                         )
-                        txs.append(DeployTransaction(
+                        tx = DeployTransaction(
                             id_=TransactionID.loads(transaction["transaction_id"]),
                             deployment=deployment,
                             fee=fee,
@@ -607,7 +673,7 @@ class Database:
                                 address=Address.loads(program_data["owner"]),
                                 signature=Signature.loads(program_data["signature"])
                             )
-                        ))
+                        )
                     case Transaction.Type.Execute.name:
                         await cur.execute(
                             "SELECT * FROM transaction_execute WHERE transaction_id = %s",
@@ -649,7 +715,7 @@ class Database:
                             proof = None
                         else:
                             proof = Proof.loads(execute_transaction["inclusion_proof"])
-                        txs.append(ExecuteTransaction(
+                        tx = ExecuteTransaction(
                             id_=TransactionID.loads(transaction["transaction_id"]),
                             execution=Execution(
                                 transitions=Vec[Transition, u8](tss),
@@ -657,9 +723,79 @@ class Database:
                                 inclusion_proof=Option[Proof](proof),
                             ),
                             additional_fee=Option[Fee](fee),
+                        )
+                    case _:
+                        raise NotImplementedError
+
+                cur.execute("SELECT * FROM finalize_operation WHERE confirmed_transaction_id = %s", (confirmed_transaction["id"],))
+                finalize_operations = await cur.fetchall()
+                f = []
+                for finalize_operation in finalize_operations:
+                    match finalize_operation["type"]:
+                        case FinalizeOperation.Type.InitializeMapping.name:
+                            await cur.execute(
+                                "SELECT * FROM finalize_operation_initialize_mapping WHERE finalize_operation_id = %s",
+                                (finalize_operation["id"],)
+                            )
+                            initialize_mapping = await cur.fetchone()
+                            f.append(InitializeMapping(mapping_id=Field.loads(initialize_mapping["mapping_id"])))
+                        case FinalizeOperation.Type.InsertKeyValue.name:
+                            await cur.execute(
+                                "SELECT * FROM finalize_operation_insert_kv WHERE finalize_operation_id = %s",
+                                (finalize_operation["id"],)
+                            )
+                            insert_kv = await cur.fetchone()
+                            f.append(InsertKeyValue(
+                                mapping_id=Field.loads(insert_kv["mapping_id"]),
+                                key_id=Field.loads(insert_kv["key_id"]),
+                                value_id=Field.loads(insert_kv["value_id"]),
+                            ))
+                        case FinalizeOperation.Type.UpdateKeyValue.name:
+                            await cur.execute(
+                                "SELECT * FROM finalize_operation_update_kv WHERE finalize_operation_id = %s",
+                                (finalize_operation["id"],)
+                            )
+                            update_kv = await cur.fetchone()
+                            f.append(UpdateKeyValue(
+                                mapping_id=Field.loads(update_kv["mapping_id"]),
+                                index=u64.loads(update_kv["index"]),
+                                key_id=Field.loads(update_kv["key_id"]),
+                                value_id=Field.loads(update_kv["value_id"]),
+                            ))
+                        case FinalizeOperation.Type.RemoveKeyValue.name:
+                            await cur.execute(
+                                "SELECT * FROM finalize_operation_remove_kv WHERE finalize_operation_id = %s",
+                                (finalize_operation["id"],)
+                            )
+                            remove_kv = await cur.fetchone()
+                            f.append(RemoveKeyValue(
+                                mapping_id=Field.loads(remove_kv["mapping_id"]),
+                                index=u64.loads(remove_kv["index"]),
+                            ))
+                        case FinalizeOperation.Type.RemoveMapping.name:
+                            await cur.execute(
+                                "SELECT * FROM finalize_operation_remove_mapping WHERE finalize_operation_id = %s",
+                                (finalize_operation["id"],)
+                            )
+                            remove_mapping = await cur.fetchone()
+                            f.append(RemoveMapping(mapping_id=Field.loads(remove_mapping["mapping_id"])))
+
+                match confirmed_transaction["type"]:
+                    case ConfirmedTransaction.Type.AcceptedDeploy.name:
+                        ctxs.append(AcceptedDeploy(
+                            index=u32(confirmed_transaction["index"]),
+                            transaction=tx,
+                            finalize=Vec[FinalizeOperation, u16](f),
+                        ))
+                    case ConfirmedTransaction.Type.AcceptedExecute.name:
+                        ctxs.append(AcceptedExecute(
+                            index=u32(confirmed_transaction["index"]),
+                            transaction=tx,
+                            finalize=Vec[FinalizeOperation, u16](f),
                         ))
                     case _:
                         raise NotImplementedError
+
             await cur.execute("SELECT * FROM coinbase_solution WHERE block_id = %s", (block["id"],))
             coinbase_solution = await cur.fetchone()
             if coinbase_solution is not None:
@@ -690,7 +826,7 @@ class Database:
                 previous_hash=BlockHash.loads(block['previous_hash']),
                 header=Database._get_block_header(block),
                 transactions=Transactions(
-                    transactions=Vec[Transaction, u32](txs),
+                    transactions=Vec[ConfirmedTransaction, u32](ctxs),
                 ),
                 coinbase=Option[CoinbaseSolution](coinbase_solution),
                 signature=Signature.loads(block['signature']),
@@ -710,7 +846,7 @@ class Database:
     async def _get_fast_block(block: dict, conn: psycopg.AsyncConnection) -> dict:
         async with conn.cursor() as cur:
             await cur.execute(
-                "SELECT COUNT(*) FROM transaction WHERE block_id = %s",
+                "SELECT COUNT(*) FROM confirmed_transaction WHERE block_id = %s",
                 (block["id"],)
             )
             transaction_count = (await cur.fetchone())["count"]
@@ -868,7 +1004,9 @@ class Database:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT b.* FROM block b JOIN transaction t ON b.id = t.block_id WHERE t.transaction_id = %s",
+                        "SELECT b.* FROM block b "
+                        "JOIN confirmed_transaction ct ON b.id = ct.block_id "
+                        "JOIN transaction t ON ct.id = t.confimed_transaction_id WHERE t.transaction_id = %s",
                         (str(transaction_id),)
                     )
                     block = await cur.fetchone()
@@ -1265,7 +1403,8 @@ class Database:
                         "FROM program p "
                         "JOIN transaction_deploy td on p.transaction_deploy_id = td.id "
                         "JOIN transaction t on td.transaction_id = t.id "
-                        "JOIN block b on t.block_id = b.id "
+                        "JOIN confirmed_transaction ct on t.confimed_transaction_id = ct.id "
+                        "JOIN block b on ct.block_id = b.id "
                         "JOIN program_function pf on p.id = pf.program_id "
                         f"{where}"
                         "GROUP BY p.program_id, b.height, t.transaction_id "
@@ -1287,7 +1426,8 @@ class Database:
                         "FROM program p "
                         "JOIN transaction_deploy td on p.transaction_deploy_id = td.id "
                         "JOIN transaction t on td.transaction_id = t.id "
-                        "JOIN block b on t.block_id = b.id "
+                        "JOIN confirmed_transaction ct on t.confimed_transaction_id = ct.id "
+                        "JOIN block b on ct.block_id = b.id "
                         "JOIN program_function pf on p.id = pf.program_id "
                         "WHERE feature_hash = %s "
                         "GROUP BY p.program_id, b.height, t.transaction_id "
@@ -1310,7 +1450,8 @@ class Database:
                         "SELECT height FROM transaction tx "
                         "JOIN transaction_deploy td on tx.id = td.transaction_id "
                         "JOIN program p on td.id = p.transaction_deploy_id "
-                        "JOIN block b on tx.block_id = b.id "
+                        "JOIN confirmed_transaction ct on ct.id = tx.confimed_transaction_id "
+                        "JOIN block b on ct.block_id = b.id "
                         "WHERE p.program_id = %s",
                         (program_id,)
                     )
@@ -1350,7 +1491,8 @@ class Database:
                         "FROM transition ts "
                         "JOIN transaction_execute te on te.id = ts.transaction_execute_id "
                         "JOIN transaction t on te.transaction_id = t.id "
-                        "JOIN block b on t.block_id = b.id "
+                        "JOIN confirmed_transaction ct on t.confimed_transaction_id = ct.id "
+                        "JOIN block b on ct.block_id = b.id "
                         "WHERE ts.program_id = %s "
                         "ORDER BY b.height DESC "
                         "LIMIT %s OFFSET %s",

@@ -38,6 +38,9 @@
         {% call data_line("Block") %}
             <a href="/block?h={{ block.header.metadata.height }}">{{ block.header.metadata.height }}</a>
         {% endcall %}
+        {% call data_line("Index") %}
+            {{ index }}
+        {% endcall %}
         {% call data_line("Type") %}
             {{ type }}
         {% endcall %}

@@ -1252,10 +1252,7 @@ class ThirdMessage(Serialize, Deserialize):
         self.sums = sums
 
     def dump(self) -> bytes:
-        res = b""
-        for s in self.sums:
-            res += s.dump()
-        return res
+        return self.sums.dump()
 
     @classmethod
     # @type_check
@@ -2446,7 +2443,7 @@ class RemoveMapping(FinalizeOperation):
         return cls(mapping_id=mapping_id)
 
 
-class AcceptedDeploy(Serialize, Deserialize):
+class AcceptedDeploy(ConfirmedTransaction):
     type = ConfirmedTransaction.Type.AcceptedDeploy
 
     # @type_check
@@ -2467,7 +2464,7 @@ class AcceptedDeploy(Serialize, Deserialize):
         return cls(index=index, transaction=transaction, finalize=finalize)
 
 
-class AcceptedExecute(Serialize, Deserialize):
+class AcceptedExecute(ConfirmedTransaction):
     type = ConfirmedTransaction.Type.AcceptedExecute
 
     # @type_check
@@ -2488,7 +2485,7 @@ class AcceptedExecute(Serialize, Deserialize):
         return cls(index=index, transaction=transaction, finalize=finalize)
 
 
-class RejectedDeploy(Serialize, Deserialize):
+class RejectedDeploy(ConfirmedTransaction):
     type = ConfirmedTransaction.Type.RejectedDeploy
 
     # @type_check
@@ -2509,7 +2506,7 @@ class RejectedDeploy(Serialize, Deserialize):
         return cls(index=index, transaction=transaction, rejected=rejected)
 
 
-class RejectedExecute(Serialize, Deserialize):
+class RejectedExecute(ConfirmedTransaction):
     type = ConfirmedTransaction.Type.RejectedExecute
 
     # @type_check
@@ -2560,13 +2557,13 @@ class BlockHeaderMetadata(Serialize, Deserialize):
 
     # @type_check
     def __init__(self, *, network: u16, round_: u64, height: u32, total_supply_in_microcredits: u64,
-                 cumulative_proof_target: u128, coinbase_target: u64, proof_target: u64, last_coinbase_target: u64,
+                 cumulative_weight: u128, coinbase_target: u64, proof_target: u64, last_coinbase_target: u64,
                  last_coinbase_timestamp: i64, timestamp: i64):
         self.network = network
         self.round = round_
         self.height = height
         self.total_supply_in_microcredits = total_supply_in_microcredits
-        self.cumulative_proof_target = cumulative_proof_target
+        self.cumulative_weight = cumulative_weight
         self.coinbase_target = coinbase_target
         self.proof_target = proof_target
         self.last_coinbase_target = last_coinbase_target
@@ -2575,7 +2572,7 @@ class BlockHeaderMetadata(Serialize, Deserialize):
 
     def dump(self) -> bytes:
         return self.version.dump() + self.network.dump() + self.round.dump() + self.height.dump() + \
-            self.total_supply_in_microcredits.dump() + self.cumulative_proof_target.dump() + \
+            self.total_supply_in_microcredits.dump() + self.cumulative_weight.dump() + \
             self.coinbase_target.dump() + self.proof_target.dump() + self.last_coinbase_target.dump() + \
             self.last_coinbase_timestamp.dump() + self.timestamp.dump()
 
@@ -2590,7 +2587,7 @@ class BlockHeaderMetadata(Serialize, Deserialize):
         round_ = u64.load(data)
         height = u32.load(data)
         total_supply_in_microcredits = u64.load(data)
-        cumulative_proof_target = u128.load(data)
+        cumulative_weight = u128.load(data)
         coinbase_target = u64.load(data)
         proof_target = u64.load(data)
         last_coinbase_target = u64.load(data)
@@ -2598,33 +2595,9 @@ class BlockHeaderMetadata(Serialize, Deserialize):
         timestamp = i64.load(data)
         return cls(network=network, round_=round_, height=height,
                    total_supply_in_microcredits=total_supply_in_microcredits,
-                   cumulative_proof_target=cumulative_proof_target, coinbase_target=coinbase_target,
+                   cumulative_weight=cumulative_weight, coinbase_target=coinbase_target,
                    proof_target=proof_target, last_coinbase_target=last_coinbase_target,
                    last_coinbase_timestamp=last_coinbase_timestamp, timestamp=timestamp)
-
-    @classmethod
-    # @type_check
-    def load_json(cls, data: dict):
-        network = u16(data["network"])
-        round_ = u64(data["round"])
-        height = u32(data["height"])
-        coinbase_target = u64(data["coinbase_target"])
-        proof_target = u64(data["proof_target"])
-        last_coinbase_target = u64(data["last_coinbase_target"])
-        last_coinbase_timestamp = i64(data["last_coinbase_timestamp"])
-        timestamp = i64(data["timestamp"])
-        return cls(network=network, round_=round_, height=height, coinbase_target=coinbase_target,
-                   proof_target=proof_target, last_coinbase_target=last_coinbase_target,
-                   last_coinbase_timestamp=last_coinbase_timestamp, timestamp=timestamp)
-
-    # really needed?
-    def __eq__(self, other):
-        if not isinstance(other, BlockHeaderMetadata):
-            return False
-        return self.network == other.network and self.round == other.round and self.height == other.height \
-               and self.coinbase_target == other.coinbase_target and self.proof_target == other.proof_target \
-               and self.last_coinbase_target == other.last_coinbase_target \
-               and self.last_coinbase_timestamp == other.last_coinbase_timestamp and self.timestamp == other.timestamp
 
 
 class BlockHeader(Serialize, Deserialize):
@@ -2657,24 +2630,6 @@ class BlockHeader(Serialize, Deserialize):
         return cls(previous_state_root=previous_state_root, transactions_root=transactions_root,
                    finalize_root=finalize_root, coinbase_accumulator_point=coinbase_accumulator_point,
                    metadata=metadata)
-
-    @classmethod
-    # @type_check
-    def load_json(cls, data: dict):
-        previous_state_root = Field.loads(data['previous_state_root'])
-        transactions_root = Field.loads(data['transactions_root'])
-        coinbase_accumulator_point = Field.loads(data['coinbase_accumulator_point'])
-        metadata = BlockHeaderMetadata.load_json(data['metadata'])
-        return cls(previous_state_root=previous_state_root, transactions_root=transactions_root,
-                   coinbase_accumulator_point=coinbase_accumulator_point, metadata=metadata)
-
-    def __eq__(self, other):
-        if not isinstance(other, BlockHeader):
-            return False
-        return self.previous_state_root == other.previous_state_root and \
-               self.transactions_root == other.transactions_root and \
-               self.coinbase_accumulator_point == other.coinbase_accumulator_point and \
-               self.metadata == other.metadata
 
 
 class PuzzleCommitment(Serialize, Deserialize):

@@ -24,6 +24,18 @@ CREATE SCHEMA explorer;
 
 
 --
+-- Name: confirmed_transaction_type; Type: TYPE; Schema: explorer; Owner: -
+--
+
+CREATE TYPE explorer.confirmed_transaction_type AS ENUM (
+    'AcceptedDeploy',
+    'AcceptedExecute',
+    'RejectedDeploy',
+    'RejectedExecute'
+);
+
+
+--
 -- Name: finalize_value_type; Type: TYPE; Schema: explorer; Owner: -
 --
 
@@ -104,7 +116,7 @@ CREATE TABLE explorer.block (
     signature text NOT NULL,
     coinbase_reward numeric(20,0),
     total_supply numeric(20,0) NOT NULL,
-    cumulative_proof_target numeric(40,0) NOT NULL,
+    cumulative_weight numeric(40,0) NOT NULL,
     finalize_root text NOT NULL
 );
 
@@ -160,6 +172,38 @@ CREATE SEQUENCE explorer.coinbase_solution_id_seq
 --
 
 ALTER SEQUENCE explorer.coinbase_solution_id_seq OWNED BY explorer.coinbase_solution.id;
+
+
+--
+-- Name: confirmed_transaction; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.confirmed_transaction (
+    id integer NOT NULL,
+    block_id integer,
+    index bigint,
+    type explorer.confirmed_transaction_type
+);
+
+
+--
+-- Name: confirmed_transaction_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.confirmed_transaction_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: confirmed_transaction_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.confirmed_transaction_id_seq OWNED BY explorer.confirmed_transaction.id;
 
 
 --
@@ -406,10 +450,9 @@ ALTER SEQUENCE explorer.program_id_seq OWNED BY explorer.program.id;
 
 CREATE TABLE explorer.transaction (
     id integer NOT NULL,
-    block_id integer NOT NULL,
+    confimed_transaction_id integer NOT NULL,
     transaction_id text NOT NULL,
-    type explorer.transaction_type NOT NULL,
-    index integer NOT NULL
+    type explorer.transaction_type NOT NULL
 );
 
 
@@ -898,6 +941,13 @@ ALTER TABLE ONLY explorer.coinbase_solution ALTER COLUMN id SET DEFAULT nextval(
 
 
 --
+-- Name: confirmed_transaction id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.confirmed_transaction ALTER COLUMN id SET DEFAULT nextval('explorer.confirmed_transaction_id_seq'::regclass);
+
+
+--
 -- Name: fee id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -1058,6 +1108,14 @@ ALTER TABLE ONLY explorer.block
 
 ALTER TABLE ONLY explorer.coinbase_solution
     ADD CONSTRAINT coinbase_solution_pk PRIMARY KEY (id);
+
+
+--
+-- Name: confirmed_transaction confirmed_transaction_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.confirmed_transaction
+    ADD CONSTRAINT confirmed_transaction_pk PRIMARY KEY (id);
 
 
 --
@@ -1265,6 +1323,27 @@ CREATE INDEX coinbase_solution_block_id_index ON explorer.coinbase_solution USIN
 
 
 --
+-- Name: confirmed_transaction_block_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX confirmed_transaction_block_id_index ON explorer.confirmed_transaction USING btree (block_id);
+
+
+--
+-- Name: confirmed_transaction_index_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX confirmed_transaction_index_index ON explorer.confirmed_transaction USING btree (index);
+
+
+--
+-- Name: confirmed_transaction_type_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX confirmed_transaction_type_index ON explorer.confirmed_transaction USING btree (type);
+
+
+--
 -- Name: fee_transaction_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -1349,10 +1428,10 @@ CREATE INDEX program_transaction_deploy_id_index ON explorer.program USING btree
 
 
 --
--- Name: transaction_block_id_index; Type: INDEX; Schema: explorer; Owner: -
+-- Name: transaction_confimed_transaction_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-CREATE INDEX transaction_block_id_index ON explorer.transaction USING btree (block_id);
+CREATE INDEX transaction_confimed_transaction_id_index ON explorer.transaction USING btree (confimed_transaction_id);
 
 
 --
@@ -1374,13 +1453,6 @@ CREATE INDEX transaction_execute_transaction_id_index ON explorer.transaction_ex
 --
 
 CREATE INDEX transaction_finalize_record_transaction_finalize_id_index ON explorer.transition_finalize_record USING btree (transition_finalize_id);
-
-
---
--- Name: transaction_index_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX transaction_index_index ON explorer.transaction USING btree (index);
 
 
 --
@@ -1546,6 +1618,14 @@ ALTER TABLE ONLY explorer.coinbase_solution
 
 
 --
+-- Name: confirmed_transaction confirmed_transaction_block_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.confirmed_transaction
+    ADD CONSTRAINT confirmed_transaction_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id);
+
+
+--
 -- Name: fee fee_transaction_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -1578,11 +1658,11 @@ ALTER TABLE ONLY explorer.program
 
 
 --
--- Name: transaction transaction_block_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+-- Name: transaction transaction_confirmed_transaction_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
 ALTER TABLE ONLY explorer.transaction
-    ADD CONSTRAINT transaction_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id);
+    ADD CONSTRAINT transaction_confirmed_transaction_id_fk FOREIGN KEY (confimed_transaction_id) REFERENCES explorer.confirmed_transaction(id);
 
 
 --

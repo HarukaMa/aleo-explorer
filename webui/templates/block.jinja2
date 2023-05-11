@@ -93,6 +93,7 @@
             <table id="transactions-table" class="unstriped">
                 <thead>
                 <tr>
+                    <td>Index</td>
                     <td>Transaction ID</td>
                     <td>Type</td>
                     <td>Transitions</td>
@@ -102,6 +103,7 @@
                 <tbody>
                 {% for tx in transactions %}
                     <tr>
+                        <td>{{ tx.index }}</td>
                         <td class="mono"><a href="/transaction?id={{ tx.tx_id }}">{{ tx.tx_id }}</a></td>
                         <td>{{ tx.type }}</td>
                         <td>{{ tx.transitions_count }}</td>

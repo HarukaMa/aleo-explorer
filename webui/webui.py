@@ -26,7 +26,7 @@ from node.types import u32, Transaction, Transition, ExecuteTransaction, Transit
     RecordTransitionInput, TransitionOutput, RecordTransitionOutput, Record, KZGProof, Proof, WitnessCommitments, \
     G1Affine, Ciphertext, Owner, Entry, DeployTransaction, Deployment, Program, PublicTransitionInput, \
     PublicTransitionOutput, PrivateTransitionOutput, Value, PlaintextValue, ExternalRecordTransitionInput, \
-    ExternalRecordTransitionOutput
+    ExternalRecordTransitionOutput, ConfirmedTransaction, AcceptedDeploy, AcceptedExecute
 
 
 class UvicornServer(multiprocessing.Process):
@@ -206,21 +206,30 @@ async def block_route(request: Request):
 
     txs = []
     total_fee = 0
-    for tx in block.transactions:
-        tx: Transaction
-        match tx.type:
-            case Transaction.Type.Deploy:
+    for ct in block.transactions:
+        ct: ConfirmedTransaction
+        match ct.type:
+            case ConfirmedTransaction.Type.AcceptedDeploy:
+                ct: AcceptedDeploy
+                tx: Transaction = ct.transaction
+                if tx.type != Transaction.Type.Deploy:
+                    raise HTTPException(status_code=550, detail="Invalid transaction type")
                 tx: DeployTransaction
                 fee = int(tx.fee.transition.inputs[1].plaintext.value.literal.primitive)
                 t = {
                     "tx_id": tx.id,
-                    "type": "Deploy",
+                    "index": ct.index,
+                    "type": "AcceptedDeploy",
                     "transitions_count": 1,
                     "fee": fee,
                 }
                 txs.append(t)
                 total_fee += fee
-            case Transaction.Type.Execute:
+            case ConfirmedTransaction.Type.AcceptedExecute:
+                ct: AcceptedExecute
+                tx: Transaction = ct.transaction
+                if tx.type != Transaction.Type.Execute:
+                    raise HTTPException(status_code=550, detail="Invalid transaction type")
                 tx: ExecuteTransaction
                 fee_transition = tx.additional_fee.value
                 if fee_transition is not None:
@@ -229,13 +238,15 @@ async def block_route(request: Request):
                     fee = 0
                 t = {
                     "tx_id": tx.id,
-                    "type": "Execute",
+                    "index": ct.index,
+                    "type": "AcceptedExecute",
                     "transitions_count": len(tx.execution.transitions) + bool(tx.additional_fee.value is not None),
                     "fee": fee,
                 }
                 txs.append(t)
                 total_fee += fee
-
+            case _:
+                raise HTTPException(status_code=550, detail="Unsupported transaction type")
     ctx = {
         "request": request,
         "block": block,
@@ -260,20 +271,29 @@ async def transaction_route(request: Request):
 
     transaction: DeployTransaction | ExecuteTransaction | None = None
     transaction_type = ""
-    for tx in block.transactions:
-        match tx.type:
-            case Transaction.Type.Deploy:
+    index = -1
+    for ct in block.transactions:
+        match ct.type:
+            case ConfirmedTransaction.Type.AcceptedDeploy:
+                ct: AcceptedDeploy
+                tx: Transaction = ct.transaction
                 tx: DeployTransaction
-                transaction_type = "Deploy"
+                transaction_type = "AcceptedDeploy"
                 if str(tx.id) == tx_id:
                     transaction = tx
+                    index = ct.index
                     break
-            case Transaction.Type.Execute:
+            case ConfirmedTransaction.Type.AcceptedExecute:
+                ct: AcceptedExecute
+                tx: Transaction = ct.transaction
                 tx: ExecuteTransaction
-                transaction_type = "Execute"
+                transaction_type = "AcceptedExecute"
                 if str(tx.id) == tx_id:
                     transaction = tx
+                    index = ct.index
                     break
+            case _:
+                raise HTTPException(status_code=550, detail="Unsupported transaction type")
     if transaction is None:
         raise HTTPException(status_code=550, detail="Transaction not found in block")
 
@@ -282,6 +302,7 @@ async def transaction_route(request: Request):
         "tx_id": tx_id,
         "tx_id_trunc": str(tx_id)[:12] + "..." + str(tx_id)[-6:],
         "block": block,
+        "index": index,
         "transaction": transaction,
         "type": transaction_type,
     }
@@ -844,7 +865,7 @@ async def address_route(request: Request):
                 program_tx = tx
                 break
         if program_tx is None:
-            raise HTTPException(status_code=500, detail="Program transaction not found")
+            raise HTTPException(status_code=550, detail="Program transaction not found")
         recent_programs.append({
             "program_id": program,
             "height": program_block.header.metadata.height,
