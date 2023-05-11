@@ -868,7 +868,7 @@ async def address_route(request: Request):
         program_tx = None
         for ct in program_block.transactions.transactions:
             if ct.type == ConfirmedTransaction.Type.AcceptedDeploy:
-                tx = ct.tx
+                tx = ct.transaction
                 if tx.type == Transaction.Type.Deploy and str(tx.deployment.program.id) == program:
                     program_tx = tx
                     break
