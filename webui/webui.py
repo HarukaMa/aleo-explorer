@@ -366,14 +366,18 @@ async def transition_route(request: Request):
 
     transaction_id = None
     transition = None
-    for tx in block.transactions:
-        if tx.type == Transaction.Type.Deploy:
+    for ct in block.transactions:
+        if ct.type == ConfirmedTransaction.Type.AcceptedDeploy:
+            ct: AcceptedDeploy
+            tx: Transaction = ct.transaction
             tx: DeployTransaction
             if str(tx.fee.transition.id) == ts_id:
                 transition = tx.fee.transition
                 transaction_id = tx.id
                 break
-        elif tx.type == Transaction.Type.Execute:
+        elif ct.type == ConfirmedTransaction.Type.AcceptedExecute:
+            ct: AcceptedExecute
+            tx: Transaction = ct.transaction
             tx: ExecuteTransaction
             for ts in tx.execution.transitions:
                 ts: Transition
