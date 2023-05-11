@@ -708,8 +708,10 @@ async def program_route(request: Request):
     if block is None:
         raise HTTPException(status_code=404, detail="Program not found")
     transaction: DeployTransaction | None = None
-    for tx in block.transactions:
-        if tx.type == Transaction.Type.Deploy:
+    for ct in block.transactions:
+        if ct.type == ConfirmedTransaction.Type.AcceptedDeploy:
+            ct: AcceptedDeploy
+            tx: Transaction = ct.transaction
             tx: DeployTransaction
             if str(tx.deployment.program.id) == program_id:
                 transaction = tx
