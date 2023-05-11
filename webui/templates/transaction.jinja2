@@ -44,7 +44,7 @@
         {% call data_line("Type") %}
             {{ type }}
         {% endcall %}
-        {% if type == "Execute" %}
+        {% if type == "AcceptedExecute" %}
             {% call data_line("Global state root") %}
             <span class="mono">{{ global_state_root }}</span>
             {% endcall %}
@@ -57,7 +57,7 @@
                     -
                 {% endif %}
             {% endcall %}
-        {% elif type == "Deploy" %}
+        {% elif type == "AcceptedDeploy" %}
             {% call data_line("Edition") %}
                 {{ edition }}
             {% endcall %}
