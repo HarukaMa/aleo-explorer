@@ -132,7 +132,7 @@ class Node:
                 if self.handshake_state != 0:
                     raise Exception("incorrect handshake state")
                 msg: ChallengeResponse = frame.message
-                if msg.genesis_header != Testnet3.genesis_block.header and not await self.explorer_request(explorer.Request.GetDevMode()):
+                if msg.genesis_header.transactions_root != Testnet3.genesis_block.header.transactions_root and not await self.explorer_request(explorer.Request.GetDevMode()):
                     raise ValueError("peer has wrong genesis block")
                 self.handshake_state = 2
 
