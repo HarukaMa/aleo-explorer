@@ -56,8 +56,8 @@
         {% call data_line("Proof target") %}
             {{ block.header.metadata.proof_target }}
         {% endcall %}
-        {% call data_line("Cumulative proof target") %}
-            {{ block.header.metadata.cumulative_proof_target }}
+        {% call data_line("Cumulative weight") %}
+            {{ block.header.metadata.cumulative_weight }}
         {% endcall %}
         {% call data_line("Coinbase reward") %}
             {% if coinbase_reward %}{{ (coinbase_reward // 2) | format_aleo_credit }}{% else %}-{% endif %}
