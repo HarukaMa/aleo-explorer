@@ -962,10 +962,11 @@ class VerifyingKey(Serialize, Deserialize):
     # @type_check
     @generic_type_check
     def __init__(self, *, circuit_info: CircuitInfo, circuit_commitments: Vec[KZGCommitment, u64],
-                 verifier_key: SonicVerifierKey):
+                 verifier_key: SonicVerifierKey, id_: Vec[u8, 32]):
         self.circuit_info = circuit_info
         self.circuit_commitments = circuit_commitments
         self.verifier_key = verifier_key
+        self.id = id_
 
     def dump(self) -> bytes:
         res = b""
@@ -973,6 +974,7 @@ class VerifyingKey(Serialize, Deserialize):
         res += self.circuit_info.dump()
         res += self.circuit_commitments.dump()
         res += self.verifier_key.dump()
+        res += self.id.dump()
         return res
 
     @classmethod
@@ -984,7 +986,8 @@ class VerifyingKey(Serialize, Deserialize):
         circuit_info = CircuitInfo.load(data)
         circuit_commitments = Vec[KZGCommitment, u64].load(data)
         verifier_key = SonicVerifierKey.load(data)
-        return cls(circuit_info=circuit_info, circuit_commitments=circuit_commitments, verifier_key=verifier_key)
+        id_ = Vec[u8, 32].load(data)
+        return cls(circuit_info=circuit_info, circuit_commitments=circuit_commitments, verifier_key=verifier_key, id_=id_)
 
 
 class KZGProof(Serialize, Deserialize):

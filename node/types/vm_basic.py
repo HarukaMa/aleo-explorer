@@ -305,7 +305,7 @@ class Fq2(Serialize, Deserialize):
         self.flags = flags
 
     def dump(self) -> bytes:
-        res = self.c0.dump() + self.c1.dump()
+        res = bytearray(self.c0.dump() + self.c1.dump())
         res[-1] |= self.flags << 7
         return res
 
