@@ -132,6 +132,12 @@ class Identifier(Serialize, Deserialize):
     def __str__(self):
         return self.data
 
+    def __eq__(self, other):
+        return self.data == other.data
+
+    def __hash__(self):
+        return hash(self.data)
+
 class ProgramID(Serialize, Deserialize):
 
     # @type_check
