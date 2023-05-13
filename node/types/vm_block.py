@@ -1691,6 +1691,9 @@ class PlaintextValue(Value):
         plaintext = Plaintext.load(data)
         return cls(plaintext=plaintext)
 
+    def __str__(self):
+        return str(self.plaintext)
+
 
 class RecordValue(Value):
     type = Value.Type.Record
