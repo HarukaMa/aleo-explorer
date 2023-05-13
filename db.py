@@ -288,7 +288,7 @@ class Database:
                                         "INSERT INTO transaction_execute (transaction_id, global_state_root, inclusion_proof) "
                                         "VALUES (%s, %s, %s) RETURNING id",
                                         (transaction_db_id, str(transaction.execution.global_state_root),
-                                        transaction.execution.inclusion_proof.dumps())
+                                         transaction.execution.inclusion_proof.dumps())
                                     )
                                     execute_transaction_db_id = (await cur.fetchone())["id"]
 
@@ -306,57 +306,89 @@ class Database:
                                         fee_db_id = (await cur.fetchone())["id"]
                                         await self._insert_transition(conn, None, fee_db_id, fee.transition, 0)
 
-                                case _:
+                                case ConfirmedTransaction.Type.RejectedDeploy:
                                     raise ValueError("transaction type not implemented")
 
-                            for finalize_operation in confirmed_transaction.finalize:
-                                finalize_operation: FinalizeOperation
-                                await cur.execute(
-                                    "INSERT INTO finalize_operation (confirmed_transaction_id, type) "
-                                    "VALUES (%s, %s) RETURNING id",
-                                    (confirmed_transaction_db_id, finalize_operation.type.name)
-                                )
-                                finalize_operation_db_id = (await cur.fetchone())["id"]
-                                match finalize_operation.type:
-                                    case FinalizeOperation.Type.InitializeMapping:
-                                        finalize_operation: InitializeMapping
-                                        await cur.execute(
-                                            "INSERT INTO finalize_operation_initialize_mapping (finalize_operation_id, "
-                                            "mapping_id) VALUES (%s, %s)",
-                                            (finalize_operation_db_id, str(finalize_operation.mapping_id))
-                                        )
-                                    case FinalizeOperation.Type.InsertKeyValue:
-                                        finalize_operation: InsertKeyValue
-                                        await cur.execute(
-                                            "INSERT INTO finalize_operation_insert_kv (finalize_operation_id, "
-                                            "mapping_id, key_id, value_id) VALUES (%s, %s, %s, %s)",
-                                            (finalize_operation_db_id, str(finalize_operation.mapping_id),
-                                            str(finalize_operation.key_id), str(finalize_operation.value_id))
-                                        )
-                                    case FinalizeOperation.Type.UpdateKeyValue:
-                                        finalize_operation: UpdateKeyValue
-                                        await cur.execute(
-                                            "INSERT INTO finalize_operation_update_kv (finalize_operation_id, "
-                                            "mapping_id, index, key_id, value_id) VALUES (%s, %s, %s, %s, %s)",
-                                            (finalize_operation_db_id, str(finalize_operation.mapping_id),
-                                            finalize_operation.index, str(finalize_operation.key_id),
-                                            str(finalize_operation.value_id))
-                                        )
-                                    case FinalizeOperation.Type.RemoveKeyValue:
-                                        finalize_operation: RemoveKeyValue
-                                        await cur.execute(
-                                            "INSERT INTO finalize_operation_remove_kv (finalize_operation_id, "
-                                            "mapping_id, index) VALUES (%s, %s, %s)",
-                                            (finalize_operation_db_id, str(finalize_operation.mapping_id),
-                                            finalize_operation.index)
-                                        )
-                                    case FinalizeOperation.Type.RemoveMapping:
-                                        finalize_operation: RemoveMapping
-                                        await cur.execute(
-                                            "INSERT INTO finalize_operation_remove_mapping (finalize_operation_id, "
-                                            "mapping_id) VALUES (%s, %s)",
-                                            (finalize_operation_db_id, str(finalize_operation.mapping_id))
-                                        )
+                                case ConfirmedTransaction.Type.RejectedExecute:
+                                    confirmed_transaction: RejectedExecute
+                                    transaction: Transaction = confirmed_transaction.transaction
+                                    if transaction.type != Transaction.Type.Fee:
+                                        raise ValueError("expected fee transaction")
+                                    transaction: FeeTransaction
+                                    transaction_id = transaction.id
+                                    await cur.execute(
+                                        "INSERT INTO transaction (confimed_transaction_id, transaction_id, type) VALUES (%s, %s, %s) RETURNING id",
+                                        (confirmed_transaction_db_id, str(transaction_id), transaction.type.name)
+                                    )
+                                    transaction_db_id = (await cur.fetchone())["id"]
+                                    fee = transaction.fee
+                                    await cur.execute(
+                                        "INSERT INTO fee (transaction_id, global_state_root, inclusion_proof) "
+                                        "VALUES (%s, %s, %s) RETURNING id",
+                                        (transaction_db_id, str(fee.global_state_root), fee.inclusion_proof.dumps())
+                                    )
+                                    fee_db_id = (await cur.fetchone())["id"]
+                                    await self._insert_transition(conn, None, fee_db_id, fee.transition, 0)
+
+                                    await cur.execute(
+                                        "INSERT INTO transaction_execute (transaction_id, global_state_root, inclusion_proof) "
+                                        "VALUES (%s, %s, %s) RETURNING id",
+                                        (transaction_db_id, str(confirmed_transaction.rejected.global_state_root),
+                                         confirmed_transaction.rejected.inclusion_proof.dumps())
+                                    )
+                                    execute_transaction_db_id = (await cur.fetchone())["id"]
+                                    for ts_index, transition in enumerate(confirmed_transaction.rejected.transitions):
+                                        await self._insert_transition(conn, execute_transaction_db_id, None, transition, ts_index)
+
+                            if confirmed_transaction.type in [ConfirmedTransaction.Type.AcceptedDeploy, ConfirmedTransaction.Type.AcceptedExecute]:
+                                for finalize_operation in confirmed_transaction.finalize:
+                                    finalize_operation: FinalizeOperation
+                                    await cur.execute(
+                                        "INSERT INTO finalize_operation (confirmed_transaction_id, type) "
+                                        "VALUES (%s, %s) RETURNING id",
+                                        (confirmed_transaction_db_id, finalize_operation.type.name)
+                                    )
+                                    finalize_operation_db_id = (await cur.fetchone())["id"]
+                                    match finalize_operation.type:
+                                        case FinalizeOperation.Type.InitializeMapping:
+                                            finalize_operation: InitializeMapping
+                                            await cur.execute(
+                                                "INSERT INTO finalize_operation_initialize_mapping (finalize_operation_id, "
+                                                "mapping_id) VALUES (%s, %s)",
+                                                (finalize_operation_db_id, str(finalize_operation.mapping_id))
+                                            )
+                                        case FinalizeOperation.Type.InsertKeyValue:
+                                            finalize_operation: InsertKeyValue
+                                            await cur.execute(
+                                                "INSERT INTO finalize_operation_insert_kv (finalize_operation_id, "
+                                                "mapping_id, key_id, value_id) VALUES (%s, %s, %s, %s)",
+                                                (finalize_operation_db_id, str(finalize_operation.mapping_id),
+                                                str(finalize_operation.key_id), str(finalize_operation.value_id))
+                                            )
+                                        case FinalizeOperation.Type.UpdateKeyValue:
+                                            finalize_operation: UpdateKeyValue
+                                            await cur.execute(
+                                                "INSERT INTO finalize_operation_update_kv (finalize_operation_id, "
+                                                "mapping_id, index, key_id, value_id) VALUES (%s, %s, %s, %s, %s)",
+                                                (finalize_operation_db_id, str(finalize_operation.mapping_id),
+                                                finalize_operation.index, str(finalize_operation.key_id),
+                                                str(finalize_operation.value_id))
+                                            )
+                                        case FinalizeOperation.Type.RemoveKeyValue:
+                                            finalize_operation: RemoveKeyValue
+                                            await cur.execute(
+                                                "INSERT INTO finalize_operation_remove_kv (finalize_operation_id, "
+                                                "mapping_id, index) VALUES (%s, %s, %s)",
+                                                (finalize_operation_db_id, str(finalize_operation.mapping_id),
+                                                finalize_operation.index)
+                                            )
+                                        case FinalizeOperation.Type.RemoveMapping:
+                                            finalize_operation: RemoveMapping
+                                            await cur.execute(
+                                                "INSERT INTO finalize_operation_remove_mapping (finalize_operation_id, "
+                                                "mapping_id) VALUES (%s, %s)",
+                                                (finalize_operation_db_id, str(finalize_operation.mapping_id))
+                                            )
 
                         if block.coinbase.value is not None:
                             coinbase_reward = block.get_coinbase_reward((await self.get_latest_block()).header.metadata.last_coinbase_timestamp)
@@ -625,108 +657,6 @@ class Database:
             confirmed_transactions = await cur.fetchall()
             ctxs = []
             for confirmed_transaction in confirmed_transactions:
-                await cur.execute("SELECT * FROM transaction WHERE confimed_transaction_id = %s", (confirmed_transaction["id"],))
-                transaction = await cur.fetchone()
-                match transaction["type"]:
-                    case Transaction.Type.Deploy.name:
-                        await cur.execute(
-                            "SELECT * FROM transaction_deploy WHERE transaction_id = %s",
-                            (transaction["id"],)
-                        )
-                        deploy_transaction = await cur.fetchone()
-                        await cur.execute(
-                            "SELECT raw_data, owner, signature FROM program WHERE transaction_deploy_id = %s",
-                            (deploy_transaction["id"],)
-                        )
-                        program_data = await cur.fetchone()
-                        program = program_data["raw_data"]
-                        deployment = Deployment(
-                            edition=u16(deploy_transaction["edition"]),
-                            program=Program.load(bytearray(program)),
-                            verifying_keys=Vec[Tuple[Identifier, VerifyingKey, Certificate], u16]([]),
-                        )
-                        await cur.execute(
-                            "SELECT * FROM fee WHERE transaction_id = %s",
-                            (transaction["id"],)
-                        )
-                        fee = await cur.fetchone()
-                        await cur.execute(
-                            "SELECT * FROM transition WHERE fee_id = %s",
-                            (fee["id"],)
-                        )
-                        fee_transition = await cur.fetchone()
-                        if fee_transition is None:
-                            raise ValueError("fee transition not found")
-                        proof = None
-                        if fee["inclusion_proof"] is not None:
-                            proof = Proof.loads(fee["inclusion_proof"])
-                        fee = Fee(
-                            transition=await Database._get_transition(fee_transition, conn),
-                            global_state_root=StateRoot.loads(fee["global_state_root"]),
-                            inclusion_proof=Option[Proof](proof),
-                        )
-                        tx = DeployTransaction(
-                            id_=TransactionID.loads(transaction["transaction_id"]),
-                            deployment=deployment,
-                            fee=fee,
-                            owner=ProgramOwner(
-                                address=Address.loads(program_data["owner"]),
-                                signature=Signature.loads(program_data["signature"])
-                            )
-                        )
-                    case Transaction.Type.Execute.name:
-                        await cur.execute(
-                            "SELECT * FROM transaction_execute WHERE transaction_id = %s",
-                            (transaction["id"],)
-                        )
-                        execute_transaction = await cur.fetchone()
-                        await cur.execute(
-                            "SELECT * FROM transition WHERE transaction_execute_id = %s",
-                            (execute_transaction["id"],)
-                        )
-                        transitions = await cur.fetchall()
-                        tss = []
-                        for transition in transitions:
-                            tss.append(await Database._get_transition(transition, conn))
-                        await cur.execute(
-                            "SELECT * FROM fee WHERE transaction_id = %s",
-                            (transaction["id"],)
-                        )
-                        additional_fee = await cur.fetchone()
-                        if additional_fee is None:
-                            fee = None
-                        else:
-                            await cur.execute(
-                                "SELECT * FROM transition WHERE fee_id = %s",
-                                (additional_fee["id"],)
-                            )
-                            fee_transition = await cur.fetchone()
-                            if fee_transition is None:
-                                raise ValueError("fee transition not found")
-                            proof = None
-                            if additional_fee["inclusion_proof"] is not None:
-                                proof = Proof.loads(additional_fee["inclusion_proof"])
-                            fee = Fee(
-                                transition=await Database._get_transition(fee_transition, conn),
-                                global_state_root=StateRoot.loads(additional_fee["global_state_root"]),
-                                inclusion_proof=Option[Proof](proof),
-                            )
-                        if execute_transaction["inclusion_proof"] is None:
-                            proof = None
-                        else:
-                            proof = Proof.loads(execute_transaction["inclusion_proof"])
-                        tx = ExecuteTransaction(
-                            id_=TransactionID.loads(transaction["transaction_id"]),
-                            execution=Execution(
-                                transitions=Vec[Transition, u8](tss),
-                                global_state_root=StateRoot.loads(execute_transaction["global_state_root"]),
-                                inclusion_proof=Option[Proof](proof),
-                            ),
-                            additional_fee=Option[Fee](fee),
-                        )
-                    case _:
-                        raise NotImplementedError
-
                 await cur.execute("SELECT * FROM finalize_operation WHERE confirmed_transaction_id = %s", (confirmed_transaction["id"],))
                 finalize_operations = await cur.fetchall()
                 f = []
@@ -780,19 +710,130 @@ class Database:
                             remove_mapping = await cur.fetchone()
                             f.append(RemoveMapping(mapping_id=Field.loads(remove_mapping["mapping_id"])))
 
+                await cur.execute("SELECT * FROM transaction WHERE confimed_transaction_id = %s", (confirmed_transaction["id"],))
+                transaction = await cur.fetchone()
                 match confirmed_transaction["type"]:
-                    case ConfirmedTransaction.Type.AcceptedDeploy.name:
+                    case ConfirmedTransaction.Type.AcceptedDeploy.name | ConfirmedTransaction.Type.RejectedDeploy.name:
+                        if confirmed_transaction["type"] == ConfirmedTransaction.Type.RejectedDeploy.name:
+                            raise NotImplementedError
+                        await cur.execute(
+                            "SELECT * FROM transaction_deploy WHERE transaction_id = %s",
+                            (transaction["id"],)
+                        )
+                        deploy_transaction = await cur.fetchone()
+                        await cur.execute(
+                            "SELECT raw_data, owner, signature FROM program WHERE transaction_deploy_id = %s",
+                            (deploy_transaction["id"],)
+                        )
+                        program_data = await cur.fetchone()
+                        program = program_data["raw_data"]
+                        deployment = Deployment(
+                            edition=u16(deploy_transaction["edition"]),
+                            program=Program.load(bytearray(program)),
+                            verifying_keys=Vec[Tuple[Identifier, VerifyingKey, Certificate], u16]([]),
+                        )
+                        await cur.execute(
+                            "SELECT * FROM fee WHERE transaction_id = %s",
+                            (transaction["id"],)
+                        )
+                        fee = await cur.fetchone()
+                        await cur.execute(
+                            "SELECT * FROM transition WHERE fee_id = %s",
+                            (fee["id"],)
+                        )
+                        fee_transition = await cur.fetchone()
+                        if fee_transition is None:
+                            raise ValueError("fee transition not found")
+                        proof = None
+                        if fee["inclusion_proof"] is not None:
+                            proof = Proof.loads(fee["inclusion_proof"])
+                        fee = Fee(
+                            transition=await Database._get_transition(fee_transition, conn),
+                            global_state_root=StateRoot.loads(fee["global_state_root"]),
+                            inclusion_proof=Option[Proof](proof),
+                        )
+                        tx = DeployTransaction(
+                            id_=TransactionID.loads(transaction["transaction_id"]),
+                            deployment=deployment,
+                            fee=fee,
+                            owner=ProgramOwner(
+                                address=Address.loads(program_data["owner"]),
+                                signature=Signature.loads(program_data["signature"])
+                            )
+                        )
                         ctxs.append(AcceptedDeploy(
                             index=u32(confirmed_transaction["index"]),
                             transaction=tx,
                             finalize=Vec[FinalizeOperation, u16](f),
                         ))
-                    case ConfirmedTransaction.Type.AcceptedExecute.name:
-                        ctxs.append(AcceptedExecute(
-                            index=u32(confirmed_transaction["index"]),
-                            transaction=tx,
-                            finalize=Vec[FinalizeOperation, u16](f),
-                        ))
+                    case ConfirmedTransaction.Type.AcceptedExecute.name | ConfirmedTransaction.Type.RejectedExecute.name:
+                        await cur.execute(
+                            "SELECT * FROM transaction_execute WHERE transaction_id = %s",
+                            (transaction["id"],)
+                        )
+                        execute_transaction = await cur.fetchone()
+                        await cur.execute(
+                            "SELECT * FROM transition WHERE transaction_execute_id = %s",
+                            (execute_transaction["id"],)
+                        )
+                        transitions = await cur.fetchall()
+                        tss = []
+                        for transition in transitions:
+                            tss.append(await Database._get_transition(transition, conn))
+                        await cur.execute(
+                            "SELECT * FROM fee WHERE transaction_id = %s",
+                            (transaction["id"],)
+                        )
+                        additional_fee = await cur.fetchone()
+                        if additional_fee is None:
+                            fee = None
+                        else:
+                            await cur.execute(
+                                "SELECT * FROM transition WHERE fee_id = %s",
+                                (additional_fee["id"],)
+                            )
+                            fee_transition = await cur.fetchone()
+                            if fee_transition is None:
+                                raise ValueError("fee transition not found")
+                            proof = None
+                            if additional_fee["inclusion_proof"] is not None:
+                                proof = Proof.loads(additional_fee["inclusion_proof"])
+                            fee = Fee(
+                                transition=await Database._get_transition(fee_transition, conn),
+                                global_state_root=StateRoot.loads(additional_fee["global_state_root"]),
+                                inclusion_proof=Option[Proof](proof),
+                            )
+                        if execute_transaction["inclusion_proof"] is None:
+                            proof = None
+                        else:
+                            proof = Proof.loads(execute_transaction["inclusion_proof"])
+                        if confirmed_transaction["type"] == ConfirmedTransaction.Type.AcceptedExecute.name:
+                            ctxs.append(AcceptedExecute(
+                                index=u32(confirmed_transaction["index"]),
+                                transaction=ExecuteTransaction(
+                                    id_=TransactionID.loads(transaction["transaction_id"]),
+                                    execution=Execution(
+                                        transitions=Vec[Transition, u8](tss),
+                                        global_state_root=StateRoot.loads(execute_transaction["global_state_root"]),
+                                        inclusion_proof=Option[Proof](proof),
+                                    ),
+                                    additional_fee=Option[Fee](fee),
+                                ),
+                                finalize=Vec[FinalizeOperation, u16](f),
+                            ))
+                        else:
+                            ctxs.append(RejectedExecute(
+                                index=u32(confirmed_transaction["index"]),
+                                transaction=FeeTransaction(
+                                    id_=TransactionID.loads(transaction["transaction_id"]),
+                                    fee=fee,
+                                ),
+                                rejected=Execution(
+                                    transitions=Vec[Transition, u8](tss),
+                                    global_state_root=StateRoot.loads(execute_transaction["global_state_root"]),
+                                    inclusion_proof=Option[Proof](proof),
+                                )
+                            ))
                     case _:
                         raise NotImplementedError
 
@@ -1487,7 +1528,7 @@ class Database:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT b.height, b.timestamp, ts.transition_id, function_name "
+                        "SELECT b.height, b.timestamp, ts.transition_id, function_name, ct.type "
                         "FROM transition ts "
                         "JOIN transaction_execute te on te.id = ts.transaction_execute_id "
                         "JOIN transaction t on te.transaction_id = t.id "
@@ -1571,7 +1612,9 @@ class Database:
 
     # migration methods
     async def migrate(self):
-        migrations = []
+        migrations = [
+            (1, self.migrate_1_add_fee_transaction_type),
+        ]
         conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -1586,6 +1629,12 @@ class Database:
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
+
+    async def migrate_1_add_fee_transaction_type(self):
+        conn: psycopg.AsyncConnection
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("ALTER TYPE explorer.transaction_type ADD VALUE 'Fee' AFTER 'Execute'")
 
     # debug method
     async def clear_database(self):

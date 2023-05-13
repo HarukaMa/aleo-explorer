@@ -22,7 +22,7 @@
 
 {% endblock %}
 
-{% from "macros.jinja2" import data_line, sub_data_line, sub_data_line_safe %}
+{% from "macros.jinja2" import data_line, sub_data_line, sub_data_line_safe, state_label %}
 
 {% block content %}
 
@@ -37,6 +37,9 @@
         {% endcall %}
         {% call data_line("Transaction") %}
             <span class="mono"><a href="/transaction?id={{ transaction_id }}">{{ transaction_id }}</a></span>
+        {% endcall %}
+        {% call data_line("State") %}
+            {{ state_label(state) }}
         {% endcall %}
         {% call data_line("Program ID") %}
             {% if program_id | string == "credits.aleo" %}
@@ -56,7 +59,7 @@
         {% endcall %}
         {% call data_line("Proof") %}
             <advanced-link scope="transition" object="{{ ts_id }}" type="proof">
-                <span class="mono">{{ proof }}</span>
+                <span class="mono">{{ proof_trunc }}</span>
             </advanced-link>
         {% endcall %}
         </div>

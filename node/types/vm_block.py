@@ -2127,6 +2127,7 @@ class Transaction(Serialize, Deserialize):  # Enum
     class Type(IntEnumu8):
         Deploy = 0
         Execute = 1
+        Fee = 2
 
     @property
     @abstractmethod
@@ -2149,6 +2150,10 @@ class Transaction(Serialize, Deserialize):  # Enum
             if version != ExecuteTransaction.version:
                 raise ValueError("incorrect version")
             return ExecuteTransaction.load(data)
+        elif type_ == cls.Type.Fee:
+            if version != FeeTransaction.version:
+                raise ValueError("incorrect version")
+            return FeeTransaction.load(data)
         else:
             raise ValueError("incorrect type")
 
@@ -2218,6 +2223,24 @@ class ExecuteTransaction(Transaction):
         execution = Execution.load(data)
         additional_fee = Option[Fee].load(data)
         return cls(id_=id_, execution=execution, additional_fee=additional_fee)
+
+class FeeTransaction(Transaction):
+    type = Transaction.Type.Fee
+
+    # @type_check
+    def __init__(self, *, id_: TransactionID, fee: Fee):
+        self.id = id_
+        self.fee = fee
+
+    def dump(self) -> bytes:
+        return self.version.dump() + self.type.dump() + self.id.dump() + self.fee.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        id_ = TransactionID.load(data)
+        fee = Fee.load(data)
+        return cls(id_=id_, fee=fee)
 
 class ConfirmedTransaction(Serialize, Deserialize):
     class Type(IntEnumu8):

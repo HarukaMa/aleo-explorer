@@ -30,7 +30,7 @@
     </style>
 {% endblock %}
 
-{% from "macros.jinja2" import data_line %}
+{% from "macros.jinja2" import data_line, state_label %}
 
 {% block content %}
 
@@ -96,6 +96,7 @@
                     <td>Index</td>
                     <td>Transaction ID</td>
                     <td>Type</td>
+                    <td>State</td>
                     <td>Transitions</td>
                     <td>Fee</td>
                 </tr>
@@ -106,6 +107,7 @@
                         <td>{{ tx.index }}</td>
                         <td class="mono"><a href="/transaction?id={{ tx.tx_id }}">{{ tx.tx_id }}</a></td>
                         <td>{{ tx.type }}</td>
+                        <td>{{ state_label(tx.state) }}</td>
                         <td>{{ tx.transitions_count }}</td>
                         <td>{{ tx.fee | format_aleo_credit }} Aleo credits</td>
                     </tr>

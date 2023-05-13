@@ -215,7 +215,7 @@
 <div class="footer-container">
     <div class="settings">
         Timezone display: <a onclick="toggle_timezone()"><span id="timezone-setting"></span></a><br>
-        Advanced mode: <a onclick="toggle_advanced()" disabled><span id="advanced-setting"></span></a><br>
+        Advanced mode: <span id="advanced-setting"></span><br>
     </div>
     <div class="footer">
         <a href="https://github.com/HarukaMa/aleo-explorer" target="_blank">Open source</a> Aleo explorer made by Haruka. <br>
@@ -282,7 +282,7 @@
         timezone_setting_element.text("UTC")
     }
 
-    let advanced_setting = localStorage.getItem("advanced")
+    let advanced_setting = "false"
     if (advanced_setting === null) {
         advanced_setting = false
         localStorage.setItem("advanced", "false")
@@ -292,7 +292,7 @@
 
     const advanced_setting_element = $("#advanced-setting")
 
-    advanced_setting_element.text(advanced_setting ? "On" : "Off")
+    advanced_setting_element.text("Off")
     dispatch_advanced_event()
 
     function dispatch_advanced_event() {

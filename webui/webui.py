@@ -26,7 +26,8 @@ from node.types import u32, Transaction, Transition, ExecuteTransaction, Transit
     RecordTransitionInput, TransitionOutput, RecordTransitionOutput, Record, KZGProof, Proof, WitnessCommitments, \
     G1Affine, Ciphertext, Owner, Entry, DeployTransaction, Deployment, Program, PublicTransitionInput, \
     PublicTransitionOutput, PrivateTransitionOutput, Value, PlaintextValue, ExternalRecordTransitionInput, \
-    ExternalRecordTransitionOutput, ConfirmedTransaction, AcceptedDeploy, AcceptedExecute
+    ExternalRecordTransitionOutput, ConfirmedTransaction, AcceptedDeploy, AcceptedExecute, RejectedExecute, \
+    FeeTransaction
 
 
 class UvicornServer(multiprocessing.Process):
@@ -219,7 +220,8 @@ async def block_route(request: Request):
                 t = {
                     "tx_id": tx.id,
                     "index": ct.index,
-                    "type": "AcceptedDeploy",
+                    "type": "Deploy",
+                    "state": "Accepted",
                     "transitions_count": 1,
                     "fee": fee,
                 }
@@ -239,8 +241,26 @@ async def block_route(request: Request):
                 t = {
                     "tx_id": tx.id,
                     "index": ct.index,
-                    "type": "AcceptedExecute",
+                    "type": "Execute",
+                    "state": "Accepted",
                     "transitions_count": len(tx.execution.transitions) + bool(tx.additional_fee.value is not None),
+                    "fee": fee,
+                }
+                txs.append(t)
+                total_fee += fee
+            case ConfirmedTransaction.Type.RejectedExecute:
+                ct: RejectedExecute
+                tx: Transaction = ct.transaction
+                if tx.type != Transaction.Type.Fee:
+                    raise HTTPException(status_code=550, detail="Invalid transaction type")
+                tx: FeeTransaction
+                fee = int(tx.fee.transition.inputs[1].plaintext.value.literal.primitive)
+                t = {
+                    "tx_id": tx.id,
+                    "index": ct.index,
+                    "type": "Execute",
+                    "state": "Rejected",
+                    "transitions_count": 1,
                     "fee": fee,
                 }
                 txs.append(t)
@@ -269,8 +289,10 @@ async def transaction_route(request: Request):
     if block is None:
         raise HTTPException(status_code=404, detail="Transaction not found")
 
-    transaction: DeployTransaction | ExecuteTransaction | None = None
+    transaction: DeployTransaction | ExecuteTransaction | FeeTransaction | None = None
     transaction_type = ""
+    transaction_state = ""
+    confirmed_transaction = None
     index = -1
     for ct in block.transactions:
         match ct.type:
@@ -278,8 +300,10 @@ async def transaction_route(request: Request):
                 ct: AcceptedDeploy
                 tx: Transaction = ct.transaction
                 tx: DeployTransaction
-                transaction_type = "AcceptedDeploy"
+                transaction_type = "Deploy"
+                transaction_state = "Accepted"
                 if str(tx.id) == tx_id:
+                    confirmed_transaction = ct
                     transaction = tx
                     index = ct.index
                     break
@@ -287,13 +311,26 @@ async def transaction_route(request: Request):
                 ct: AcceptedExecute
                 tx: Transaction = ct.transaction
                 tx: ExecuteTransaction
-                transaction_type = "AcceptedExecute"
+                transaction_type = "Execute"
+                transaction_state = "Accepted"
                 if str(tx.id) == tx_id:
+                    confirmed_transaction = ct
                     transaction = tx
                     index = ct.index
                     break
-            case _:
+            case ConfirmedTransaction.Type.RejectedDeploy:
                 raise HTTPException(status_code=550, detail="Unsupported transaction type")
+            case ConfirmedTransaction.Type.RejectedExecute:
+                ct: RejectedExecute
+                tx: Transaction = ct.transaction
+                tx: FeeTransaction
+                transaction_type = "Execute"
+                transaction_state = "Rejected"
+                if str(tx.id) == tx_id:
+                    confirmed_transaction = ct
+                    transaction = tx
+                    index = ct.index
+                    break
     if transaction is None:
         raise HTTPException(status_code=550, detail="Transaction not found in block")
 
@@ -305,6 +342,7 @@ async def transaction_route(request: Request):
         "index": index,
         "transaction": transaction,
         "type": transaction_type,
+        "state": transaction_state,
     }
 
     if transaction.type == Transaction.Type.Deploy:
@@ -342,17 +380,42 @@ async def transaction_route(request: Request):
         else:
             total_fee = 0
         ctx.update({
-            "request": request,
-            "tx_id": tx_id,
-            "tx_id_trunc": str(tx_id)[:12] + "..." + str(tx_id)[-6:],
-            "block": block,
-            "transaction": transaction,
-            "type": transaction_type,
             "global_state_root": global_state_root,
             "inclusion_proof": inclusion_proof,
             "total_fee": total_fee,
             "transitions": transitions,
         })
+    elif transaction.type == Transaction.Type.Fee:
+        transaction: FeeTransaction
+        global_state_root = transaction.fee.global_state_root
+        inclusion_proof = transaction.fee.inclusion_proof.value
+        transitions = []
+        rejected_transitions = []
+        transition = transaction.fee.transition
+        total_fee = int(transition.inputs[1].plaintext.value.literal.primitive)
+        transitions.append({
+            "transition_id": transition.id,
+            "action": await function_signature(str(transition.program_id), str(transition.function_name)),
+        })
+        if confirmed_transaction.type == ConfirmedTransaction.Type.RejectedExecute:
+            confirmed_transaction: RejectedExecute
+            for transition in confirmed_transaction.rejected.transitions:
+                transition: Transition
+                rejected_transitions.append({
+                    "transition_id": transition.id,
+                    "action": await function_signature(str(transition.program_id), str(transition.function_name)),
+                })
+        else:
+            raise HTTPException(status_code=550, detail="Unsupported transaction type")
+        ctx.update({
+            "global_state_root": global_state_root,
+            "inclusion_proof": inclusion_proof,
+            "inclusion_proof_trunc": str(inclusion_proof)[:30] + "..." + str(inclusion_proof)[-30:] if inclusion_proof else None,
+            "total_fee": total_fee,
+            "transitions": transitions,
+            "rejected_transitions": rejected_transitions,
+        })
+
     return templates.TemplateResponse('transaction.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'})
 
 
@@ -366,11 +429,13 @@ async def transition_route(request: Request):
 
     transaction_id = None
     transition = None
+    state = ""
     for ct in block.transactions:
         if ct.type == ConfirmedTransaction.Type.AcceptedDeploy:
             ct: AcceptedDeploy
             tx: Transaction = ct.transaction
             tx: DeployTransaction
+            state = "Accepted"
             if str(tx.fee.transition.id) == ts_id:
                 transition = tx.fee.transition
                 transaction_id = tx.id
@@ -379,6 +444,7 @@ async def transition_route(request: Request):
             ct: AcceptedExecute
             tx: Transaction = ct.transaction
             tx: ExecuteTransaction
+            state = "Accepted"
             for ts in tx.execution.transitions:
                 ts: Transition
                 if str(ts.id) == ts_id:
@@ -391,6 +457,22 @@ async def transition_route(request: Request):
                     transition = ts
                     transaction_id = tx.id
                     break
+        elif ct.type == ConfirmedTransaction.Type.RejectedExecute:
+            ct: RejectedExecute
+            tx: Transaction = ct.transaction
+            tx: FeeTransaction
+            if str(tx.fee.transition.id) == ts_id:
+                transition = tx.fee.transition
+                transaction_id = tx.id
+                state = "Accepted"
+            else:
+                for ts in ct.rejected.transitions:
+                    ts: Transition
+                    if str(ts.id) == ts_id:
+                        transition = ts
+                        transaction_id = tx.id
+                        state = "Rejected"
+                        break
     if transaction_id is None:
         raise HTTPException(status_code=550, detail="Transition not found in block")
 
@@ -493,11 +575,13 @@ async def transition_route(request: Request):
         "ts_id_trunc": str(ts_id)[:12] + "..." + str(ts_id)[-6:],
         "transaction_id": transaction_id,
         "transition": transition,
+        "state": state,
         "program_id": program_id,
         "function_name": function_name,
         "tpk": tpk,
         "tcm": tcm,
         "proof": proof,
+        "proof_trunc": str(proof)[:30] + "..." + str(proof)[-30:],
         "function_signature": await function_signature(str(transition.program_id), str(transition.function_name)),
         "function_definition": await function_definition(str(transition.program_id), str(transition.function_name)),
         "inputs": inputs,

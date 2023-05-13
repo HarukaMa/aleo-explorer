@@ -81,3 +81,7 @@
         </div>
     </div>
 {% endmacro %}
+
+{% macro state_label(state) %}
+    <span class="label {% if state == 'Accepted' %}success{% else %}alert{% endif %}">{{ state }}</span>
+{% endmacro %}

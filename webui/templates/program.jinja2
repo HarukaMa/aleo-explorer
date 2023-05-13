@@ -22,7 +22,7 @@
 
 {% endblock %}
 
-{% from "macros.jinja2" import data_line %}
+{% from "macros.jinja2" import data_line, state_label %}
 
 {% block content %}
 
@@ -137,6 +137,7 @@
                         <td>Timestamp</td>
                         <td>Transition ID</td>
                         <td>Function call</td>
+                        <td>State</td>
                     </tr>
                     </thead>
                     <tbody>
@@ -144,8 +145,9 @@
                         <tr>
                             <td><a href="/block?h={{ call.height }}">{{ call.height }}</a></td>
                             <td>{{ call.timestamp | format_time | safe }}</td>
-                            <td><a href="/transition?id={{ call.transition_id }}">{{ call.transition_id }}</a></td>
+                            <td><span class="mono"><a href="/transition?id={{ call.transition_id }}">{{ call.transition_id }}</a></span></td>
                             <td><span class="mono">{{ call.function_name }}</span></td>
+                            <td>{{ state_label(call.type.rstrip("Execute")) }}</td>
                         </tr>
                     {% endfor %}
                     </tbody>
