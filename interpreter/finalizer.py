@@ -42,7 +42,7 @@ def execute_finalizer(db: Database, program: Program, function_name: Identifier,
                 c: SetCommand
                 mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(c.mapping)))
                 key = load_plaintext_from_operand(c.key, registers)
-                value = load_plaintext_from_operand(c.value, registers)
+                value = PlaintextValue(plaintext=load_plaintext_from_operand(c.value, registers))
                 key_id = Field.loads(aleo.get_key_id(str(mapping_id), key.dump()))
                 value_id = Field.loads(aleo.get_value_id(str(key_id), value.dump()))
                 print(mapping_id)
