@@ -1,10 +1,10 @@
-import aleo
-
+from db import Database
 from node.types import *
 from .environment import Registers
+from .utils import load_plaintext_from_operand
 
 
-def execute_finalizer(program: Program, function_name: Identifier, inputs: [Plaintext], expected_operations: [FinalizeOperation]):
+def execute_finalizer(db: Database, program: Program, function_name: Identifier, inputs: [Plaintext], expected_operations: [FinalizeOperation]):
     registers = Registers()
     operations = {}
     function: Function = program.functions[function_name]
@@ -41,27 +41,11 @@ def execute_finalizer(program: Program, function_name: Identifier, inputs: [Plai
             case Command.Type.Set:
                 c: SetCommand
                 mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(c.mapping)))
-                match c.key.type:
-                    case Operand.Type.Literal:
-                        key = LiteralPlaintext(literal=c.key.literal)
-                    case Operand.Type.Register:
-                        register = c.key.register
-                        match register.type:
-                            case Register.Type.Locator:
-                                register: LocatorRegister
-                                key = registers[int(register.locator)]
-                            case Register.Type.Member:
-                                register: MemberRegister
-                                struct_: StructPlaintext = registers[int(register.locator)]
-                                if not isinstance(struct_, StructPlaintext):
-                                    raise TypeError("register is not struct")
-                                for i, identifier in enumerate(register.identifiers):
-                                    if i == len(register.identifiers) - 1:
-                                        key = struct_.members[identifier]
-                                    else:
-                                        struct_ = struct_.members[identifier]
-                    case _:
-                        raise NotImplementedError
-                key_id = Field.loads(aleo.get_key_id(str(mapping_id), str(c.key)))
-                value_id = Field.loads(aleo.get_value_id(str(key_id), str(c.value)))
-                print(mapping_id, key_id, value_id)
+                key = load_plaintext_from_operand(c.key, registers)
+                value = load_plaintext_from_operand(c.value, registers)
+                key_id = Field.loads(aleo.get_key_id(str(mapping_id), key.dump()))
+                value_id = Field.loads(aleo.get_value_id(str(key_id), value.dump()))
+                print(mapping_id)
+                print(key_id)
+                print(value_id)
+                print(f"{c.mapping}[{key}](index) = {value}")

@@ -64,7 +64,8 @@ CREATE TYPE explorer.finalize_value_type AS ENUM (
 
 CREATE TYPE explorer.transaction_type AS ENUM (
     'Deploy',
-    'Execute'
+    'Execute',
+    'Fee'
 );
 
 
@@ -493,6 +494,73 @@ CREATE TABLE explorer.leaderboard (
 CREATE TABLE explorer.leaderboard_total (
     total_credit numeric(20,0) DEFAULT 0 NOT NULL
 );
+
+
+--
+-- Name: mapping; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.mapping (
+    id integer NOT NULL,
+    mapping_id text NOT NULL,
+    program_id text NOT NULL,
+    mapping text NOT NULL
+);
+
+
+--
+-- Name: mapping_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.mapping_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: mapping_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.mapping_id_seq OWNED BY explorer.mapping.id;
+
+
+--
+-- Name: mapping_value; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.mapping_value (
+    id integer NOT NULL,
+    mapping_id integer NOT NULL,
+    index integer NOT NULL,
+    key_id text NOT NULL,
+    value_id text NOT NULL,
+    key bytea NOT NULL,
+    value bytea NOT NULL
+);
+
+
+--
+-- Name: mapping_value_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.mapping_value_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: mapping_value_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.mapping_value_id_seq OWNED BY explorer.mapping_value.id;
 
 
 --
@@ -1202,6 +1270,20 @@ ALTER TABLE ONLY explorer.finalize_operation_update_kv ALTER COLUMN id SET DEFAU
 
 
 --
+-- Name: mapping id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping ALTER COLUMN id SET DEFAULT nextval('explorer.mapping_id_seq'::regclass);
+
+
+--
+-- Name: mapping_value id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping_value ALTER COLUMN id SET DEFAULT nextval('explorer.mapping_value_id_seq'::regclass);
+
+
+--
 -- Name: partial_solution id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -1427,6 +1509,46 @@ ALTER TABLE ONLY explorer.finalize_operation_update_kv
 
 ALTER TABLE ONLY explorer.leaderboard
     ADD CONSTRAINT leaderboard_pk PRIMARY KEY (address);
+
+
+--
+-- Name: mapping mapping_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping
+    ADD CONSTRAINT mapping_pk PRIMARY KEY (id);
+
+
+--
+-- Name: mapping mapping_pk2; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping
+    ADD CONSTRAINT mapping_pk2 UNIQUE (mapping_id);
+
+
+--
+-- Name: mapping mapping_pk3; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping
+    ADD CONSTRAINT mapping_pk3 UNIQUE (program_id, mapping);
+
+
+--
+-- Name: mapping_value mapping_value_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping_value
+    ADD CONSTRAINT mapping_value_pk PRIMARY KEY (id);
+
+
+--
+-- Name: mapping_value mapping_value_pk2; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping_value
+    ADD CONSTRAINT mapping_value_pk2 UNIQUE (mapping_id, index);
 
 
 --
@@ -1748,6 +1870,13 @@ CREATE INDEX leaderboard_total_incentive_index ON explorer.leaderboard USING btr
 --
 
 CREATE INDEX leaderboard_total_reward_index ON explorer.leaderboard USING btree (total_reward);
+
+
+--
+-- Name: mapping_value_mapping_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX mapping_value_mapping_id_index ON explorer.mapping_value USING btree (mapping_id);
 
 
 --
