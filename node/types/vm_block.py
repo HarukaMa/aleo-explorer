@@ -1345,6 +1345,19 @@ class StructPlaintext(Plaintext):
             data[str(identifier)] = str(plaintext)
         return json.dumps(data).replace('"', '')
 
+    def get_member(self, identifier):
+        for member in self.members:
+            if member[0] == identifier:
+                return member[1]
+        raise ValueError("Identifier not found")
+
+    def set_member(self, identifier, plaintext):
+        for i, member in enumerate(self.members):
+            if member[0] == identifier:
+                self.members[i] = Tuple[Identifier, Plaintext]([identifier, plaintext])
+                return
+        raise ValueError("Identifier not found")
+
 
 class Owner(TypeParameter, Serialize, Deserialize):  # enum
 

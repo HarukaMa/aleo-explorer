@@ -1644,7 +1644,7 @@ class Database:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT index, key_id, value_id FROM mapping_value mv "
+                        "SELECT index, key_id, value_id, key, value FROM mapping_value mv "
                         "JOIN mapping m on mv.mapping_id = m.id "
                         "WHERE m.mapping_id = %s "
                         "ORDER BY index",

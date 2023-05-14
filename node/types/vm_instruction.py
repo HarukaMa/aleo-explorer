@@ -69,6 +69,24 @@ class Literal(Serialize, Deserialize): # enum
         Type.String: StringType,
     }
 
+    reverse_primitive_type_map = {
+        Group: Type.Group,
+        bool_: Type.Boolean,
+        Field: Type.Field,
+        i8: Type.I8,
+        i16: Type.I16,
+        i32: Type.I32,
+        i64: Type.I64,
+        i128: Type.I128,
+        u8: Type.U8,
+        u16: Type.U16,
+        u32: Type.U32,
+        u64: Type.U64,
+        u128: Type.U128,
+        Scalar: Type.Scalar,
+        StringType: Type.String,
+    }
+
     # @type_check
     def __init__(self, *, type_: Type, primitive: Serialize):
         self.type = type_
