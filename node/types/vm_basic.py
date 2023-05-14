@@ -197,6 +197,9 @@ class Field(Serialize, Deserialize):
             return False
         return self.data == other.data
 
+    def __hash__(self):
+        return hash(self.data)
+
 
 class Group(Serialize, Deserialize):
     # This is definitely wrong, but we are not using the internals

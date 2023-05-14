@@ -196,7 +196,6 @@ class Database:
 
                         confirmed_transaction: ConfirmedTransaction
                         for confirmed_transaction in block.transactions:
-                            # noinspection PyUnresolvedReferences
                             await cur.execute(
                                 "INSERT INTO confirmed_transaction (block_id, index, type) VALUES (%s, %s, %s) RETURNING id",
                                 (block_db_id, confirmed_transaction.index, confirmed_transaction.type.name)
@@ -391,7 +390,7 @@ class Database:
                                                 (finalize_operation_db_id, str(finalize_operation.mapping_id))
                                             )
 
-                        if block.coinbase.value is not None:
+                        if block.coinbase.value is not None and not os.environ.get("DEBUG_SKIP_COINBASE"):
                             coinbase_reward = block.get_coinbase_reward((await self.get_latest_block()).header.metadata.last_coinbase_timestamp)
                             await cur.execute(
                                 "UPDATE block SET coinbase_reward = %s WHERE id = %s",
@@ -1627,6 +1626,84 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
+
+    async def get_program(self, program_id: str) -> bytes:
+        conn: psycopg.AsyncConnection
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute("SELECT raw_data FROM program WHERE program_id = %s", (program_id,))
+                    return (await cur.fetchone())['raw_data']
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def get_mapping_cache(self, mapping_id: str) -> list:
+        conn: psycopg.AsyncConnection
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT index, key_id, value_id FROM mapping_value mv "
+                        "JOIN mapping m on mv.mapping_id = m.id "
+                        "WHERE m.mapping_id = %s "
+                        "ORDER BY index",
+                        (mapping_id,)
+                    )
+                    return await cur.fetchall()
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def initialize_mapping(self, mapping_id: str, program_id: str, mapping: str):
+        conn: psycopg.AsyncConnection
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    async with conn.transaction():
+                        await cur.execute(
+                            "INSERT INTO mapping (mapping_id, program_id, mapping) VALUES (%s, %s, %s)",
+                            (mapping_id, program_id, mapping)
+                        )
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def update_mapping_key_value(self, mapping_id: str, index: int, key_id: str, value_id: str,
+                                        key: bytes, value: bytes):
+        conn: psycopg.AsyncConnection
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    async with conn.transaction():
+                        await cur.execute("SELECT id FROM mapping WHERE mapping_id = %s", (mapping_id,))
+                        mapping = await cur.fetchone()
+                        if mapping is None:
+                            raise ValueError(f"Mapping {mapping_id} not found")
+                        mapping_id = mapping['id']
+                        await cur.execute(
+                            "SELECT key_id FROM mapping_value WHERE mapping_id = %s AND index = %s",
+                            (mapping_id, index)
+                        )
+                        if (res := await cur.fetchone()) is None:
+                            await cur.execute(
+                                "INSERT INTO mapping_value (mapping_id, index, key_id, value_id, key, value) "
+                                "VALUES (%s, %s, %s, %s, %s, %s)",
+                                (mapping_id, index, key_id, value_id, key, value)
+                            )
+                        else:
+                            if res["key_id"] != key_id:
+                                raise ValueError(f"Key id mismatch: {res['key_id']} != {key_id}")
+                            await cur.execute(
+                                "UPDATE mapping_value SET value_id = %s, value = %s "
+                                "WHERE mapping_id = %s AND index = %s",
+                                (value_id, value, mapping_id, index)
+                            )
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+                
+                
     async def get_program_leo_source_code(self, program_id: str) -> str | None:
         conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
@@ -1689,6 +1766,7 @@ class Database:
         async with self.pool.connection() as conn:
             try:
                 await conn.execute("TRUNCATE TABLE block RESTART IDENTITY CASCADE")
+                await conn.execute("TRUNCATE TABLE mapping RESTART IDENTITY CASCADE")
             except Exception as e:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
