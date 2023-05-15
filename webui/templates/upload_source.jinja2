@@ -8,6 +8,7 @@
 
         textarea {
             font-family: monospace;
+            height: 400px;
         }
 
     </style>
@@ -37,7 +38,7 @@
             </div>
         {% endif %}
         <form action="/submit_source" method="post">
-            <label>Leo source code (<span class="mono">{{ program_id }}.leo</span>)
+            <label>Leo source code (<span class="mono">main.leo</span>):
                 <textarea name="source">{{ source }}</textarea>
             </label>
             <input type="hidden" name="id" value="{{ program_id }}">
