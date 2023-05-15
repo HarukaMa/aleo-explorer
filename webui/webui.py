@@ -11,7 +11,6 @@ from starlette.responses import FileResponse
 from starlette.routing import Route, Mount
 from starlette.staticfiles import StaticFiles
 
-from db import Database
 # from node.light_node import LightNodeState
 from .chain_routes import *
 from .error_routes import *
@@ -35,7 +34,7 @@ class UvicornServer(multiprocessing.Process):
         self.server.run()
 
 async def index_route(request: Request):
-    db = request.app.state.db
+    db: Database = request.app.state.db
     recent_blocks = await db.get_recent_blocks_fast()
     network_speed = await db.get_network_speed()
     maintenance, info = await out_of_sync_check(db)
@@ -79,6 +78,8 @@ routes = [
     Route("/programs", programs_route),
     Route("/program", program_route),
     Route("/similar_programs", similar_programs_route),
+    Route("/upload_source", upload_source_route, methods=["GET", "POST"]),
+    Route("/submit_source", submit_source_route, methods=["POST"]),
     # Proving
     Route("/calc", calc_route),
     Route("/leaderboard", leaderboard_route),

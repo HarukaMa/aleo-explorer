@@ -1,15 +1,18 @@
+import aleo
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
+from starlette.responses import RedirectResponse
 
 import disasm.aleo
+from db import Database
 from node.types import Transaction, DeployTransaction, Deployment, Program, \
-    ConfirmedTransaction, AcceptedDeploy
+    ConfirmedTransaction, AcceptedDeploy, Import
 from .template import templates
 from .utils import function_signature, out_of_sync_check
 
 
 async def programs_route(request: Request):
-    db = request.app.state.db
+    db: Database = request.app.state.db
     try:
         page = request.query_params.get("p")
         if page is None:
@@ -44,7 +47,7 @@ async def programs_route(request: Request):
 
 
 async def program_route(request: Request):
-    db = request.app.state.db
+    db: Database = request.app.state.db
     program_id = request.query_params.get("id")
     if program_id is None:
         raise HTTPException(status_code=400, detail="Missing program id")
@@ -67,6 +70,13 @@ async def program_route(request: Request):
     functions = []
     for f in program.functions.keys():
         functions.append((await function_signature(db, str(program.id), str(f))).split("/", 1)[-1])
+    leo_source = await db.get_program_leo_source_code(program_id)
+    if leo_source is not None:
+        source = leo_source
+        has_leo_source = True
+    else:
+        source = disasm.aleo.disassemble_program(program)
+        has_leo_source = False
     ctx = {
         "request": request,
         "program_id": str(program.id),
@@ -80,7 +90,8 @@ async def program_route(request: Request):
         "records": list(map(str, program.records.keys())),
         "closures": list(map(str, program.closures.keys())),
         "functions": functions,
-        "source": disasm.aleo.disassemble_program(program),
+        "source": source,
+        "has_leo_source": has_leo_source,
         "recent_calls": await db.get_program_calls(program_id, 0, 30),
         "similar_count": await db.get_program_similar_count(program_id),
     }
@@ -88,7 +99,7 @@ async def program_route(request: Request):
 
 
 async def similar_programs_route(request: Request):
-    db = request.app.state.db
+    db: Database = request.app.state.db
     try:
         page = request.query_params.get("p")
         if page is None:
@@ -122,3 +133,59 @@ async def similar_programs_route(request: Request):
     }
     return templates.TemplateResponse('similar_programs.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
 
+
+async def upload_source_route(request: Request):
+    db: Database = request.app.state.db
+    program_id = request.query_params.get("id")
+    if program_id is None:
+        raise HTTPException(status_code=400, detail="Missing program id")
+    program = await db.get_program_bytes(program_id)
+    if program is None:
+        raise HTTPException(status_code=404, detail="Program not found")
+    if request.method == "POST":
+        form = await request.form()
+        source = form.get("source")
+    else:
+        source = ""
+    if (await db.get_program_leo_source_code(program_id)) is not None:
+        has_leo_source = True
+        has_imports = None
+    else:
+        has_leo_source = False
+        program = Program.load(bytearray(program))
+        has_imports = False
+        for i in program.imports:
+            i: Import
+            if str(i.program_id) != "credits.aleo":
+                has_imports = True
+                break
+    message = request.query_params.get("message")
+    ctx = {
+        "request": request,
+        "program_id": program_id,
+        "has_imports": has_imports,
+        "has_leo_source": has_leo_source,
+        "message": message,
+        "source": source,
+    }
+    return templates.TemplateResponse('upload_source.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
+
+async def submit_source_route(request: Request):
+    db: Database = request.app.state.db
+    form = await request.form()
+    program_id = form.get("id")
+    if program_id is None:
+        return RedirectResponse(url=f"/upload_source?id={program_id}&message=Missing program id")
+    program = await db.get_program_bytes(program_id)
+    if program is None:
+        return RedirectResponse(url=f"/upload_source?id={program_id}&message=Program not found")
+    source = form.get("source")
+    if source is None:
+        return RedirectResponse(url=f"/upload_source?id={program_id}&message=Missing source code")
+    try:
+        compiled = aleo.compile_program(source, program_id.split(".")[0])
+    except RuntimeError as e:
+        return RedirectResponse(url=f"/upload_source?id={program_id}&message=Failed to compile source code: {e}")
+    print(program)
+    print(compiled)
+    return RedirectResponse(url=f"/upload_source?id={program_id}&message=Test")

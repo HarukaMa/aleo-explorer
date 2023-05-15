@@ -2,6 +2,7 @@ from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
 
+from db import Database
 from node.types import u32, Transaction, Transition, ExecuteTransaction, TransitionInput, PrivateTransitionInput, \
     RecordTransitionInput, TransitionOutput, RecordTransitionOutput, Record, DeployTransaction, Deployment, Program, \
     PublicTransitionInput, \
@@ -13,7 +14,7 @@ from .utils import function_signature, out_of_sync_check, function_definition
 
 
 async def block_route(request: Request):
-    db = request.app.state.db
+    db: Database = request.app.state.db
     height = request.query_params.get("h")
     block_hash = request.query_params.get("bh")
     if height is None and block_hash is None:
@@ -123,7 +124,7 @@ async def block_route(request: Request):
 
 
 async def transaction_route(request: Request):
-    db = request.app.state.db
+    db: Database = request.app.state.db
     tx_id = request.query_params.get("id")
     if tx_id is None:
         raise HTTPException(status_code=400, detail="Missing transaction id")
@@ -265,7 +266,7 @@ async def transaction_route(request: Request):
 
 
 async def transition_route(request: Request):
-    db = request.app.state.db
+    db: Database = request.app.state.db
     ts_id = request.query_params.get("id")
     if ts_id is None:
         raise HTTPException(status_code=400, detail="Missing transition id")
@@ -438,7 +439,7 @@ async def transition_route(request: Request):
 
 
 async def search_route(request: Request):
-    db = request.app.state.db
+    db: Database = request.app.state.db
     query = request.query_params.get("q")
     if query is None:
         raise HTTPException(status_code=400, detail="Missing query")
@@ -548,7 +549,7 @@ async def search_route(request: Request):
 
 
 async def blocks_route(request: Request):
-    db = request.app.state.db
+    db: Database = request.app.state.db
     try:
         page = request.query_params.get("p")
         if page is None:

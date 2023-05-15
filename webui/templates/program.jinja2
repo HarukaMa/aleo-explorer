@@ -27,7 +27,7 @@
 
 {% endblock %}
 
-{% from "macros.jinja2" import data_line, state_label %}
+{% from "macros.jinja2" import data_line, data_line_safe, state_label %}
 
 {% block content %}
 
@@ -128,9 +128,15 @@
                 {% endfor %}
                 </span>
                 {% endcall %}
-                {% call data_line("Source code (Aleo instructions)") %}
-                    <pre>{{ source }}</pre>
-                {% endcall %}
+                {% if has_leo_source %}
+                    {% call data_line("Source code (Leo)") %}
+                        <pre>{{ source }}</pre>
+                    {% endcall %}
+                {% else %}
+                    {% call data_line_safe('Source code (Aleo instructions)<br><a href="/upload_source?id=' + program_id + '">Upload Leo source</a>') %}
+                        <pre>{{ source }}</pre>
+                    {% endcall %}
+                {% endif %}
             </div>
 
             <div id="transitions">

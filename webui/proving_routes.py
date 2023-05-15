@@ -3,13 +3,14 @@ import time
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
 
+from db import Database
 from node.types import Transaction, ConfirmedTransaction
 from .template import templates
 from .utils import out_of_sync_check
 
 
 async def calc_route(request: Request):
-    db = request.app.state.db
+    db: Database = request.app.state.db
     proof_target = (await db.get_latest_block()).header.metadata.proof_target
     ctx = {
         "request": request,
@@ -20,7 +21,7 @@ async def calc_route(request: Request):
 
 
 async def leaderboard_route(request: Request):
-    db = request.app.state.db
+    db: Database = request.app.state.db
     try:
         page = request.query_params.get("p")
         if page is None:
@@ -63,7 +64,7 @@ async def leaderboard_route(request: Request):
 
 
 async def address_route(request: Request):
-    db = request.app.state.db
+    db: Database = request.app.state.db
     address = request.query_params.get("a")
     if address is None:
         raise HTTPException(status_code=400, detail="Missing address")
@@ -139,7 +140,7 @@ async def address_route(request: Request):
 
 
 async def address_solution_route(request: Request):
-    db = request.app.state.db
+    db: Database = request.app.state.db
     address = request.query_params.get("a")
     if address is None:
         raise HTTPException(status_code=400, detail="Missing address")

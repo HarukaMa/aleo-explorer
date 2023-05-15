@@ -18,6 +18,33 @@
 
 <div class="content">
 
+    <div class="header">
+        <h3>Upload source code for program {{ program_id }}</h3>
+    </div>
+
+    {% if has_leo_source %}
+        <div class="callout warning">
+            The source code has already been uploaded for this program.
+        </div>
+    {% elif has_imports %}
+        <div class="callout warning">
+           Programs with imports other than <span class="mono">credits.aleo</span> are not supported yet.
+        </div>
+    {% else %}
+        {% if message %}
+            <div class="callout warning">
+                {{ message }}
+            </div>
+        {% endif %}
+        <form action="/submit_source" method="post">
+            <label>Leo source code (<span class="mono">{{ program_id }}.leo</span>)
+                <textarea name="source">{{ source }}</textarea>
+            </label>
+            <input type="hidden" name="id" value="{{ program_id }}">
+            <button type="submit" class="button">Submit</button>
+        </form>
+    {% endif %}
+
 </div>
 
 {% endblock %}

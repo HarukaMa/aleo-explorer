@@ -196,6 +196,7 @@ class Database:
 
                         confirmed_transaction: ConfirmedTransaction
                         for confirmed_transaction in block.transactions:
+                            # noinspection PyUnresolvedReferences
                             await cur.execute(
                                 "INSERT INTO confirmed_transaction (block_id, index, type) VALUES (%s, %s, %s) RETURNING id",
                                 (block_db_id, confirmed_transaction.index, confirmed_transaction.type.name)
@@ -586,6 +587,7 @@ class Database:
                         if transition_output_record["record_ciphertext"] is None:
                             record_ciphertext = None
                         else:
+                            # noinspection PyArgumentList
                             record_ciphertext = Record[Ciphertext].loads(transition_output_record["record_ciphertext"])
                         tos.append((RecordTransitionOutput(
                             commitment=Field.loads(transition_output_record["commitment"]),
@@ -632,6 +634,7 @@ class Database:
                                 (transition_finalize["id"],)
                             )
                             transition_finalize_record = await cur.fetchone()
+                            # noinspection PyArgumentList
                             finalize.append((RecordValue(
                                 record=Record[Plaintext].loads(transition_finalize_record["record"])
                             ), transition_finalize["index"]))
@@ -1021,11 +1024,14 @@ class Database:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
+    # noinspection PyUnusedLocal
     async def get_validator_from_block_hash(self, block_hash: BlockHash) -> Address | None:
         raise NotImplementedError
+        # noinspection PyUnreachableCode
         conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             try:
+                # noinspection PyUnresolvedReferences,SqlResolve
                 return await conn.fetchval(
                     "SELECT owner "
                     "FROM explorer.record r "
@@ -1610,10 +1616,45 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
+    async def get_program_bytes(self, program_id: str) -> bytes:
+        conn: psycopg.AsyncConnection
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute("SELECT raw_data FROM program WHERE program_id = %s", (program_id,))
+                    return (await cur.fetchone())['raw_data']
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def get_program_leo_source_code(self, program_id: str) -> str | None:
+        conn: psycopg.AsyncConnection
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute("SELECT leo_source FROM program WHERE program_id = %s", (program_id,))
+                    return (await cur.fetchone())['leo_source']
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def store_program_leo_source_code(self, program_id: str, source_code: str):
+        conn: psycopg.AsyncConnection
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "UPDATE program SET leo_source = %s WHERE program_id = %s", (source_code, program_id)
+                    )
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
     # migration methods
     async def migrate(self):
         migrations = [
             (1, self.migrate_1_add_fee_transaction_type),
+            (2, self.migrate_2_program_add_leo_source_column),
         ]
         conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
@@ -1635,6 +1676,12 @@ class Database:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 await cur.execute("ALTER TYPE explorer.transaction_type ADD VALUE 'Fee' AFTER 'Execute'")
+
+    async def migrate_2_program_add_leo_source_column(self):
+        conn: psycopg.AsyncConnection
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("ALTER TABLE explorer.program ADD leo_source TEXT")
 
     # debug method
     async def clear_database(self):
