@@ -180,10 +180,10 @@ async def submit_source_route(request: Request):
     if program is None:
         return RedirectResponse(url=f"/upload_source?id={program_id}&message=Program not found")
     source = form.get("source")
-    if source is None:
+    if source is None or source == "":
         return RedirectResponse(url=f"/upload_source?id={program_id}&message=Missing source code")
     try:
-        compiled = aleo.compile_program(source, program_id.split(".")[0])
+        compiled = bytes(aleo.compile_program(source, program_id.split(".")[0]))
     except RuntimeError as e:
         return RedirectResponse(url=f"/upload_source?id={program_id}&message=Failed to compile source code: {e}")
     print(program)
