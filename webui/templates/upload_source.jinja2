@@ -11,6 +11,10 @@
             height: 400px;
         }
 
+        .mono-only {
+            font-family: monospace;
+        }
+
     </style>
 
 {% endblock %}
@@ -20,7 +24,7 @@
 <div class="content">
 
     <div class="header">
-        <h3>Upload source code for program <span class="mono">{{ program_id }}</span></h3>
+        <h3>Upload source code for program <span class="mono-only">{{ program_id }}</span></h3>
     </div>
 
     {% if has_leo_source %}
