@@ -1788,6 +1788,11 @@ class Database:
                 )
                 await cur.execute("create unique index mapping_value_pk2 on mapping_value using btree (mapping_id, index)")
                 await cur.execute("create index mapping_value_mapping_id_index on mapping_value using btree (mapping_id)")
+                await cur.execute(
+                    "alter table explorer.mapping_value "
+                    "add constraint mapping_value_mapping_id_fk "
+                    "foreign key (mapping_id) references explorer.mapping"
+                )
 
 
     # debug method

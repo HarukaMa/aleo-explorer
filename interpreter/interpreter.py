@@ -34,6 +34,15 @@ async def finalize_block(db: Database, block: Block):
                 transition: Transition
                 finalize: Vec[Value, u8] = transition.finalize.value
                 if finalize is not None:
+                    # temp ignore to avoid bug
+                    calls = await db.get_program_calls(str(transition.program_id), 0, 2 ** 32)
+                    stop = False
+                    for call in calls:
+                        if call["type"] not in [ConfirmedTransaction.Type.AcceptedDeploy.name, ConfirmedTransaction.Type.AcceptedExecute.name]:
+                            stop = True
+                            break
+                    if stop:
+                        continue
                     program = Program.load(bytearray(await db.get_program(str(transition.program_id))))
                     inputs = list(map(lambda x: x.plaintext, finalize))
                     operations.extend(
@@ -53,7 +62,7 @@ async def finalize_block(db: Database, block: Block):
                 case FinalizeOperation.Type.InitializeMapping:
                     pass
                 case FinalizeOperation.Type.UpdateKeyValue:
-                    if e.mapping_id != o["mapping_id"] or e.index != o["index"] or e.key_id != o["key_id"] or e.value_id != o["value_id"]:
+                    if e.index != o["index"] or e.key_id != o["key_id"] or e.value_id != o["value_id"]:
                         raise TypeError("invalid finalize operation")
                 case _:
                     raise NotImplementedError
