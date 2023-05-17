@@ -1,3 +1,4 @@
+import os
 import time
 
 import psycopg
@@ -1732,6 +1733,7 @@ class Database:
         migrations = [
             (1, self.migrate_1_add_fee_transaction_type),
             (2, self.migrate_2_program_add_leo_source_column),
+            (3, self.migrate_3_add_mapping_tables),
         ]
         conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
@@ -1759,6 +1761,34 @@ class Database:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 await cur.execute("ALTER TABLE explorer.program ADD leo_source TEXT")
+
+    async def migrate_3_add_mapping_tables(self):
+        conn: psycopg.AsyncConnection
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "create table explorer.mapping ( "
+                    "id serial primary key not null, "
+                    "mapping_id text not null, "
+                    "program_id text not null, "
+                    "mapping text not null )"
+                )
+                await cur.execute("create unique index mapping_pk2 on mapping using btree (mapping_id)")
+                await cur.execute("create unique index mapping_pk3 on mapping using btree (program_id, mapping)")
+                await cur.execute(
+                    "create table explorer.mapping_value ( " 
+                    "id serial primary key not null, "
+                    "mapping_id integer not null, "
+                    "index integer not null, "
+                    "key_id text not null, "
+                    "value_id text not null, "
+                    "key bytea not null, "
+                    "value bytea not null "
+                    ")"
+                )
+                await cur.execute("create unique index mapping_value_pk2 on mapping_value using btree (mapping_id, index)")
+                await cur.execute("create index mapping_value_mapping_id_index on mapping_value using btree (mapping_id)")
+
 
     # debug method
     async def clear_database(self):
