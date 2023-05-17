@@ -17,7 +17,11 @@ def execute_instruction(instruction: Instruction, program: Program, registers: R
     elif isinstance(literals, Call):
         raise NotImplementedError
     elif isinstance(literals, AssertInstruction):
-        raise NotImplementedError
+        variant = literals.variant
+        if variant == 0:
+            AssertEq(literals.operands, registers)
+        elif variant == 1:
+            AssertNeq(literals.operands, registers)
     else:
         raise NotImplementedError
 
@@ -51,15 +55,12 @@ def Add(operands: [Operand], destination: Register, registers: Registers):
     op2_type = Literal.primitive_type_map[op2.literal.type]
     if not (op1_type, op2_type) in allowed_types:
         raise TypeError("invalid operand types")
-    if isinstance(op1.literal.primitive, int) and isinstance(op2.literal.primitive, int):
-        res = LiteralPlaintext(
-            literal=Literal(
-                type_=Literal.reverse_primitive_type_map[op1_type],
-                primitive=op1_type(op1.literal.primitive + op2.literal.primitive)
-            )
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=Literal.reverse_primitive_type_map[op1_type],
+            primitive=op1.literal.primitive + op2.literal.primitive
         )
-    else:
-        raise NotImplementedError
+    )
     store_plaintext_to_register(res, destination, registers)
 
 def AddWrapped(operands: [Operand], destination: Register, registers: Registers):
@@ -68,11 +69,21 @@ def AddWrapped(operands: [Operand], destination: Register, registers: Registers)
 def And(operands: [Operand], destination: Register, registers: Registers):
     raise NotImplementedError
 
-def AssertEq(operands: [Operand], destination: Register, registers: Registers):
-    raise NotImplementedError
+def AssertEq(operands: [Operand], registers: Registers):
+    if len(operands) != 2:
+        raise RuntimeError("invalid number of operands")
+    op1 = load_plaintext_from_operand(operands[0], registers)
+    op2 = load_plaintext_from_operand(operands[1], registers)
+    if op1 != op2:
+        raise RuntimeError("assertion failed")
 
-def AssertNeq(operands: [Operand], destination: Register, registers: Registers):
-    raise NotImplementedError
+def AssertNeq(operands: [Operand], registers: Registers):
+    if len(operands) != 2:
+        raise RuntimeError("invalid number of operands")
+    op1 = load_plaintext_from_operand(operands[0], registers)
+    op2 = load_plaintext_from_operand(operands[1], registers)
+    if op1 == op2:
+        raise RuntimeError("assertion failed")
 
 def CallOp(operands: [Operand], destination: Register, registers: Registers):
     raise NotImplementedError
@@ -155,7 +166,14 @@ def GreaterThanOrEqual(operands: [Operand], destination: Register, registers: Re
     raise NotImplementedError
 
 def HashBHP256(operands: [Operand], destination: Register, registers: Registers):
-    raise NotImplementedError
+    op = load_plaintext_from_operand(operands[0], registers)
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=Literal.Type.Field,
+            primitive=Field.load(bytearray(aleo.hash_bhp256(PlaintextValue(plaintext=op).dump())))
+        )
+    )
+    store_plaintext_to_register(res, destination, registers)
 
 def HashBHP512(operands: [Operand], destination: Register, registers: Registers):
     raise NotImplementedError
@@ -251,7 +269,36 @@ def SquareRoot(operands: [Operand], destination: Register, registers: Registers)
     raise NotImplementedError
 
 def Sub(operands: [Operand], destination: Register, registers: Registers):
-    raise NotImplementedError
+    allowed_types = [
+        (Field, Field),
+        (Group, Group),
+        (i8, i8),
+        (i16, i16),
+        (i32, i32),
+        (i64, i64),
+        (i128, i128),
+        (u8, u8),
+        (u16, u16),
+        (u32, u32),
+        (u64, u64),
+        (u128, u128),
+        (Scalar, Scalar),
+    ]
+    op1 = load_plaintext_from_operand(operands[0], registers)
+    op2 = load_plaintext_from_operand(operands[1], registers)
+    if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
+        raise TypeError("operands must be literals")
+    op1_type = Literal.primitive_type_map[op1.literal.type]
+    op2_type = Literal.primitive_type_map[op2.literal.type]
+    if not (op1_type, op2_type) in allowed_types:
+        raise TypeError("invalid operand types")
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=Literal.reverse_primitive_type_map[op1_type],
+            primitive=op1.literal.primitive - op2.literal.primitive
+        )
+    )
+    store_plaintext_to_register(res, destination, registers)
 
 def SubWrapped(operands: [Operand], destination: Register, registers: Registers):
     raise NotImplementedError

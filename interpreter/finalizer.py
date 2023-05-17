@@ -59,11 +59,12 @@ async def execute_finalizer(db: Database, program: Program, function_name: Ident
             case Command.Type.Instruction:
                 c: InstructionCommand
                 instruction: Instruction = c.instruction
-                execute_instruction(instruction, program, registers)
                 print(disasm_instruction(instruction))
+                execute_instruction(instruction, program, registers)
                 registers.dump()
 
             case Command.Type.Get | Command.Type.GetOrInit:
+                print(disasm_command(c))
                 if c.type == Command.Type.Get:
                     c: GetCommand
                 else:
@@ -94,10 +95,10 @@ async def execute_finalizer(db: Database, program: Program, function_name: Ident
                 value = mapping_cache[mapping_id][index][3]
                 destination: Register = c.destination
                 store_plaintext_to_register(value.plaintext, destination, registers)
-                print(disasm_command(c))
                 registers.dump()
 
             case Command.Type.Set:
+                print(disasm_command(c))
                 c: SetCommand
                 mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(c.mapping)))
                 if mapping_id not in mapping_cache:
@@ -124,7 +125,6 @@ async def execute_finalizer(db: Database, program: Program, function_name: Ident
                     "key": key,
                     "value": value,
                 })
-                print(disasm_command(c))
                 registers.dump()
 
     return operations

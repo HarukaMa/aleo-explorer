@@ -1,5 +1,4 @@
 import socket
-from decimal import Decimal
 
 from .traits import *
 
@@ -23,12 +22,8 @@ class Bech32m:
 
 class u8(Int):
     size = 1
-
-    def __init__(self, value=0):
-        if not isinstance(value, int):
-            raise TypeError("value must be int")
-        if value < 0 or value > 255:
-            raise ValueError("value must be between 0 and 255")
+    min = 0
+    max = 255
 
     def dump(self) -> bytes:
         return struct.pack("<B", self)
@@ -43,12 +38,8 @@ class u8(Int):
 
 class u16(Int):
     size = 2
-
-    def __init__(self, value=0):
-        if not isinstance(value, int):
-            raise TypeError("value must be int")
-        if value < 0 or value > 65535:
-            raise ValueError("value must be between 0 and 65535")
+    min = 0
+    max = 65535
 
     def dump(self) -> bytes:
         return struct.pack("<H", self)
@@ -63,12 +54,8 @@ class u16(Int):
 
 class u32(Int):
     size = 4
-
-    def __init__(self, value=0):
-        if not isinstance(value, int):
-            raise TypeError("value must be int")
-        if value < 0 or value > 4294967295:
-            raise ValueError("value must be between 0 and 4294967295")
+    min = 0
+    max = 4294967295
 
     def dump(self) -> bytes:
         return struct.pack("<I", self)
@@ -83,14 +70,8 @@ class u32(Int):
 
 class u64(Int):
     size = 8
-
-    def __init__(self, value=0):
-        if not isinstance(value, (int, Decimal)):
-            raise TypeError("value must be int or Decimal")
-        if isinstance(value, Decimal):
-            value = int(value)
-        if value < 0 or value > 18446744073709551615:
-            raise ValueError("value must be between 0 and 18446744073709551615")
+    min = 0
+    max = 18446744073709551615
 
     def dump(self) -> bytes:
         return struct.pack("<Q", self)
@@ -107,14 +88,8 @@ usize = u64
 
 class u128(Int):
     size = 16
-
-    def __init__(self, value=0):
-        if not isinstance(value, (int, Decimal)):
-            raise TypeError("value must be int or Decimal")
-        if isinstance(value, Decimal):
-            value = int(value)
-        if value < 0 or value > 2 ** 128 - 1:
-            raise ValueError("value must be between 0 and 2 ** 128 - 1")
+    min = 0
+    max = 340282366920938463463374607431768211455
 
     def dump(self) -> bytes:
         return struct.pack("<QQ", self & 0xFFFF_FFFF_FFFF_FFFF, self >> 64)
@@ -130,12 +105,8 @@ class u128(Int):
 
 class i8(Int):
     size = 1
-
-    def __init__(self, value=0):
-        if not isinstance(value, int):
-            raise TypeError("value must be int")
-        if value < -128 or value > 127:
-            raise ValueError("value must be between -128 and 127")
+    min = -128
+    max = 127
 
     def dump(self) -> bytes:
         return struct.pack("<b", self)
@@ -150,12 +121,8 @@ class i8(Int):
 
 class i16(Int):
     size = 2
-
-    def __init__(self, value=0):
-        if not isinstance(value, int):
-            raise TypeError("value must be int")
-        if value < -32768 or value > 32767:
-            raise ValueError("value must be between -32768 and 32767")
+    min = -32768
+    max = 32767
 
     def dump(self) -> bytes:
         return struct.pack("<h", self)
@@ -170,12 +137,8 @@ class i16(Int):
 
 class i32(Int):
     size = 4
-
-    def __init__(self, value=0):
-        if not isinstance(value, int):
-            raise TypeError("value must be int")
-        if value < -2147483648 or value > 2147483647:
-            raise ValueError("value must be between -2147483648 and 2147483647")
+    min = -2147483648
+    max = 2147483647
 
     def dump(self) -> bytes:
         return struct.pack("<i", self)
@@ -190,12 +153,8 @@ class i32(Int):
 
 class i64(Int):
     size = 8
-
-    def __init__(self, value=0):
-        if not isinstance(value, int):
-            raise TypeError("value must be int")
-        if value < -9223372036854775808 or value > 9223372036854775807:
-            raise ValueError("value must be between -9223372036854775808 and 9223372036854775807")
+    min = -9223372036854775808
+    max = 9223372036854775807
 
     def dump(self) -> bytes:
         return struct.pack("<q", self)
@@ -210,12 +169,8 @@ class i64(Int):
 
 class i128(Int):
     size = 16
-
-    def __init__(self, value=0):
-        if not isinstance(value, int):
-            raise TypeError("value must be int")
-        if value < -170141183460469231731687303715884105728 or value > 170141183460469231731687303715884105727:
-            raise ValueError("value must be between -170141183460469231731687303715884105728 and 170141183460469231731687303715884105727")
+    min = -170141183460469231731687303715884105728
+    max = 170141183460469231731687303715884105727
 
     def dump(self) -> bytes:
         return struct.pack("<qq", self & 0xFFFF_FFFF_FFFF_FFFF, self >> 64)

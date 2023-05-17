@@ -1307,6 +1307,9 @@ class LiteralPlaintext(Plaintext):
     def __str__(self):
         return str(self.literal)
 
+    def __eq__(self, other):
+        return self.literal == other.literal
+
 
 class StructPlaintext(Plaintext):
     type = Plaintext.Type.Struct

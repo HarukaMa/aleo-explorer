@@ -110,6 +110,9 @@ class Literal(Serialize, Deserialize): # enum
         import disasm.aleo
         return disasm.aleo.disasm_literal(self)
 
+    def __eq__(self, other):
+        return self.type == other.type and self.primitive == other.primitive
+
 
 class Identifier(Serialize, Deserialize):
 
