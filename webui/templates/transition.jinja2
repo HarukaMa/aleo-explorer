@@ -65,7 +65,7 @@
         </div>
 
         <div class="data">
-            <a href="#" class="button primary" id="wallet-connect-button" style="display: none">Connect Wallet</a>
+            <a data-open="wallet-method" class="button primary" id="wallet-connect-button" style="display: none">Connect Wallet</a>
             <span id="wallet-connect-text"></span>
             <h4>Function call</h4>
             {% call data_line("Function signature") %}
@@ -170,11 +170,40 @@
         {% endfor %}
         </div>
 
+        <div class="reveal" id="wallet-method" data-reveal>
+            <h3>Choose connect method</h3>
+
+            <p>
+                As a temporary workaround, you can let the explorer acquire your address's view key in order to decrypt
+                inputs and outputs. This is inherently less secure as the key will leave the isolated environment of the
+                wallet. The explorer will not store the key nor send it to anywhere else; the view key will only be used
+                to decrypt the individual ciphertexts.
+            </p>
+            <p>
+                You can also connect the wallet in the normal and safe way, but currently you can only decrypt records.
+            </p>
+
+            <div class="button-group">
+                <button class="button primary" data-close id="wallet-connect-normal">Safe method</button>
+                <button class="button secondary" data-close id="wallet-connect-unsafe">Unsafe method</button>
+            </div>
+
+            <button class="close-button" data-close aria-label="Close reveal" type="button">
+                <span aria-hidden="true">&times;</span>
+            </button>
+        </div>
+
     </div>
 
     <script src="static/leo_wallet.js"></script>
-    <script>
+    <script type="module">
+        import {init, WASI} from 'https://cdn.jsdelivr.net/npm/@wasmer/wasi@1.2.2/+esm'
+
+        await init()
+
         const button = document.getElementById("wallet-connect-button")
+        const safe_buffon = document.getElementById("wallet-connect-normal")
+        const unsafe_buffon = document.getElementById("wallet-connect-unsafe")
         const text = document.getElementById("wallet-connect-text")
         let wallet = null
         if (window.LeoWallet !== undefined) {
@@ -184,11 +213,12 @@
             }
         }
 
-        button.addEventListener("click", connect)
+        safe_buffon.addEventListener("click", connect)
+        unsafe_buffon.addEventListener("click", connect_unsafe)
 
-        async function connect(e) {
-            e.preventDefault()
+        async function disconnect(e) {
             if (wallet.connected) {
+                e.stopPropagation()
                 await wallet.disconnect()
                 button.className = "button primary"
                 button.innerText = "Connect Wallet"
@@ -199,8 +229,40 @@
                     }
                 }
                 text.innerText = ""
-                return
+                button.removeEventListener("click", disconnect)
             }
+        }
+
+        async function connect_unsafe(e) {
+            e.preventDefault()
+            try {
+                await wallet.connect(window.AleoWalletBase.DecryptPermission.ViewKeyAccess, window.AleoWalletBase.WalletAdapterNetwork.Testnet)
+            } catch (e) {
+                button.className = "button alert"
+                button.innerText = "Connect failed"
+                text.innerText = e
+            }
+            if (wallet.connected) {
+                button.addEventListener("click", disconnect)
+                button.className = "button success"
+                const address = wallet.publicKey
+                button.innerHTML = `Connected to address <span class="mono">${address.substring(0, 9) + "..." + address.substring(address.length - 6)}</span>`
+                text.innerText = "Trying to decrypt all ciphertexts..."
+
+                const wasi = new WASI({})
+                const wasm = await fetch("static/decrypt.wasm")
+                const module = await WebAssembly.compileStreaming(wasm)
+                const imports = wasi.getImports(module)
+                const instance = await WebAssembly.instantiate(module, imports)
+                console.log(instance)
+
+            } else {
+                button.className = "button alert"
+            }
+        }
+
+        async function connect(e) {
+            e.preventDefault()
             try {
                 await wallet.connect(window.AleoWalletBase.DecryptPermission.AutoDecrypt, window.AleoWalletBase.WalletAdapterNetwork.Testnet)
             } catch (e) {
@@ -209,6 +271,7 @@
                 text.innerText = e
             }
             if (wallet.connected) {
+                button.addEventListener("click", disconnect)
                 button.className = "button success"
                 const address = wallet.publicKey
                 button.innerHTML = `Connected to address <span class="mono">${address.substring(0, 9) + "..." + address.substring(address.length - 6)}</span>`
