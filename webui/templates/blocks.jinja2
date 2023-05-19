@@ -39,13 +39,13 @@
                 <tbody>
                 {% for block in blocks %}
                     <tr>
-                        <td><a href="/block?h={{ block.height }}">{{ block.height }}</a></td>
+                        <td><a href="/block?h={{ block.height }}">{{ block.height | format_number | safe }}</a></td>
                         <td>{{ block.height // 256 }} <span class="note">{{ block.height % 256 }} / 256</span></td>
                         <td>{{ block.timestamp | format_time | safe }}</td>
                         <td>{{ block.transaction_count }}</td>
-                        <td>{{ block.proof_target }}</td>
-                        <td>{{ block.coinbase_target }}</td>
-                        <td>{% if block.coinbase_reward %}{{ ((block.coinbase_reward | int) // 2) | format_aleo_credit }}{% else %}-{% endif %}</td>
+                        <td>{{ block.proof_target | format_number | safe }}</td>
+                        <td>{{ block.coinbase_target | format_number | safe }}</td>
+                        <td>{% if block.coinbase_reward %}{{ ((block.coinbase_reward | int) // 2) | format_aleo_credit | safe }}{% else %}-{% endif %}</td>
                         <td>{% if block.coinbase_reward %}{{ block.partial_solution_count }}{% else %}-{% endif %}</td>
                         <td>-</td>
                     </tr>

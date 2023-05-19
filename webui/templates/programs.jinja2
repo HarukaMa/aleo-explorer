@@ -47,7 +47,7 @@
                 {% for program in programs %}
                     <tr>
                         <td><span class="mono"><a href="/program?id={{ program.program_id }}">{{ program.program_id }}</a></span></td>
-                        <td><a href="/block?h={{ program.height }}">{{ program.height }}</a></td>
+                        <td><a href="/block?h={{ program.height }}">{{ program.height | format_number | safe }}</a></td>
                         <td><span class="mono"><a href="/transaction?id={{ program.transaction_id }}">{{ program.transaction_id }}</a></span></td>
                         <td>{{ program.called }}</td>
                     </tr>

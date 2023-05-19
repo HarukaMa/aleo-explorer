@@ -46,7 +46,7 @@
                         <td>{{ solution.timestamp | format_time | safe }}</td>
                         <td>{{ solution.nonce }}</td>
                         <td>{{ solution.target }}<span class="note"> / {{ solution.target_sum }}</span></td>
-                        <td>{{ solution.reward | format_aleo_credit }}</td>
+                        <td>{{ solution.reward | format_aleo_credit | safe }}</td>
                     </tr>
                 {% endfor %}
                 </tbody>

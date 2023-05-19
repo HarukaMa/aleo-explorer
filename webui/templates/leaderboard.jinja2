@@ -30,7 +30,7 @@
         <div class="callout warning">
             This leaderboard is unofficial. The data might be inaccurate.
         </div>
-        Testnet Aleo credits rewarded: {{ total_credit | format_aleo_credit }} / {{ target_credit | format_aleo_credit }}
+        Testnet Aleo credits rewarded: {{ total_credit | format_aleo_credit | safe }} / {{ target_credit | format_aleo_credit | safe }}
         <div class="primary progress" role="progressbar">
             <div class="progress-meter" style="width: {{ ratio }}%">
             {% if ratio > 5 %}
@@ -58,8 +58,8 @@
                     <tr>
                         <td>{{ loop.index + (page - 1) * 50 }}</td>
                         <td class="mono"><a href="/address?a={{ line.address }}">{{ line.address }}</a></td>
-                        <td>{{ line.total_incentive | format_aleo_credit }}</td>
-                        <td>{{ line.total_rewards | format_aleo_credit }}</td>
+                        <td>{{ line.total_incentive | format_aleo_credit | safe }}</td>
+                        <td>{{ line.total_rewards | format_aleo_credit | safe }}</td>
                     </tr>
                 {% endfor %}
                 </tbody>

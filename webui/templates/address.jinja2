@@ -37,10 +37,10 @@
             <span class="mono">{{ address }}</span>
         {% endcall %}
         {% call data_line_safe("Total incentive reward (<span data-tooltip title=\"Testnet3 credits earned during incentive period (since block 130888). Divide by 5 to get converted mainnet reward amount.\">?</span>)") %}
-            {{ total_incentive | format_aleo_credit }} (Mainnet reward: {{ (total_incentive // 5) | format_aleo_credit }})
+            {{ total_incentive | format_aleo_credit | safe }} (Mainnet reward: {{ (total_incentive // 5) | format_aleo_credit | safe }})
         {% endcall %}
         {% call data_line_safe("Total coinbase reward (<span data-tooltip title=\"Testnet3 credits earned since the start of the network.\">?</span>)") %}
-            {{ total_rewards | format_aleo_credit }}
+            {{ total_rewards | format_aleo_credit | safe }}
         {% endcall %}
         {% call data_line("Solutions found") %}
             {{ total_solutions }}
@@ -73,12 +73,12 @@
                 <tbody>
                 {% for solution in solutions %}
                     <tr>
-                        <td><a href="/block?h={{ solution.height }}">{{ solution.height }}</a></td>
+                        <td><a href="/block?h={{ solution.height }}">{{ solution.height | format_number | safe }}</a></td>
                         <td>{{ solution.height // 256 }}</td>
                         <td>{{ solution.timestamp | format_time | safe }}</td>
                         <td>{{ solution.nonce }}</td>
-                        <td>{{ solution.target }}<span class="note"> / {{ solution.target_sum }}</span></td>
-                        <td>{{ solution.reward | format_aleo_credit }}</td>
+                        <td>{{ solution.target | format_number | safe }}<span class="note"> / {{ solution.target_sum | format_number | safe }}</span></td>
+                        <td>{{ solution.reward | format_aleo_credit | safe }}</td>
                     </tr>
                 {% endfor %}
                 </tbody>
@@ -103,7 +103,7 @@
                 {% for program in programs %}
                     <tr>
                         <td><a href="/program?id={{ program.program_id }}">{{ program.program_id }}</a></td>
-                        <td><a href="/block?h={{ program.height }}">{{ program.height }}</a></td>
+                        <td><a href="/block?h={{ program.height }}">{{ program.height | format_number | safe }}</a></td>
                         <td>{{ program.timestamp | format_time | safe }}</td>
                         <td><a href="/transaction?id={{ program.transaction_id }}">{{ program.transaction_id }}</a></td>
                     </tr>

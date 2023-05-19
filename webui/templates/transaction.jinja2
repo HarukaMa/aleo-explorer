@@ -36,7 +36,7 @@
                 <span class="mono">{{ tx_id }}</span>
             {% endcall %}
             {% call data_line("Block") %}
-                <a href="/block?h={{ block.header.metadata.height }}">{{ block.header.metadata.height }}</a>
+                <a href="/block?h={{ block.header.metadata.height }}">{{ block.header.metadata.height | format_number | safe }}</a>
             {% endcall %}
             {% call data_line("Index") %}
                 {{ index }}
@@ -69,7 +69,7 @@
                 {% endcall %}
             {% endif %}
             {% call data_line("Total fee") %}
-                {{ total_fee | format_aleo_credit }} Aleo credits
+                {{ total_fee | format_aleo_credit | safe }} Aleo credits
             {% endcall %}
         </div>
 

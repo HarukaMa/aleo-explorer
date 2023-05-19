@@ -37,12 +37,12 @@
     <div class="content">
 
         <div id="header">
-            <h3>Block {{ block.header.metadata.height }}</h3>
+            <h3>Block {{ block.header.metadata.height | format_number | safe }}</h3>
         </div>
 
         <div id="data">
         {% call data_line("Height") %}
-            {{ block.header.metadata.height }}
+            {{ block.header.metadata.height | format_number | safe }}
         {% endcall %}
         {% call data_line("Epoch") %}
             {{ block.header.metadata.height // 256 }} <span class="note">{{ block.header.metadata.height % 256 }} / 256</span>
@@ -51,22 +51,22 @@
             {{ block.header.metadata.timestamp | format_time | safe }}
         {% endcall %}
         {% call data_line("Coinbase target") %}
-            {{ block.header.metadata.coinbase_target }}
+            {{ block.header.metadata.coinbase_target | format_number | safe }}
         {% endcall %}
         {% call data_line("Proof target") %}
-            {{ block.header.metadata.proof_target }}
+            {{ block.header.metadata.proof_target | format_number | safe }}
         {% endcall %}
         {% call data_line("Cumulative weight") %}
-            {{ block.header.metadata.cumulative_weight }}
+            {{ block.header.metadata.cumulative_weight | format_number | safe }}
         {% endcall %}
         {% call data_line("Coinbase reward") %}
-            {% if coinbase_reward %}{{ (coinbase_reward // 2) | format_aleo_credit }}{% else %}-{% endif %}
+            {% if coinbase_reward %}{{ (coinbase_reward // 2) | format_aleo_credit | safe }}{% else %}-{% endif %}
         {% endcall %}
         {% call data_line("Total fee") %}
-            {{ total_fee | format_aleo_credit }} Aleo credits
+            {{ total_fee | format_aleo_credit | safe }} Aleo credits
         {% endcall %}
         {% call data_line("Total supply") %}
-            {{ block.header.metadata.total_supply_in_microcredits | format_aleo_credit }} Aleo credits
+            {{ block.header.metadata.total_supply_in_microcredits | format_aleo_credit | safe }} Aleo credits
         {% endcall %}
         {% call data_line("Block hash") %}
             <span class="mono">{{ block.block_hash }}</span>
@@ -109,7 +109,7 @@
                         <td>{{ tx.type }}</td>
                         <td>{{ state_label(tx.state) }}</td>
                         <td>{{ tx.transitions_count }}</td>
-                        <td>{{ tx.fee | format_aleo_credit }} Aleo credits</td>
+                        <td>{{ tx.fee | format_aleo_credit | safe }} Aleo credits</td>
                     </tr>
                 {% endfor %}
                 </tbody>
@@ -143,8 +143,8 @@
                     <td><a href="/address?a={{ partial_solution.address }}"><span class="mono">{{ partial_solution.address_trunc }}</span></a></td>
                     <td><span class="mono">{{ partial_solution.nonce }}</span></td>
                     <td><span class="mono">{{ partial_solution.commitment }}</span></td>
-                    <td>{{ partial_solution.target }}<span class="note"> / {{ target_sum }}</span></td>
-                    <td>{{ partial_solution.reward | format_aleo_credit }}</td>
+                    <td>{{ partial_solution.target | format_number | safe }}<span class="note"> / {{ target_sum | format_number | safe }}</span></td>
+                    <td>{{ partial_solution.reward | format_aleo_credit | safe }}</td>
                 </tr>
                 {% endfor %}
                 </tbody>
