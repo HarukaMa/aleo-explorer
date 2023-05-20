@@ -18,6 +18,10 @@
             margin-left: 8px;
         }
 
+        .decrypted {
+            color: green;
+        }
+
     </style>
 
 {% endblock %}
@@ -43,16 +47,16 @@
         {% endcall %}
         {% call data_line("Program ID") %}
             {% if program_id | string == "credits.aleo" %}
-                <span class="mono">{{ program_id }}</span>
+                <span class="mono" id="program-id">{{ program_id }}</span>
             {% else %}
-                <span class="mono"><a href="/program?id={{ program_id }}">{{ program_id }}</a></span>
+                <span class="mono" id="program-id"><a href="/program?id={{ program_id }}">{{ program_id }}</a></span>
             {% endif %}
         {% endcall %}
         {% call data_line("Function name") %}
-            <span class="mono">{{ function_name }}</span>
+            <span class="mono" id="function-name">{{ function_name }}</span>
         {% endcall %}
         {% call data_line("Transition public key") %}
-            <span class="mono">{{ tpk }}</span>
+            <span class="mono" id="tpk">{{ tpk }}</span>
         {% endcall %}
         {% call data_line("Transition commitment") %}
             <span class="mono">{{ tcm }}</span>
@@ -90,7 +94,7 @@
             {% endcall %}
             {% call data_line("Ciphertext") %}
                 <advanced-link scope="transition" object="{{ ts_id }}" type="input_private" index="{{ loop.index0 }}">
-                    <span class="mono">{{ input.ciphertext }}</span>
+                    <span class="mono ciphertext" data-index="{{ loop.index0 }}">{{ input.ciphertext }}</span>
                 </advanced-link>
             {% endcall %}
         {% elif input.type == "Record" %}
@@ -107,6 +111,7 @@
         {% endif %}
             <br>
         {% endfor %}
+        {% set input_count = inputs | length %}
         {% for output in outputs %}
             {% set outer_loop = loop %}
             <h5>Output #{{ loop.index }}</h5>
@@ -126,10 +131,11 @@
             {% endcall %}
             {% call data_line("Ciphertext") %}
                 <advanced-link scope="transition" object="{{ ts_id }}" type="output_private" index="{{ loop.index0 }}">
-                    <span class="mono">{{ output.ciphertext }}</span>
+                    <span class="mono ciphertext" data-index="{{ loop.index0 + input_count }}">{{ output.ciphertext }}</span>
                 </advanced-link>
             {% endcall %}
         {% elif output.type == "Record" %}
+            <span class="record">
             {% call data_line("Commitment") %}
                 <span class="mono">{{ output.commitment }}</span>
             {% endcall %}
@@ -137,20 +143,21 @@
                 <span class="mono">{{ output.checksum }}</span>
             {% endcall %}
             {% call data_line("Record data") %}
-                <span class="mono record">{{ output.record }}</span>
+                <span class="mono record-data">{{ output.record }}</span>
             {% endcall %}
             {% call sub_data_line_safe('<span class="mono">owner</span>') %}
                 <advanced-link scope="transition" object="{{ ts_id }}" type="output_record" index="{{ loop.index0 }}" field="owner">
-                    <span class="mono">{{ output.record_data.owner }}</span>
+                    <span class="mono record-field">{{ output.record_data.owner }}</span>
                 </advanced-link>
             {% endcall %}
             {% for identifier, entry in output.record_data.data %}
                 {% call sub_data_line_safe('<span class="mono">' + (identifier | string) + "</span>") %}
                     <advanced-link scope="transition" object="{{ ts_id }}" type="output_record" index="{{ outer_loop.index0 }}" field="{{ identifier }}">
-                        <span class="mono">{{ entry }}</span>
+                        <span class="mono record-field">{{ entry }}</span>
                     </advanced-link>
                 {% endcall %}
             {% endfor %}
+            </span>
         {% elif output.type == "External record" %}
             {% call data_line("Commitment") %}
                 <span class="mono">{{ output.commitment }}</span>
@@ -182,6 +189,10 @@
             <p>
                 You can also connect the wallet in the normal and safe way, but currently you can only decrypt records.
             </p>
+            <p>
+                <strong>NOTE:</strong> You will need to revoke the permission in Leo Wallet and connect again if you
+                want to change the method.
+            </p>
 
             <div class="button-group">
                 <button class="button primary" data-close id="wallet-connect-normal">Safe method</button>
@@ -196,8 +207,8 @@
     </div>
 
     <script src="static/leo_wallet.js"></script>
-    <script type="module">
-        import {init, WASI} from 'https://cdn.jsdelivr.net/npm/@wasmer/wasi@1.2.2/+esm'
+    <script type="module" async>
+        import init, {decrypt_ciphertext, decrypt_record} from '/static/decrypt.js'
 
         await init()
 
@@ -222,10 +233,22 @@
                 await wallet.disconnect()
                 button.className = "button primary"
                 button.innerText = "Connect Wallet"
-                const records = document.getElementsByClassName("record")
+                const records = document.getElementsByClassName("record-data")
                 for (const re of records) {
                     for (const c of re.children) {
                         re.removeChild(c)
+                    }
+                }
+                const record_fields = document.getElementsByClassName("record-field")
+                for (const re of record_fields) {
+                    for (const c of re.children) {
+                        re.removeChild(c)
+                    }
+                }
+                const ciphertexts = document.getElementsByClassName("ciphertext")
+                for (const ct of ciphertexts) {
+                    for (const c of ct.children) {
+                        ct.removeChild(c)
                     }
                 }
                 text.innerText = ""
@@ -248,14 +271,64 @@
                 const address = wallet.publicKey
                 button.innerHTML = `Connected to address <span class="mono">${address.substring(0, 9) + "..." + address.substring(address.length - 6)}</span>`
                 text.innerText = "Trying to decrypt all ciphertexts..."
-
-                const wasi = new WASI({})
-                const wasm = await fetch("static/decrypt.wasm")
-                const module = await WebAssembly.compileStreaming(wasm)
-                const imports = wasi.getImports(module)
-                const instance = await WebAssembly.instantiate(module, imports)
-                console.log(instance)
-
+                const tpk = document.getElementById("tpk").innerText
+                const vk = wallet._wallet.permission.viewKey
+                const program_name = document.getElementById("program-id").innerText.split(".")[0]
+                const function_name = document.getElementById("function-name").innerText
+                const ciphertexts = document.getElementsByClassName("ciphertext")
+                let ciphertext_counter = 0
+                for (const c of ciphertexts) {
+                    try {
+                        const index = parseInt(c.dataset.index)
+                        const plaintext = decrypt_ciphertext(vk, tpk, program_name, function_name, index, c.innerText)
+                        const element = document.createElement("span")
+                        element.className = "decrypted"
+                        element.innerHTML = `<br>${plaintext}`
+                        c.appendChild(element)
+                        ciphertext_counter += 1
+                    } catch (e) {}
+                }
+                text.innerText = "Trying to decrypt all records..."
+                const records = document.getElementsByClassName("record")
+                let record_counter = 0
+                for (const re of records) {
+                    try {
+                        const rd = re.getElementsByClassName("record-data")[0]
+                        const record_data = decrypt_record(vk, rd.innerText)
+                        const element = document.createElement("span")
+                        element.className = "decrypted"
+                        element.innerHTML = `<br>${record_data.string.replaceAll("\n", "<br>").replaceAll(" ", "&nbsp;")}`
+                        rd.appendChild(element)
+                        const fields = re.getElementsByClassName("record-field")
+                        const values = record_data.plaintext
+                        values.forEach((value, index) => {
+                            const element = document.createElement("span")
+                            element.className = "decrypted"
+                            element.innerHTML = `<br>${value}`
+                            fields[index].appendChild(element)
+                        })
+                        record_counter++
+                    } catch (e) {
+                        console.log(e)
+                    }
+                }
+                if (record_counter > 0 || ciphertext_counter > 0) {
+                    let english
+                    if (record_counter === 1) {
+                        english = "record"
+                    } else {
+                        english = "records"
+                    }
+                    let english2
+                    if (ciphertext_counter === 1) {
+                        english2 = "ciphertext"
+                    } else {
+                        english2 = "ciphertexts"
+                    }
+                    text.innerText = `Decrypted ${record_counter} ${english} and ${ciphertext_counter} ${english2}.`
+                } else {
+                    text.innerText = "No record or ciphertext could be decrypted."
+                }
             } else {
                 button.className = "button alert"
             }
@@ -279,13 +352,13 @@
                 const records = document.getElementsByClassName("record")
                 let counter = 0
                 for (const re of records) {
-                    console.log(re.innerHTML)
-                    console.log(re.children)
+                    const r = re.getElementsByClassName("record-data")[0]
                     try {
-                        const plaintext = await wallet.decrypt(re.innerHTML)
+                        const plaintext = await wallet.decrypt(r.innerHTML)
                         const element = document.createElement("span")
+                        element.className = "decrypted"
                         element.innerHTML = `<br>${plaintext.replaceAll("\n", "<br>").replaceAll(" ", "&nbsp;")}`
-                        re.appendChild(element)
+                        r.appendChild(element)
                         counter++
                     } catch (e) {}
                 }
