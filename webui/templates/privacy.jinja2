@@ -25,7 +25,7 @@
 
         <p>
             <strong>Important:</strong> When you use the explorer, your requests will appear in the web server logs
-            (non-cached part){% if ("CLOUDFLARE" | get_env) or ("MATOMO" | get_env) %} or analytics data{% endif %},
+            (non-cached part){% if ("CLOUDFLARE" | get_env) or ("PLAUSIBLE" | get_env) %} or analytics data{% endif %},
             so there might be enough information to link different addresses together depending on your requests
             (searches, page visits, etc.) I will not use this information against anyone or give them to anyone else,
             nor will I actively collect and derive such information from various logs.
@@ -58,27 +58,21 @@
         </p>
     {% endif %}
 
-    {% if "MATOMO" | get_env %}
-        <h4>Matomo Analytics (Self-hosted)</h4>
+    {% if "PLAUSIBLE" | get_env %}
+        <h4>Plausible Analytics (Self-hosted)</h4>
 
         <p>
-            This site uses a self-hosted Matomo Analytics instance. It's an open-source alternative to Google Analytics
-            and can collect more detailed info about your visits. As it's a self-hosted instance, only I can access the data.</p>
-
-        <p>
-            Matomo analytics can anonymize many data and is fully GDPR-compliant. I use this data to study how
-            visitors interact with the site and make improvements.
+            This site uses a self-hosted Plausible Analytics instance. It's an open-source alternative to Google Analytics
+            and collects simple metrics. The data is open as well, so you can see what I see:
+            <a href="https://p.hamp.app/explorer.hamp.app">Live data</a>
         </p>
 
         <p>
-            You can always opt out from being tracked by clicking the "Opt Out" link at the bottom of every page. You
-            can also require me to delete all your data by sending a request email to privacy@hamp.app and include at
-            least the first three segments of your IP address.
+            To opt-out of Plausible Analytics, add domain <pre>p.hamp.app</pre> to your adblocker.
         </p>
-
     {% endif %}
 
-    {% if not ("CLOUDFLARE" | get_env) and not ("MATOMO | get_env") %}
+    {% if not ("CLOUDFLARE" | get_env) and not ("PLAUSIBLE" | get_env) %}
         <p>
             <em>There are no analytics scripts on this site.</em>
         </p>

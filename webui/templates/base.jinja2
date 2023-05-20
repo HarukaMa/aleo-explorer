@@ -232,7 +232,7 @@
     <div class="footer">
         <a href="https://github.com/HarukaMa/aleo-explorer" target="_blank">Open source</a> Aleo explorer made by Haruka. <br>
         {% if "CLOUDFLARE" | get_env %} Contains CloudFlare analytics.{% endif %}
-        {% if "MATOMO" | get_env %} Contains self-hosted Matomo analytics. <a onclick="toggle_optout()"><span id="matomo-optout"></span></a>.{% endif %}
+        {% if "PLAUSIBLE" | get_env %} Contains self-hosted Plausible analytics.{% endif %}
         <a href="/privacy">Privacy policy</a>.
         <br>
     </div>
@@ -324,28 +324,6 @@
         advanced_setting = !advanced_setting
         dispatch_advanced_event()
     }
-
-    {% if "MATOMO" | get_env %}
-    _paq.push([function () {
-        if (this.isUserOptedOut()) {
-            $("#matomo-optout").text("Opt in")
-        } else {
-            $("#matomo-optout").text("Opt out")
-        }
-    }])
-
-    function toggle_optout() {
-        _paq.push([function () {
-            if (this.isUserOptedOut()) {
-                _paq.push(['forgetUserOptOut']);
-                $("#matomo-optout").text("Opt out")
-            } else {
-                _paq.push(['optUserOut']);
-                $("#matomo-optout").text("Opt in")
-            }
-        }])
-    }
-    {% endif %}
 
 </script>
 </body>
