@@ -36,27 +36,32 @@
         {% call data_line("Address") %}
             <span class="mono">{{ address }}</span>
         {% endcall %}
-        {% call data_line_safe("Total incentive reward (<span data-tooltip title=\"Testnet3 credits earned during incentive period (since block 130888). Divide by 5 to get converted mainnet reward amount.\">?</span>)") %}
-            {{ total_incentive | format_aleo_credit | safe }} (Mainnet reward: {{ (total_incentive // 5) | format_aleo_credit | safe }})
-        {% endcall %}
-        {% call data_line_safe("Total coinbase reward (<span data-tooltip title=\"Testnet3 credits earned since the start of the network.\">?</span>)") %}
-            {{ total_rewards | format_aleo_credit | safe }}
-        {% endcall %}
-        {% call data_line("Solutions found") %}
-            {{ total_solutions }}
-        {% endcall %}
+        {% if not "DEBUG_SKIP_COINBASE" | get_env %}
+            {% call data_line_safe("Total incentive reward (<span data-tooltip title=\"Testnet3 credits earned during incentive period (since block 130888). Divide by 5 to get converted mainnet reward amount.\">?</span>)") %}
+                {{ total_incentive | format_aleo_credit | safe }} (Mainnet reward: {{ (total_incentive // 5) | format_aleo_credit | safe }})
+            {% endcall %}
+            {% call data_line_safe("Total coinbase reward (<span data-tooltip title=\"Testnet3 credits earned since the start of the network.\">?</span>)") %}
+                {{ total_rewards | format_aleo_credit | safe }}
+            {% endcall %}
+            {% call data_line("Solutions found") %}
+                {{ total_solutions }}
+            {% endcall %}
+        {% endif %}
         {% call data_line("Programs deployed") %}
             {{ total_programs }}
         {% endcall %}
-        {% call data_line("Estimated speed") %}
-            {% if speed != 0 %}
-            {{ "%.2f" % speed }} <span data-tooltip title='commitments per second, also known as "p/s" or "s/s"'>c/s</span> (last {{ timespan }})
-            {% else %}
-            Not enough solutions during last day
-            {% endif %}
-        {% endcall %}
+        {% if not "DEBUG_SKIP_COINBASE" | get_env %}
+            {% call data_line("Estimated speed") %}
+                {% if speed != 0 %}
+                {{ "%.2f" % speed }} <span data-tooltip title='commitments per second, also known as "p/s" or "s/s"'>c/s</span> (last {{ timespan }})
+                {% else %}
+                Not enough solutions during last day
+                {% endif %}
+            {% endcall %}
+        {% endif %}
         </div>
 
+        {% if not "DEBUG_SKIP_COINBASE" | get_env %}
         <div id="solutions">
             <h4>Accepted solutions</h4>
             <table class="unstriped">
@@ -87,6 +92,7 @@
             <a href="/address_solution?a={{ address }}">Show all accepted solutions</a>
             {% endif %}
         </div>
+        {% endif %}
 
         <div id="programs">
             <h4>Deployed programs</h4>

@@ -61,10 +61,12 @@
                 As the interpreter still can't execute all instructions, the explorer will stop syncing when it
                 encounters a block with an instruction that it can't execute. Expect this to happen often.
             </p>
-            <p>
-                For performance reasons, this instance of the explorer won't track the coinbase solutions and the
-                rewards of individual provers.
-            </p>
+            {% if "DEBUG_SKIP_COINBASE" | get_env %}
+                <p>
+                    For performance reasons, this instance of the explorer won't track the coinbase solutions and the
+                    rewards of individual provers.
+                </p>
+            {% endif %}
         </div>
         {% endif %}
 
@@ -101,14 +103,16 @@
                     </div>
                 </div>
             </div>
-            <div class="grid-x grid-padding-x">
-                <div class="cell large-auto ticker-cell">
-                    <div class="grid-y ticker-cell-content">
-                        <div class="cell ticker-cell-title">Estimated network speed (15m)</div>
-                        <div class="cell auto ticker-cell-data">{{ network_speed | format_number | safe }}&nbsp;<span data-tooltip title='commitments per second, also known as "p/s" or "s/s"'>c/s</span></div>
+            {% if not "DEBUG_SKIP_COINBASE" | get_env %}
+                <div class="grid-x grid-padding-x">
+                    <div class="cell large-auto ticker-cell">
+                        <div class="grid-y ticker-cell-content">
+                            <div class="cell ticker-cell-title">Estimated network speed (15m)</div>
+                            <div class="cell auto ticker-cell-data">{{ network_speed | format_number | safe }}&nbsp;<span data-tooltip title='commitments per second, also known as "p/s" or "s/s"'>c/s</span></div>
+                        </div>
                     </div>
                 </div>
-            </div>
+            {% endif %}
         </div>
 
         <div id="recent-blocks">
@@ -122,8 +126,10 @@
                     <th>Transactions</th>
                     <th>Proof target</th>
                     <th>Coinbase target</th>
-                    <th>Coinbase rewards</th>
-                    <th>Coinbase solutions</th>
+                    {% if not "DEBUG_SKIP_COINBASE" | get_env %}
+                        <th>Coinbase rewards</th>
+                        <th>Coinbase solutions</th>
+                    {% endif %}
                     <th>Validator</th>
                 </tr>
                 </thead>
@@ -136,8 +142,10 @@
                         <td>{{ block.transaction_count }}</td>
                         <td>{{ block.proof_target | format_number | safe }}</td>
                         <td>{{ block.coinbase_target | format_number | safe }}</td>
-                        <td>{% if block.coinbase_reward %}{{ ((block.coinbase_reward | int) // 2) | format_aleo_credit | safe }}{% else %}-{% endif %}</td>
-                        <td>{% if block.coinbase_reward %}{{ block.partial_solution_count }}{% else %}-{% endif %}</td>
+                        {% if not "DEBUG_SKIP_COINBASE" | get_env %}
+                            <td>{% if block.coinbase_reward %}{{ ((block.coinbase_reward | int) // 2) | format_aleo_credit | safe }}{% else %}-{% endif %}</td>
+                            <td>{% if block.coinbase_reward %}{{ block.partial_solution_count }}{% else %}-{% endif %}</td>
+                        {% endif %}
                         <td>-</td>
                     </tr>
                 {% endfor %}
