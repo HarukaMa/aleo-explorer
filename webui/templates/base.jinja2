@@ -66,7 +66,12 @@
         }
 
         .top-bar, .top-bar ul {
+
+        {% if "BETA" | get_env %}
+            background-color: #92a9f6;
+        {% else %}
             background-color: #e1e7f8;
+        {% endif %}
         }
 
         .top-bar-right {
@@ -156,7 +161,11 @@
     <div class="menubar">
         <div class="top-bar-left">
             <ul class="dropdown menu" data-dropdown-menu>
-                <li class="menu-text">Haruka's Aleo Explorer</li>
+                {% if "BETA" | get_env %}
+                    <li class="menu-text">Haruka's Explorer<sup>PREVIEW</sup></li>
+                {% else %}
+                    <li class="menu-text">Haruka's Aleo Explorer</li>
+                {% endif %}
                 <li><a href="/">Home</a></li>
                 <li><a href="/blocks">Blocks</a></li>
                 <li><a href="/programs">Programs</a></li>
@@ -168,6 +177,9 @@
                     </ul>
                 </li>
                 <li><a href="/faq">FAQ</a></li>
+                {% if "HAS_BETA" | get_env %}
+                    <li style="margin-left: auto"><a href="//explorerb.hamp.app">Preview</a></li>
+                {% endif %}
             </ul>
         </div>
         <div class="top-bar-right">
