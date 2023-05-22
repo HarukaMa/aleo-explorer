@@ -68,7 +68,7 @@
         .top-bar, .top-bar ul {
 
         {% if "BETA" | get_env %}
-            background-color: #92a9f6;
+            background-color: #eef8e1;
         {% else %}
             background-color: #e1e7f8;
         {% endif %}
@@ -121,7 +121,7 @@
         }
 
         input[type=number] {
-            -moz-appearance:textfield;
+            -moz-appearance: textfield;
         }
 
         .pagination {
@@ -162,7 +162,7 @@
         <div class="top-bar-left">
             <ul class="dropdown menu" data-dropdown-menu>
                 {% if "BETA" | get_env %}
-                    <li class="menu-text">Haruka's Explorer<sup>PREVIEW</sup></li>
+                    <li class="menu-text">Haruka's Explorer <sup>PREVIEW</sup></li>
                 {% else %}
                     <li class="menu-text">Haruka's Aleo Explorer</li>
                 {% endif %}
