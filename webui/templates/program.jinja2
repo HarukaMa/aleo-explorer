@@ -10,17 +10,23 @@
             margin: 20px 4px;
         }
 
-        #transitions, #structure {
-            margin-top: 20px;
-        }
-
         .text-alert {
             color: #cc4b37;
         }
 
         pre {
+            background-color: #eee;
+            padding: 10px;
             overflow-y: scroll;
-            max-height: 400px;
+            max-height: 800px;
+        }
+
+        .tabs {
+            margin-top: 20px;
+        }
+
+        .tabs-title > a {
+            font-size: 0.875em;
         }
 
     </style>
@@ -60,110 +66,128 @@
                 {% endif %}
             {% endcall %}
 
-            <div id="structure">
-                <h5>Program Structure</h5>
-                {% call data_line("Imports") %}
-                    <span class="mono">
-                {% if imports %}
-                    {% for import in imports %}
-                        {% if import | string != "credits.aleo" %}
-                            <a href="/program?id={{ import }}">{{ import }}</a><br>
-                        {% else %}
-                            {{ import }}<br>
-                        {% endif %}
-                    {% endfor %}
-                {% else %}
-                    -
-                {% endif %}
-                </span>
-                {% endcall %}
-                {% call data_line("Mappings") %}
-                    <span class="mono">
-                {% if mappings %}
-                    {% for mapping in mappings %}
-                        {{ mapping }}<br>
-                    {% endfor %}
-                {% else %}
-                    -
-                {% endif %}
-                </span>
-                {% endcall %}
-                {% call data_line("Structs") %}
-                    <span class="mono">
-                {% if structs %}
-                    {% for struct in structs %}
-                        {{ struct }}<br>
-                    {% endfor %}
-                {% else %}
-                    -
-                {% endif %}
-                </span>
-                {% endcall %}
-                {% call data_line("Records") %}
-                    <span class="mono">
-                {% if records %}
-                    {% for record in records %}
-                        {{ record }}<br>
-                    {% endfor %}
-                {% else %}
-                    -
-                {% endif %}
-                </span>
-                {% endcall %}
-                {% call data_line("Functions") %}
-                    <span class="mono">
-                {% if closures %}
-                    {% for function in closures %}
-                        {{ function }}<br>
-                    {% endfor %}
-                {% else %}
-                    -
-                {% endif %}
-                </span>
-                {% endcall %}
-                {% call data_line("Transitions") %}
-                    <span class="mono">
-                {% for transition in functions %}
-                    {{ transition }}<br>
-                {% endfor %}
-                </span>
-                {% endcall %}
-                {% if has_leo_source %}
-                    {% call data_line("Source code (Leo)") %}
-                        <pre>{{ source }}</pre>
+            <ul class="tabs" data-tabs id="program-tabs">
+                <li class="tabs-title is-active"><a href="#structure">Program structure</a></li>
+                <li class="tabs-title"><a href="#transitions">Recent calls</a></li>
+                <li class="tabs-title"><a href="#source">Source code</a></li>
+                <li class="tabs-title"><a href="#read">Read mappings</a></li>
+                <li class="tabs-title"><a href="#execute">Execute transitions</a></li>
+            </ul>
+
+            <div class="tabs-content" data-tabs-content="program-tabs">
+                <div class="tabs-panel is-active" id="structure">
+                    {% call data_line("Imports") %}
+                        <span class="mono">
+                    {% if imports %}
+                        {% for import in imports %}
+                            {% if import | string != "credits.aleo" %}
+                                <a href="/program?id={{ import }}">{{ import }}</a><br>
+                            {% else %}
+                                {{ import }}<br>
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        -
+                    {% endif %}
+                    </span>
                     {% endcall %}
-                {% else %}
-                    {% call data_line_safe('Source code (Aleo instructions)<br><a href="/upload_source?id=' + program_id + '">Upload Leo source</a>') %}
-                        <pre>{{ source }}</pre>
+                    {% call data_line("Mappings") %}
+                        <span class="mono">
+                    {% if mappings %}
+                        {% for mapping in mappings %}
+                            {{ mapping }}<br>
+                        {% endfor %}
+                    {% else %}
+                        -
+                    {% endif %}
+                    </span>
                     {% endcall %}
-                {% endif %}
+                    {% call data_line("Structs") %}
+                        <span class="mono">
+                    {% if structs %}
+                        {% for struct in structs %}
+                            {{ struct }}<br>
+                        {% endfor %}
+                    {% else %}
+                        -
+                    {% endif %}
+                    </span>
+                    {% endcall %}
+                    {% call data_line("Records") %}
+                        <span class="mono">
+                    {% if records %}
+                        {% for record in records %}
+                            {{ record }}<br>
+                        {% endfor %}
+                    {% else %}
+                        -
+                    {% endif %}
+                    </span>
+                    {% endcall %}
+                    {% call data_line("Functions") %}
+                        <span class="mono">
+                    {% if closures %}
+                        {% for function in closures %}
+                            {{ function }}<br>
+                        {% endfor %}
+                    {% else %}
+                        -
+                    {% endif %}
+                    </span>
+                    {% endcall %}
+                    {% call data_line("Transitions") %}
+                        <span class="mono">
+                    {% for transition in functions %}
+                        {{ transition }}<br>
+                    {% endfor %}
+                    </span>
+                    {% endcall %}
+                </div>
+
+                <div class="tabs-panel" id="source">
+                    {% if has_leo_source %}
+                        <h6>Program Source Code (Leo)</h6>
+                    {% else %}
+                        <h6>Program Source Code (Aleo Instruction)</h6>
+                        <a href="/upload_source?id={{ program_id }}">Upload Leo source</a>
+                    {% endif %}
+                    <pre>{{ source }}</pre>
+                </div>
+
+                <div class="tabs-panel" id="transitions">
+                    <table id="transitions-table" class="unstriped">
+                        <thead>
+                        <tr>
+                            <td>Block height</td>
+                            <td>Timestamp</td>
+                            <td>Transition ID</td>
+                            <td>Function call</td>
+                            <td>State</td>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% for call in recent_calls %}
+                            <tr>
+                                <td><a href="/block?h={{ call.height }}">{{ call.height | format_number | safe }}</a></td>
+                                <td>{{ call.timestamp | format_time | safe }}</td>
+                                <td><span class="mono"><a href="/transition?id={{ call.transition_id }}">{{ call.transition_id }}</a></span></td>
+                                <td><span class="mono">{{ call.function_name }}</span></td>
+                                <td>{{ state_label(call.type.rstrip("Execute")) }}</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="tabs-panel" id="read">
+                    <h6>Not implemented</h6>
+                </div>
+
+                <div class="tabs-panel" id="execute">
+                    <h6>Not implemented</h6>
+                </div>
             </div>
 
-            <div id="transitions">
-                <h4>Recent calls</h4>
-                <table id="transitions-table" class="unstriped">
-                    <thead>
-                    <tr>
-                        <td>Block height</td>
-                        <td>Timestamp</td>
-                        <td>Transition ID</td>
-                        <td>Function call</td>
-                        <td>State</td>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    {% for call in recent_calls %}
-                        <tr>
-                            <td><a href="/block?h={{ call.height }}">{{ call.height | format_number | safe }}</a></td>
-                            <td>{{ call.timestamp | format_time | safe }}</td>
-                            <td><span class="mono"><a href="/transition?id={{ call.transition_id }}">{{ call.transition_id }}</a></span></td>
-                            <td><span class="mono">{{ call.function_name }}</span></td>
-                            <td>{{ state_label(call.type.rstrip("Execute")) }}</td>
-                        </tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
-            </div>
         </div>
     </div>
 
