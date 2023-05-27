@@ -187,7 +187,7 @@ class Field(Serialize, Deserialize):
 
     @classmethod
     def loads(cls, data: str):
-        return cls(int(data.replace("field", "")))
+        return cls(int(data.removesuffix("field")))
 
     def __str__(self):
         return str(self.data) + "field"
@@ -223,7 +223,7 @@ class Group(Serialize, Deserialize):
 
     @classmethod
     def loads(cls, data: str):
-        return cls(int(data.replace("group", "")))
+        return cls(int(data.removesuffix("group")))
 
     def __str__(self):
         return str(self.data) + "group"
@@ -251,7 +251,7 @@ class Scalar(Serialize, Deserialize):
 
     @classmethod
     def loads(cls, data: str):
-        return cls(int(data.replace("scalar", "")))
+        return cls(int(data.removesuffix("scalar")))
 
     def __str__(self):
         return str(self.data) + "scalar"
