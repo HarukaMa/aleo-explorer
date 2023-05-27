@@ -1,14 +1,14 @@
 import asyncio
-import contextlib
 import logging
+import multiprocessing
 import os
-import threading
 import time
 
 import uvicorn
 from asgi_logger import AccessLoggerMiddleware
 from starlette.applications import Starlette
 from starlette.exceptions import HTTPException
+from starlette.middleware import Middleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
@@ -16,25 +16,18 @@ from starlette.routing import Route
 from db import Database
 
 
-# from node.light_node import LightNodeState
+class UvicornServer(multiprocessing.Process):
 
+    def __init__(self, config: uvicorn.Config):
+        super().__init__()
+        self.server = uvicorn.Server(config=config)
+        self.config = config
 
-class Server(uvicorn.Server):
-    # https://stackoverflow.com/a/64521239
-    def install_signal_handlers(self):
-        pass
+    def stop(self):
+        self.terminate()
 
-    @contextlib.contextmanager
-    def run_in_thread(self):
-        thread = threading.Thread(target=self.run)
-        thread.start()
-        try:
-            while not self.started:
-                time.sleep(1e-3)
-            yield
-        finally:
-            self.should_exit = True
-            thread.join()
+    def run(self, *args, **kwargs):
+        self.server.run()
 
 async def commitment_route(request: Request):
     if time.time() >= 1675209600:
@@ -59,21 +52,21 @@ async def startup():
     await db.connect()
 
 
-AccessLoggerMiddleware.DEFAULT_FORMAT = '\033[92mAPI\033[0m: \033[94m%(client_addr)s\033[0m - - %(t)s \033[96m"%(request_line)s"\033[0m \033[93m%(s)s\033[0m %(B)s "%(f)s" "%(a)s" %(L)s'
+log_format = '\033[92mAPI\033[0m: \033[94m%(client_addr)s\033[0m - - %(t)s \033[96m"%(request_line)s"\033[0m \033[93m%(s)s\033[0m %(B)s "%(f)s" "%(a)s" %(L)s'
 # noinspection PyTypeChecker
 app = Starlette(
     debug=True if os.environ.get("DEBUG") else False,
     routes=routes,
     on_startup=[startup],
-    # middleware=[Middleware(AccessLoggerMiddleware)]
+    middleware=[Middleware(AccessLoggerMiddleware, format=log_format)]
 )
 
 
 async def run():
     config = uvicorn.Config("api:app", reload=True, log_level="info", port=int(os.environ.get("API_PORT", 8001)))
     logging.getLogger("uvicorn.access").handlers = []
-    server = Server(config=config)
+    server = UvicornServer(config=config)
 
-    with server.run_in_thread():
-        while True:
-            await asyncio.sleep(3600)
+    server.start()
+    while True:
+        await asyncio.sleep(3600)
