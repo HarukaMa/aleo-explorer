@@ -528,6 +528,26 @@ class LiteralType(IntEnumu16):
     Scalar = 14
     String = 15
 
+    def get_primitive_type(self):
+        return {
+            self.Address: Group,
+            self.Boolean: bool_,
+            self.Field: Field,
+            self.Group: Group,
+            self.I8: i8,
+            self.I16: i16,
+            self.I32: i32,
+            self.I64: i64,
+            self.I128: i128,
+            self.U8: u8,
+            self.U16: u16,
+            self.U32: u32,
+            self.U64: u64,
+            self.U128: u128,
+            self.Scalar: Scalar,
+            self.String: StringType,
+        }[self]
+
 
 class PlaintextType(Serialize, Deserialize): # enum
 

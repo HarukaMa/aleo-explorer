@@ -1656,6 +1656,25 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
+    async def get_mapping_value(self, program_id: str, mapping: str, key_id: str) -> bytes | None:
+        conn: psycopg.AsyncConnection
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT value FROM mapping_value mv "
+                        "JOIN mapping m on mv.mapping_id = m.id "
+                        "WHERE m.program_id = %s AND m.mapping = %s AND mv.key_id = %s",
+                        (program_id, mapping, key_id)
+                    )
+                    res = await cur.fetchone()
+                    if res is None:
+                        return None
+                    return res['value']
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
     async def initialize_mapping(self, mapping_id: str, program_id: str, mapping: str):
         conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
@@ -1760,14 +1779,14 @@ class Database:
         conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
-                await cur.execute("ALTER TABLE explorer.program ADD leo_source TEXT")
+                await cur.execute("ALTER TABLE program ADD leo_source TEXT")
 
     async def migrate_3_add_mapping_tables(self):
         conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 await cur.execute(
-                    "create table explorer.mapping ( "
+                    "create table mapping ( "
                     "id serial primary key not null, "
                     "mapping_id text not null, "
                     "program_id text not null, "
@@ -1776,7 +1795,7 @@ class Database:
                 await cur.execute("create unique index mapping_pk2 on mapping using btree (mapping_id)")
                 await cur.execute("create unique index mapping_pk3 on mapping using btree (program_id, mapping)")
                 await cur.execute(
-                    "create table explorer.mapping_value ( " 
+                    "create table mapping_value ( " 
                     "id serial primary key not null, "
                     "mapping_id integer not null, "
                     "index integer not null, "
@@ -1789,10 +1808,11 @@ class Database:
                 await cur.execute("create unique index mapping_value_pk2 on mapping_value using btree (mapping_id, index)")
                 await cur.execute("create index mapping_value_mapping_id_index on mapping_value using btree (mapping_id)")
                 await cur.execute(
-                    "alter table explorer.mapping_value "
+                    "alter table mapping_value "
                     "add constraint mapping_value_mapping_id_fk "
-                    "foreign key (mapping_id) references explorer.mapping"
+                    "foreign key (mapping_id) references mapping"
                 )
+                await cur.execute("create index mapping_value_key_id_index on mapping_value (key_id);")
 
 
     # debug method
