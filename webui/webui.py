@@ -48,6 +48,11 @@ async def index_route(request: Request):
     }
     return templates.TemplateResponse('index.jinja2', ctx, headers={'Cache-Control': 'public, max-age=10'})
 
+async def tools_route(request: Request):
+    ctx = {
+        "request": request,
+    }
+    return templates.TemplateResponse('tools.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'})
 
 async def faq_route(request: Request):
     ctx = {
@@ -86,6 +91,7 @@ routes = [
     Route("/address", address_route),
     Route("/address_solution", address_solution_route),
     # Other
+    Route("/tools", tools_route),
     Route("/faq", faq_route),
     Route("/privacy", privacy_route),
     Route("/robots.txt", robots_route),
