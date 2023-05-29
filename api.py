@@ -10,6 +10,7 @@ from asgi_logger import AccessLoggerMiddleware
 from starlette.applications import Starlette
 from starlette.exceptions import HTTPException
 from starlette.middleware import Middleware
+from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
@@ -41,6 +42,7 @@ async def commitment_route(request: Request):
     return JSONResponse(await db.get_puzzle_commitment(commitment))
 
 async def mapping_route(request: Request):
+    version = request.path_params["version"]
     program_id = request.path_params["program_id"]
     mapping = request.path_params["mapping"]
     key = request.path_params["key"]
@@ -70,12 +72,12 @@ async def mapping_route(request: Request):
     key_id = aleo.get_key_id(mapping_id, key.dump())
     value = await db.get_mapping_value(program_id, mapping, key_id)
     if value is None:
-        return JSONResponse(None)
-    return JSONResponse(str(Value.load(bytearray(value))))
+        return JSONResponse({"value": None})
+    return JSONResponse({"value": str(Value.load(bytearray(value)))})
 
 routes = [
     Route("/commitment", commitment_route),
-    Route("/mapping/{program_id}/{mapping}/{key}", mapping_route),
+    Route("/v{version:int}/mapping/{program_id}/{mapping}/{key}", mapping_route),
 ]
 
 async def startup():
@@ -95,7 +97,10 @@ app = Starlette(
     debug=True if os.environ.get("DEBUG") else False,
     routes=routes,
     on_startup=[startup],
-    middleware=[Middleware(AccessLoggerMiddleware, format=log_format)]
+    middleware=[
+        Middleware(AccessLoggerMiddleware, format=log_format),
+        Middleware(CORSMiddleware, allow_origins=['*']),
+    ]
 )
 
 

@@ -30,6 +30,14 @@
             padding: 0.75rem;
         }
 
+        #read input[type="text"] {
+            height: 2rem;
+        }
+
+        #read input[type="submit"] {
+            padding: 8px;
+        }
+
     </style>
 
 {% endblock %}
@@ -96,7 +104,7 @@
                         <span class="mono">
                     {% if mappings %}
                         {% for mapping in mappings %}
-                            {{ mapping }}<br>
+                            {{ mapping.name }} ({{ mapping.key_type }} -> {{ mapping.value_type }})<br>
                         {% endfor %}
                     {% else %}
                         -
@@ -147,11 +155,12 @@
 
                 <div class="tabs-panel" id="source">
                     {% if has_leo_source %}
-                        <h6>Program Source Code (Leo)</h6>
+                        Program Source Code (Leo)
                     {% else %}
-                        <h6>Program Source Code (Aleo Instruction)</h6>
+                        Program Source Code (Aleo Instruction)
                         <a href="/upload_source?id={{ program_id }}">Upload Leo source</a>
                     {% endif %}
+                    <br><br>
                     <pre>{{ source }}</pre>
                 </div>
 
@@ -181,7 +190,21 @@
                 </div>
 
                 <div class="tabs-panel" id="read">
-                    <h6>Not implemented</h6>
+                    {% if not mappings %}
+                    Program has no mappings.
+                    {% else %}
+                        {% for mapping in mappings %}
+                        <form data-mapping="{{ mapping.name }}" action="#">
+                            <label>
+                                <span class="mono">{{ mapping.name }} ({{ mapping.key_type }} -> {{ mapping.value_type }})</span>
+                                <input class="mono" type="text" id="mapping-{{ mapping.name }}-input" placeholder="{{ mapping.key_type }}" />
+                            </label>
+                            <input type="submit" class="button mapping-read-submit" value="Read" />
+                        </form>
+                        <span class="mono" id="mapping-{{ mapping.name }}-value"></span>
+                        <br><br>
+                        {% endfor %}
+                    {% endif %}
                 </div>
 
                 <div class="tabs-panel" id="execute">
@@ -192,4 +215,54 @@
         </div>
     </div>
 
+{% endblock %}
+
+{% block content_script %}
+<script>
+    const reads = document.getElementsByClassName("mapping-read-submit")
+    for (let button of reads) {
+        button.addEventListener("click", read_mapping)
+    }
+
+    async function read_mapping(e) {
+        e.preventDefault()
+
+        const button = e.target
+        button.disabled = true
+        button.value = "Loading..."
+
+        const form = button.parentElement
+        const mapping = form.dataset.mapping
+
+        const input = document.getElementById(`mapping-${mapping}-input`)
+        const value = document.getElementById(`mapping-${mapping}-value`)
+
+        if (input.value === "") {
+            value.innerText = "Key cannot be empty"
+            button.disabled = false
+            button.value = "Read"
+            return
+        }
+
+        try {
+            const response = await fetch(`{{ "API_HOST" | get_env }}/v1/mapping/{{ program_id }}/${mapping}/${input.value}`)
+            if (!response.ok) {
+                value.innerText = "Error loading data: " + response.statusText
+            } else {
+                const data = await response.json()
+                if ("error" in data) {
+                    value.innerText = "Error loading data: " + data.error
+                } else if (data.value == null) {
+                    value.innerText = "Key not found"
+                } else {
+                    value.innerText = data.value
+                }
+            }
+        } catch (e) {
+            value.innerText = "Error fetching data: " + e
+        }
+        button.disabled = false
+        button.value = "Read"
+    }
+</script>
 {% endblock %}
