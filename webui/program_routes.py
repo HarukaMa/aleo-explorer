@@ -100,6 +100,7 @@ async def program_route(request: Request):
         "source": source,
         "has_leo_source": has_leo_source,
         "recent_calls": await db.get_program_calls(program_id, 0, 30),
+        "has_rejects": await db.program_calls_has_reject(program_id),
         "similar_count": await db.get_program_similar_count(program_id),
     }
     return templates.TemplateResponse('program.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})

@@ -1550,6 +1550,27 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
+    # temp method TODO: remove after next reset
+    async def program_calls_has_reject(self, program_id: str) -> bool:
+        conn: psycopg.AsyncConnection
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT ts.transition_id, function_name, ct.type "
+                        "FROM transition ts "
+                        "JOIN transaction_execute te on te.id = ts.transaction_execute_id "
+                        "JOIN transaction t on te.transaction_id = t.id "
+                        "JOIN confirmed_transaction ct on t.confimed_transaction_id = ct.id "
+                        "WHERE ts.program_id = %s "
+                        "AND (ct.type = 'RejectedDeploy' OR ct.type = 'RejectedExecute')",
+                        (program_id,)
+                    )
+                    return len(await cur.fetchall()) > 0
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
     async def get_program_similar_count(self, program_id: str) -> int:
         conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:

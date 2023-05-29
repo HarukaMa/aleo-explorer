@@ -191,7 +191,10 @@
 
                 <div class="tabs-panel" id="read">
                     {% if not mappings %}
-                    Program has no mappings.
+                        Program has no mappings.
+                    {% elif has_rejects %}
+                        Program has rejected transitions, the mapping values could be affected by a snarkVM bug. <br>
+                        Thus, mapping values are not readable here as the explorer is unable to track the values.
                     {% else %}
                         {% for mapping in mappings %}
                         <form data-mapping="{{ mapping.name }}" action="#">
