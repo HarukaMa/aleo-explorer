@@ -208,7 +208,7 @@ class Node:
 
             case Message.Type.Disconnect:
                 msg: Disconnect = frame.message
-                print("Disconnected:", msg.reason)
+                print("Disconnected:", msg.reason.name)
 
             case _:
                 print("unhandled message type:", frame.type)
