@@ -246,17 +246,13 @@
 
         try {
             const response = await fetch(`{{ "API_HOST" | get_env }}/v1/mapping/{{ program_id }}/${mapping}/${input.value}`)
-            if (!response.ok) {
-                value.innerText = "Error loading data: " + response.statusText
+            const data = await response.json()
+            if ("error" in data) {
+                value.innerText = "Error loading data: " + data.error
+            } else if (data.value == null) {
+                value.innerText = "Key not found"
             } else {
-                const data = await response.json()
-                if ("error" in data) {
-                    value.innerText = "Error loading data: " + data.error
-                } else if (data.value == null) {
-                    value.innerText = "Key not found"
-                } else {
-                    value.innerText = data.value
-                }
+                value.innerText = data.value
             }
         } catch (e) {
             value.innerText = "Error fetching data: " + e
