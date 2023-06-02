@@ -33,19 +33,19 @@ def AbsWrapped(operands: [Operand], destination: Register, registers: Registers)
 
 def Add(operands: [Operand], destination: Register, registers: Registers):
     allowed_types = [
-        (Field, Field),
-        (Group, Group),
-        (i8, i8),
-        (i16, i16),
-        (i32, i32),
-        (i64, i64),
-        (i128, i128),
-        (u8, u8),
-        (u16, u16),
-        (u32, u32),
-        (u64, u64),
-        (u128, u128),
-        (Scalar, Scalar),
+        Field,
+        Group,
+        i8,
+        i16,
+        i32,
+        i64,
+        i128,
+        u8,
+        u16,
+        u32,
+        u64,
+        u128,
+        Scalar,
     ]
     op1 = load_plaintext_from_operand(operands[0], registers)
     op2 = load_plaintext_from_operand(operands[1], registers)
@@ -53,7 +53,7 @@ def Add(operands: [Operand], destination: Register, registers: Registers):
         raise TypeError("operands must be literals")
     op1_type = Literal.primitive_type_map[op1.literal.type]
     op2_type = Literal.primitive_type_map[op2.literal.type]
-    if not (op1_type, op2_type) in allowed_types:
+    if not (op1_type in allowed_types and op2_type == op1_type):
         raise TypeError("invalid operand types")
     res = LiteralPlaintext(
         literal=Literal(
@@ -203,7 +203,37 @@ def Inv(operands: [Operand], destination: Register, registers: Registers):
     raise NotImplementedError
 
 def IsEq(operands: [Operand], destination: Register, registers: Registers):
-    raise NotImplementedError
+    allowed_types = [
+        Address,
+        bool_,
+        Field,
+        Group,
+        i8,
+        i16,
+        i32,
+        i64,
+        i128,
+        u8,
+        u16,
+        u32,
+        u64,
+        u128,
+        Scalar,
+        Struct,
+    ]
+    op1 = load_plaintext_from_operand(operands[0], registers)
+    op2 = load_plaintext_from_operand(operands[1], registers)
+    # loosely check the types, we don't really expect to run into bad types here
+    if op1.type != op2.type:
+        raise TypeError("invalid operand types")
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=Literal.Type.Boolean,
+            primitive=bool_(op1 == op2),
+        )
+    )
+    store_plaintext_to_register(res, destination, registers)
+
 
 def IsNeq(operands: [Operand], destination: Register, registers: Registers):
     raise NotImplementedError
@@ -270,19 +300,19 @@ def SquareRoot(operands: [Operand], destination: Register, registers: Registers)
 
 def Sub(operands: [Operand], destination: Register, registers: Registers):
     allowed_types = [
-        (Field, Field),
-        (Group, Group),
-        (i8, i8),
-        (i16, i16),
-        (i32, i32),
-        (i64, i64),
-        (i128, i128),
-        (u8, u8),
-        (u16, u16),
-        (u32, u32),
-        (u64, u64),
-        (u128, u128),
-        (Scalar, Scalar),
+        Field,
+        Group,
+        i8,
+        i16,
+        i32,
+        i64,
+        i128,
+        u8,
+        u16,
+        u32,
+        u64,
+        u128,
+        Scalar,
     ]
     op1 = load_plaintext_from_operand(operands[0], registers)
     op2 = load_plaintext_from_operand(operands[1], registers)
@@ -290,7 +320,7 @@ def Sub(operands: [Operand], destination: Register, registers: Registers):
         raise TypeError("operands must be literals")
     op1_type = Literal.primitive_type_map[op1.literal.type]
     op2_type = Literal.primitive_type_map[op2.literal.type]
-    if not (op1_type, op2_type) in allowed_types:
+    if not (op1_type in allowed_types and op2_type == op1_type):
         raise TypeError("invalid operand types")
     res = LiteralPlaintext(
         literal=Literal(
@@ -304,7 +334,17 @@ def SubWrapped(operands: [Operand], destination: Register, registers: Registers)
     raise NotImplementedError
 
 def Ternary(operands: [Operand], destination: Register, registers: Registers):
-    raise NotImplementedError
+    op1 = load_plaintext_from_operand(operands[0], registers)
+    op2 = load_plaintext_from_operand(operands[1], registers)
+    op3 = load_plaintext_from_operand(operands[2], registers)
+    if not isinstance(op1, LiteralPlaintext):
+        raise TypeError("condition must be a literal")
+    if op1.literal.type != Literal.Type.Boolean:
+        raise TypeError("condition must be a boolean")
+    if op1.literal.primitive == bool_(True):
+        store_plaintext_to_register(op2, destination, registers)
+    else:
+        store_plaintext_to_register(op3, destination, registers)
 
 def Xor(operands: [Operand], destination: Register, registers: Registers):
     raise NotImplementedError

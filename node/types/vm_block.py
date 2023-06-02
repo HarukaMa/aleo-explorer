@@ -1361,6 +1361,14 @@ class StructPlaintext(Plaintext):
                 return
         raise ValueError("Identifier not found")
 
+    def __eq__(self, other):
+        if not isinstance(other, StructPlaintext):
+            return False
+        for identifier, plaintext in self.members:
+            if plaintext != other.get_member(identifier):
+                return False
+        return True
+
 
 class Owner(TypeParameter, Serialize, Deserialize):  # enum
 
