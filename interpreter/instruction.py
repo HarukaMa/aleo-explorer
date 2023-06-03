@@ -236,7 +236,36 @@ def IsEq(operands: [Operand], destination: Register, registers: Registers):
 
 
 def IsNeq(operands: [Operand], destination: Register, registers: Registers):
-    raise NotImplementedError
+    allowed_types = [
+        Address,
+        bool_,
+        Field,
+        Group,
+        i8,
+        i16,
+        i32,
+        i64,
+        i128,
+        u8,
+        u16,
+        u32,
+        u64,
+        u128,
+        Scalar,
+        Struct,
+    ]
+    op1 = load_plaintext_from_operand(operands[0], registers)
+    op2 = load_plaintext_from_operand(operands[1], registers)
+    # loosely check the types, we don't really expect to run into bad types here
+    if op1.type != op2.type:
+        raise TypeError("invalid operand types")
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=Literal.Type.Boolean,
+            primitive=bool_(op1 != op2),
+        )
+    )
+    store_plaintext_to_register(res, destination, registers)
 
 def LessThan(operands: [Operand], destination: Register, registers: Registers):
     raise NotImplementedError
