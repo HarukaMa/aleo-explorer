@@ -16,6 +16,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 from db import Database
+from middleware.server_timing import ServerTimingMiddleware
 from node.types import Program, Identifier, PlaintextType, LiteralPlaintextType, StructPlaintextType, LiteralPlaintext, \
     Literal, Value
 
@@ -100,6 +101,7 @@ app = Starlette(
     middleware=[
         Middleware(AccessLoggerMiddleware, format=log_format),
         Middleware(CORSMiddleware, allow_origins=['*']),
+        Middleware(ServerTimingMiddleware),
     ]
 )
 
