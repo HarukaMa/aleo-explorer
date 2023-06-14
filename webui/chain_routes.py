@@ -278,6 +278,8 @@ async def transition_route(request: Request):
     transition = None
     state = ""
     for ct in block.transactions:
+        if state != "":
+            break
         if ct.type == ConfirmedTransaction.Type.AcceptedDeploy:
             ct: AcceptedDeploy
             tx: Transaction = ct.transaction
