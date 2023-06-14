@@ -58,6 +58,13 @@ class Int(Sized, Serialize, Deserialize, int, metaclass=ABCMeta):
             raise TypeError("unsupported operand type(s) for -: '{}' and '{}'".format(type(self), type(other)))
         return self.__class__(int.__sub__(self, other))
 
+    def __mul__(self, other):
+        if type(other) is int:
+            return self.__class__(int.__mul__(self, other))
+        if type(other) is not type(self):
+            raise TypeError("unsupported operand type(s) for *: '{}' and '{}'".format(type(self), type(other)))
+        return self.__class__(int.__mul__(self, other))
+
     def __eq__(self, other):
         if type(other) is int:
             return int.__eq__(self, other)

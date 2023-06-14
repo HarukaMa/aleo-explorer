@@ -352,7 +352,19 @@ def Modulo(operands: [Operand], destination: Register, registers: Registers):
     raise NotImplementedError
 
 def Mul(operands: [Operand], destination: Register, registers: Registers):
-    raise NotImplementedError
+    op1 = load_plaintext_from_operand(operands[0], registers)
+    op2 = load_plaintext_from_operand(operands[1], registers)
+    if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
+        raise TypeError("operands must be literals")
+    if op1.literal.type != op2.literal.type:
+        raise TypeError("invalid operand types")
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=op1.literal.type,
+            primitive=op1.literal.primitive * op2.literal.primitive,
+        )
+    )
+    store_plaintext_to_register(res, destination, registers)
 
 def MulWrapped(operands: [Operand], destination: Register, registers: Registers):
     raise NotImplementedError
