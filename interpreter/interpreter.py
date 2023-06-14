@@ -35,13 +35,8 @@ async def finalize_block(db: Database, block: Block):
                 finalize: Vec[Value, u8] = transition.finalize.value
                 if finalize is not None:
                     # temp ignore to avoid bug
-                    calls = await db.get_program_calls(str(transition.program_id), 0, 2 ** 32)
-                    stop = False
-                    for call in calls:
-                        if call["type"] not in [ConfirmedTransaction.Type.AcceptedDeploy.name, ConfirmedTransaction.Type.AcceptedExecute.name]:
-                            stop = True
-                            break
-                    if stop:
+                    has_rejects = await db.program_calls_has_reject(str(transition.program_id))
+                    if has_rejects:
                         continue
                     program = Program.load(bytearray(await db.get_program(str(transition.program_id))))
                     inputs = list(map(lambda x: x.plaintext, finalize))
