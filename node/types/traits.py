@@ -73,6 +73,16 @@ class Int(Sized, Serialize, Deserialize, int, metaclass=ABCMeta):
             return self.__class__(~int(self) & self.max)
         return self.__class__(~int(self))
 
+    # we are deviating from python's insane behavior here
+    # this is actually __truncdiv__
+    def __floordiv__(self, other):
+        if type(other) is int:
+            return self.__class__(int(self / other))
+        if type(other) is not type(self):
+            raise TypeError("unsupported operand type(s) for //: '{}' and '{}'".format(type(self), type(other)))
+        return self.__class__(int(self / other))
+
+
 
 
 class IntEnumu8(Serialize, Deserialize, IntEnum, metaclass=ABCEnumMeta):
