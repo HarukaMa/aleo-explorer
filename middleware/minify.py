@@ -45,6 +45,7 @@ class MinifyWrapper:
                         do_not_minify_doctype=True,
                         ensure_spec_compliant_unquoted_attribute_values=True,
                         keep_closing_tags=True,
+                        keep_html_and_head_opening_tags=True,
                         minify_css=True,
                         minify_js=True,
                     ).encode("utf-8")
