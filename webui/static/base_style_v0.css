@@ -1,0 +1,121 @@
+
+
+.global-banner {
+    margin-bottom: 0 !important;
+}
+
+.container {
+    margin: 0 20px;
+}
+
+.content {
+    max-width: 1280px;
+    margin: auto;
+    padding: 8px;
+    font-size: 0.9rem;
+}
+
+.footer-container {
+    padding: 0 8px;
+}
+
+.footer {
+    max-width: 1280px;
+    margin: auto;
+    padding: 8px;
+    font-size: 0.875rem;
+}
+
+.settings {
+    max-width: 1280px;
+    margin: auto;
+    padding: 32px 8px 8px 8px;
+    font-size: 0.875rem;
+}
+
+#search {
+    width: 100%;
+}
+
+.menubar {
+    max-width: 1280px;
+    flex: 1 1 auto;
+    margin: auto;
+    display: flex;
+    padding: 0 20px;
+}
+
+.top-bar-right {
+    width: 35%;
+}
+
+.menu .menu-text {
+    padding-left: 0;
+}
+
+.top-bar input {
+    max-width: 100%;
+}
+
+.input-group {
+    margin-bottom: 0;
+}
+
+.mono, pre {
+    font-family: monospace;
+    font-size: 0.825rem;
+}
+
+.note {
+    font-size: 0.75rem;
+    color: #999;
+}
+
+.data-line {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #ccc;
+}
+
+.sub-data-line {
+    padding: 0.5rem 0 0.5rem 1rem;
+    border-bottom: 1px solid #ccc;
+}
+
+.data-line-value {
+    overflow-wrap: break-word;
+}
+
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[type=number] {
+    -moz-appearance: textfield;
+}
+
+.pagination {
+    display: inline-block;
+}
+
+#goto {
+    display: inline-block;
+}
+
+#goto input {
+    height: 2rem;
+    width: 50px;
+}
+
+.number-part {
+    margin: 0 0.1em;
+}
+
+.number-dot {
+    margin: 0 -0.05em;
+}
+
+.formatted-number {
+    margin: 0 -0.1em;
+}
