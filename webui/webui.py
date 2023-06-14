@@ -11,6 +11,7 @@ from starlette.responses import FileResponse
 from starlette.routing import Route, Mount
 from starlette.staticfiles import StaticFiles
 
+from middleware.minify import MinifyMiddleware
 from middleware.server_timing import ServerTimingMiddleware
 # from node.light_node import LightNodeState
 from .chain_routes import *
@@ -126,6 +127,7 @@ app = Starlette(
     exception_handlers=exc_handlers,
     middleware=[
         Middleware(AccessLoggerMiddleware, format=log_format),
+        Middleware(MinifyMiddleware),
         Middleware(ServerTimingMiddleware),
     ]
 )
