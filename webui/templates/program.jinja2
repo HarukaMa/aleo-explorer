@@ -90,8 +90,8 @@
                 {% endcall %}
                 {% call data_line("Structs") %}
                     <span class="mono">
-                {% if interfaces %}
-                    {% for struct in interfaces %}
+                {% if structs %}
+                    {% for struct in structs %}
                         {{ struct }}<br>
                     {% endfor %}
                 {% else %}
