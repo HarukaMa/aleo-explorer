@@ -77,6 +77,13 @@ async def program_route(request: Request):
     else:
         source = disasm.aleo.disassemble_program(program)
         has_leo_source = False
+    mappings = []
+    for name, mapping in program.mappings.items():
+        mappings.append({
+            "name": str(name),
+            "key_type": str(mapping.key.plaintext_type),
+            "value_type": str(mapping.value.plaintext_type)
+        })
     ctx = {
         "request": request,
         "program_id": str(program.id),
@@ -85,7 +92,7 @@ async def program_route(request: Request):
         "signature": str(transaction.owner.signature),
         "times_called": await db.get_program_called_times(program_id),
         "imports": list(map(lambda i: str(i.program_id), program.imports)),
-        "mappings": list(map(str, program.mappings.keys())),
+        "mappings": mappings,
         "structs": list(map(str, program.structs.keys())),
         "records": list(map(str, program.records.keys())),
         "closures": list(map(str, program.closures.keys())),
@@ -93,6 +100,7 @@ async def program_route(request: Request):
         "source": source,
         "has_leo_source": has_leo_source,
         "recent_calls": await db.get_program_calls(program_id, 0, 30),
+        "has_rejects": await db.program_calls_has_reject(program_id),
         "similar_count": await db.get_program_similar_count(program_id),
     }
     return templates.TemplateResponse('program.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})

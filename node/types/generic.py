@@ -104,9 +104,22 @@ class Vec(Generic, Serialize, Deserialize, Sequence):
         return len(self._list)
 
     def __getitem__(self, index):
-        if not isinstance(index, int):
+        if isinstance(index, int) or isinstance(index, slice):
+            return self._list[index]
+        else:
+            raise TypeError("index must be int or slice")
+
+    def __setitem__(self, index, value):
+        if isinstance(index, int):
+            if isinstance(self.type, type) or isinstance(self.type, UnionType):
+                if not isinstance(value, self.type):
+                    raise TypeError("value must be of type {}".format(self.type))
+            else:
+                if not isinstance(value, type(self.type)):
+                    raise TypeError("value must be of type {}".format(type(self.type)))
+            self._list[index] = value
+        else:
             raise TypeError("index must be int")
-        return self._list[index]
 
     def dump(self) -> bytes:
         res = b""
@@ -196,6 +209,9 @@ class VarInt(Generic, Serialize, Deserialize):
 
     def __str__(self):
         return str(self.value)
+
+    def __int__(self):
+        return int(self.value)
 
 class Option(Generic, Serialize, Deserialize):
 

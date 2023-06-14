@@ -5,12 +5,6 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="format-detection" content="telephone=no">
     <title>{% block title %}{% endblock %}</title>
-    {#    <style>#}
-    {#        body {#}
-    {#            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";#}
-    {#            line-height: 1.35;#}
-    {#        }#}
-    {#    </style>#}
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/foundation/6.7.4/css/foundation.min.css"
           integrity="sha512-TgmH0v8FUwmsr3yDgd5PTCgR6lRZ2Q5c7KsUNTHcoxZpOExCX16MYECIL4xdRQOhQlz7pCnZlmA4zda58QWxBw=="
@@ -19,140 +13,15 @@
           integrity="sha512-kDmbIQZ10fxeKP5NSt3+tz77HO42IJiS+YPIirOIKTdokl4LtuXYo3NNvq9mTAF+rzdV1plp0sm9E6nvtVpnFQ=="
           crossorigin="anonymous" referrerpolicy="no-referrer"/>
     <style>
-
-        .global-banner {
-            margin-bottom: 0 !important;
-        }
-
-        .container {
-            margin: 0 20px;
-        }
-
-        .content {
-            max-width: 1280px;
-            margin: auto;
-            padding: 8px;
-            font-size: 0.9rem;
-        }
-
-        .footer-container {
-            padding: 0 8px;
-        }
-
-        .footer {
-            max-width: 1280px;
-            margin: auto;
-            padding: 8px;
-            font-size: 0.875rem;
-        }
-
-        .settings {
-            max-width: 1280px;
-            margin: auto;
-            padding: 32px 8px 8px 8px;
-            font-size: 0.875rem;
-        }
-
-        #search {
-            width: 100%;
-        }
-
-        .menubar {
-            max-width: 1280px;
-            flex: 1 1 auto;
-            margin: auto;
-            display: flex;
-            padding: 0 20px;
-        }
-
         .top-bar, .top-bar ul {
-
         {% if "BETA" | get_env %}
-            background-color: #92a9f6;
+            background-color: #eef8e1;
         {% else %}
             background-color: #e1e7f8;
         {% endif %}
         }
-
-        .top-bar-right {
-            width: 35%;
-        }
-
-        .menu .menu-text {
-            padding-left: 0;
-        }
-
-        .top-bar input {
-            max-width: 100%;
-        }
-
-        .input-group {
-            margin-bottom: 0;
-        }
-
-        .mono, pre {
-            font-family: monospace;
-            font-size: 0.825rem;
-        }
-
-        .note {
-            font-size: 0.75rem;
-            color: #999;
-        }
-
-        .data-line {
-            padding: 0.5rem 0;
-            border-bottom: 1px solid #ccc;
-        }
-
-        .sub-data-line {
-            padding: 0.5rem 0 0.5rem 1rem;
-            border-bottom: 1px solid #ccc;
-        }
-
-        .data-line-value {
-            overflow-wrap: break-word;
-        }
-
-        input::-webkit-outer-spin-button,
-        input::-webkit-inner-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
-        }
-
-        input[type=number] {
-            -moz-appearance:textfield;
-        }
-
-        .pagination {
-            display: inline-block;
-        }
-
-        #goto {
-            display: inline-block;
-        }
-
-        #goto input {
-            height: 2rem;
-            width: 50px;
-        }
-
-        .number-part {
-            margin: 0 0.1em;
-        }
-
-        .number-dot {
-            margin: 0 -0.05em;
-        }
-
-        .formatted-number {
-            margin: 0 -0.1em;
-        }
-
     </style>
-    <script>
-
-    </script>
+    <link rel="stylesheet" href="/static/base_style_v0.css">
     {% block head %}{% endblock %}
 </head>
 <body>
@@ -162,7 +31,7 @@
         <div class="top-bar-left">
             <ul class="dropdown menu" data-dropdown-menu>
                 {% if "BETA" | get_env %}
-                    <li class="menu-text">Haruka's Explorer<sup>PREVIEW</sup></li>
+                    <li class="menu-text">Haruka's Explorer <sup>PREVIEW</sup></li>
                 {% else %}
                     <li class="menu-text">Haruka's Aleo Explorer</li>
                 {% endif %}
@@ -197,39 +66,13 @@
         </div>
     </div>
 </div>
-<script>
-    customElements.define(
-        "advanced-link",
-        class extends HTMLElement {
-            constructor() {
-                super();
-                this.addEventListener("advanced-toggle", (e) => {
-                    const show = e.detail;
-                    if (show) {
-                        const query_string = Array.from(this.attributes).map((attr) => {
-                            return `${attr.name}=${attr.value}`;
-                        }).reduce((a, b) => {
-                            return `${a}&${b}`;
-                        });
-                        this.innerHTML = `<a class="advanced-link" href="/advanced?${query_string}">${this.innerHTML}</a>`;
-                    } else {
-                        if (this.children[0].tagName === "A") {
-                            this.innerHTML = this.children[0].innerHTML;
-                        }
-                    }
-                })
-            }
-
-        }
-    )
-</script>
 {% if maintenance is defined and maintenance != None %}
     <div class="content">
     <div class="callout alert global-banner">
         {% if maintenance %}
             The explorer is resyncing with the network: {{ info }} The data below is not up-to-date. Please check back later.
         {% else %}
-            It seems the explorer is out of sync - the last block was {{ info }}. The data below might not be up-to-date.
+            The explorer is out of sync - the last block was {{ info }}. The data below might not be up-to-date.
         {% endif %}
     </div>
     </div>
@@ -259,84 +102,7 @@
 {% block content_script %}{% endblock %}
 <script>
     $(document).foundation()
-
-    function utc_to_local() {
-        const times = $(".time")
-        for (const time of times) {
-            const text = time.innerText
-            const date = new Date(Date.parse(text.replace(" ", "T") + "Z"))
-            time.innerText = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}:${date.getSeconds().toString().padStart(2, '0')}`
-        }
-    }
-
-    function local_to_utc() {
-        const times = $(".time")
-        for (const time of times) {
-            const text = time.innerText
-            const date = new Date(text)
-            time.innerText = `${date.getUTCFullYear()}-${(date.getUTCMonth() + 1).toString().padStart(2, '0')}-${date.getUTCDate().toString().padStart(2, '0')} ${date.getUTCHours().toString().padStart(2, '0')}:${date.getUTCMinutes().toString().padStart(2, '0')}:${date.getUTCSeconds().toString().padStart(2, '0')}`
-        }
-    }
-
-    const timezone_setting_element = $("#timezone-setting")
-
-    function toggle_timezone() {
-        if (localStorage.getItem("timezone") === "local") {
-            localStorage.setItem("timezone", "utc")
-            timezone_setting_element.text("UTC")
-            local_to_utc()
-        } else {
-            localStorage.setItem("timezone", "local")
-            timezone_setting_element.text("Local")
-            utc_to_local()
-        }
-    }
-
-
-    let timezone_setting = localStorage.getItem("timezone")
-    if (timezone_setting === null) {
-        timezone_setting = "utc"
-        localStorage.setItem("timezone", "utc")
-    }
-
-    if (timezone_setting === "local") {
-        utc_to_local()
-        timezone_setting_element.text("Local")
-    } else {
-        timezone_setting_element.text("UTC")
-    }
-
-    let advanced_setting = "false"
-    if (advanced_setting === null) {
-        advanced_setting = false
-        localStorage.setItem("advanced", "false")
-    } else {
-        advanced_setting = JSON.parse(advanced_setting)
-    }
-
-    const advanced_setting_element = $("#advanced-setting")
-
-    advanced_setting_element.text("Off")
-    dispatch_advanced_event()
-
-    function dispatch_advanced_event() {
-        $("advanced-link").each((_, element) => {
-            element.dispatchEvent(new CustomEvent("advanced-toggle", { detail: advanced_setting }))
-        })
-    }
-
-    function toggle_advanced() {
-        if (advanced_setting) {
-            localStorage.setItem("advanced", "false")
-            advanced_setting_element.text("Off")
-        } else {
-            localStorage.setItem("advanced", "true")
-            advanced_setting_element.text("On")
-        }
-        advanced_setting = !advanced_setting
-        dispatch_advanced_event()
-    }
-
 </script>
+<script src="/static/base_script_v0.js"></script>
 </body>
 </html>

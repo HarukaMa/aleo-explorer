@@ -6,6 +6,7 @@ from sys import stdout
 import api
 import webui
 from db import Database
+from interpreter.interpreter import finalize_block
 from node import Node
 from node.testnet3 import Testnet3
 from node.types import Block
@@ -113,6 +114,7 @@ class Explorer:
             print(f"ignoring block {block} because previous block hash does not match")
         else:
             print(f"adding block {block}")
+            await finalize_block(self.db, block)
             await self.db.save_block(block)
             self.latest_height = block.header.metadata.height
             self.latest_block_hash = block.block_hash
@@ -126,7 +128,7 @@ class Explorer:
                 from hashlib import md5
                 if md5(f.read()).hexdigest() == "1c28714e40263e4c4afa1aa7f7272a3f":
                     self.dev_mode = True
-                    i = 10
+                    i = 1
                     while i > 0:
                         print(f"\x1b[G\x1b[2K!!! Clearing database in {i} seconds !!!", end="")
                         stdout.flush()

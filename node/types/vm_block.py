@@ -1307,6 +1307,15 @@ class LiteralPlaintext(Plaintext):
     def __str__(self):
         return str(self.literal)
 
+    def __eq__(self, other):
+        return self.literal == other.literal
+
+    def __gt__(self, other):
+        return self.literal > other.literal
+
+    def __ge__(self, other):
+        return self.literal >= other.literal
+
 
 class StructPlaintext(Plaintext):
     type = Plaintext.Type.Struct
@@ -1344,6 +1353,27 @@ class StructPlaintext(Plaintext):
         for identifier, plaintext in self.members:
             data[str(identifier)] = str(plaintext)
         return json.dumps(data).replace('"', '')
+
+    def get_member(self, identifier):
+        for member in self.members:
+            if member[0] == identifier:
+                return member[1]
+        raise ValueError("Identifier not found")
+
+    def set_member(self, identifier, plaintext):
+        for i, member in enumerate(self.members):
+            if member[0] == identifier:
+                self.members[i] = Tuple[Identifier, Plaintext]([identifier, plaintext])
+                return
+        raise ValueError("Identifier not found")
+
+    def __eq__(self, other):
+        if not isinstance(other, StructPlaintext):
+            return False
+        for identifier, plaintext in self.members:
+            if plaintext != other.get_member(identifier):
+                return False
+        return True
 
 
 class Owner(TypeParameter, Serialize, Deserialize):  # enum
@@ -1690,6 +1720,9 @@ class PlaintextValue(Value):
     def load(cls, data: bytearray):
         plaintext = Plaintext.load(data)
         return cls(plaintext=plaintext)
+
+    def __str__(self):
+        return str(self.plaintext)
 
 
 class RecordValue(Value):

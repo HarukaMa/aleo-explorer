@@ -1,5 +1,6 @@
 import struct
 from abc import abstractmethod
+from decimal import Decimal
 from enum import IntEnum
 
 from .utils import *
@@ -31,13 +32,64 @@ class Int(Sized, Serialize, Deserialize, int, metaclass=ABCMeta):
     def __new__(cls, value=0):
         return int.__new__(cls, value)
 
-    @abstractmethod
-    def __init__(self, _):
-        raise NotImplementedError
+    def __init__(self, value=0):
+        if not isinstance(value, (int, Decimal)):
+            raise TypeError("value must be int or Decimal")
+        if isinstance(value, Decimal):
+            value = int(value)
+        if not self.min <= value <= self.max:
+            raise ValueError("value must be between {} and {}".format(self.min, self.max))
 
     @classmethod
     def loads(cls, value: int):
         return cls(value)
+
+    def __add__(self, other):
+        if type(other) is int:
+            return self.__class__(int.__add__(self, other))
+        if type(other) is not type(self):
+            raise TypeError("unsupported operand type(s) for +: '{}' and '{}'".format(type(self), type(other)))
+        return self.__class__(int.__add__(self, other))
+
+    def __sub__(self, other):
+        if type(other) is int:
+            return self.__class__(int.__sub__(self, other))
+        if type(other) is not type(self):
+            raise TypeError("unsupported operand type(s) for -: '{}' and '{}'".format(type(self), type(other)))
+        return self.__class__(int.__sub__(self, other))
+
+    def __mul__(self, other):
+        if type(other) is int:
+            return self.__class__(int.__mul__(self, other))
+        if type(other) is not type(self):
+            raise TypeError("unsupported operand type(s) for *: '{}' and '{}'".format(type(self), type(other)))
+        return self.__class__(int.__mul__(self, other))
+
+    def __eq__(self, other):
+        if type(other) is int:
+            return int.__eq__(self, other)
+        if type(other) is not type(self):
+            return False
+        return int.__eq__(self, other)
+
+    def __hash__(self):
+        return int.__hash__(self)
+
+    def __invert__(self):
+        if self.min == 0:
+            return self.__class__(~int(self) & self.max)
+        return self.__class__(~int(self))
+
+    # we are deviating from python's insane behavior here
+    # this is actually __truncdiv__
+    def __floordiv__(self, other):
+        if type(other) is int:
+            return self.__class__(int(self / other))
+        if type(other) is not type(self):
+            raise TypeError("unsupported operand type(s) for //: '{}' and '{}'".format(type(self), type(other)))
+        return self.__class__(int(self / other))
+
+
 
 
 class IntEnumu8(Serialize, Deserialize, IntEnum, metaclass=ABCEnumMeta):

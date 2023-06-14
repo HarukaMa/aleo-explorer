@@ -51,7 +51,7 @@ class Literal(Serialize, Deserialize): # enum
         String = 15
 
     primitive_type_map = {
-        Type.Address: Group,
+        Type.Address: Address,
         Type.Boolean: bool_,
         Type.Field: Field,
         Type.Group: Group,
@@ -67,6 +67,25 @@ class Literal(Serialize, Deserialize): # enum
         Type.U128: u128,
         Type.Scalar: Scalar,
         Type.String: StringType,
+    }
+
+    reverse_primitive_type_map = {
+        Address: Type.Address,
+        bool_: Type.Boolean,
+        Field: Type.Field,
+        Group: Type.Group,
+        i8: Type.I8,
+        i16: Type.I16,
+        i32: Type.I32,
+        i64: Type.I64,
+        i128: Type.I128,
+        u8: Type.U8,
+        u16: Type.U16,
+        u32: Type.U32,
+        u64: Type.U64,
+        u128: Type.U128,
+        Scalar: Type.Scalar,
+        StringType: Type.String,
     }
 
     # @type_check
@@ -91,6 +110,15 @@ class Literal(Serialize, Deserialize): # enum
     def __str__(self):
         import disasm.aleo
         return disasm.aleo.disasm_literal(self)
+
+    def __eq__(self, other):
+        return self.type == other.type and self.primitive == other.primitive
+
+    def __gt__(self, other):
+        return self.type == other.type and self.primitive > other.primitive
+
+    def __ge__(self, other):
+        return self.type == other.type and self.primitive >= other.primitive
 
 
 class Identifier(Serialize, Deserialize):
@@ -131,6 +159,12 @@ class Identifier(Serialize, Deserialize):
 
     def __str__(self):
         return self.data
+
+    def __eq__(self, other):
+        return self.data == other.data
+
+    def __hash__(self):
+        return hash(self.data)
 
 class ProgramID(Serialize, Deserialize):
 
@@ -501,6 +535,46 @@ class LiteralType(IntEnumu16):
     Scalar = 14
     String = 15
 
+    def get_primitive_type(self):
+        return {
+            self.Address: Address,
+            self.Boolean: bool_,
+            self.Field: Field,
+            self.Group: Group,
+            self.I8: i8,
+            self.I16: i16,
+            self.I32: i32,
+            self.I64: i64,
+            self.I128: i128,
+            self.U8: u8,
+            self.U16: u16,
+            self.U32: u32,
+            self.U64: u64,
+            self.U128: u128,
+            self.Scalar: Scalar,
+            self.String: StringType,
+        }[self]
+
+    def __str__(self):
+        return {
+            self.Address: "address",
+            self.Boolean: "bool",
+            self.Field: "field",
+            self.Group: "group",
+            self.I8: "i8",
+            self.I16: "i16",
+            self.I32: "i32",
+            self.I64: "i64",
+            self.I128: "i128",
+            self.U8: "u8",
+            self.U16: "u16",
+            self.U32: "u32",
+            self.U64: "u64",
+            self.U128: "u128",
+            self.Scalar: "scalar",
+            self.String: "string",
+        }[self]
+
 
 class PlaintextType(Serialize, Deserialize): # enum
 
@@ -543,6 +617,9 @@ class LiteralPlaintextType(PlaintextType):
         literal_type = LiteralType.load(data)
         return cls(literal_type=literal_type)
 
+    def __str__(self):
+        return str(self.literal_type)
+
 
 class StructPlaintextType(PlaintextType):
     type = PlaintextType.Type.Struct
@@ -559,6 +636,9 @@ class StructPlaintextType(PlaintextType):
     def load(cls, data: bytearray):
         struct_ = Identifier.load(data)
         return cls(struct_=struct_)
+
+    def __str__(self):
+        return str(self.struct)
 
 class RegisterType(Serialize, Deserialize): # enum
 
