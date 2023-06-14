@@ -1,7 +1,7 @@
 import os
-import time
 
 import psycopg
+import time
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 
@@ -1562,8 +1562,10 @@ class Database:
                         "JOIN transaction_execute te on te.id = ts.transaction_execute_id "
                         "JOIN transaction t on te.transaction_id = t.id "
                         "JOIN confirmed_transaction ct on t.confimed_transaction_id = ct.id "
+                        "JOIN block b on ct.block_id = b.id "
                         "WHERE ts.program_id = %s "
-                        "AND (ct.type = 'RejectedDeploy' OR ct.type = 'RejectedExecute')",
+                        "AND (ct.type = 'RejectedDeploy' OR ct.type = 'RejectedExecute') "
+                        "AND b.height < 200000",
                         (program_id,)
                     )
                     return len(await cur.fetchall()) > 0
