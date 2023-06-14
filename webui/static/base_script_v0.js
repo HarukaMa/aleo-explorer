@@ -78,15 +78,16 @@ if (advanced_setting === null) {
     advanced_setting = JSON.parse(advanced_setting)
 }
 
-const advanced_setting_element = $("#advanced-setting")
+const advanced_setting_element = document.getElementById("advanced-setting")
 
 advanced_setting_element.innerText = "Off"
 dispatch_advanced_event()
 
 function dispatch_advanced_event() {
-    $("advanced-link").each((_, element) => {
+    const advanced = document.getElementsByTagName("advanced-link")
+    for(const element of advanced) {
         element.dispatchEvent(new CustomEvent("advanced-toggle", { detail: advanced_setting }))
-    })
+    }
 }
 
 function toggle_advanced() {
