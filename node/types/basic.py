@@ -229,6 +229,9 @@ class bool_(Int):
             return "True"
         return "False"
 
+    def __invert__(self):
+        return bool_(not self)
+
 
 class SocketAddr(Deserialize):
     def __init__(self, *, ip: int, port: int):

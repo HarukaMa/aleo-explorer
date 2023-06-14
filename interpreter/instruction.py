@@ -160,10 +160,42 @@ def Double(operands: [Operand], destination: Register, registers: Registers):
     raise NotImplementedError
 
 def GreaterThan(operands: [Operand], destination: Register, registers: Registers):
-    raise NotImplementedError
+    op1 = load_plaintext_from_operand(operands[0], registers)
+    op2 = load_plaintext_from_operand(operands[1], registers)
+    if op1 > op2:
+        res = LiteralPlaintext(
+            literal=Literal(
+                type_=Literal.Type.Boolean,
+                primitive=bool_(True),
+            )
+        )
+    else:
+        res = LiteralPlaintext(
+            literal=Literal(
+                type_=Literal.Type.Boolean,
+                primitive=bool_(False),
+            )
+        )
+    store_plaintext_to_register(res, destination, registers)
 
 def GreaterThanOrEqual(operands: [Operand], destination: Register, registers: Registers):
-    raise NotImplementedError
+    op1 = load_plaintext_from_operand(operands[0], registers)
+    op2 = load_plaintext_from_operand(operands[1], registers)
+    if op1 >= op2:
+        res = LiteralPlaintext(
+            literal=Literal(
+                type_=Literal.Type.Boolean,
+                primitive=bool_(True),
+            )
+        )
+    else:
+        res = LiteralPlaintext(
+            literal=Literal(
+                type_=Literal.Type.Boolean,
+                primitive=bool_(False),
+            )
+        )
+    store_plaintext_to_register(res, destination, registers)
 
 def HashBHP256(operands: [Operand], destination: Register, registers: Registers):
     op = load_plaintext_from_operand(operands[0], registers)
@@ -268,11 +300,42 @@ def IsNeq(operands: [Operand], destination: Register, registers: Registers):
     store_plaintext_to_register(res, destination, registers)
 
 def LessThan(operands: [Operand], destination: Register, registers: Registers):
-    raise NotImplementedError
+    op1 = load_plaintext_from_operand(operands[0], registers)
+    op2 = load_plaintext_from_operand(operands[1], registers)
+    if op1 < op2:
+        res = LiteralPlaintext(
+            literal=Literal(
+                type_=Literal.Type.Boolean,
+                primitive=bool_(True),
+            )
+        )
+    else:
+        res = LiteralPlaintext(
+            literal=Literal(
+                type_=Literal.Type.Boolean,
+                primitive=bool_(False),
+            )
+        )
+    store_plaintext_to_register(res, destination, registers)
 
 def LessThanOrEqual(operands: [Operand], destination: Register, registers: Registers):
-    raise NotImplementedError
-
+    op1 = load_plaintext_from_operand(operands[0], registers)
+    op2 = load_plaintext_from_operand(operands[1], registers)
+    if op1 <= op2:
+        res = LiteralPlaintext(
+            literal=Literal(
+                type_=Literal.Type.Boolean,
+                primitive=bool_(True),
+            )
+        )
+    else:
+        res = LiteralPlaintext(
+            literal=Literal(
+                type_=Literal.Type.Boolean,
+                primitive=bool_(False),
+            )
+        )
+    store_plaintext_to_register(res, destination, registers)
 def Modulo(operands: [Operand], destination: Register, registers: Registers):
     raise NotImplementedError
 
@@ -292,7 +355,14 @@ def Nor(operands: [Operand], destination: Register, registers: Registers):
     raise NotImplementedError
 
 def Not(operands: [Operand], destination: Register, registers: Registers):
-    raise NotImplementedError
+    op = load_plaintext_from_operand(operands[0], registers)
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=Literal.Type.Boolean,
+            primitive=~op.literal.primitive,
+        )
+    )
+    store_plaintext_to_register(res, destination, registers)
 
 def Or(operands: [Operand], destination: Register, registers: Registers):
     raise NotImplementedError

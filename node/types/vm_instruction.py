@@ -114,6 +114,12 @@ class Literal(Serialize, Deserialize): # enum
     def __eq__(self, other):
         return self.type == other.type and self.primitive == other.primitive
 
+    def __gt__(self, other):
+        return self.type == other.type and self.primitive > other.primitive
+
+    def __ge__(self, other):
+        return self.type == other.type and self.primitive >= other.primitive
+
 
 class Identifier(Serialize, Deserialize):
 

@@ -68,6 +68,12 @@ class Int(Sized, Serialize, Deserialize, int, metaclass=ABCMeta):
     def __hash__(self):
         return int.__hash__(self)
 
+    def __invert__(self):
+        if self.min == 0:
+            return self.__class__(~int(self) & self.max)
+        return self.__class__(~int(self))
+
+
 
 class IntEnumu8(Serialize, Deserialize, IntEnum, metaclass=ABCEnumMeta):
 

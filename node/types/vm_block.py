@@ -1310,6 +1310,12 @@ class LiteralPlaintext(Plaintext):
     def __eq__(self, other):
         return self.literal == other.literal
 
+    def __gt__(self, other):
+        return self.literal > other.literal
+
+    def __ge__(self, other):
+        return self.literal >= other.literal
+
 
 class StructPlaintext(Plaintext):
     type = Plaintext.Type.Struct
