@@ -44,6 +44,7 @@ class MinifyWrapper:
                         body.decode("utf-8"),
                         do_not_minify_doctype=True,
                         ensure_spec_compliant_unquoted_attribute_values=True,
+                        keep_closing_tags=True,
                         minify_css=True,
                         minify_js=True,
                     ).encode("utf-8")
