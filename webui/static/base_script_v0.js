@@ -47,11 +47,11 @@ const timezone_setting_element = document.getElementById("timezone-setting")
 function toggle_timezone() {
     if (localStorage.getItem("timezone") === "local") {
         localStorage.setItem("timezone", "utc")
-        timezone_setting_element.text("UTC")
+        timezone_setting_element.innerText = "UTC"
         local_to_utc()
     } else {
         localStorage.setItem("timezone", "local")
-        timezone_setting_element.text("Local")
+        timezone_setting_element.innerText = "Local"
         utc_to_local()
     }
 }
@@ -65,9 +65,9 @@ if (timezone_setting === null) {
 
 if (timezone_setting === "local") {
     utc_to_local()
-    timezone_setting_element.text("Local")
+    timezone_setting_element.innerText = "Local"
 } else {
-    timezone_setting_element.text("UTC")
+    timezone_setting_element.innerText = "UTC"
 }
 
 let advanced_setting = "false"
@@ -80,7 +80,7 @@ if (advanced_setting === null) {
 
 const advanced_setting_element = $("#advanced-setting")
 
-advanced_setting_element.text("Off")
+advanced_setting_element.innerText = "Off"
 dispatch_advanced_event()
 
 function dispatch_advanced_event() {
@@ -92,10 +92,10 @@ function dispatch_advanced_event() {
 function toggle_advanced() {
     if (advanced_setting) {
         localStorage.setItem("advanced", "false")
-        advanced_setting_element.text("Off")
+        advanced_setting_element.innerText = "Off"
     } else {
         localStorage.setItem("advanced", "true")
-        advanced_setting_element.text("On")
+        advanced_setting_element.innerText = "Ofn"
     }
     advanced_setting = !advanced_setting
     dispatch_advanced_event()
