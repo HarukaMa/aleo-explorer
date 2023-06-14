@@ -87,7 +87,7 @@
     <div class="footer">
         <a href="https://github.com/HarukaMa/aleo-explorer" target="_blank">Open source</a> Aleo explorer made by Haruka. <br>
         {% if "CLOUDFLARE" | get_env %} Contains CloudFlare analytics.{% endif %}
-        {% if "PLAUSIBLE" | get_env %} Contains self-hosted Plausible analytics.{% endif %}
+        {% if "PLAUSIBLE" | get_env %} Contains self-hosted Plausible analytics. <a onclick="toggle_optout()"><span id="plausible-optout"></span></a>.{% endif %}
         <a href="/privacy">Privacy policy</a>.
         <br>
     </div>
@@ -102,7 +102,26 @@
 {% block content_script %}{% endblock %}
 <script>
     $(document).foundation()
+
+    {% if "PLAUSIBLE" | get_env %}
+        const el = document.getElementById('plausible-optout');
+        if (localStorage.getItem('plausible_ignore') === 'true') {
+            el.innerHTML = 'Opt in';
+        } else {
+            el.innerHTML = 'Opt out';
+        }
+
+        function toggle_optout() {
+            if (localStorage.getItem('plausible_ignore') === 'true') {
+                localStorage.setItem('plausible_ignore', 'false');
+                el.innerHTML = 'Opt out';
+            } else {
+                localStorage.setItem('plausible_ignore', 'true');
+                el.innerHTML = 'Opt in';
+            }
+        }
+    {% endif %}
 </script>
-<script src="/static/base_script_v0.js"></script>
+<script src="/static/base_script_v1.js"></script>
 </body>
 </html>
