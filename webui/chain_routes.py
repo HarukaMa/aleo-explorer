@@ -206,7 +206,7 @@ async def transaction_route(request: Request):
     elif transaction.type == Transaction.Type.Execute:
         transaction: ExecuteTransaction
         global_state_root = transaction.execution.global_state_root
-        inclusion_proof = transaction.execution.inclusion_proof.value
+        inclusion_proof = transaction.execution.proof.value
         transitions = []
         for transition in transaction.execution.transitions:
             transition: Transition
@@ -232,7 +232,7 @@ async def transaction_route(request: Request):
     elif transaction.type == Transaction.Type.Fee:
         transaction: FeeTransaction
         global_state_root = transaction.fee.global_state_root
-        inclusion_proof = transaction.fee.inclusion_proof.value
+        inclusion_proof = transaction.fee.proof.value
         transitions = []
         rejected_transitions = []
         transition = transaction.fee.transition
