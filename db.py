@@ -1,7 +1,8 @@
 import os
+import time
+from collections import defaultdict
 
 import psycopg
-import time
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 
@@ -392,14 +393,20 @@ class Database:
                                                 (finalize_operation_db_id, str(finalize_operation.mapping_id))
                                             )
 
+                        ratification_map = defaultdict(lambda: defaultdict(list))
+
                         for index, ratify in enumerate(block.ratifications):
                             ratify: Ratify
                             # noinspection PyUnresolvedReferences
                             await cur.execute(
                                 "INSERT INTO ratification (block_id, type, address, amount, index) "
-                                "VALUES (%s, %s, %s, %s, %s)",
+                                "VALUES (%s, %s, %s, %s, %s) RETURNING id",
                                 (block_db_id, ratify.type.name, str(ratify.address), ratify.amount, index)
                             )
+                            ratify_db_id = (await cur.fetchone())["id"]
+                            # noinspection PyUnresolvedReferences
+                            ratification_map[str(ratify.address)][ratify.amount].append(ratify_db_id)
+
 
                         if block.coinbase.value is not None and not os.environ.get("DEBUG_SKIP_COINBASE"):
                             coinbase_reward = block.get_coinbase_reward((await self.get_latest_block()).header.metadata.last_coinbase_timestamp)
@@ -432,11 +439,15 @@ class Database:
                                 current_total_credit = current_total_credit["total_credit"]
                             partial_solution: PartialSolution
                             for partial_solution, target, reward in solutions:
+                                try:
+                                    ratify_id = ratification_map[str(partial_solution.address)][reward].pop()
+                                except:
+                                    raise RuntimeError(f"could not find ratification for address {partial_solution.address} and reward {reward}")
                                 await cur.execute(
-                                    "INSERT INTO partial_solution (coinbase_solution_id, address, nonce, commitment, target, reward) "
-                                    "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+                                    "INSERT INTO partial_solution (coinbase_solution_id, address, nonce, commitment, target, reward, ratification_id) "
+                                    "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
                                     (coinbase_solution_db_id, str(partial_solution.address), partial_solution.nonce,
-                                    str(partial_solution.commitment), partial_solution.commitment.to_target(), reward)
+                                    str(partial_solution.commitment), partial_solution.commitment.to_target(), reward, ratify_id)
                                 )
                                 if reward > 0:
                                     await cur.execute(

@@ -2819,7 +2819,7 @@ class Block(Serialize, Deserialize):
     def get_coinbase_reward(self, last_timestamp) -> int:
         if self.coinbase.value is None:
             return 0
-        anchor_reward = 13
+        anchor_reward = 18
         y10_anchor_height = 31536000 // 25 * 10
         remaining_blocks = y10_anchor_height - self.header.metadata.height
         if remaining_blocks <= 0:

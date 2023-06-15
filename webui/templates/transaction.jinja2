@@ -51,10 +51,10 @@
                 {% call data_line("Global state root") %}
                 <span class="mono">{{ global_state_root }}</span>
                 {% endcall %}
-                {% call data_line("Inclusion proof") %}
-                    {% if inclusion_proof %}
-                        <advanced-link scope="transaction" object="{{ tx_id }}" type="inclusion_proof">
-                            <span class="mono">{{ inclusion_proof_trunc }}</span>
+                {% call data_line("Proof") %}
+                    {% if proof %}
+                        <advanced-link scope="transaction" object="{{ tx_id }}" type="proof">
+                            <span class="mono">{{ proof_trunc }}</span>
                         </advanced-link>
                     {% else %}
                         -
