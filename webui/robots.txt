@@ -4,3 +4,14 @@ User-agent: AhrefsSiteAudit
 User-agent: SemrushBot
 User-agent: dotbot
 Disallow: /
+
+User-agent: *
+Disallow: /block
+Disallow: /blocks
+Disallow: /address
+Disallow: /transaction
+Disallow: /transition
+Disallow: /programs
+
+User-agent: Bingbot
+Crawl-delay: 5
