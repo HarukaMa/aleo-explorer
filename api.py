@@ -6,7 +6,6 @@ import time
 
 import aleo
 import uvicorn
-from asgi_logger import AccessLoggerMiddleware
 from starlette.applications import Starlette
 from starlette.exceptions import HTTPException
 from starlette.middleware import Middleware
@@ -16,6 +15,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 from db import Database
+from middleware.asgi_logger import AccessLoggerMiddleware
 from middleware.server_timing import ServerTimingMiddleware
 from node.types import Program, Identifier, PlaintextType, LiteralPlaintextType, StructPlaintextType, LiteralPlaintext, \
     Literal, Value

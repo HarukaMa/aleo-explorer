@@ -4,13 +4,13 @@ import multiprocessing
 import os
 
 import uvicorn
-from asgi_logger import AccessLoggerMiddleware
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.responses import FileResponse
 from starlette.routing import Route, Mount
 from starlette.staticfiles import StaticFiles
 
+from middleware.asgi_logger import AccessLoggerMiddleware
 from middleware.minify import MinifyMiddleware
 from middleware.server_timing import ServerTimingMiddleware
 # from node.light_node import LightNodeState
