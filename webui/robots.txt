@@ -9,9 +9,8 @@ User-agent: *
 Disallow: /block
 Disallow: /blocks
 Disallow: /address
+Disallow: /address_solution
 Disallow: /transaction
 Disallow: /transition
 Disallow: /programs
-
-User-agent: Bingbot
 Crawl-delay: 5
