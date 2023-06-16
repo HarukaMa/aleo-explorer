@@ -17,4 +17,5 @@ Disallow: /transaction
 Disallow: /transition
 Disallow: /programs
 Disallow: /similar_programs
+Disallow: /upload_source
 Crawl-delay: 5
