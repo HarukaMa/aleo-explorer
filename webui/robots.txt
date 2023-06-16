@@ -16,4 +16,5 @@ Disallow: /address_solution
 Disallow: /transaction
 Disallow: /transition
 Disallow: /programs
+Disallow: /similar_programs
 Crawl-delay: 5
