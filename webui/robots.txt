@@ -3,6 +3,9 @@ User-agent: AhrefsBot
 User-agent: AhrefsSiteAudit
 User-agent: SemrushBot
 User-agent: dotbot
+User-agent: DataForSeoBot
+User-agent: rogerbot
+User-agent: BLEXBot
 Disallow: /
 
 User-agent: *
