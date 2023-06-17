@@ -20,3 +20,6 @@ Disallow: /similar_programs
 Disallow: /upload_source
 Disallow: /leaderboard
 Crawl-delay: 5
+
+User-agent: Bingbot
+Disallow: /program
