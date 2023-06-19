@@ -1,7 +1,7 @@
 import os
+import time
 
 import psycopg
-import time
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 
@@ -1771,12 +1771,24 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
+    async def save_feedback(self, contact: str, content: str):
+        conn: psycopg.AsyncConnection
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute("INSERT INTO feedback (contact, content) VALUES (%s, %s)", (contact, content))
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+
     # migration methods
     async def migrate(self):
         migrations = [
             (1, self.migrate_1_add_fee_transaction_type),
             (2, self.migrate_2_program_add_leo_source_column),
             (3, self.migrate_3_add_mapping_tables),
+            (4, self.migrate_4_add_feedback_table),
         ]
         conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
@@ -1837,6 +1849,17 @@ class Database:
                     "foreign key (mapping_id) references mapping"
                 )
                 await cur.execute("create index mapping_value_key_id_index on mapping_value (key_id);")
+
+    async def migrate_4_add_feedback_table(self):
+        conn: psycopg.AsyncConnection
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "create table feedback ( "
+                    "id      serial not null primary key, "
+                    "contact text   not null, "
+                    "content text   not null )"
+                )
 
 
     # debug method

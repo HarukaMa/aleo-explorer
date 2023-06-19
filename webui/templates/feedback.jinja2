@@ -1,0 +1,45 @@
+{% extends "base.jinja2" %}
+
+{% block head %}
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+{% endblock %}
+
+{% block title %}Feedback - Haruka's Aleo Explorer{% endblock %}
+
+{% block content %}
+
+    <div class="content">
+
+        <div class="header">
+            <h3>Submit Feedback</h3>
+        </div>
+
+        {% if success == "1" %}
+            <div class="callout success">
+                <p>Feedback submitted successfully!</p>
+            </div>
+        {% endif %}
+
+        {% if message %}
+            <div class="callout alert">
+                <p>{{ message }}</p>
+            </div>
+        {% endif %}
+
+        {% if success == "2" %}
+
+        <form action="/submit_feedback" method="post">
+            <label>Contact:
+                <input type="text" name="contact" placeholder="Email, Discord, etc." value="{{ contact }}">
+            </label>
+            <p class="help-text">Your contact info might be used to provide answers to your feedback.</p>
+            <label>Feedback content:
+                <textarea name="content">{{ content }}</textarea>
+            </label>
+            <div class="cf-turnstile" data-sitekey="{{ "TURNSTILE_SITE_KEY" | get_env }}"></div>
+            <button type="submit" class="button">Submit</button>
+        </form>
+
+    </div>
+
+{% endblock %}

@@ -36,16 +36,27 @@
                     <li class="menu-text">Haruka's Aleo Explorer</li>
                 {% endif %}
                 <li><a href="/">Home</a></li>
-                <li><a href="/blocks">Blocks</a></li>
-                <li><a href="/programs">Programs</a></li>
+                <li>
+                    <a href="#">Blockchain</a>
+                    <ul class="menu">
+                        <li><a href="/blocks">Blocks</a></li>
+                        <li><a href="/programs">Programs</a></li>
+                    </ul>
+                </li>
                 <li>
                     <a href="#">Proving</a>
                     <ul class="menu">
                         <li><a href="/leaderboard">Leaderboard</a></li>
-                        <li><a href="/calc">Calc</a></li>
+                        <li><a href="/calc">Calculator</a></li>
                     </ul>
                 </li>
-                <li><a href="/faq">FAQ</a></li>
+                <li>
+                    <a href="#">Help</a>
+                    <ul class="menu">
+                        <li><a href="/faq">FAQ</a></li>
+                        <li><a href="/feedback">Feedback</a></li>
+                    </ul>
+                </li>
                 {% if "HAS_BETA" | get_env %}
                     <li style="margin-left: auto"><a href="//explorerb.hamp.app">Preview</a></li>
                 {% endif %}

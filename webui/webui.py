@@ -3,6 +3,7 @@ import logging
 import multiprocessing
 import os
 
+import aiohttp
 import uvicorn
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
@@ -62,6 +63,45 @@ async def faq_route(request: Request):
     }
     return templates.TemplateResponse('faq.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'})
 
+
+async def feedback_route(request: Request):
+    if request.method == "POST":
+        form = await request.form()
+        contact = form.get("contact")
+        content = form.get("content")
+    else:
+        contact = ""
+        content = ""
+    success = request.query_params.get("success")
+    message = request.query_params.get("message")
+    ctx = {
+        "request": request,
+        "success": success,
+        "message": message,
+        "contact": contact,
+        "content": content,
+    }
+    return templates.TemplateResponse('feedback.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'})
+
+async def submit_feedback_route(request: Request):
+    db: Database = request.app.state.db
+    form = await request.form()
+    contact = form.get("contact")
+    content = form.get("content")
+    turnstile_response = form.get("cf-turnstile-response")
+    async with aiohttp.ClientSession() as session:
+        data = {
+            "secret": os.environ.get("TURNSTILE_SECRET_KEY"),
+            "response": turnstile_response,
+        }
+        async with session.post("https://challenges.cloudflare.com/turnstile/v0/siteverify", data=data) as resp:
+            if not resp.ok:
+                return RedirectResponse(url="/feedback?message=Failed to verify captcha")
+            json = await resp.json()
+            if not json["success"]:
+                return RedirectResponse(url=f"/feedback?message=Failed to verify captcha: {json['error-codes']}")
+    await db.save_feedback(contact, content)
+    return RedirectResponse(url="/feedback?success=1", status_code=303)
 
 async def privacy_route(request: Request):
     ctx = {
