@@ -135,6 +135,7 @@ routes = [
     # Other
     Route("/tools", tools_route),
     Route("/faq", faq_route),
+    Route("/feedback", feedback_route),
     Route("/privacy", privacy_route),
     Route("/robots.txt", robots_route),
     Route("/cf", cloudflare_error_page),
