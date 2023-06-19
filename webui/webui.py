@@ -135,7 +135,7 @@ routes = [
     # Other
     Route("/tools", tools_route),
     Route("/faq", faq_route),
-    Route("/feedback", feedback_route),
+    Route("/feedback", feedback_route, methods=["GET", "POST"]),
     Route("/submit_feedback", submit_feedback_route, methods=["POST"]),
     Route("/privacy", privacy_route),
     Route("/robots.txt", robots_route),
