@@ -297,6 +297,37 @@ ALTER SEQUENCE explorer.fee_id_seq OWNED BY explorer.fee.id;
 
 
 --
+-- Name: feedback; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.feedback (
+    id integer NOT NULL,
+    contact text NOT NULL,
+    content text NOT NULL
+);
+
+
+--
+-- Name: feedback_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.feedback_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: feedback_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.feedback_id_seq OWNED BY explorer.feedback.id;
+
+
+--
 -- Name: finalize_operation; Type: TABLE; Schema: explorer; Owner: -
 --
 
@@ -1275,6 +1306,13 @@ ALTER TABLE ONLY explorer.fee ALTER COLUMN id SET DEFAULT nextval('explorer.fee_
 
 
 --
+-- Name: feedback id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.feedback ALTER COLUMN id SET DEFAULT nextval('explorer.feedback_id_seq'::regclass);
+
+
+--
 -- Name: finalize_operation id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -1507,6 +1545,14 @@ ALTER TABLE ONLY explorer.confirmed_transaction
 
 ALTER TABLE ONLY explorer.fee
     ADD CONSTRAINT fee_pk PRIMARY KEY (id);
+
+
+--
+-- Name: feedback feedback_pkey; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.feedback
+    ADD CONSTRAINT feedback_pkey PRIMARY KEY (id);
 
 
 --
