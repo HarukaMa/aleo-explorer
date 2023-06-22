@@ -83,7 +83,7 @@
         {% if sync_info.maintenance_info %}
             The explorer is resyncing with the network: {{ sync_info.maintenance_info }}
         {% else %}
-            The explorer is out of sync. The last synced block is {{ sync_info.relative_time }} ago.
+            The explorer is out of sync. The last synced block is {{ sync_info.relative_time }}.
         {% endif %}
         Current block height: {{ sync_info.local_height }} / {{ sync_info.remote_height }}
     </div>
