@@ -6,7 +6,7 @@ from sys import stdout
 import api
 import webui
 from db import Database
-from interpreter.interpreter import finalize_block
+from interpreter.interpreter import init_builtin_program
 from node import Node
 from node.testnet3 import Testnet3
 from node.types import Block
@@ -108,13 +108,15 @@ class Explorer:
 
     async def add_block(self, block: Block):
         if block is Testnet3.genesis_block:
+            for program in Testnet3.builtin_programs:
+                await init_builtin_program(self.db, program)
+                await self.db.save_builtin_program(program)
             await self.db.save_block(block)
             return
         if not self.dev_mode and block.previous_hash != self.latest_block_hash:
             print(f"ignoring block {block} because previous block hash does not match")
         else:
             print(f"adding block {block}")
-            await finalize_block(self.db, block)
             await self.db.save_block(block)
             self.latest_height = block.header.metadata.height
             self.latest_block_hash = block.block_hash

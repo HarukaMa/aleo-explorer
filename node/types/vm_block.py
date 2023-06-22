@@ -338,9 +338,15 @@ class Command(Serialize, Deserialize):  # enum
 
     class Type(IntEnumu8):
         Instruction = 0
-        Get = 1
-        GetOrInit = 2
-        Set = 3
+        Contains = 1
+        Get = 2
+        GetOrUse = 3
+        RandChaCha = 4
+        Remove = 5
+        Set = 6
+        BranchEq = 7
+        BranchNeq = 8
+        Position = 9
 
     @property
     @abstractmethod
@@ -353,12 +359,24 @@ class Command(Serialize, Deserialize):  # enum
         type_ = cls.Type.load(data)
         if type_ == cls.Type.Instruction:
             return InstructionCommand.load(data)
+        elif type_ == cls.Type.Contains:
+            return ContainsCommand.load(data)
         elif type_ == cls.Type.Get:
             return GetCommand.load(data)
-        elif type_ == cls.Type.GetOrInit:
-            return GetOrInitCommand.load(data)
+        elif type_ == cls.Type.GetOrUse:
+            return GetOrUseCommand.load(data)
+        elif type_ == cls.Type.RandChaCha:
+            return RandChaChaCommand.load(data)
+        elif type_ == cls.Type.Remove:
+            return RemoveCommand.load(data)
         elif type_ == cls.Type.Set:
             return SetCommand.load(data)
+        elif type_ == cls.Type.BranchEq:
+            return BranchEqCommand.load(data)
+        elif type_ == cls.Type.BranchNeq:
+            return BranchNeqCommand.load(data)
+        elif type_ == cls.Type.Position:
+            return PositionCommand.load(data)
         else:
             raise ValueError("Invalid variant")
 
@@ -378,6 +396,25 @@ class InstructionCommand(Command):
         instruction = Instruction.load(data)
         return cls(instruction=instruction)
 
+class ContainsCommand(Command):
+    type = Command.Type.Contains
+
+    # @type_check
+    def __init__(self, *, mapping: Identifier, key: Operand, destination: Register):
+        self.mapping = mapping
+        self.key = key
+        self.destination = destination
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.mapping.dump() + self.key.dump() + self.destination.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        mapping = Identifier.load(data)
+        key = Operand.load(data)
+        destination = Register.load(data)
+        return cls(mapping=mapping, key=key, destination=destination)
 
 class GetCommand(Command):
     type = Command.Type.Get
@@ -400,8 +437,8 @@ class GetCommand(Command):
         return cls(mapping=mapping, key=key, destination=destination)
 
 
-class GetOrInitCommand(Command):
-    type = Command.Type.GetOrInit
+class GetOrUseCommand(Command):
+    type = Command.Type.GetOrUse
 
     # @type_check
     def __init__(self, *, mapping: Identifier, key: Operand, default: Operand, destination: Register):
@@ -422,6 +459,45 @@ class GetOrInitCommand(Command):
         destination = Register.load(data)
         return cls(mapping=mapping, key=key, default=default, destination=destination)
 
+
+class RandChaChaCommand(Command):
+    type = Command.Type.RandChaCha
+
+    # @type_check
+    def __init__(self, *, operands: Vec[Operand, u8], destination: Register, destination_type: LiteralType):
+        self.operands = operands
+        self.destination = destination
+        self.destination_type = destination_type
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.operands.dump() + self.destination.dump() + self.destination_type.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        operands = Vec[Operand, u8].load(data)
+        destination = Register.load(data)
+        destination_type = LiteralType.load(data)
+        return cls(operands=operands, destination=destination, destination_type=destination_type)
+
+class RemoveCommand(Command):
+    type = Command.Type.Remove
+
+    # @type_check
+    def __init__(self, *, mapping: Identifier, key: Operand):
+        self.mapping = mapping
+        self.key = key
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.mapping.dump() + self.key.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        mapping = Identifier.load(data)
+        key = Operand.load(data)
+        return cls(mapping=mapping, key=key)
+
 class SetCommand(Command):
     type = Command.Type.Set
 
@@ -441,6 +517,62 @@ class SetCommand(Command):
         key = Operand.load(data)
         value = Operand.load(data)
         return cls(mapping=mapping, key=key, value=value)
+
+class BranchEqCommand(Command):
+    type = Command.Type.BranchEq
+
+    # @type_check
+    def __init__(self, *, first: Operand, second: Operand, position: Identifier):
+        self.first = first
+        self.second = second
+        self.position = position
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.first.dump() + self.second.dump() + self.position.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        first = Operand.load(data)
+        second = Operand.load(data)
+        position = Identifier.load(data)
+        return cls(first=first, second=second, position=position)
+
+class BranchNeqCommand(Command):
+    type = Command.Type.BranchNeq
+
+    # @type_check
+    def __init__(self, *, first: Operand, second: Operand, position: Identifier):
+        self.first = first
+        self.second = second
+        self.position = position
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.first.dump() + self.second.dump() + self.position.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        first = Operand.load(data)
+        second = Operand.load(data)
+        position = Identifier.load(data)
+        return cls(first=first, second=second, position=position)
+
+class PositionCommand(Command):
+    type = Command.Type.Position
+
+    # @type_check
+    def __init__(self, *, position: Identifier):
+        self.position = position
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.position.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        position = Identifier.load(data)
+        return cls(position=position)
 
 
 class FinalizeInput(Serialize, Deserialize):
@@ -892,11 +1024,9 @@ class VerifyingKey(Serialize, Deserialize):
     # Skipping a layer of marlin::CircuitVerifyingKey
     # @type_check
     @generic_type_check
-    def __init__(self, *, circuit_info: CircuitInfo, circuit_commitments: Vec[KZGCommitment, u64],
-                 verifier_key: SonicVerifierKey, id_: Vec[u8, 32]):
+    def __init__(self, *, circuit_info: CircuitInfo, circuit_commitments: Vec[KZGCommitment, u64], id_: Vec[u8, 32]):
         self.circuit_info = circuit_info
         self.circuit_commitments = circuit_commitments
-        self.verifier_key = verifier_key
         self.id = id_
 
     def dump(self) -> bytes:
@@ -904,7 +1034,6 @@ class VerifyingKey(Serialize, Deserialize):
         res += self.version.dump()
         res += self.circuit_info.dump()
         res += self.circuit_commitments.dump()
-        res += self.verifier_key.dump()
         res += self.id.dump()
         return res
 
@@ -916,9 +1045,8 @@ class VerifyingKey(Serialize, Deserialize):
             raise ValueError("Invalid version")
         circuit_info = CircuitInfo.load(data)
         circuit_commitments = Vec[KZGCommitment, u64].load(data)
-        verifier_key = SonicVerifierKey.load(data)
         id_ = Vec[u8, 32].load(data)
-        return cls(circuit_info=circuit_info, circuit_commitments=circuit_commitments, verifier_key=verifier_key, id_=id_)
+        return cls(circuit_info=circuit_info, circuit_commitments=circuit_commitments, id_=id_)
 
 
 class KZGProof(Serialize, Deserialize):
@@ -1454,82 +1582,6 @@ class PrivateOwner(Owner):
         return str(self.owner)
 
 
-class Balance(TypeParameter, Serialize, Deserialize):  # enum
-
-    def __init__(self, types):
-        if len(types) != 1:
-            raise ValueError("Balance must have exactly one type parameter")
-        self.Private = types[0]
-
-    class Type(IntEnumu8):
-        Public = 0
-        Private = 1
-
-    @property
-    def type(self):
-        raise NotImplementedError
-
-    def dump(self) -> bytes:
-        raise NotImplementedError
-
-    # @type_check
-    def load(self, data: bytearray):
-        type_ = Balance.Type.load(data)
-        if type_ == Balance.Type.Public:
-            return PublicBalance.load(data)
-        elif type_ == Balance.Type.Private:
-            return PrivateBalance[self.Private].load(data)
-        else:
-            raise ValueError("invalid type")
-
-
-class PublicBalance(Balance):
-    type = Balance.Type.Public
-
-    # noinspection PyMissingConstructor
-    def __init__(self, *, balance: u64):
-        self.balance = balance
-
-    def dump(self) -> bytes:
-        return self.type.dump() + self.balance.dump()
-
-    @classmethod
-    # @type_check
-    def load(cls, data: bytearray):
-        balance = u64.load(data)
-        return cls(balance=balance)
-
-    def __str__(self):
-        return str(self.balance)
-
-
-class PrivateBalance(Balance):
-    type = Balance.Type.Private
-
-    # noinspection PyMissingConstructor
-    def __init__(self, types):
-        if len(types) != 1:
-            raise ValueError("PrivateBalance must have exactly one type parameter")
-        self.Private = types[0]
-
-    # @type_check
-    def __call__(self, *, balance):
-        if not isinstance(balance, self.Private):
-            raise ValueError(f"balance must be of type {self.Private}")
-        self.balance = balance
-
-    def dump(self) -> bytes:
-        return self.type.dump() + self.balance.dump()
-
-    # @type_check
-    def load(self, data: bytearray):
-        self.balance = self.Private.load(data)
-        return self
-
-    def __str__(self):
-        return str(self.balance)
-
-
 class Entry(Generic, Serialize, Deserialize):  # enum
 
     def __init__(self, types):
@@ -2050,14 +2102,13 @@ class Transition(Serialize, Deserialize):
     @generic_type_check
     def __init__(self, *, id_: TransitionID, program_id: ProgramID, function_name: Identifier,
                  inputs: Vec[TransitionInput, u8], outputs: Vec[TransitionOutput, u8], finalize: Option[Vec[Value, u8]],
-                 proof: Proof, tpk: Group, tcm: Field):
+                 tpk: Group, tcm: Field):
         self.id = id_
         self.program_id = program_id
         self.function_name = function_name
         self.inputs = inputs
         self.outputs = outputs
         self.finalize = finalize
-        self.proof = proof
         self.tpk = tpk
         self.tcm = tcm
 
@@ -2070,7 +2121,6 @@ class Transition(Serialize, Deserialize):
         res += self.inputs.dump()
         res += self.outputs.dump()
         res += self.finalize.dump()
-        res += self.proof.dump()
         res += self.tpk.dump()
         res += self.tcm.dump()
         return res
@@ -2087,28 +2137,27 @@ class Transition(Serialize, Deserialize):
         inputs = Vec[TransitionInput, u8].load(data)
         outputs = Vec[TransitionOutput, u8].load(data)
         finalize = Option[Vec[Value, u8]].load(data)
-        proof = Proof.load(data)
         tpk = Group.load(data)
         tcm = Field.load(data)
         return cls(id_=id_, program_id=program_id, function_name=function_name, inputs=inputs, outputs=outputs,
-                   finalize=finalize, proof=proof, tpk=tpk, tcm=tcm)
+                   finalize=finalize, tpk=tpk, tcm=tcm)
 
 
 class Fee(Serialize, Deserialize):
     version = u8()
 
     # @type_check
-    def __init__(self, *, transition: Transition, global_state_root: StateRoot, inclusion_proof: Option[Proof]):
+    def __init__(self, *, transition: Transition, global_state_root: StateRoot, proof: Option[Proof]):
         self.transition = transition
         self.global_state_root = global_state_root
-        self.inclusion_proof = inclusion_proof
+        self.proof = proof
 
     def dump(self) -> bytes:
         res = b""
         res += self.version.dump()
         res += self.transition.dump()
         res += self.global_state_root.dump()
-        res += self.inclusion_proof.dump()
+        res += self.proof.dump()
         return res
 
     @classmethod
@@ -2119,8 +2168,8 @@ class Fee(Serialize, Deserialize):
             raise ValueError(f"version mismatch: expected {cls.version}, got {version}")
         transition = Transition.load(data)
         global_state_root = StateRoot.load(data)
-        inclusion_proof = Option[Proof].load(data)
-        return cls(transition=transition, global_state_root=global_state_root, inclusion_proof=inclusion_proof)
+        proof = Option[Proof].load(data)
+        return cls(transition=transition, global_state_root=global_state_root, proof=proof)
 
 
 class Execution(Serialize, Deserialize):
@@ -2129,17 +2178,17 @@ class Execution(Serialize, Deserialize):
     # @type_check
     @generic_type_check
     def __init__(self, *, transitions: Vec[Transition, u8], global_state_root: StateRoot,
-                 inclusion_proof: Option[Proof]):
+                 proof: Option[Proof]):
         self.transitions = transitions
         self.global_state_root = global_state_root
-        self.inclusion_proof = inclusion_proof
+        self.proof = proof
 
     def dump(self) -> bytes:
         res = b""
         res += self.version.dump()
         res += self.transitions.dump()
         res += self.global_state_root.dump()
-        res += self.inclusion_proof.dump()
+        res += self.proof.dump()
         return res
 
     @classmethod
@@ -2150,8 +2199,8 @@ class Execution(Serialize, Deserialize):
             raise ValueError(f"version mismatch: expected {cls.version}, got {version}")
         transitions = Vec[Transition, u8].load(data)
         global_state_root = StateRoot.load(data)
-        inclusion_proof = Option[Proof].load(data)
-        return cls(transitions=transitions, global_state_root=global_state_root, inclusion_proof=inclusion_proof)
+        proof = Option[Proof].load(data)
+        return cls(transitions=transitions, global_state_root=global_state_root, proof=proof)
 
 
 class Transaction(Serialize, Deserialize):  # Enum
@@ -2547,13 +2596,14 @@ class BlockHeaderMetadata(Serialize, Deserialize):
 
     # @type_check
     def __init__(self, *, network: u16, round_: u64, height: u32, total_supply_in_microcredits: u64,
-                 cumulative_weight: u128, coinbase_target: u64, proof_target: u64, last_coinbase_target: u64,
-                 last_coinbase_timestamp: i64, timestamp: i64):
+                 cumulative_weight: u128, cumulative_proof_target: u128, coinbase_target: u64, proof_target: u64,
+                 last_coinbase_target: u64, last_coinbase_timestamp: i64, timestamp: i64):
         self.network = network
         self.round = round_
         self.height = height
         self.total_supply_in_microcredits = total_supply_in_microcredits
         self.cumulative_weight = cumulative_weight
+        self.cumulative_proof_target = cumulative_proof_target
         self.coinbase_target = coinbase_target
         self.proof_target = proof_target
         self.last_coinbase_target = last_coinbase_target
@@ -2562,9 +2612,9 @@ class BlockHeaderMetadata(Serialize, Deserialize):
 
     def dump(self) -> bytes:
         return self.version.dump() + self.network.dump() + self.round.dump() + self.height.dump() + \
-            self.total_supply_in_microcredits.dump() + self.cumulative_weight.dump() + \
-            self.coinbase_target.dump() + self.proof_target.dump() + self.last_coinbase_target.dump() + \
-            self.last_coinbase_timestamp.dump() + self.timestamp.dump()
+               self.total_supply_in_microcredits.dump() + self.cumulative_weight.dump() + \
+               self.cumulative_proof_target.dump() + self.coinbase_target.dump() + self.proof_target.dump() + \
+               self.last_coinbase_target.dump() + self.last_coinbase_timestamp.dump() + self.timestamp.dump()
 
 
     @classmethod
@@ -2578,6 +2628,7 @@ class BlockHeaderMetadata(Serialize, Deserialize):
         height = u32.load(data)
         total_supply_in_microcredits = u64.load(data)
         cumulative_weight = u128.load(data)
+        cumulative_proof_target = u128.load(data)
         coinbase_target = u64.load(data)
         proof_target = u64.load(data)
         last_coinbase_target = u64.load(data)
@@ -2585,8 +2636,10 @@ class BlockHeaderMetadata(Serialize, Deserialize):
         timestamp = i64.load(data)
         return cls(network=network, round_=round_, height=height,
                    total_supply_in_microcredits=total_supply_in_microcredits,
-                   cumulative_weight=cumulative_weight, coinbase_target=coinbase_target,
-                   proof_target=proof_target, last_coinbase_target=last_coinbase_target,
+                   cumulative_weight=cumulative_weight,
+                   cumulative_proof_target=cumulative_proof_target,
+                   coinbase_target=coinbase_target, proof_target=proof_target,
+                   last_coinbase_target=last_coinbase_target,
                    last_coinbase_timestamp=last_coinbase_timestamp, timestamp=timestamp)
 
 
@@ -2595,16 +2648,18 @@ class BlockHeader(Serialize, Deserialize):
 
     # @type_check
     def __init__(self, *, previous_state_root: Field, transactions_root: Field, coinbase_accumulator_point: Field,
-                 finalize_root: Field, metadata: BlockHeaderMetadata):
+                 finalize_root: Field, ratifications_root: Field, metadata: BlockHeaderMetadata):
         self.previous_state_root = previous_state_root
         self.transactions_root = transactions_root
         self.finalize_root = finalize_root
+        self.ratifications_root = ratifications_root
         self.coinbase_accumulator_point = coinbase_accumulator_point
         self.metadata = metadata
 
     def dump(self) -> bytes:
         return self.version.dump() + self.previous_state_root.dump() + self.transactions_root.dump() \
-               + self.finalize_root.dump() + self.coinbase_accumulator_point.dump() + self.metadata.dump()
+               + self.finalize_root.dump() + self.ratifications_root.dump() + self.coinbase_accumulator_point.dump() \
+               + self.metadata.dump()
 
     @classmethod
     # @type_check
@@ -2613,13 +2668,14 @@ class BlockHeader(Serialize, Deserialize):
         previous_state_root = Field.load(data)
         transactions_root = Field.load(data)
         finalize_root = Field.load(data)
+        ratifications_root = Field.load(data)
         coinbase_accumulator_point = Field.load(data)
         metadata = BlockHeaderMetadata.load(data)
         if version != cls.version:
             raise ValueError("invalid header version")
         return cls(previous_state_root=previous_state_root, transactions_root=transactions_root,
-                   finalize_root=finalize_root, coinbase_accumulator_point=coinbase_accumulator_point,
-                   metadata=metadata)
+                   finalize_root=finalize_root, ratifications_root=ratifications_root,
+                   coinbase_accumulator_point=coinbase_accumulator_point, metadata=metadata)
 
 
 class PuzzleCommitment(Serialize, Deserialize):
@@ -2766,6 +2822,69 @@ class Signature(Serialize, Deserialize):
         return str(Bech32m(self.dump(), "sign"))
 
 
+class Ratify(Serialize, Deserialize):
+    version = 0
+
+    class Type(IntEnumu8):
+        ProvingReward = 0
+        StakingReward = 1
+
+    @property
+    @abstractmethod
+    def type(self):
+        raise NotImplementedError
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        version = u8.load(data)
+        if version != cls.version:
+            raise ValueError(f"invalid version {version}")
+        type_ = cls.Type.load(data)
+        if type_ == cls.Type.ProvingReward:
+            return ProvingReward.load(data)
+        elif type_ == cls.Type.StakingReward:
+            return StakingReward.load(data)
+        else:
+            raise ValueError(f"invalid ratify type {type_}")
+
+class ProvingReward(Ratify):
+    type = Ratify.Type.ProvingReward
+
+    # @type_check
+    def __init__(self, *, address: Address, amount: u64):
+        self.address = address
+        self.amount = amount
+
+    def dump(self) -> bytes:
+        return self.address.dump() + self.amount.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        address = Address.load(data)
+        amount = u64.load(data)
+        return cls(address=address, amount=amount)
+
+class StakingReward(Ratify):
+    type = Ratify.Type.StakingReward
+
+    # @type_check
+    def __init__(self, *, address: Address, amount: u64):
+        self.address = address
+        self.amount = amount
+
+    def dump(self) -> bytes:
+        return self.address.dump() + self.amount.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        address = Address.load(data)
+        amount = u64.load(data)
+        return cls(address=address, amount=amount)
+
+
 def retarget(prev_target, prev_block_timestamp, block_timestamp, half_life, inverse, anchor_time):
     drift = max(block_timestamp - prev_block_timestamp, 1) - anchor_time
     if drift == 0:
@@ -2791,17 +2910,19 @@ class Block(Serialize, Deserialize):
 
     # @type_check
     def __init__(self, *, block_hash: BlockHash, previous_hash: BlockHash, header: BlockHeader,
-                 transactions: Transactions, coinbase: Option[CoinbaseSolution], signature: Signature):
+                 transactions: Transactions, ratifications: Vec[Ratify, u32], coinbase: Option[CoinbaseSolution],
+                 signature: Signature):
         self.block_hash = block_hash
         self.previous_hash = previous_hash
         self.header = header
         self.transactions = transactions
+        self.ratifications = ratifications
         self.coinbase = coinbase
         self.signature = signature
 
     def dump(self) -> bytes:
         return self.version.dump() + self.block_hash.dump() + self.previous_hash.dump() + self.header.dump() \
-               + self.transactions.dump() + self.coinbase.dump() + self.signature.dump()
+               + self.transactions.dump() + self.ratifications.dump() + self.coinbase.dump() + self.signature.dump()
 
     @classmethod
     # @type_check
@@ -2811,12 +2932,13 @@ class Block(Serialize, Deserialize):
         previous_hash = BlockHash.load(data)
         header = BlockHeader.load(data)
         transactions = Transactions.load(data)
+        ratifications = Vec[Ratify, u32].load(data)
         coinbase = Option[CoinbaseSolution].load(data)
         signature = Signature.load(data)
         if version != cls.version:
             raise ValueError("invalid block version")
         return cls(block_hash=block_hash, previous_hash=previous_hash, header=header, transactions=transactions,
-                   coinbase=coinbase, signature=signature)
+                   ratifications=ratifications, coinbase=coinbase, signature=signature)
 
 
     def __str__(self):
@@ -2825,7 +2947,7 @@ class Block(Serialize, Deserialize):
     def get_coinbase_reward(self, last_timestamp) -> int:
         if self.coinbase.value is None:
             return 0
-        anchor_reward = 13
+        anchor_reward = 18
         y10_anchor_height = 31536000 // 25 * 10
         remaining_blocks = y10_anchor_height - self.header.metadata.height
         if remaining_blocks <= 0:

@@ -1,3 +1,4 @@
+from enum import auto
 from types import NoneType
 
 from .vm_basic import *
@@ -517,7 +518,7 @@ class Call(Serialize, Deserialize):
         destinations = Vec[Register, u8].load(data)
         return cls(operator=operator, operands=operands, destinations=destinations)
 
-class LiteralType(IntEnumu16):
+class LiteralType(IntEnumu8):
     Address = 0
     Boolean = 1
     Field = 2
@@ -716,87 +717,158 @@ class ExternalRecordRegisterType(RegisterType):
         locator = Locator.load(data)
         return cls(locator=locator)
 
+class CastType(Serialize, Deserialize):
+
+    class Type(IntEnumu8):
+        GroupXCoordinate = 0
+        GroupYCoordinate = 1
+        RegisterType = 2
+
+    @property
+    @abstractmethod
+    def type(self):
+        raise NotImplementedError
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        type_ = cls.Type.load(data)
+        if type_ == cls.Type.GroupXCoordinate:
+            return GroupXCoordinateCastType.load(data)
+        elif type_ == cls.Type.GroupYCoordinate:
+            return GroupYCoordinateCastType.load(data)
+        elif type_ == cls.Type.RegisterType:
+            return RegisterTypeCastType.load(data)
+        else:
+            raise ValueError(f"Invalid cast type {type_}")
+
+class GroupXCoordinateCastType(CastType):
+    type = CastType.Type.GroupXCoordinate
+
+    def dump(self) -> bytes:
+        return self.type.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        return cls()
+
+class GroupYCoordinateCastType(CastType):
+    type = CastType.Type.GroupYCoordinate
+
+    def dump(self) -> bytes:
+        return self.type.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        return cls()
+
+class RegisterTypeCastType(CastType):
+    type = CastType.Type.RegisterType
+
+    # @type_check
+    def __init__(self, *, register_type: RegisterType):
+        self.register_type = register_type
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.register_type.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        register_type = RegisterType.load(data)
+        return cls(register_type=register_type)
+
 
 class Cast(Serialize, Deserialize):
 
     # @type_check
     @generic_type_check
-    def __init__(self, *, operands: Vec[Operand, u8], destination: Register, register_type: RegisterType):
+    def __init__(self, *, operands: Vec[Operand, u8], destination: Register, cast_type: CastType):
         self.operands = operands
         self.destination = destination
-        self.register_type = register_type
+        self.cast_type = cast_type
 
     def dump(self) -> bytes:
-        return self.operands.dump() + self.destination.dump() + self.register_type.dump()
+        return self.operands.dump() + self.destination.dump() + self.cast_type.dump()
 
     @classmethod
     # @type_check
     def load(cls, data: bytearray):
         operands = Vec[Operand, u8].load(data)
         destination = Register.load(data)
-        register_type = RegisterType.load(data)
-        return cls(operands=operands, destination=destination, register_type=register_type)
+        cast_Type = CastType.load(data)
+        return cls(operands=operands, destination=destination, cast_type=cast_Type)
 
 
 class Instruction(Serialize, Deserialize): # enum
 
     class Type(IntEnumu16):
-        Abs = 0
-        AbsWrapped = 1
-        Add = 2
-        AddWrapped = 3
-        And = 4
-        AssertEq = 5
-        AssertNeq = 6
-        Call = 7
-        Cast = 8
-        CommitBHP256 = 9
-        CommitBHP512 = 10
-        CommitBHP768 = 11
-        CommitBHP1024 = 12
-        CommitPED64 = 13
-        CommitPED128 = 14
-        Div = 15
-        DivWrapped = 16
-        Double = 17
-        GreaterThan = 18
-        GreaterThanOrEqual = 19
-        HashBHP256 = 20
-        HashBHP512 = 21
-        HashBHP768 = 22
-        HashBHP1024 = 23
-        HashPED64 = 24
-        HashPED128 = 25
-        HashPSD2 = 26
-        HashPSD4 = 27
-        HashPSD8 = 28
-        Inv = 29
-        IsEq = 30
-        IsNeq = 31
-        LessThan = 32
-        LessThanOrEqual = 33
-        Modulo = 34
-        Mul = 35
-        MulWrapped = 36
-        Nand = 37
-        Neg = 38
-        Nor = 39
-        Not = 40
-        Or = 41
-        Pow = 42
-        PowWrapped = 43
-        Rem = 44
-        RemWrapped = 45
-        Shl = 46
-        ShlWrapped = 47
-        Shr = 48
-        ShrWrapped = 49
-        Square = 50
-        SquareRoot = 51
-        Sub = 52
-        SubWrapped = 53
-        Ternary = 54
-        Xor = 55
+
+        @staticmethod
+        def _generate_next_value_(name, start, count, last_values):
+            return count
+
+        Abs = auto()
+        AbsWrapped = auto()
+        Add = auto()
+        AddWrapped = auto()
+        And = auto()
+        AssertEq = auto()
+        AssertNeq = auto()
+        Call = auto()
+        Cast = auto()
+        CommitBHP256 = auto()
+        CommitBHP512 = auto()
+        CommitBHP768 = auto()
+        CommitBHP1024 = auto()
+        CommitPED64 = auto()
+        CommitPED128 = auto()
+        Div = auto()
+        DivWrapped = auto()
+        Double = auto()
+        GreaterThan = auto()
+        GreaterThanOrEqual = auto()
+        HashBHP256 = auto()
+        HashBHP512 = auto()
+        HashBHP768 = auto()
+        HashBHP1024 = auto()
+        HashPED64 = auto()
+        HashPED128 = auto()
+        HashPSD2 = auto()
+        HashPSD4 = auto()
+        HashPSD8 = auto()
+        HashManyPSD2 = auto()
+        HashManyPSD4 = auto()
+        HashManyPSD8 = auto()
+        Inv = auto()
+        IsEq = auto()
+        IsNeq = auto()
+        LessThan = auto()
+        LessThanOrEqual = auto()
+        Modulo = auto()
+        Mul = auto()
+        MulWrapped = auto()
+        Nand = auto()
+        Neg = auto()
+        Nor = auto()
+        Not = auto()
+        Or = auto()
+        Pow = auto()
+        PowWrapped = auto()
+        Rem = auto()
+        RemWrapped = auto()
+        Shl = auto()
+        ShlWrapped = auto()
+        Shr = auto()
+        ShrWrapped = auto()
+        Square = auto()
+        SquareRoot = auto()
+        Sub = auto()
+        SubWrapped = auto()
+        Ternary = auto()
+        Xor = auto()
 
     # Some types are not implemented as Literals originally,
     # but binary wise they have the same behavior (operands, destination)

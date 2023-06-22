@@ -3,7 +3,7 @@
 --
 
 -- Dumped from database version 15.1
--- Dumped by pg_dump version 15.0
+-- Dumped by pg_dump version 15.3
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -59,12 +59,23 @@ CREATE TYPE explorer.finalize_value_type AS ENUM (
 
 
 --
+-- Name: ratification_type; Type: TYPE; Schema: explorer; Owner: -
+--
+
+CREATE TYPE explorer.ratification_type AS ENUM (
+    'ProvingReward',
+    'StakingReward'
+);
+
+
+--
 -- Name: transaction_type; Type: TYPE; Schema: explorer; Owner: -
 --
 
 CREATE TYPE explorer.transaction_type AS ENUM (
     'Deploy',
-    'Execute'
+    'Execute',
+    'Fee'
 );
 
 
@@ -130,7 +141,9 @@ CREATE TABLE explorer.block (
     coinbase_reward numeric(20,0),
     total_supply numeric(20,0) NOT NULL,
     cumulative_weight numeric(40,0) NOT NULL,
-    finalize_root text NOT NULL
+    finalize_root text NOT NULL,
+    cumulative_proof_target numeric(40,0) NOT NULL,
+    ratifications_root text NOT NULL
 );
 
 
@@ -227,7 +240,7 @@ CREATE TABLE explorer.transaction_execute (
     id integer NOT NULL,
     transaction_id integer NOT NULL,
     global_state_root text NOT NULL,
-    inclusion_proof text
+    proof text
 );
 
 
@@ -259,7 +272,7 @@ CREATE TABLE explorer.fee (
     id integer NOT NULL,
     transaction_id integer NOT NULL,
     global_state_root text NOT NULL,
-    inclusion_proof text
+    proof text
 );
 
 
@@ -496,6 +509,73 @@ CREATE TABLE explorer.leaderboard_total (
 
 
 --
+-- Name: mapping; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.mapping (
+    id integer NOT NULL,
+    mapping_id text NOT NULL,
+    program_id text NOT NULL,
+    mapping text NOT NULL
+);
+
+
+--
+-- Name: mapping_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.mapping_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: mapping_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.mapping_id_seq OWNED BY explorer.mapping.id;
+
+
+--
+-- Name: mapping_value; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.mapping_value (
+    id integer NOT NULL,
+    mapping_id integer NOT NULL,
+    index integer NOT NULL,
+    key_id text NOT NULL,
+    value_id text NOT NULL,
+    key bytea NOT NULL,
+    value bytea NOT NULL
+);
+
+
+--
+-- Name: mapping_value_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.mapping_value_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: mapping_value_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.mapping_value_id_seq OWNED BY explorer.mapping_value.id;
+
+
+--
 -- Name: partial_solution; Type: TABLE; Schema: explorer; Owner: -
 --
 
@@ -506,7 +586,8 @@ CREATE TABLE explorer.partial_solution (
     nonce numeric(20,0) NOT NULL,
     commitment text NOT NULL,
     target numeric(20,0) NOT NULL,
-    reward integer NOT NULL
+    reward integer NOT NULL,
+    ratification_id integer NOT NULL
 );
 
 
@@ -567,7 +648,7 @@ ALTER SEQUENCE explorer.private_transition_input_id_seq OWNED BY explorer.transi
 
 CREATE TABLE explorer.program (
     id integer NOT NULL,
-    transaction_deploy_id integer NOT NULL,
+    transaction_deploy_id integer,
     program_id text NOT NULL,
     import text[],
     mapping text[],
@@ -578,8 +659,9 @@ CREATE TABLE explorer.program (
     raw_data bytea NOT NULL,
     is_helloworld boolean DEFAULT false NOT NULL,
     feature_hash bytea NOT NULL,
-    owner text NOT NULL,
-    signature text NOT NULL
+    owner text,
+    signature text,
+    leo_source text
 );
 
 
@@ -647,6 +729,40 @@ CREATE SEQUENCE explorer.program_id_seq
 --
 
 ALTER SEQUENCE explorer.program_id_seq OWNED BY explorer.program.id;
+
+
+--
+-- Name: ratification; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.ratification (
+    id integer NOT NULL,
+    block_id integer NOT NULL,
+    type explorer.ratification_type NOT NULL,
+    address text NOT NULL,
+    amount numeric(20,0) NOT NULL,
+    index integer NOT NULL
+);
+
+
+--
+-- Name: ratification_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.ratification_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: ratification_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.ratification_id_seq OWNED BY explorer.ratification.id;
 
 
 --
@@ -754,7 +870,6 @@ CREATE TABLE explorer.transition (
     fee_id integer,
     program_id text NOT NULL,
     function_name text NOT NULL,
-    proof text NOT NULL,
     tpk text NOT NULL,
     tcm text NOT NULL,
     index integer NOT NULL
@@ -1202,6 +1317,20 @@ ALTER TABLE ONLY explorer.finalize_operation_update_kv ALTER COLUMN id SET DEFAU
 
 
 --
+-- Name: mapping id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping ALTER COLUMN id SET DEFAULT nextval('explorer.mapping_id_seq'::regclass);
+
+
+--
+-- Name: mapping_value id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping_value ALTER COLUMN id SET DEFAULT nextval('explorer.mapping_value_id_seq'::regclass);
+
+
+--
 -- Name: partial_solution id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -1220,6 +1349,13 @@ ALTER TABLE ONLY explorer.program ALTER COLUMN id SET DEFAULT nextval('explorer.
 --
 
 ALTER TABLE ONLY explorer.program_function ALTER COLUMN id SET DEFAULT nextval('explorer.program_function_id_seq'::regclass);
+
+
+--
+-- Name: ratification id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.ratification ALTER COLUMN id SET DEFAULT nextval('explorer.ratification_id_seq'::regclass);
 
 
 --
@@ -1430,6 +1566,46 @@ ALTER TABLE ONLY explorer.leaderboard
 
 
 --
+-- Name: mapping mapping_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping
+    ADD CONSTRAINT mapping_pk PRIMARY KEY (id);
+
+
+--
+-- Name: mapping mapping_pk2; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping
+    ADD CONSTRAINT mapping_pk2 UNIQUE (mapping_id);
+
+
+--
+-- Name: mapping mapping_pk3; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping
+    ADD CONSTRAINT mapping_pk3 UNIQUE (program_id, mapping);
+
+
+--
+-- Name: mapping_value mapping_value_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping_value
+    ADD CONSTRAINT mapping_value_pk PRIMARY KEY (id);
+
+
+--
+-- Name: mapping_value mapping_value_pk2; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping_value
+    ADD CONSTRAINT mapping_value_pk2 UNIQUE (mapping_id, index);
+
+
+--
 -- Name: partial_solution partial_solution_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -1451,6 +1627,14 @@ ALTER TABLE ONLY explorer.program_function
 
 ALTER TABLE ONLY explorer.program
     ADD CONSTRAINT program_pk PRIMARY KEY (id);
+
+
+--
+-- Name: ratification ratification_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.ratification
+    ADD CONSTRAINT ratification_pk PRIMARY KEY (id);
 
 
 --
@@ -1751,6 +1935,20 @@ CREATE INDEX leaderboard_total_reward_index ON explorer.leaderboard USING btree 
 
 
 --
+-- Name: mapping_value_key_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX mapping_value_key_id_index ON explorer.mapping_value USING btree (key_id);
+
+
+--
+-- Name: mapping_value_mapping_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX mapping_value_mapping_id_index ON explorer.mapping_value USING btree (mapping_id);
+
+
+--
 -- Name: partial_solution_address_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -1804,6 +2002,41 @@ CREATE INDEX program_program_id_index ON explorer.program USING btree (program_i
 --
 
 CREATE INDEX program_transaction_deploy_id_index ON explorer.program USING btree (transaction_deploy_id);
+
+
+--
+-- Name: ratification_address_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX ratification_address_index ON explorer.ratification USING btree (address);
+
+
+--
+-- Name: ratification_address_type_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX ratification_address_type_index ON explorer.ratification USING btree (address, type);
+
+
+--
+-- Name: ratification_block_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX ratification_block_id_index ON explorer.ratification USING btree (block_id);
+
+
+--
+-- Name: ratification_index_block_id_uindex; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE UNIQUE INDEX ratification_index_block_id_uindex ON explorer.ratification USING btree (index, block_id);
+
+
+--
+-- Name: ratification_type_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX ratification_type_index ON explorer.ratification USING btree (type);
 
 
 --
@@ -2061,11 +2294,27 @@ ALTER TABLE ONLY explorer.finalize_operation_update_kv
 
 
 --
+-- Name: mapping_value mapping_value_mapping_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping_value
+    ADD CONSTRAINT mapping_value_mapping_id_fk FOREIGN KEY (mapping_id) REFERENCES explorer.mapping(id);
+
+
+--
 -- Name: partial_solution partial_solution_coinbase_solution_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
 ALTER TABLE ONLY explorer.partial_solution
     ADD CONSTRAINT partial_solution_coinbase_solution_id_fk FOREIGN KEY (coinbase_solution_id) REFERENCES explorer.coinbase_solution(id);
+
+
+--
+-- Name: partial_solution partial_solution_ratification_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.partial_solution
+    ADD CONSTRAINT partial_solution_ratification_id_fk FOREIGN KEY (ratification_id) REFERENCES explorer.ratification(id);
 
 
 --
@@ -2082,6 +2331,14 @@ ALTER TABLE ONLY explorer.program_function
 
 ALTER TABLE ONLY explorer.program
     ADD CONSTRAINT program_transaction_deployment_id_fk FOREIGN KEY (transaction_deploy_id) REFERENCES explorer.transaction_deploy(id);
+
+
+--
+-- Name: ratification ratification_block_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.ratification
+    ADD CONSTRAINT ratification_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id);
 
 
 --

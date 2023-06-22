@@ -59,15 +59,36 @@ def disasm_command(value: Command) -> str:
         case Command.Type.Instruction:
             value: InstructionCommand
             return disasm_instruction(value.instruction)
+        case Command.Type.Contains:
+            value: ContainsCommand
+            return f"contains {value.mapping}[{disasm_operand(value.key)}] into {disasm_register(value.destination)}"
         case Command.Type.Get:
             value: GetCommand
             return f"get {value.mapping}[{disasm_operand(value.key)}] into {disasm_register(value.destination)}"
-        case Command.Type.GetOrInit:
-            value: GetOrInitCommand
-            return f"get.or_init {value.mapping}[{disasm_operand(value.key)}] {disasm_operand(value.default)} into {disasm_register(value.destination)}"
+        case Command.Type.GetOrUse:
+            value: GetOrUseCommand
+            return f"get.or_use {value.mapping}[{disasm_operand(value.key)}] {disasm_operand(value.default)} into {disasm_register(value.destination)}"
+        case Command.Type.RandChaCha:
+            value: RandChaChaCommand
+            operands = []
+            for i in value.operands:
+                operands.append(disasm_operand(i) + " ")
+            return f"rand.chacha {''.join(operands)}into {disasm_register(value.destination)} as {value.destination_type}"
+        case Command.Type.Remove:
+            value: RemoveCommand
+            return f"remove {value.mapping}[{disasm_operand(value.key)}]"
         case Command.Type.Set:
             value: SetCommand
             return f"set {disasm_operand(value.value)} into {value.mapping}[{disasm_operand(value.key)}]"
+        case Command.Type.BranchEq:
+            value: BranchEqCommand
+            return f"branch.eq {disasm_operand(value.first)} {disasm_operand(value.second)} to {value.position}"
+        case Command.Type.BranchNeq:
+            value: BranchNeqCommand
+            return f"branch.neq {disasm_operand(value.first)} {disasm_operand(value.second)} to {value.position}"
+        case Command.Type.Position:
+            value: PositionCommand
+            return f"position {value.position}"
 
 def disasm_literal(value: Literal) -> str:
     T = Literal.Type
@@ -116,7 +137,20 @@ def disasm_call(value: Call) -> str:
     return f"{disasm_call_operator(value.operator)} {' '.join(map(disasm_operand, value.operands))} into {' '.join(map(disasm_register, value.destinations))}"
 
 def disasm_cast(value: Cast) -> str:
-    return f"{' '.join(map(disasm_operand, value.operands))} into {disasm_register(value.destination)} as {disasm_register_type(value.register_type)}"
+    cast_type: CastType = value.cast_type
+    match cast_type.type:
+        case CastType.Type.GroupXCoordinate:
+            cast_type: GroupXCoordinateCastType
+            destination_type = "group.x"
+        case CastType.Type.GroupYCoordinate:
+            cast_type: GroupYCoordinateCastType
+            destination_type = "group.y"
+        case CastType.Type.RegisterType:
+            cast_type: RegisterTypeCastType
+            destination_type = disasm_register_type(cast_type.register_type)
+        case _:
+            raise ValueError(f"unknown cast type {cast_type.type}")
+    return f"{' '.join(map(disasm_operand, value.operands))} into {disasm_register(value.destination)} as {destination_type}"
 
 def disasm_instruction(value: Instruction) -> str:
     inst_str = f"{instruction_type_to_str(value.type)} "

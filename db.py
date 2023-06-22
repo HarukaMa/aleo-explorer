@@ -1,5 +1,6 @@
 import os
 import time
+from collections import defaultdict
 
 import psycopg
 from psycopg.rows import dict_row
@@ -44,11 +45,10 @@ class Database:
         async with conn.cursor() as cur:
             await cur.execute(
                 "INSERT INTO transition (transition_id, transaction_execute_id, fee_id, program_id, "
-                "function_name, proof, tpk, tcm, index) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                "function_name, tpk, tcm, index) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
                 (str(transition.id), exe_tx_db_id, fee_db_id, str(transition.program_id),
-                str(transition.function_name), str(transition.proof), str(transition.tpk),
-                str(transition.tcm), ts_index)
+                str(transition.function_name), str(transition.tpk), str(transition.tcm), ts_index)
             )
             transition_db_id = (await cur.fetchone())["id"]
 
@@ -161,15 +161,73 @@ class Database:
                                 (transition_finalize_db_id, str(finalize.record))
                             )
 
-            if str(transition.program_id) != "credits.aleo":
-                await cur.execute(
-                    "SELECT id FROM program WHERE program_id = %s", (str(transition.program_id),)
-                )
-                program_db_id = (await cur.fetchone())["id"]
-                await cur.execute(
-                    "UPDATE program_function SET called = called + 1 WHERE program_id = %s AND name = %s",
-                    (program_db_id, str(transition.function_name))
-                )
+            await cur.execute(
+                "SELECT id FROM program WHERE program_id = %s", (str(transition.program_id),)
+            )
+            program_db_id = (await cur.fetchone())["id"]
+            await cur.execute(
+                "UPDATE program_function SET called = called + 1 WHERE program_id = %s AND name = %s",
+                (program_db_id, str(transition.function_name))
+            )
+
+    async def save_builtin_program(self, program: Program):
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await self._save_program(cur, program, None, None)
+
+    # noinspection PyMethodMayBeStatic
+    async def _save_program(self, cur, program: Program, deploy_transaction_db_id, transaction) -> None:
+        imports = [str(x.program_id) for x in program.imports]
+        mappings = list(map(str, program.mappings.keys()))
+        interfaces = list(map(str, program.structs.keys()))
+        records = list(map(str, program.records.keys()))
+        closures = list(map(str, program.closures.keys()))
+        functions = list(map(str, program.functions.keys()))
+        if transaction:
+            await cur.execute(
+                "INSERT INTO program "
+                "(transaction_deploy_id, program_id, import, mapping, interface, record, "
+                "closure, function, raw_data, is_helloworld, feature_hash, owner, signature) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                (deploy_transaction_db_id, str(program.id), imports, mappings, interfaces, records,
+                 closures, functions, program.dump(), program.is_helloworld(), program.feature_hash(),
+                 str(transaction.owner.address), str(transaction.owner.signature))
+            )
+        else:
+            await cur.execute(
+                "INSERT INTO program "
+                "(program_id, import, mapping, interface, record, "
+                "closure, function, raw_data, is_helloworld, feature_hash) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                (str(program.id), imports, mappings, interfaces, records,
+                 closures, functions, program.dump(), program.is_helloworld(), program.feature_hash())
+            )
+        program_db_id = (await cur.fetchone())["id"]
+        for function in program.functions.values():
+            inputs = []
+            input_modes = []
+            i: FunctionInput
+            for i in function.inputs:
+                mode, _type = value_type_to_mode_type_str(i.value_type)
+                inputs.append(_type)
+                input_modes.append(mode)
+            outputs = []
+            output_modes = []
+            o: FunctionOutput
+            for o in function.outputs:
+                mode, _type = value_type_to_mode_type_str(o.value_type)
+                outputs.append(_type)
+                output_modes.append(mode)
+            finalizes = []
+            if function.finalize.value is not None:
+                f: FinalizeInput
+                for f in function.finalize.value[1].inputs:
+                    finalizes.append(plaintext_type_to_str(f.plaintext_type))
+            await cur.execute(
+                "INSERT INTO program_function (program_id, name, input, input_mode, output, output_mode, finalize) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                (program_db_id, str(function.name), inputs, input_modes, outputs, output_modes, finalizes)
+            )
 
     async def _save_block(self, block: Block):
         async with self.pool.connection() as conn:
@@ -177,12 +235,14 @@ class Database:
             async with conn.transaction():
                 async with conn.cursor() as cur:
                     try:
+                        from interpreter.interpreter import finalize_block
+                        await finalize_block(self, cur, block)
                         await cur.execute(
                             "INSERT INTO block (height, block_hash, previous_hash, previous_state_root, transactions_root, "
                             "coinbase_accumulator_point, round, coinbase_target, proof_target, last_coinbase_target, "
                             "last_coinbase_timestamp, timestamp, signature, total_supply, cumulative_weight, "
-                            "finalize_root) "
-                            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                            "finalize_root, cumulative_proof_target, ratifications_root) "
+                            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
                             "RETURNING id",
                             (block.header.metadata.height, str(block.block_hash), str(block.previous_hash),
                              str(block.header.previous_state_root), str(block.header.transactions_root),
@@ -191,12 +251,14 @@ class Database:
                              block.header.metadata.last_coinbase_target, block.header.metadata.last_coinbase_timestamp,
                              block.header.metadata.timestamp, str(block.signature),
                              block.header.metadata.total_supply_in_microcredits,
-                             block.header.metadata.cumulative_weight, str(block.header.finalize_root))
+                             block.header.metadata.cumulative_weight, str(block.header.finalize_root),
+                             block.header.metadata.cumulative_proof_target, str(block.header.ratifications_root))
                         )
                         block_db_id = (await cur.fetchone())["id"]
 
                         confirmed_transaction: ConfirmedTransaction
                         for confirmed_transaction in block.transactions:
+                            # noinspection PyUnresolvedReferences
                             await cur.execute(
                                 "INSERT INTO confirmed_transaction (block_id, index, type) VALUES (%s, %s, %s) RETURNING id",
                                 (block_db_id, confirmed_transaction.index, confirmed_transaction.type.name)
@@ -222,53 +284,12 @@ class Database:
                                     )
                                     deploy_transaction_db_id = (await cur.fetchone())["id"]
 
-                                    program: Program = transaction.deployment.program
-                                    imports = [str(x.program_id) for x in program.imports]
-                                    mappings = list(map(str, program.mappings.keys()))
-                                    interfaces = list(map(str, program.structs.keys()))
-                                    records = list(map(str, program.records.keys()))
-                                    closures = list(map(str, program.closures.keys()))
-                                    functions = list(map(str, program.functions.keys()))
-                                    await cur.execute(
-                                        "INSERT INTO program "
-                                        "(transaction_deploy_id, program_id, import, mapping, interface, record, "
-                                        "closure, function, raw_data, is_helloworld, feature_hash, owner, signature) "
-                                        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
-                                        (deploy_transaction_db_id, str(program.id), imports, mappings, interfaces, records,
-                                        closures, functions, program.dump(), program.is_helloworld(), program.feature_hash(),
-                                        str(transaction.owner.address), str(transaction.owner.signature))
-                                    )
-                                    program_db_id = (await cur.fetchone())["id"]
-                                    for function in program.functions.values():
-                                        inputs = []
-                                        input_modes = []
-                                        i: FunctionInput
-                                        for i in function.inputs:
-                                            mode, _type = value_type_to_mode_type_str(i.value_type)
-                                            inputs.append(_type)
-                                            input_modes.append(mode)
-                                        outputs = []
-                                        output_modes = []
-                                        o: FunctionOutput
-                                        for o in function.outputs:
-                                            mode, _type = value_type_to_mode_type_str(o.value_type)
-                                            outputs.append(_type)
-                                            output_modes.append(mode)
-                                        finalizes = []
-                                        if function.finalize.value is not None:
-                                            f: FinalizeInput
-                                            for f in function.finalize.value[1].inputs:
-                                                finalizes.append(plaintext_type_to_str(f.plaintext_type))
-                                        await cur.execute(
-                                            "INSERT INTO program_function (program_id, name, input, input_mode, output, output_mode, finalize) "
-                                            "VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                                            (program_db_id, str(function.name), inputs, input_modes, outputs, output_modes, finalizes)
-                                        )
+                                    await self._save_program(cur, transaction.deployment.program, deploy_transaction_db_id, transaction)
 
                                     await cur.execute(
-                                        "INSERT INTO fee (transaction_id, global_state_root, inclusion_proof) "
+                                        "INSERT INTO fee (transaction_id, global_state_root, proof) "
                                         "VALUES (%s, %s, %s) RETURNING id",
-                                        (transaction_db_id, str(transaction.fee.global_state_root), transaction.fee.inclusion_proof.dumps())
+                                        (transaction_db_id, str(transaction.fee.global_state_root), transaction.fee.proof.dumps())
                                     )
                                     fee_db_id = (await cur.fetchone())["id"]
                                     await self._insert_transition(conn, None, fee_db_id, transaction.fee.transition, 0)
@@ -286,10 +307,10 @@ class Database:
                                     )
                                     transaction_db_id = (await cur.fetchone())["id"]
                                     await cur.execute(
-                                        "INSERT INTO transaction_execute (transaction_id, global_state_root, inclusion_proof) "
+                                        "INSERT INTO transaction_execute (transaction_id, global_state_root, proof) "
                                         "VALUES (%s, %s, %s) RETURNING id",
                                         (transaction_db_id, str(transaction.execution.global_state_root),
-                                         transaction.execution.inclusion_proof.dumps())
+                                         transaction.execution.proof.dumps())
                                     )
                                     execute_transaction_db_id = (await cur.fetchone())["id"]
 
@@ -300,9 +321,9 @@ class Database:
                                     if transaction.additional_fee.value is not None:
                                         fee: Fee = transaction.additional_fee.value
                                         await cur.execute(
-                                            "INSERT INTO fee (transaction_id, global_state_root, inclusion_proof) "
+                                            "INSERT INTO fee (transaction_id, global_state_root, proof) "
                                             "VALUES (%s, %s, %s) RETURNING id",
-                                            (transaction_db_id, str(fee.global_state_root), fee.inclusion_proof.dumps())
+                                            (transaction_db_id, str(fee.global_state_root), fee.proof.dumps())
                                         )
                                         fee_db_id = (await cur.fetchone())["id"]
                                         await self._insert_transition(conn, None, fee_db_id, fee.transition, 0)
@@ -324,18 +345,18 @@ class Database:
                                     transaction_db_id = (await cur.fetchone())["id"]
                                     fee = transaction.fee
                                     await cur.execute(
-                                        "INSERT INTO fee (transaction_id, global_state_root, inclusion_proof) "
+                                        "INSERT INTO fee (transaction_id, global_state_root, proof) "
                                         "VALUES (%s, %s, %s) RETURNING id",
-                                        (transaction_db_id, str(fee.global_state_root), fee.inclusion_proof.dumps())
+                                        (transaction_db_id, str(fee.global_state_root), fee.proof.dumps())
                                     )
                                     fee_db_id = (await cur.fetchone())["id"]
                                     await self._insert_transition(conn, None, fee_db_id, fee.transition, 0)
 
                                     await cur.execute(
-                                        "INSERT INTO transaction_execute (transaction_id, global_state_root, inclusion_proof) "
+                                        "INSERT INTO transaction_execute (transaction_id, global_state_root, proof) "
                                         "VALUES (%s, %s, %s) RETURNING id",
                                         (transaction_db_id, str(confirmed_transaction.rejected.global_state_root),
-                                         confirmed_transaction.rejected.inclusion_proof.dumps())
+                                         confirmed_transaction.rejected.proof.dumps())
                                     )
                                     execute_transaction_db_id = (await cur.fetchone())["id"]
                                     for ts_index, transition in enumerate(confirmed_transaction.rejected.transitions):
@@ -391,6 +412,21 @@ class Database:
                                                 (finalize_operation_db_id, str(finalize_operation.mapping_id))
                                             )
 
+                        ratification_map = defaultdict(lambda: defaultdict(list))
+
+                        for index, ratify in enumerate(block.ratifications):
+                            ratify: Ratify
+                            # noinspection PyUnresolvedReferences
+                            await cur.execute(
+                                "INSERT INTO ratification (block_id, type, address, amount, index) "
+                                "VALUES (%s, %s, %s, %s, %s) RETURNING id",
+                                (block_db_id, ratify.type.name, str(ratify.address), ratify.amount, index)
+                            )
+                            ratify_db_id = (await cur.fetchone())["id"]
+                            # noinspection PyUnresolvedReferences
+                            ratification_map[str(ratify.address)][ratify.amount].append(ratify_db_id)
+
+
                         if block.coinbase.value is not None and not os.environ.get("DEBUG_SKIP_COINBASE"):
                             coinbase_reward = block.get_coinbase_reward((await self.get_latest_block()).header.metadata.last_coinbase_timestamp)
                             await cur.execute(
@@ -422,11 +458,15 @@ class Database:
                                 current_total_credit = current_total_credit["total_credit"]
                             partial_solution: PartialSolution
                             for partial_solution, target, reward in solutions:
+                                try:
+                                    ratify_id = ratification_map[str(partial_solution.address)][reward].pop()
+                                except:
+                                    raise RuntimeError(f"could not find ratification for address {partial_solution.address} and reward {reward}")
                                 await cur.execute(
-                                    "INSERT INTO partial_solution (coinbase_solution_id, address, nonce, commitment, target, reward) "
-                                    "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+                                    "INSERT INTO partial_solution (coinbase_solution_id, address, nonce, commitment, target, reward, ratification_id) "
+                                    "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
                                     (coinbase_solution_db_id, str(partial_solution.address), partial_solution.nonce,
-                                    str(partial_solution.commitment), partial_solution.commitment.to_target(), reward)
+                                    str(partial_solution.commitment), partial_solution.commitment.to_target(), reward, ratify_id)
                                 )
                                 if reward > 0:
                                     await cur.execute(
@@ -460,6 +500,7 @@ class Database:
             previous_state_root=Field.loads(block["previous_state_root"]),
             transactions_root=Field.loads(block["transactions_root"]),
             finalize_root=Field.loads(block["finalize_root"]),
+            ratifications_root=Field.loads(block["ratifications_root"]),
             coinbase_accumulator_point=Field.loads(block["coinbase_accumulator_point"]),
             metadata=BlockHeaderMetadata(
                 network=u16(3),
@@ -467,6 +508,7 @@ class Database:
                 height=u32(block["height"]),
                 total_supply_in_microcredits=u64(block["total_supply"]),
                 cumulative_weight=u128(block["cumulative_weight"]),
+                cumulative_proof_target=u128(block["cumulative_proof_target"]),
                 coinbase_target=u64(block["coinbase_target"]),
                 proof_target=u64(block["proof_target"]),
                 last_coinbase_target=u64(block["last_coinbase_target"]),
@@ -648,7 +690,6 @@ class Database:
                 inputs=Vec[TransitionInput, u8](tis),
                 outputs=Vec[TransitionOutput, u8](tos),
                 finalize=Option[Vec[Value, u8]](finalize),
-                proof=Proof.loads(transition["proof"]),
                 tpk=Group.loads(transition["tpk"]),
                 tcm=Field.loads(transition["tcm"]),
             )
@@ -748,12 +789,12 @@ class Database:
                         if fee_transition is None:
                             raise ValueError("fee transition not found")
                         proof = None
-                        if fee["inclusion_proof"] is not None:
-                            proof = Proof.loads(fee["inclusion_proof"])
+                        if fee["proof"] is not None:
+                            proof = Proof.loads(fee["proof"])
                         fee = Fee(
                             transition=await Database._get_transition(fee_transition, conn),
                             global_state_root=StateRoot.loads(fee["global_state_root"]),
-                            inclusion_proof=Option[Proof](proof),
+                            proof=Option[Proof](proof),
                         )
                         tx = DeployTransaction(
                             id_=TransactionID.loads(transaction["transaction_id"]),
@@ -799,17 +840,17 @@ class Database:
                             if fee_transition is None:
                                 raise ValueError("fee transition not found")
                             proof = None
-                            if additional_fee["inclusion_proof"] is not None:
-                                proof = Proof.loads(additional_fee["inclusion_proof"])
+                            if additional_fee["proof"] is not None:
+                                proof = Proof.loads(additional_fee["proof"])
                             fee = Fee(
                                 transition=await Database._get_transition(fee_transition, conn),
                                 global_state_root=StateRoot.loads(additional_fee["global_state_root"]),
-                                inclusion_proof=Option[Proof](proof),
+                                proof=Option[Proof](proof),
                             )
-                        if execute_transaction["inclusion_proof"] is None:
+                        if execute_transaction["proof"] is None:
                             proof = None
                         else:
-                            proof = Proof.loads(execute_transaction["inclusion_proof"])
+                            proof = Proof.loads(execute_transaction["proof"])
                         if confirmed_transaction["type"] == ConfirmedTransaction.Type.AcceptedExecute.name:
                             ctxs.append(AcceptedExecute(
                                 index=u32(confirmed_transaction["index"]),
@@ -818,7 +859,7 @@ class Database:
                                     execution=Execution(
                                         transitions=Vec[Transition, u8](tss),
                                         global_state_root=StateRoot.loads(execute_transaction["global_state_root"]),
-                                        inclusion_proof=Option[Proof](proof),
+                                        proof=Option[Proof](proof),
                                     ),
                                     additional_fee=Option[Fee](fee),
                                 ),
@@ -834,11 +875,27 @@ class Database:
                                 rejected=Execution(
                                     transitions=Vec[Transition, u8](tss),
                                     global_state_root=StateRoot.loads(execute_transaction["global_state_root"]),
-                                    inclusion_proof=Option[Proof](proof),
+                                    proof=Option[Proof](proof),
                                 )
                             ))
                     case _:
                         raise NotImplementedError
+
+            await cur.execute("SELECT * FROM ratification WHERE block_id = %s ORDER BY index", (block["id"],))
+            ratifications = await cur.fetchall()
+            rs = []
+            for ratification in ratifications:
+                match ratification["type"]:
+                    case Ratify.Type.ProvingReward.name:
+                        rs.append(ProvingReward(
+                            address=Address.loads(ratification["address"]),
+                            amount=u64(ratification["amount"]),
+                        ))
+                    case Ratify.Type.StakingReward.name:
+                        rs.append(StakingReward(
+                            address=Address.loads(ratification["address"]),
+                            amount=u64(ratification["amount"]),
+                        ))
 
             await cur.execute("SELECT * FROM coinbase_solution WHERE block_id = %s", (block["id"],))
             coinbase_solution = await cur.fetchone()
@@ -872,6 +929,7 @@ class Database:
                 transactions=Transactions(
                     transactions=Vec[ConfirmedTransaction, u32](ctxs),
                 ),
+                ratifications=Vec[Ratify, u32](rs),
                 coinbase=Option[CoinbaseSolution](coinbase_solution),
                 signature=Signature.loads(block['signature']),
             )
@@ -1462,6 +1520,23 @@ class Database:
                     return await cur.fetchall()
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def get_builtin_programs(self):
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT p.program_id, SUM(pf.called) as called "
+                        "FROM program p "
+                        "JOIN program_function pf on p.id = pf.program_id "
+                        "WHERE p.transaction_deploy_id IS NULL "
+                        "GROUP BY p.program_id "
+                    )
+                    return await cur.fetchall()
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
 
     async def get_programs_with_feature_hash(self, feature_hash: bytes, start, end) -> list:
         conn: psycopg.AsyncConnection
@@ -1546,29 +1621,6 @@ class Database:
                         (program_id, end - start, start)
                     )
                     return await cur.fetchall()
-                except Exception as e:
-                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
-                    raise
-
-    # temp method TODO: remove after next reset
-    async def program_calls_has_reject(self, program_id: str) -> bool:
-        conn: psycopg.AsyncConnection
-        async with self.pool.connection() as conn:
-            async with conn.cursor() as cur:
-                try:
-                    await cur.execute(
-                        "SELECT ts.transition_id, function_name, ct.type "
-                        "FROM transition ts "
-                        "JOIN transaction_execute te on te.id = ts.transaction_execute_id "
-                        "JOIN transaction t on te.transaction_id = t.id "
-                        "JOIN confirmed_transaction ct on t.confimed_transaction_id = ct.id "
-                        "JOIN block b on ct.block_id = b.id "
-                        "WHERE ts.program_id = %s "
-                        "AND (ct.type = 'RejectedDeploy' OR ct.type = 'RejectedExecute') "
-                        "AND b.height < 200000",
-                        (program_id,)
-                    )
-                    return len(await cur.fetchall()) > 0
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
@@ -1663,22 +1715,19 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_mapping_cache(self, mapping_id: str) -> list:
-        conn: psycopg.AsyncConnection
-        async with self.pool.connection() as conn:
-            async with conn.cursor() as cur:
-                try:
-                    await cur.execute(
-                        "SELECT index, key_id, value_id, key, value FROM mapping_value mv "
-                        "JOIN mapping m on mv.mapping_id = m.id "
-                        "WHERE m.mapping_id = %s "
-                        "ORDER BY index",
-                        (mapping_id,)
-                    )
-                    return await cur.fetchall()
-                except Exception as e:
-                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
-                    raise
+    async def get_mapping_cache(self, cur, mapping_id: str) -> list:
+        try:
+            await cur.execute(
+                "SELECT index, key_id, value_id, key, value FROM mapping_value mv "
+                "JOIN mapping m on mv.mapping_id = m.id "
+                "WHERE m.mapping_id = %s "
+                "ORDER BY index",
+                (mapping_id,)
+            )
+            return await cur.fetchall()
+        except Exception as e:
+            await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+            raise
 
     async def get_mapping_value(self, program_id: str, mapping: str, key_id: str) -> bytes | None:
         conn: psycopg.AsyncConnection
@@ -1699,53 +1748,58 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def initialize_mapping(self, mapping_id: str, program_id: str, mapping: str):
+    async def initialize_mapping(self, cur, mapping_id: str, program_id: str, mapping: str):
+        try:
+            await cur.execute(
+                "INSERT INTO mapping (mapping_id, program_id, mapping) VALUES (%s, %s, %s)",
+                (mapping_id, program_id, mapping)
+            )
+        except Exception as e:
+            await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+            raise
+
+    async def initialize_builtin_mapping(self, mapping_id: str, program_id: str, mapping: str):
         conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
-                    async with conn.transaction():
-                        await cur.execute(
-                            "INSERT INTO mapping (mapping_id, program_id, mapping) VALUES (%s, %s, %s)",
-                            (mapping_id, program_id, mapping)
-                        )
+                    await cur.execute(
+                        "INSERT INTO mapping (mapping_id, program_id, mapping) VALUES (%s, %s, %s)",
+                        (mapping_id, program_id, mapping)
+                    )
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def update_mapping_key_value(self, mapping_id: str, index: int, key_id: str, value_id: str,
+    async def update_mapping_key_value(self, cur, mapping_id: str, index: int, key_id: str, value_id: str,
                                         key: bytes, value: bytes):
-        conn: psycopg.AsyncConnection
-        async with self.pool.connection() as conn:
-            async with conn.cursor() as cur:
-                try:
-                    async with conn.transaction():
-                        await cur.execute("SELECT id FROM mapping WHERE mapping_id = %s", (mapping_id,))
-                        mapping = await cur.fetchone()
-                        if mapping is None:
-                            raise ValueError(f"Mapping {mapping_id} not found")
-                        mapping_id = mapping['id']
-                        await cur.execute(
-                            "SELECT key_id FROM mapping_value WHERE mapping_id = %s AND index = %s",
-                            (mapping_id, index)
-                        )
-                        if (res := await cur.fetchone()) is None:
-                            await cur.execute(
-                                "INSERT INTO mapping_value (mapping_id, index, key_id, value_id, key, value) "
-                                "VALUES (%s, %s, %s, %s, %s, %s)",
-                                (mapping_id, index, key_id, value_id, key, value)
-                            )
-                        else:
-                            if res["key_id"] != key_id:
-                                raise ValueError(f"Key id mismatch: {res['key_id']} != {key_id}")
-                            await cur.execute(
-                                "UPDATE mapping_value SET value_id = %s, value = %s "
-                                "WHERE mapping_id = %s AND index = %s",
-                                (value_id, value, mapping_id, index)
-                            )
-                except Exception as e:
-                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
-                    raise
+        try:
+            await cur.execute("SELECT id FROM mapping WHERE mapping_id = %s", (mapping_id,))
+            mapping = await cur.fetchone()
+            if mapping is None:
+                raise ValueError(f"Mapping {mapping_id} not found")
+            mapping_id = mapping['id']
+            await cur.execute(
+                "SELECT key_id FROM mapping_value WHERE mapping_id = %s AND index = %s",
+                (mapping_id, index)
+            )
+            if (res := await cur.fetchone()) is None:
+                await cur.execute(
+                    "INSERT INTO mapping_value (mapping_id, index, key_id, value_id, key, value) "
+                    "VALUES (%s, %s, %s, %s, %s, %s)",
+                    (mapping_id, index, key_id, value_id, key, value)
+                )
+            else:
+                if res["key_id"] != key_id:
+                    raise ValueError(f"Key id mismatch: {res['key_id']} != {key_id}")
+                await cur.execute(
+                    "UPDATE mapping_value SET value_id = %s, value = %s "
+                    "WHERE mapping_id = %s AND index = %s",
+                    (value_id, value, mapping_id, index)
+                )
+        except Exception as e:
+            await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+            raise
                 
                 
     async def get_program_leo_source_code(self, program_id: str) -> str | None:
@@ -1785,10 +1839,7 @@ class Database:
     # migration methods
     async def migrate(self):
         migrations = [
-            (1, self.migrate_1_add_fee_transaction_type),
-            (2, self.migrate_2_program_add_leo_source_column),
-            (3, self.migrate_3_add_mapping_tables),
-            (4, self.migrate_4_add_feedback_table),
+
         ]
         conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
@@ -1804,63 +1855,6 @@ class Database:
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
-
-    async def migrate_1_add_fee_transaction_type(self):
-        conn: psycopg.AsyncConnection
-        async with self.pool.connection() as conn:
-            async with conn.cursor() as cur:
-                await cur.execute("ALTER TYPE explorer.transaction_type ADD VALUE 'Fee' AFTER 'Execute'")
-
-    async def migrate_2_program_add_leo_source_column(self):
-        conn: psycopg.AsyncConnection
-        async with self.pool.connection() as conn:
-            async with conn.cursor() as cur:
-                await cur.execute("ALTER TABLE program ADD leo_source TEXT")
-
-    async def migrate_3_add_mapping_tables(self):
-        conn: psycopg.AsyncConnection
-        async with self.pool.connection() as conn:
-            async with conn.cursor() as cur:
-                await cur.execute(
-                    "create table mapping ( "
-                    "id serial primary key not null, "
-                    "mapping_id text not null, "
-                    "program_id text not null, "
-                    "mapping text not null )"
-                )
-                await cur.execute("create unique index mapping_pk2 on mapping using btree (mapping_id)")
-                await cur.execute("create unique index mapping_pk3 on mapping using btree (program_id, mapping)")
-                await cur.execute(
-                    "create table mapping_value ( " 
-                    "id serial primary key not null, "
-                    "mapping_id integer not null, "
-                    "index integer not null, "
-                    "key_id text not null, "
-                    "value_id text not null, "
-                    "key bytea not null, "
-                    "value bytea not null "
-                    ")"
-                )
-                await cur.execute("create unique index mapping_value_pk2 on mapping_value using btree (mapping_id, index)")
-                await cur.execute("create index mapping_value_mapping_id_index on mapping_value using btree (mapping_id)")
-                await cur.execute(
-                    "alter table mapping_value "
-                    "add constraint mapping_value_mapping_id_fk "
-                    "foreign key (mapping_id) references mapping"
-                )
-                await cur.execute("create index mapping_value_key_id_index on mapping_value (key_id);")
-
-    async def migrate_4_add_feedback_table(self):
-        conn: psycopg.AsyncConnection
-        async with self.pool.connection() as conn:
-            async with conn.cursor() as cur:
-                await cur.execute(
-                    "create table feedback ( "
-                    "id      serial not null primary key, "
-                    "contact text   not null, "
-                    "content text   not null )"
-                )
-
 
     # debug method
     async def clear_database(self):

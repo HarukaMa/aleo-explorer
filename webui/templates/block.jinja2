@@ -59,6 +59,9 @@
         {% call data_line("Cumulative weight") %}
             {{ block.header.metadata.cumulative_weight | format_number | safe }}
         {% endcall %}
+        {% call data_line("Cumulative proof target") %}
+            {{ block.header.metadata.cumulative_proof_target | format_number | safe }}
+        {% endcall %}
         {% call data_line("Coinbase reward") %}
             {% if coinbase_reward %}{{ (coinbase_reward // 2) | format_aleo_credit | safe }}{% else %}-{% endif %}
         {% endcall %}
@@ -72,7 +75,11 @@
             <span class="mono">{{ block.block_hash }}</span>
         {% endcall %}
         {% call data_line("Previous block hash") %}
-            <a href="/block?bh={{ block.previous_hash }}"><span class="mono">{{ block.previous_hash }}</span></a>
+            {% if block.header.metadata.height == 0 %}
+                <span class="mono">{{ block.previous_hash }}</span>
+            {% else %}
+                <a href="/block?bh={{ block.previous_hash }}"><span class="mono">{{ block.previous_hash }}</span></a>
+            {% endif %}
         {% endcall %}
         {% call data_line("Previous state root") %}
             <span class="mono">{{ block.header.previous_state_root }}</span>
@@ -82,6 +89,9 @@
         {% endcall %}
         {% call data_line("Finalize root") %}
             <span class="mono">{{ block.header.finalize_root }}</span>
+        {% endcall %}
+        {% call data_line("Ratifications root") %}
+            <span class="mono">{{ block.header.ratifications_root }}</span>
         {% endcall %}
         {% call data_line("Coinbase accumulator point") %}
             <span class="mono">{{ block.header.coinbase_accumulator_point }}</span>

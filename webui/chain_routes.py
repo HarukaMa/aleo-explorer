@@ -206,7 +206,7 @@ async def transaction_route(request: Request):
     elif transaction.type == Transaction.Type.Execute:
         transaction: ExecuteTransaction
         global_state_root = transaction.execution.global_state_root
-        inclusion_proof = transaction.execution.inclusion_proof.value
+        proof = transaction.execution.proof.value
         transitions = []
         for transition in transaction.execution.transitions:
             transition: Transition
@@ -225,14 +225,15 @@ async def transaction_route(request: Request):
             total_fee = 0
         ctx.update({
             "global_state_root": global_state_root,
-            "inclusion_proof": inclusion_proof,
+            "proof": proof,
+            "proof_trunc": str(proof)[:30] + "..." + str(proof)[-30:] if proof else None,
             "total_fee": total_fee,
             "transitions": transitions,
         })
     elif transaction.type == Transaction.Type.Fee:
         transaction: FeeTransaction
         global_state_root = transaction.fee.global_state_root
-        inclusion_proof = transaction.fee.inclusion_proof.value
+        proof = transaction.fee.proof.value
         transitions = []
         rejected_transitions = []
         transition = transaction.fee.transition
@@ -255,8 +256,8 @@ async def transaction_route(request: Request):
             raise HTTPException(status_code=550, detail="Unsupported transaction type")
         ctx.update({
             "global_state_root": global_state_root,
-            "inclusion_proof": inclusion_proof,
-            "inclusion_proof_trunc": str(inclusion_proof)[:30] + "..." + str(inclusion_proof)[-30:] if inclusion_proof else None,
+            "proof": proof,
+            "proof_trunc": str(proof)[:30] + "..." + str(proof)[-30:] if proof else None,
             "total_fee": total_fee,
             "transitions": transitions,
             "rejected_transitions": rejected_transitions,
@@ -329,7 +330,6 @@ async def transition_route(request: Request):
     function_name = transition.function_name
     tpk = transition.tpk
     tcm = transition.tcm
-    proof = transition.proof
 
     inputs = []
     for input_ in transition.inputs:
@@ -429,8 +429,6 @@ async def transition_route(request: Request):
         "function_name": function_name,
         "tpk": tpk,
         "tcm": tcm,
-        "proof": proof,
-        "proof_trunc": str(proof)[:30] + "..." + str(proof)[-30:],
         "function_signature": await function_signature(db, str(transition.program_id), str(transition.function_name)),
         "function_definition": await function_definition(db, str(transition.program_id), str(transition.function_name)),
         "inputs": inputs,
