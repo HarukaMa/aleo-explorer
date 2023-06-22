@@ -338,9 +338,15 @@ class Command(Serialize, Deserialize):  # enum
 
     class Type(IntEnumu8):
         Instruction = 0
-        Get = 1
-        GetOrInit = 2
-        Set = 3
+        Contains = 1
+        Get = 2
+        GetOrUse = 3
+        RandChaCha = 4
+        Remove = 5
+        Set = 6
+        BranchEq = 7
+        BranchNeq = 8
+        Position = 9
 
     @property
     @abstractmethod
@@ -353,12 +359,24 @@ class Command(Serialize, Deserialize):  # enum
         type_ = cls.Type.load(data)
         if type_ == cls.Type.Instruction:
             return InstructionCommand.load(data)
+        elif type_ == cls.Type.Contains:
+            return ContainsCommand.load(data)
         elif type_ == cls.Type.Get:
             return GetCommand.load(data)
-        elif type_ == cls.Type.GetOrInit:
-            return GetOrInitCommand.load(data)
+        elif type_ == cls.Type.GetOrUse:
+            return GetOrUseCommand.load(data)
+        elif type_ == cls.Type.RandChaCha:
+            return RandChaChaCommand.load(data)
+        elif type_ == cls.Type.Remove:
+            return RemoveCommand.load(data)
         elif type_ == cls.Type.Set:
             return SetCommand.load(data)
+        elif type_ == cls.Type.BranchEq:
+            return BranchEqCommand.load(data)
+        elif type_ == cls.Type.BranchNeq:
+            return BranchNeqCommand.load(data)
+        elif type_ == cls.Type.Position:
+            return PositionCommand.load(data)
         else:
             raise ValueError("Invalid variant")
 
@@ -378,6 +396,25 @@ class InstructionCommand(Command):
         instruction = Instruction.load(data)
         return cls(instruction=instruction)
 
+class ContainsCommand(Command):
+    type = Command.Type.Contains
+
+    # @type_check
+    def __init__(self, *, mapping: Identifier, key: Operand, destination: Register):
+        self.mapping = mapping
+        self.key = key
+        self.destination = destination
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.mapping.dump() + self.key.dump() + self.destination.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        mapping = Identifier.load(data)
+        key = Operand.load(data)
+        destination = Register.load(data)
+        return cls(mapping=mapping, key=key, destination=destination)
 
 class GetCommand(Command):
     type = Command.Type.Get
@@ -400,8 +437,8 @@ class GetCommand(Command):
         return cls(mapping=mapping, key=key, destination=destination)
 
 
-class GetOrInitCommand(Command):
-    type = Command.Type.GetOrInit
+class GetOrUseCommand(Command):
+    type = Command.Type.GetOrUse
 
     # @type_check
     def __init__(self, *, mapping: Identifier, key: Operand, default: Operand, destination: Register):
@@ -422,6 +459,45 @@ class GetOrInitCommand(Command):
         destination = Register.load(data)
         return cls(mapping=mapping, key=key, default=default, destination=destination)
 
+
+class RandChaChaCommand(Command):
+    type = Command.Type.RandChaCha
+
+    # @type_check
+    def __init__(self, *, operands: Vec[Operand, u8], destination: Register, destination_type: LiteralType):
+        self.operands = operands
+        self.destination = destination
+        self.destination_type = destination_type
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.operands.dump() + self.destination.dump() + self.destination_type.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        operands = Vec[Operand, u8].load(data)
+        destination = Register.load(data)
+        destination_type = LiteralType.load(data)
+        return cls(operands=operands, destination=destination, destination_type=destination_type)
+
+class RemoveCommand(Command):
+    type = Command.Type.Remove
+
+    # @type_check
+    def __init__(self, *, mapping: Identifier, key: Operand):
+        self.mapping = mapping
+        self.key = key
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.mapping.dump() + self.key.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        mapping = Identifier.load(data)
+        key = Operand.load(data)
+        return cls(mapping=mapping, key=key)
+
 class SetCommand(Command):
     type = Command.Type.Set
 
@@ -441,6 +517,62 @@ class SetCommand(Command):
         key = Operand.load(data)
         value = Operand.load(data)
         return cls(mapping=mapping, key=key, value=value)
+
+class BranchEqCommand(Command):
+    type = Command.Type.BranchEq
+
+    # @type_check
+    def __init__(self, *, first: Operand, second: Operand, position: Identifier):
+        self.first = first
+        self.second = second
+        self.position = position
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.first.dump() + self.second.dump() + self.position.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        first = Operand.load(data)
+        second = Operand.load(data)
+        position = Identifier.load(data)
+        return cls(first=first, second=second, position=position)
+
+class BranchNeqCommand(Command):
+    type = Command.Type.BranchNeq
+
+    # @type_check
+    def __init__(self, *, first: Operand, second: Operand, position: Identifier):
+        self.first = first
+        self.second = second
+        self.position = position
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.first.dump() + self.second.dump() + self.position.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        first = Operand.load(data)
+        second = Operand.load(data)
+        position = Identifier.load(data)
+        return cls(first=first, second=second, position=position)
+
+class PositionCommand(Command):
+    type = Command.Type.Position
+
+    # @type_check
+    def __init__(self, *, position: Identifier):
+        self.position = position
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.position.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        position = Identifier.load(data)
+        return cls(position=position)
 
 
 class FinalizeInput(Serialize, Deserialize):
@@ -892,11 +1024,9 @@ class VerifyingKey(Serialize, Deserialize):
     # Skipping a layer of marlin::CircuitVerifyingKey
     # @type_check
     @generic_type_check
-    def __init__(self, *, circuit_info: CircuitInfo, circuit_commitments: Vec[KZGCommitment, u64],
-                 verifier_key: SonicVerifierKey, id_: Vec[u8, 32]):
+    def __init__(self, *, circuit_info: CircuitInfo, circuit_commitments: Vec[KZGCommitment, u64], id_: Vec[u8, 32]):
         self.circuit_info = circuit_info
         self.circuit_commitments = circuit_commitments
-        self.verifier_key = verifier_key
         self.id = id_
 
     def dump(self) -> bytes:
@@ -904,7 +1034,6 @@ class VerifyingKey(Serialize, Deserialize):
         res += self.version.dump()
         res += self.circuit_info.dump()
         res += self.circuit_commitments.dump()
-        res += self.verifier_key.dump()
         res += self.id.dump()
         return res
 
@@ -916,9 +1045,8 @@ class VerifyingKey(Serialize, Deserialize):
             raise ValueError("Invalid version")
         circuit_info = CircuitInfo.load(data)
         circuit_commitments = Vec[KZGCommitment, u64].load(data)
-        verifier_key = SonicVerifierKey.load(data)
         id_ = Vec[u8, 32].load(data)
-        return cls(circuit_info=circuit_info, circuit_commitments=circuit_commitments, verifier_key=verifier_key, id_=id_)
+        return cls(circuit_info=circuit_info, circuit_commitments=circuit_commitments, id_=id_)
 
 
 class KZGProof(Serialize, Deserialize):

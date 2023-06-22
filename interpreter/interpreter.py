@@ -2,8 +2,13 @@ from db import Database
 from interpreter.finalizer import execute_finalizer
 from node.types import *
 
+async def init_builtin_program(db: Database, program: Program):
+    for mapping in program.mappings.keys():
+        mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(mapping)))
+        await db.initialize_builtin_mapping(str(mapping_id), str(program.id), str(mapping))
 
-async def finalize_block(db: Database, block: Block):
+
+async def finalize_block(db: Database, cur, block: Block):
     for confirmed_transaction in block.transactions.transactions:
         confirmed_transaction: ConfirmedTransaction
         if confirmed_transaction.type == ConfirmedTransaction.Type.AcceptedDeploy:
@@ -34,14 +39,10 @@ async def finalize_block(db: Database, block: Block):
                 transition: Transition
                 finalize: Vec[Value, u8] = transition.finalize.value
                 if finalize is not None:
-                    # temp ignore to avoid bug
-                    has_rejects = await db.program_calls_has_reject(str(transition.program_id))
-                    if has_rejects:
-                        continue
                     program = Program.load(bytearray(await db.get_program(str(transition.program_id))))
                     inputs = list(map(lambda x: x.plaintext, finalize))
                     operations.extend(
-                        await execute_finalizer(db, program, transition.function_name, inputs, mapping_cache)
+                        await execute_finalizer(db, cur, program, transition.function_name, inputs, mapping_cache)
                     )
 
         else:
@@ -62,17 +63,17 @@ async def finalize_block(db: Database, block: Block):
                 case _:
                     raise NotImplementedError
 
-        await execute_operations(db, operations)
+        await execute_operations(db, cur, operations)
 
 
-async def execute_operations(db: Database, operations: [dict]):
+async def execute_operations(db: Database, cur, operations: [dict]):
     for operation in operations:
         match operation["type"]:
             case FinalizeOperation.Type.InitializeMapping:
                 mapping_id = operation["mapping_id"]
                 program_id = operation["program_id"]
                 mapping = operation["mapping"]
-                await db.initialize_mapping(str(mapping_id), str(program_id), str(mapping))
+                await db.initialize_mapping(cur, str(mapping_id), str(program_id), str(mapping))
             case FinalizeOperation.Type.UpdateKeyValue:
                 mapping_id = operation["mapping_id"]
                 index = operation["index"]
@@ -80,6 +81,6 @@ async def execute_operations(db: Database, operations: [dict]):
                 value_id = operation["value_id"]
                 key = operation["key"]
                 value = operation["value"]
-                await db.update_mapping_key_value(str(mapping_id), index, str(key_id), str(value_id), key.dump(), value.dump())
+                await db.update_mapping_key_value(cur, str(mapping_id), index, str(key_id), str(value_id), key.dump(), value.dump())
             case _:
                 raise NotImplementedError

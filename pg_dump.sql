@@ -586,7 +586,8 @@ CREATE TABLE explorer.partial_solution (
     nonce numeric(20,0) NOT NULL,
     commitment text NOT NULL,
     target numeric(20,0) NOT NULL,
-    reward integer NOT NULL
+    reward integer NOT NULL,
+    ratification_id integer NOT NULL
 );
 
 
@@ -647,7 +648,7 @@ ALTER SEQUENCE explorer.private_transition_input_id_seq OWNED BY explorer.transi
 
 CREATE TABLE explorer.program (
     id integer NOT NULL,
-    transaction_deploy_id integer NOT NULL,
+    transaction_deploy_id integer,
     program_id text NOT NULL,
     import text[],
     mapping text[],
@@ -658,8 +659,8 @@ CREATE TABLE explorer.program (
     raw_data bytea NOT NULL,
     is_helloworld boolean DEFAULT false NOT NULL,
     feature_hash bytea NOT NULL,
-    owner text NOT NULL,
-    signature text NOT NULL,
+    owner text,
+    signature text,
     leo_source text
 );
 
@@ -2306,6 +2307,14 @@ ALTER TABLE ONLY explorer.mapping_value
 
 ALTER TABLE ONLY explorer.partial_solution
     ADD CONSTRAINT partial_solution_coinbase_solution_id_fk FOREIGN KEY (coinbase_solution_id) REFERENCES explorer.coinbase_solution(id);
+
+
+--
+-- Name: partial_solution partial_solution_ratification_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.partial_solution
+    ADD CONSTRAINT partial_solution_ratification_id_fk FOREIGN KEY (ratification_id) REFERENCES explorer.ratification(id);
 
 
 --

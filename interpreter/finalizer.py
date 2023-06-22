@@ -5,8 +5,8 @@ from .environment import Registers
 from .instruction import execute_instruction
 from .utils import load_plaintext_from_operand, store_plaintext_to_register
 
-async def mapping_cache_read(db: Database, mapping_id: Field) -> list:
-    mapping = await db.get_mapping_cache(str(mapping_id))
+async def mapping_cache_read(db: Database, cur, mapping_id: Field) -> list:
+    mapping = await db.get_mapping_cache(cur, str(mapping_id))
     if not mapping:
         return []
     res = []
@@ -29,7 +29,7 @@ def mapping_find_index(mapping: list, key_id: Field) -> int:
             return i
     return -1
 
-async def execute_finalizer(db: Database, program: Program, function_name: Identifier, inputs: [Plaintext],
+async def execute_finalizer(db: Database, cur, program: Program, function_name: Identifier, inputs: [Plaintext],
                             mapping_cache: dict) -> list:
     registers = Registers()
     operations = []
@@ -63,15 +63,15 @@ async def execute_finalizer(db: Database, program: Program, function_name: Ident
                 execute_instruction(instruction, program, registers)
                 registers.dump()
 
-            case Command.Type.Get | Command.Type.GetOrInit:
+            case Command.Type.Get | Command.Type.GetOrUse:
                 print(disasm_command(c))
                 if c.type == Command.Type.Get:
                     c: GetCommand
                 else:
-                    c: GetOrInitCommand
+                    c: GetOrUseCommand
                 mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(c.mapping)))
                 if mapping_id not in mapping_cache:
-                    mapping_cache[mapping_id] = await mapping_cache_read(db, mapping_id)
+                    mapping_cache[mapping_id] = await mapping_cache_read(db, cur, mapping_id)
                 key = load_plaintext_from_operand(c.key, registers)
                 key_id = Field.loads(aleo.get_key_id(str(mapping_id), key.dump()))
                 index = mapping_find_index(mapping_cache[mapping_id], key_id)
@@ -80,19 +80,8 @@ async def execute_finalizer(db: Database, program: Program, function_name: Ident
                         raise RuntimeError("key not found")
                     default = load_plaintext_from_operand(c.default, registers)
                     value = PlaintextValue(plaintext=default)
-                    value_id = Field.loads(aleo.get_value_id(str(key_id), value.dump()))
-                    index = len(mapping_cache[mapping_id])
-                    mapping_cache[mapping_id].append((key_id, value_id, key, value))
-                    operations.append({
-                        "type": FinalizeOperation.Type.UpdateKeyValue,
-                        "mapping_id": mapping_id,
-                        "index": index,
-                        "key_id": key_id,
-                        "value_id": value_id,
-                        "key": key,
-                        "value": value,
-                    })
-                value = mapping_cache[mapping_id][index][3]
+                else:
+                    value = mapping_cache[mapping_id][index][3]
                 destination: Register = c.destination
                 store_plaintext_to_register(value.plaintext, destination, registers)
                 registers.dump()
@@ -102,7 +91,7 @@ async def execute_finalizer(db: Database, program: Program, function_name: Ident
                 c: SetCommand
                 mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(c.mapping)))
                 if mapping_id not in mapping_cache:
-                    mapping_cache[mapping_id] = await mapping_cache_read(db, mapping_id)
+                    mapping_cache[mapping_id] = await mapping_cache_read(db, cur, mapping_id)
                 key = load_plaintext_from_operand(c.key, registers)
                 value = PlaintextValue(plaintext=load_plaintext_from_operand(c.value, registers))
                 key_id = Field.loads(aleo.get_key_id(str(mapping_id), key.dump()))
@@ -126,6 +115,8 @@ async def execute_finalizer(db: Database, program: Program, function_name: Ident
                     "value": value,
                 })
                 registers.dump()
+            case _:
+                raise NotImplementedError
 
     return operations
 

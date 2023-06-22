@@ -12,7 +12,7 @@ def execute_instruction(instruction: Instruction, program: Program, registers: R
     elif isinstance(literals, Cast):
         operands = literals.operands
         destination = literals.destination
-        register_type = literals.register_type
+        register_type = literals.cast_type
         CastOp(operands, destination, register_type, program, registers)
     elif isinstance(literals, Call):
         raise NotImplementedError

@@ -46,11 +46,7 @@
             {{ state_label(state) }}
         {% endcall %}
         {% call data_line("Program ID") %}
-            {% if program_id | string == "credits.aleo" %}
-                <span class="mono" id="program-id">{{ program_id }}</span>
-            {% else %}
-                <span class="mono" id="program-id"><a href="/program?id={{ program_id }}">{{ program_id }}</a></span>
-            {% endif %}
+            <span class="mono" id="program-id"><a href="/program?id={{ program_id }}">{{ program_id }}</a></span>
         {% endcall %}
         {% call data_line("Function name") %}
             <span class="mono" id="function-name">{{ function_name }}</span>

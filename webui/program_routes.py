@@ -32,11 +32,12 @@ async def programs_route(request: Request):
         raise HTTPException(status_code=400, detail="Invalid page")
     start = 50 * (page - 1)
     programs = await db.get_programs(start, start + 50, no_helloworld=no_helloworld)
+    builtin_programs = await db.get_builtin_programs()
 
     maintenance, info = await out_of_sync_check(db)
     ctx = {
         "request": request,
-        "programs": programs,
+        "programs": programs + builtin_programs,
         "page": page,
         "total_pages": total_pages,
         "no_helloworld": no_helloworld,
@@ -52,21 +53,26 @@ async def program_route(request: Request):
     if program_id is None:
         raise HTTPException(status_code=400, detail="Missing program id")
     block = await db.get_block_by_program_id(program_id)
-    if block is None:
-        raise HTTPException(status_code=404, detail="Program not found")
-    transaction: DeployTransaction | None = None
-    for ct in block.transactions:
-        if ct.type == ConfirmedTransaction.Type.AcceptedDeploy:
-            ct: AcceptedDeploy
-            tx: Transaction = ct.transaction
-            tx: DeployTransaction
-            if str(tx.deployment.program.id) == program_id:
-                transaction = tx
-                break
-    if transaction is None:
-        raise HTTPException(status_code=550, detail="Deploy transaction not found")
-    deployment: Deployment = transaction.deployment
-    program: Program = deployment.program
+    if block:
+        transaction: DeployTransaction | None = None
+        for ct in block.transactions:
+            if ct.type == ConfirmedTransaction.Type.AcceptedDeploy:
+                ct: AcceptedDeploy
+                tx: Transaction = ct.transaction
+                tx: DeployTransaction
+                if str(tx.deployment.program.id) == program_id:
+                    transaction = tx
+                    break
+        if transaction is None:
+            raise HTTPException(status_code=550, detail="Deploy transaction not found")
+        deployment: Deployment = transaction.deployment
+        program: Program = deployment.program
+    else:
+        program_bytes = await db.get_program(program_id)
+        if not program_bytes:
+            raise HTTPException(status_code=404, detail="Program not found")
+        program = Program.load(bytearray(program_bytes))
+        transaction = None
     functions = []
     for f in program.functions.keys():
         functions.append((await function_signature(db, str(program.id), str(f))).split("/", 1)[-1])
@@ -87,9 +93,6 @@ async def program_route(request: Request):
     ctx = {
         "request": request,
         "program_id": str(program.id),
-        "transaction_id": str(transaction.id),
-        "owner": str(transaction.owner.address),
-        "signature": str(transaction.owner.signature),
         "times_called": await db.get_program_called_times(program_id),
         "imports": list(map(lambda i: str(i.program_id), program.imports)),
         "mappings": mappings,
@@ -100,9 +103,20 @@ async def program_route(request: Request):
         "source": source,
         "has_leo_source": has_leo_source,
         "recent_calls": await db.get_program_calls(program_id, 0, 30),
-        "has_rejects": await db.program_calls_has_reject(program_id),
         "similar_count": await db.get_program_similar_count(program_id),
     }
+    if transaction:
+        ctx.update({
+            "transaction_id": str(transaction.id),
+            "owner": str(transaction.owner.address),
+            "signature": str(transaction.owner.signature),
+        })
+    else:
+        ctx.update({
+            "transaction_id": None,
+            "owner": None,
+            "signature": None,
+        })
     return templates.TemplateResponse('program.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
 
 

@@ -80,13 +80,25 @@
                 <span class="mono">{{ program_id }}</span>
             {% endcall %}
             {% call data_line("Deployment transaction") %}
+                {% if transaction_id %}
                 <span class="mono"><a href="/transaction?id={{ transaction_id }}">{{ transaction_id }}</a></span>
+                {% else %}
+                -
+                {% endif %}
             {% endcall %}
             {% call data_line("Program owner") %}
+                {% if owner %}
                 <span class="mono"><a href="/address?a={{ owner }}">{{ owner }}</a></span>
+                {% else %}
+                -
+                {% endif %}
             {% endcall %}
             {% call data_line("Owner signature") %}
+                {% if signature %}
                 <span class="mono">{{ signature }}</span>
+                {% else %}
+                -
+                {% endif %}
             {% endcall %}
             {% call data_line("Times called") %}
                 {{ times_called }}
@@ -216,9 +228,6 @@
                 <div class="tabs-panel" id="read">
                     {% if not mappings %}
                         Program has no mappings.
-                    {% elif has_rejects %}
-                        Program has rejected transitions, the mapping values could be affected by a snarkVM bug. <br>
-                        Thus, mapping values are not readable here as the explorer is unable to track the values.
                     {% else %}
                         {% for mapping in mappings %}
                         <form data-mapping="{{ mapping.name }}" action="#">
