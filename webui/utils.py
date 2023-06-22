@@ -4,43 +4,6 @@ import time
 
 from db import Database
 
-credits_functions = {
-    "mint": {
-        "input": ["address", "u64"],
-        "input_mode": ["public", "public"],
-        "output": ["credits"],
-        "output_mode": ["private"],
-        "finalize": [],
-    },
-    "transfer": {
-        "input": ["credits", "address", "u64"],
-        "input_mode": ["private", "private", "private"],
-        "output": ["credits", "credits"],
-        "output_mode": ["private", "private"],
-        "finalize": [],
-    },
-    "join": {
-        "input": ["credits", "credits"],
-        "input_mode": ["private", "private"],
-        "output": ["credits"],
-        "output_mode": ["private"],
-        "finalize": [],
-    },
-    "split": {
-        "input": ["credits", "u64"],
-        "input_mode": ["private", "private"],
-        "output": ["credits", "credits"],
-        "output_mode": ["private", "private"],
-        "finalize": [],
-    },
-    "fee": {
-        "input": ["credits", "u64"],
-        "input_mode": ["private", "public"],
-        "output": ["credits"],
-        "output_mode": ["private"],
-        "finalize": [],
-    },
-}
 
 def get_relative_time(timestamp):
     now = time.time()
@@ -97,12 +60,7 @@ async def function_signature(db: Database, program_id: str, function_name: str):
     return result
 
 async def function_definition(db: Database, program_id: str, function_name: str):
-    if program_id == "credits.aleo":
-        if function_name not in credits_functions:
-            return f"Unknown program {program_id}"
-        return credits_functions[function_name]
-    else:
-        data = await db.get_function_definition(program_id, function_name)
-        if data is None:
-            return f"Unknown function {program_id}/{function_name}"
-        return data
+    data = await db.get_function_definition(program_id, function_name)
+    if data is None:
+        return f"Unknown function {program_id}/{function_name}"
+    return data
