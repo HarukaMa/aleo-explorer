@@ -47,7 +47,7 @@ async def leaderboard_route(request: Request):
     total_credit = await db.get_leaderboard_total()
     target_credit = 37_500_000_000_000
     ratio = total_credit / target_credit * 100
-    maintenance, info = await out_of_sync_check(db)
+    sync_info = await out_of_sync_check(db)
     ctx = {
         "request": request,
         "leaderboard": data,
@@ -57,8 +57,7 @@ async def leaderboard_route(request: Request):
         "target_credit": target_credit,
         "ratio": ratio,
         "now": now,
-        "maintenance": maintenance,
-        "info": info,
+        "sync_info": sync_info,
     }
     return templates.TemplateResponse('leaderboard.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
 
@@ -120,7 +119,7 @@ async def address_route(request: Request):
             "timestamp": program_block.header.metadata.timestamp,
             "transaction_id": program_tx.id,
         })
-    maintenance, info = await out_of_sync_check(db)
+    sync_info = await out_of_sync_check(db)
     ctx = {
         "request": request,
         "address": address,
@@ -133,8 +132,7 @@ async def address_route(request: Request):
         "total_programs": program_count,
         "speed": speed,
         "timespan": interval_text[interval],
-        "maintenance": maintenance,
-        "info": info,
+        "sync_info": sync_info,
     }
     return templates.TemplateResponse('address.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
 
@@ -168,7 +166,7 @@ async def address_solution_route(request: Request):
             "target": solution["target"],
             "target_sum": solution["target_sum"],
         })
-    maintenance, info = await out_of_sync_check(db)
+    sync_info = await out_of_sync_check(db)
     ctx = {
         "request": request,
         "address": address,
@@ -176,7 +174,6 @@ async def address_solution_route(request: Request):
         "solutions": data,
         "page": page,
         "total_pages": total_pages,
-        "maintenance": maintenance,
-        "info": info,
+        "sync_info": sync_info,
     }
     return templates.TemplateResponse('address_solution.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})

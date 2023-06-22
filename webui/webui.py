@@ -40,14 +40,13 @@ async def index_route(request: Request):
     db: Database = request.app.state.db
     recent_blocks = await db.get_recent_blocks_fast()
     network_speed = await db.get_network_speed()
-    maintenance, info = await out_of_sync_check(db)
+    sync_info = await out_of_sync_check(db)
     ctx = {
         "latest_block": await db.get_latest_block(),
         "request": request,
         "recent_blocks": recent_blocks,
         "network_speed": network_speed,
-        "maintenance": maintenance,
-        "info": info,
+        "sync_info": sync_info,
     }
     return templates.TemplateResponse('index.jinja2', ctx, headers={'Cache-Control': 'public, max-age=10'})
 

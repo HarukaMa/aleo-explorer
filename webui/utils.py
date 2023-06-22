@@ -2,6 +2,8 @@
 import os
 import time
 
+import aiohttp
+
 from db import Database
 
 
@@ -22,11 +24,22 @@ async def out_of_sync_check(db: Database):
     last_timestamp = last_block.header.metadata.timestamp
     now = int(time.time())
     maintenance_info = os.environ.get("MAINTENANCE_INFO")
+    out_of_sync = False
+    remote_height = None
     if now - last_timestamp > 120:
-        if maintenance_info:
-            return True, maintenance_info
-        return False, get_relative_time(last_timestamp)
-    return None, None
+        out_of_sync = True
+        if rpc_root := os.environ.get("RPC_URL_ROOT"):
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"{rpc_root}/testnet3/latest/height") as resp:
+                    if resp.status == 200:
+                        remote_height = await resp.text()
+    return {
+        "out_of_sync": out_of_sync,
+        "maintenance_info": maintenance_info,
+        "local_height": last_block.header.metadata.height,
+        "remote_height": remote_height,
+        "relative_time": get_relative_time(last_timestamp),
+    }
 
 
 async def function_signature(db: Database, program_id: str, function_name: str):

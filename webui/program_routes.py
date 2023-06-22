@@ -34,15 +34,14 @@ async def programs_route(request: Request):
     programs = await db.get_programs(start, start + 50, no_helloworld=no_helloworld)
     builtin_programs = await db.get_builtin_programs()
 
-    maintenance, info = await out_of_sync_check(db)
+    sync_info = await out_of_sync_check(db)
     ctx = {
         "request": request,
         "programs": programs + builtin_programs,
         "page": page,
         "total_pages": total_pages,
         "no_helloworld": no_helloworld,
-        "maintenance": maintenance,
-        "info": info,
+        "sync_info": sync_info,
     }
     return templates.TemplateResponse('programs.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
 
@@ -143,15 +142,14 @@ async def similar_programs_route(request: Request):
     start = 50 * (page - 1)
     programs = await db.get_programs_with_feature_hash(feature_hash, start, start + 50)
 
-    maintenance, info = await out_of_sync_check(db)
+    sync_info = await out_of_sync_check(db)
     ctx = {
         "request": request,
         "program_id": program_id,
         "programs": programs,
         "page": page,
         "total_pages": total_pages,
-        "maintenance": maintenance,
-        "info": info,
+        "sync_info": sync_info,
     }
     return templates.TemplateResponse('similar_programs.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
 

@@ -565,13 +565,12 @@ async def blocks_route(request: Request):
     start = total_blocks - 50 * (page - 1)
     blocks = await db.get_blocks_range_fast(start, start - 50)
 
-    maintenance, info = await out_of_sync_check(db)
+    sync_info = await out_of_sync_check(db)
     ctx = {
         "request": request,
         "blocks": blocks,
         "page": page,
         "total_pages": total_pages,
-        "maintenance": maintenance,
-        "info": info,
+        "sync_info": sync_info,
     }
     return templates.TemplateResponse('blocks.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
