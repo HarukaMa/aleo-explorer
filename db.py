@@ -488,7 +488,6 @@ class Database:
                         await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseBlockAdded, block.header.metadata.height))
                     except Exception as e:
                         await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
-                        breakpoint()
                         raise
 
     async def save_block(self, block: Block):
