@@ -243,6 +243,15 @@ def HashPSD4(operands: [Operand], destination: Register, registers: Registers):
 def HashPSD8(operands: [Operand], destination: Register, registers: Registers):
     raise NotImplementedError
 
+def HashManyPSD2(operands: [Operand], destination: Register, registers: Registers):
+    raise NotImplementedError
+
+def HashManyPSD4(operands: [Operand], destination: Register, registers: Registers):
+    raise NotImplementedError
+
+def HashManyPSD8(operands: [Operand], destination: Register, registers: Registers):
+    raise NotImplementedError
+
 def Inv(operands: [Operand], destination: Register, registers: Registers):
     raise NotImplementedError
 
@@ -504,31 +513,34 @@ instruction_ops = {
     26: HashPSD2,
     27: HashPSD4,
     28: HashPSD8,
-    29: Inv,
-    30: IsEq,
-    31: IsNeq,
-    32: LessThan,
-    33: LessThanOrEqual,
-    34: Modulo,
-    35: Mul,
-    36: MulWrapped,
-    37: Nand,
-    38: Neg,
-    39: Nor,
-    40: Not,
-    41: Or,
-    42: Pow,
-    43: PowWrapped,
-    44: Rem,
-    45: RemWrapped,
-    46: Shl,
-    47: ShlWrapped,
-    48: Shr,
-    49: ShrWrapped,
-    50: Square,
-    51: SquareRoot,
-    52: Sub,
-    53: SubWrapped,
-    54: Ternary,
-    55: Xor
+    29: HashManyPSD2,
+    30: HashManyPSD4,
+    31: HashManyPSD8,
+    32: Inv,
+    33: IsEq,
+    34: IsNeq,
+    35: LessThan,
+    36: LessThanOrEqual,
+    37: Modulo,
+    38: Mul,
+    39: MulWrapped,
+    40: Nand,
+    41: Neg,
+    42: Nor,
+    43: Not,
+    44: Or,
+    45: Pow,
+    46: PowWrapped,
+    47: Rem,
+    48: RemWrapped,
+    49: Shl,
+    50: ShlWrapped,
+    51: Shr,
+    52: ShrWrapped,
+    53: Square,
+    54: SquareRoot,
+    55: Sub,
+    56: SubWrapped,
+    57: Ternary,
+    58: Xor
 }
