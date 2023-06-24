@@ -414,18 +414,26 @@ class Database:
 
                         ratification_map = defaultdict(lambda: defaultdict(list))
 
+                        copy_data = []
                         for index, ratify in enumerate(block.ratifications):
                             ratify: Ratify
                             # noinspection PyUnresolvedReferences
-                            await cur.execute(
+                            copy_data.append((block_db_id, ratify.type.name, str(ratify.address), ratify.amount, index))
+                        if copy_data:
+                            await cur.executemany(
                                 "INSERT INTO ratification (block_id, type, address, amount, index) "
                                 "VALUES (%s, %s, %s, %s, %s) RETURNING id",
-                                (block_db_id, ratify.type.name, str(ratify.address), ratify.amount, index)
+                                copy_data,
+                                returning=True,
                             )
-                            ratify_db_id = (await cur.fetchone())["id"]
-                            # noinspection PyUnresolvedReferences
-                            ratification_map[str(ratify.address)][ratify.amount].append(ratify_db_id)
-
+                            ratify_db_id = []
+                            while True:
+                                ratify_db_id.append((await cur.fetchone())["id"])
+                                if not cur.nextset():
+                                    break
+                            for index, data in enumerate(copy_data):
+                                #                addr     amount
+                                ratification_map[data[2]][data[3]].append(ratify_db_id[index])
 
                         if block.coinbase.value is not None and not os.environ.get("DEBUG_SKIP_COINBASE"):
                             coinbase_reward = block.get_coinbase_reward((await self.get_latest_block()).header.metadata.last_coinbase_timestamp)
@@ -457,16 +465,15 @@ class Database:
                             else:
                                 current_total_credit = current_total_credit["total_credit"]
                             partial_solution: PartialSolution
+                            copy_data = []
                             for partial_solution, target, reward in solutions:
                                 try:
                                     ratify_id = ratification_map[str(partial_solution.address)][reward].pop()
                                 except:
                                     raise RuntimeError(f"could not find ratification for address {partial_solution.address} and reward {reward}")
-                                await cur.execute(
-                                    "INSERT INTO partial_solution (coinbase_solution_id, address, nonce, commitment, target, reward, ratification_id) "
-                                    "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                                copy_data.append(
                                     (coinbase_solution_db_id, str(partial_solution.address), partial_solution.nonce,
-                                    str(partial_solution.commitment), partial_solution.commitment.to_target(), reward, ratify_id)
+                                     str(partial_solution.commitment), partial_solution.commitment.to_target(), reward, ratify_id)
                                 )
                                 if reward > 0:
                                     await cur.execute(
@@ -479,6 +486,9 @@ class Database:
                                             "UPDATE leaderboard SET total_incentive = leaderboard.total_incentive + %s WHERE address = %s",
                                             (reward, str(partial_solution.address))
                                         )
+                            async with cur.copy("COPY partial_solution (coinbase_solution_id, address, nonce, commitment, target, reward, ratification_id) FROM STDIN") as copy:
+                                for row in copy_data:
+                                    await copy.write_row(row)
                             if block.header.metadata.height >= 130888 and block.header.metadata.timestamp < 1675209600 and current_total_credit < 37_500_000_000_000:
                                 await cur.execute(
                                     "UPDATE leaderboard_total SET total_credit = leaderboard_total.total_credit + %s",
