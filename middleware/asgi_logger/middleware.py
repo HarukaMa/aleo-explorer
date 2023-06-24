@@ -42,6 +42,8 @@ class AccessLoggerMiddleware:
             self.logger = logger
         if pattern := os.environ.get("ACCESS_LOG_UA_EXCLUDE_PATTERN"):
             self.ua_exclude_pattern = re.compile(pattern.encode())
+        else:
+            self.ua_exclude_pattern = None
 
     async def __call__(
         self, scope: HTTPScope, receive: ASGIReceiveCallable, send: ASGISendCallable

@@ -9,12 +9,12 @@ def execute_instruction(instruction: Instruction, program: Program, registers: R
         operands = literals.operands[:num_operands]
         destination = literals.destination
         instruction_ops[instruction.type.value](operands, destination, registers)
-    elif isinstance(literals, Cast):
+    elif isinstance(literals, CastInstruction):
         operands = literals.operands
         destination = literals.destination
         register_type = literals.cast_type
         CastOp(operands, destination, register_type, program, registers)
-    elif isinstance(literals, Call):
+    elif isinstance(literals, CallInstruction):
         raise NotImplementedError
     elif isinstance(literals, AssertInstruction):
         variant = literals.variant

@@ -1,4 +1,4 @@
-from enum import auto
+from enum import auto, Enum
 from types import NoneType
 
 from .vm_basic import *
@@ -498,7 +498,7 @@ class ResourceCallOperator(CallOperator):
         return cls(resource=Identifier.load(data))
 
 
-class Call(Serialize, Deserialize):
+class CallInstruction(Serialize, Deserialize):
 
     # @type_check
     @generic_type_check
@@ -781,7 +781,7 @@ class RegisterTypeCastType(CastType):
         return cls(register_type=register_type)
 
 
-class Cast(Serialize, Deserialize):
+class CastInstruction(Serialize, Deserialize):
 
     # @type_check
     @generic_type_check
@@ -800,6 +800,79 @@ class Cast(Serialize, Deserialize):
         destination = Register.load(data)
         cast_Type = CastType.load(data)
         return cls(operands=operands, destination=destination, cast_type=cast_Type)
+
+class CommitInstruction(Generic, Serialize, Deserialize):
+    class Type(Enum):
+        CommitBHP256 = 0
+        CommitBHP512 = 1
+        CommitBHP768 = 2
+        CommitBHP1024 = 3
+        CommitPED64 = 4
+        CommitPED128 = 5
+
+    # The generic here is for the commit type
+    def __init__(self, types):
+        if len(types) != 1:
+            raise ValueError("CommitInstruction must have exactly one type")
+        self.type = types[0]
+
+    def __call__(self, *, operands: Vec[Operand, 2], destination: Register, destination_type: LiteralType):
+        self.operands = operands
+        self.destination = destination
+        self.destination_type = destination_type
+        return self
+
+    def dump(self) -> bytes:
+        return self.operands.dump() + self.destination.dump() + self.destination_type.dump()
+
+    def load(self, data: bytearray):
+        self.operands = Vec[Operand, 2].load(data)
+        self.destination = Register.load(data)
+        self.destination_type = LiteralType.load(data)
+        return self(operands=self.operands, destination=self.destination, destination_type=self.destination_type)
+
+
+class HashInstruction(Generic, Serialize, Deserialize):
+    class Type(Enum):
+        HashBHP256 = 0
+        HashBHP512 = 1
+        HashBHP768 = 2
+        HashBHP1024 = 3
+        HashPED64 = 4
+        HashPED128 = 5
+        HashPSD2 = 6
+        HashPSD4 = 7
+        HashPSD8 = 8
+        HashManyPSD2 = 9
+        HashManyPSD4 = 10
+        HashManyPSD8 = 11
+
+    # The generic here is for the hash type
+    def __init__(self, types):
+        if len(types) != 1:
+            raise ValueError("HashInstruction must have exactly one type")
+        self.type = types[0]
+
+    @generic_type_check
+    def __call__(self, *, operands: Vec[Operand | NoneType, 2], destination: Register, destination_type: LiteralType):
+        self.operands = operands
+        self.destination = destination
+        self.destination_type = destination_type
+        return self
+
+    def num_operands(self):
+        if self.type in [self.Type.HashManyPSD2, self.Type.HashManyPSD4, self.Type.HashManyPSD8]:
+            return 2
+        return 1
+
+    def dump(self) -> bytes:
+        return self.operands.dump() + self.destination.dump() + self.destination_type.dump()
+
+    def load(self, data: bytearray):
+        self.operands = Vec[Operand, self.num_operands()].load(data)
+        self.destination = Register.load(data)
+        self.destination_type = LiteralType.load(data)
+        return self(operands=self.operands, destination=self.destination, destination_type=self.destination_type)
 
 
 class Instruction(Serialize, Deserialize): # enum
@@ -880,28 +953,31 @@ class Instruction(Serialize, Deserialize): # enum
         Type.And: Literals[2],
         Type.AssertEq: AssertInstruction[0],
         Type.AssertNeq: AssertInstruction[1],
-        Type.Call: Call,
-        Type.Cast: Cast,
-        Type.CommitBHP256: Literals[2],
-        Type.CommitBHP512: Literals[2],
-        Type.CommitBHP768: Literals[2],
-        Type.CommitBHP1024: Literals[2],
-        Type.CommitPED64: Literals[2],
-        Type.CommitPED128: Literals[2],
+        Type.Call: CallInstruction,
+        Type.Cast: CastInstruction,
+        Type.CommitBHP256: CommitInstruction[CommitInstruction.Type.CommitBHP256],
+        Type.CommitBHP512: CommitInstruction[CommitInstruction.Type.CommitBHP512],
+        Type.CommitBHP768: CommitInstruction[CommitInstruction.Type.CommitBHP768],
+        Type.CommitBHP1024: CommitInstruction[CommitInstruction.Type.CommitBHP1024],
+        Type.CommitPED64: CommitInstruction[CommitInstruction.Type.CommitPED64],
+        Type.CommitPED128: CommitInstruction[CommitInstruction.Type.CommitPED128],
         Type.Div: Literals[2],
         Type.DivWrapped: Literals[2],
         Type.Double: Literals[1],
         Type.GreaterThan: Literals[2],
         Type.GreaterThanOrEqual: Literals[2],
-        Type.HashBHP256: Literals[1],
-        Type.HashBHP512: Literals[1],
-        Type.HashBHP768: Literals[1],
-        Type.HashBHP1024: Literals[1],
-        Type.HashPED64: Literals[1],
-        Type.HashPED128: Literals[1],
-        Type.HashPSD2: Literals[1],
-        Type.HashPSD4: Literals[1],
-        Type.HashPSD8: Literals[1],
+        Type.HashBHP256: HashInstruction[HashInstruction.Type.HashBHP256],
+        Type.HashBHP512: HashInstruction[HashInstruction.Type.HashBHP512],
+        Type.HashBHP768: HashInstruction[HashInstruction.Type.HashBHP768],
+        Type.HashBHP1024: HashInstruction[HashInstruction.Type.HashBHP1024],
+        Type.HashPED64: HashInstruction[HashInstruction.Type.HashPED64],
+        Type.HashPED128: HashInstruction[HashInstruction.Type.HashPED128],
+        Type.HashPSD2: HashInstruction[HashInstruction.Type.HashPSD2],
+        Type.HashPSD4: HashInstruction[HashInstruction.Type.HashPSD4],
+        Type.HashPSD8: HashInstruction[HashInstruction.Type.HashPSD8],
+        Type.HashManyPSD2: HashInstruction[HashInstruction.Type.HashManyPSD2],
+        Type.HashManyPSD4: HashInstruction[HashInstruction.Type.HashManyPSD4],
+        Type.HashManyPSD8: HashInstruction[HashInstruction.Type.HashManyPSD8],
         Type.Inv: Literals[1],
         Type.IsEq: Literals[2],
         Type.IsNeq: Literals[2],
@@ -962,6 +1038,9 @@ class Instruction(Serialize, Deserialize): # enum
         Type.HashPSD2: "H",
         Type.HashPSD4: "H",
         Type.HashPSD8: "H",
+        Type.HashManyPSD2: "H",
+        Type.HashManyPSD4: "H",
+        Type.HashManyPSD8: "H",
         Type.Inv: "U",
         Type.IsEq: "P",
         Type.IsNeq: "P",
@@ -992,7 +1071,7 @@ class Instruction(Serialize, Deserialize): # enum
     }
 
     # @type_check
-    def __init__(self, *, type_: Type, literals: Literals | AssertInstruction | Call | Cast):
+    def __init__(self, *, type_: Type, literals: Literals | AssertInstruction | CallInstruction | CastInstruction | CommitInstruction | HashInstruction):
         self.type = type_
         self.literals = literals
 

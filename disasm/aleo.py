@@ -133,10 +133,10 @@ def disasm_literals(value: Literals) -> str:
 def disasm_assert(value: AssertInstruction) -> str:
     return " ".join(map(disasm_operand, value.operands))
 
-def disasm_call(value: Call) -> str:
+def disasm_call(value: CallInstruction) -> str:
     return f"{disasm_call_operator(value.operator)} {' '.join(map(disasm_operand, value.operands))} into {' '.join(map(disasm_register, value.destinations))}"
 
-def disasm_cast(value: Cast) -> str:
+def disasm_cast(value: CastInstruction) -> str:
     cast_type: CastType = value.cast_type
     match cast_type.type:
         case CastType.Type.GroupXCoordinate:
@@ -152,17 +152,29 @@ def disasm_cast(value: Cast) -> str:
             raise ValueError(f"unknown cast type {cast_type.type}")
     return f"{' '.join(map(disasm_operand, value.operands))} into {disasm_register(value.destination)} as {destination_type}"
 
+def disasm_commit(value: CommitInstruction) -> str:
+    return f"{' '.join(map(disasm_operand, value.operands))} into {disasm_register(value.destination)} as {value.destination_type}"
+
+def disasm_hash(value: HashInstruction) -> str:
+    return f"{' '.join(map(disasm_operand, value.operands))} into {disasm_register(value.destination)} as {value.destination_type}"
+
 def disasm_instruction(value: Instruction) -> str:
     inst_str = f"{instruction_type_to_str(value.type)} "
     instruction_type = Instruction.type_map[value.type]
     if isinstance(instruction_type, Literals):
         return inst_str + disasm_literals(value.literals)
-    if isinstance(instruction_type, AssertInstruction):
+    elif isinstance(instruction_type, AssertInstruction):
         return inst_str + disasm_assert(value.literals)
-    if instruction_type is Call:
+    elif instruction_type is CallInstruction:
         return inst_str + disasm_call(value.literals)
-    if instruction_type is Cast:
+    elif instruction_type is CastInstruction:
         return inst_str + disasm_cast(value.literals)
+    elif isinstance(instruction_type, CommitInstruction):
+        return inst_str + disasm_commit(value.literals)
+    elif isinstance(instruction_type, HashInstruction):
+        return inst_str + disasm_hash(value.literals)
+    else:
+        raise NotImplementedError
 
 def disassemble_program(program: Program) -> str:
     res = disasm_str()
