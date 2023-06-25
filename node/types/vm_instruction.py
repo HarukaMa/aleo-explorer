@@ -853,7 +853,8 @@ class HashInstruction(Generic, Serialize, Deserialize):
             raise ValueError("HashInstruction must have exactly one type")
         self.type = types[0]
 
-    @generic_type_check
+    # shortcut here so check doesn't work
+    # @generic_type_check
     def __call__(self, *, operands: Vec[Operand | NoneType, 2], destination: Register, destination_type: LiteralType):
         self.operands = operands
         self.destination = destination
