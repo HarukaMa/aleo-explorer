@@ -215,6 +215,7 @@ class Node:
                 print("unhandled message type:", frame.type)
 
     async def _sync(self):
+        batch_size = int(os.environ.get("P2P_BLOCK_BATCH_SIZE", 1))
         if self.block_requests_deadline < time.time():
             self.block_requests.clear()
             self.block_requests_deadline = float("inf")
@@ -227,7 +228,7 @@ class Node:
         if self.is_syncing:
             next_block = self.block_requests[0]
             self.block_requests_deadline = time.time() + 30
-            msg = BlockRequest(start_height=u32(next_block), end_height=u32(min(max(self.block_requests) + 1, next_block + os.environ.get("P2P_BLOCK_BATCH_SIZE", 1))))
+            msg = BlockRequest(start_height=u32(next_block), end_height=u32(min(max(self.block_requests) + 1, next_block + batch_size)))
             await self.send_message(msg)
         else:
             latest_height = await self.explorer_request(explorer.Request.GetLatestHeight())
@@ -235,7 +236,7 @@ class Node:
                 return
 
             start_block_height = latest_height + 1
-            end_block_height = min(self.peer_block_height + 1, start_block_height + os.environ.get("P2P_BLOCK_BATCH_SIZE", 1))
+            end_block_height = min(self.peer_block_height + 1, start_block_height + batch_size)
             print(f"Synchronizing from block {start_block_height} to {end_block_height}")
             self.is_syncing = True
 
