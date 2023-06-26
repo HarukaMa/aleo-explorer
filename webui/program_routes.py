@@ -205,7 +205,11 @@ async def submit_source_route(request: Request):
     try:
         compiled = bytes(aleo.compile_program(source, program_id.split(".")[0]))
     except RuntimeError as e:
-        return RedirectResponse(url=f"/upload_source?id={program_id}&message=Failed to compile source code: {e}")
+        if len(str(e)) > 100:
+            msg = str(e)[:100] + "[trimmed]"
+        else:
+            msg = str(e)
+        return RedirectResponse(url=f"/upload_source?id={program_id}&message=Failed to compile source code: {msg}")
     if program != compiled:
         return RedirectResponse(url=f"/upload_source?id={program_id}&message=Program compiled from source code doesn't match program on chain")
     await db.store_program_leo_source_code(program_id, source)
