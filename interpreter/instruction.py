@@ -127,7 +127,7 @@ def CastOp(operands: [Operand], destination: Register, cast_type: CastType, prog
     register_type: PlaintextRegisterType
     plaintext_type: PlaintextType = register_type.plaintext_type
     if plaintext_type.type != PlaintextType.Type.Struct:
-        raise RuntimeError("invalid plaintext type")
+        raise NotImplementedError
     plaintext_type: StructPlaintextType
     struct_identifier = plaintext_type.struct
     struct_definition = program.structs[struct_identifier]
