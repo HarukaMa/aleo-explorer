@@ -1,4 +1,6 @@
-
+body {
+    color: #111;
+}
 
 .global-banner {
     margin-bottom: 0 !important;
