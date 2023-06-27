@@ -12,8 +12,8 @@ def execute_instruction(instruction: Instruction, program: Program, registers: R
     elif isinstance(literals, CastInstruction):
         operands = literals.operands
         destination = literals.destination
-        register_type = literals.cast_type
-        CastOp(operands, destination, register_type, program, registers)
+        cast_type = literals.cast_type
+        CastOp(operands, destination, cast_type, program, registers)
     elif isinstance(literals, CallInstruction):
         raise NotImplementedError
     elif isinstance(literals, AssertInstruction):
@@ -22,6 +22,12 @@ def execute_instruction(instruction: Instruction, program: Program, registers: R
             AssertEq(literals.operands, registers)
         elif variant == 1:
             AssertNeq(literals.operands, registers)
+    elif isinstance(literals, HashInstruction):
+        type_ = literals.type
+        if type_ == HashInstruction.Type.HashBHP256:
+            HashBHP256(literals.operands, literals.destination, literals.destination_type, registers)
+        else:
+            raise NotImplementedError
     else:
         raise NotImplementedError
 
@@ -88,7 +94,7 @@ def AssertNeq(operands: [Operand], registers: Registers):
 def CallOp(operands: [Operand], destination: Register, registers: Registers):
     raise NotImplementedError
 
-def CastOp(operands: [Operand], destination: Register, register_type: RegisterType, program: Program, registers: Registers):
+def CastOp(operands: [Operand], destination: Register, cast_type: CastType, program: Program, registers: Registers):
 
     def verify_struct_type(struct_plaintext: StructPlaintext, verify_struct_definition: Struct):
         if len(struct_plaintext.members) != len(verify_struct_definition.members):
@@ -113,6 +119,9 @@ def CastOp(operands: [Operand], destination: Register, register_type: RegisterTy
                 member_type: StructPlaintextType
                 sub_struct_definition = program.structs[member_type.struct]
                 verify_struct_type(member_value, sub_struct_definition)
+    if not isinstance(cast_type, RegisterTypeCastType):
+        raise NotImplementedError
+    register_type: RegisterType = cast_type.register_type
     if register_type == RegisterType.Type.Plaintext:
         raise RuntimeError("invalid register type")
     register_type: PlaintextRegisterType
@@ -209,12 +218,14 @@ def GreaterThanOrEqual(operands: [Operand], destination: Register, registers: Re
         )
     store_plaintext_to_register(res, destination, registers)
 
-def HashBHP256(operands: [Operand], destination: Register, registers: Registers):
+def HashBHP256(operands: [Operand], destination: Register, destination_type: LiteralType, registers: Registers):
     op = load_plaintext_from_operand(operands[0], registers)
+    value_type = destination_type.get_primitive_type()
+    value = value_type.load(bytearray(aleo.hash_ops(PlaintextValue(plaintext=op).dump(), "bhp256", destination_type.dump())))
     res = LiteralPlaintext(
         literal=Literal(
-            type_=Literal.Type.Field,
-            primitive=Field.load(bytearray(aleo.hash_bhp256(PlaintextValue(plaintext=op).dump())))
+            type_=Literal.Type(destination_type.value),
+            primitive=value,
         )
     )
     store_plaintext_to_register(res, destination, registers)

@@ -200,6 +200,11 @@ class Field(Serialize, Deserialize):
     def __hash__(self):
         return hash(self.data)
 
+    def __add__(self, other):
+        if not isinstance(other, Field):
+            raise TypeError("other must be Field")
+        return Field.load(bytearray(aleo.field_ops(self.dump(), other.dump(), "add")))
+
 
 class Group(Serialize, Deserialize):
     # This is definitely wrong, but we are not using the internals
