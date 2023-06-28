@@ -114,6 +114,10 @@ def disasm_operand(value: Operand) -> str:
             return str(value.program_id)
         case Operand.Type.Caller:
             return "self.caller"
+        case Operand.Type.BlockHeight:
+            return "block.height"
+        case _:
+            raise ValueError("unknown operand type")
 
 def disasm_call_operator(value: CallOperator) -> str:
     match value.type:
