@@ -245,7 +245,10 @@ def disassemble_program(program: Program) -> str:
             finalize: Finalize
             finalize_command: FinalizeCommand
             finalize_command, finalize = f.finalize.value
-            res.insert_line(f"finalize {' '.join(map(disasm_operand, finalize_command.operands))};")
+            if len(finalize_command.operands) > 0:
+                res.insert_line(f"finalize {' '.join(map(disasm_operand, finalize_command.operands))};")
+            else:
+                res.insert_line("finalize;")
             res.unindent()
             res.insert_line("")
             res.insert_line(f"finalize {finalize.name}:")
