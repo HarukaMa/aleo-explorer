@@ -276,6 +276,7 @@ class Operand(Serialize, Deserialize): # enum
         Register = 1
         ProgramID = 2
         Caller = 3
+        BlockHeight = 4
 
     @property
     @abstractmethod
@@ -296,6 +297,8 @@ class Operand(Serialize, Deserialize): # enum
             return ProgramIDOperand.load(data)
         elif type_ == cls.Type.Caller:
             return CallerOperand.load(data)
+        elif type_ == cls.Type.BlockHeight:
+            return BlockHeightOperand.load(data)
         else:
             raise ValueError("unknown operand type")
 
@@ -349,6 +352,21 @@ class ProgramIDOperand(Operand):
 
 class CallerOperand(Operand):
     type = Operand.Type.Caller
+
+    # @type_check
+    def __init__(self):
+        pass
+
+    def dump(self) -> bytes:
+        return self.type.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        return cls()
+
+class BlockHeightOperand(Operand):
+    type = Operand.Type.BlockHeight
 
     # @type_check
     def __init__(self):
