@@ -42,7 +42,7 @@ async def finalize_block(db: Database, cur, block: Block):
                     program = Program.load(bytearray(await db.get_program(str(transition.program_id))))
                     inputs = list(map(lambda x: x.plaintext, finalize))
                     operations.extend(
-                        await execute_finalizer(db, cur, program, transition.function_name, inputs, mapping_cache)
+                        await execute_finalizer(db, program, transition.function_name, inputs, mapping_cache)
                     )
 
         else:
@@ -84,3 +84,6 @@ async def execute_operations(db: Database, cur, operations: [dict]):
                 await db.update_mapping_key_value(cur, str(mapping_id), index, str(key_id), str(value_id), key.dump(), value.dump())
             case _:
                 raise NotImplementedError
+
+async def preview_finalize_execution(db: Database, program: Program, function_name: Identifier, inputs: [Value]):
+    return await execute_finalizer(db, program, function_name, inputs, {})

@@ -1727,19 +1727,22 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_mapping_cache(self, cur, mapping_id: str) -> list:
-        try:
-            await cur.execute(
-                "SELECT index, key_id, value_id, key, value FROM mapping_value mv "
-                "JOIN mapping m on mv.mapping_id = m.id "
-                "WHERE m.mapping_id = %s "
-                "ORDER BY index",
-                (mapping_id,)
-            )
-            return await cur.fetchall()
-        except Exception as e:
-            await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
-            raise
+    async def get_mapping_cache(self, mapping_id: str) -> list:
+        conn: psycopg.AsyncConnection
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT index, key_id, value_id, key, value FROM mapping_value mv "
+                        "JOIN mapping m on mv.mapping_id = m.id "
+                        "WHERE m.mapping_id = %s "
+                        "ORDER BY index",
+                        (mapping_id,)
+                    )
+                    return await cur.fetchall()
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
 
     async def get_mapping_value(self, program_id: str, mapping: str, key_id: str) -> bytes | None:
         conn: psycopg.AsyncConnection

@@ -15,11 +15,13 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 from db import Database
+from interpreter.finalizer import ExecuteError
+from interpreter.interpreter import preview_finalize_execution
 from middleware.api_quota import APIQuotaMiddleware
 from middleware.asgi_logger import AccessLoggerMiddleware
 from middleware.server_timing import ServerTimingMiddleware
 from node.types import Program, Identifier, PlaintextType, LiteralPlaintextType, StructPlaintextType, LiteralPlaintext, \
-    Literal, Value
+    Literal, Value, Function, Finalize, FinalizeInput, StructPlaintext
 
 
 class UvicornServer(multiprocessing.Process):
@@ -79,9 +81,69 @@ async def mapping_route(request: Request):
         return JSONResponse({"value": None})
     return JSONResponse({"value": str(Value.load(bytearray(value)))})
 
+async def preview_finalize_route(request: Request):
+    db = request.app.state.db
+    version = request.path_params["version"]
+    json = await request.json()
+    program_id = json.get("program_id")
+    transition_name = json.get("transition_name")
+    inputs = json.get("inputs")
+    if not program_id:
+        return JSONResponse({"error": "Missing program_id"}, status_code=400)
+    if not transition_name:
+        return JSONResponse({"error": "Missing transition_name"}, status_code=400)
+    if not inputs:
+        return JSONResponse({"error": "Missing inputs (pass empty array for no input)"}, status_code=400)
+    if not isinstance(inputs, list):
+        return JSONResponse({"error": "Inputs must be an array"}, status_code=400)
+
+    try:
+        program = Program.load(bytearray(await db.get_program(program_id)))
+    except:
+        return JSONResponse({"error": "Program not found"}, status_code=404)
+    function_name = Identifier.loads(transition_name)
+    if function_name not in program.functions:
+        return JSONResponse({"error": "Transition not found"}, status_code=404)
+    function: Function = program.functions[function_name]
+    if function.finalize.value is None:
+        return JSONResponse({"error": "Transition does not have a finalizer"}, status_code=400)
+    finalize: Finalize = function.finalize.value[1]
+    finalize_inputs = finalize.inputs
+    values = []
+    for index, finalize_input in enumerate(finalize_inputs):
+        finalize_input: FinalizeInput
+        plaintext_type: PlaintextType = finalize_input.plaintext_type
+        if plaintext_type.type == PlaintextType.Type.Literal:
+            plaintext_type: LiteralPlaintextType
+            primitive_type = plaintext_type.literal_type.get_primitive_type()
+            try:
+                value = primitive_type.loads(str(inputs[index]))
+            except:
+                return JSONResponse({"error": f"Invalid input for index {index}"}, status_code=400)
+            values.append(LiteralPlaintext(literal=Literal(type_=Literal.reverse_primitive_type_map[primitive_type], primitive=value)))
+        elif plaintext_type.type == PlaintextType.Type.Struct:
+            plaintext_type: StructPlaintextType
+            structs = program.structs
+            struct_type = structs[plaintext_type.struct]
+            try:
+                value = StructPlaintext.loads(inputs[index], struct_type, structs)
+            except Exception as e:
+                return JSONResponse({"error": f"Invalid input for index {index}: {e} (experimental feature, if you believe this is an error please submit a feedback)"}, status_code=400)
+            values.append(value)
+        else:
+            return JSONResponse({"error": "Unknown input type"}, status_code=500)
+    try:
+        result = await preview_finalize_execution(db, program, function_name, values)
+    except ExecuteError as e:
+        return JSONResponse({"error": f"Execution error on instruction \"{e.instruction}\": {e.original_exception}"}, status_code=400)
+    return JSONResponse({"result": result})
+
+
+
 routes = [
     Route("/commitment", commitment_route),
     Route("/v{version:int}/mapping/{program_id}/{mapping}/{key}", mapping_route),
+    Route("/v{version:int}/preview_finalize_execution", preview_finalize_route, methods=["POST"]),
 ]
 
 async def startup():

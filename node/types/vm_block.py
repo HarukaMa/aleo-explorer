@@ -1,4 +1,5 @@
 import json
+import re
 from hashlib import sha256, md5
 
 from .vm_instruction import *
@@ -164,6 +165,12 @@ class Struct(Serialize, Deserialize):
         members = Vec[Tuple[Identifier, PlaintextType], u16].load(data)
         return cls(name=name, members=members)
 
+    def get_member_type(self, member_name: Identifier) -> PlaintextType:
+        for member in self.members:
+            if member[0] == member_name:
+                return member[1]
+        raise ValueError("member not found")
+
 
 class PublicOrPrivate(IntEnumu8):
     Public = 0
@@ -292,46 +299,6 @@ class FinalizeCommand(Serialize, Deserialize):
     def load(cls, data: bytearray):
         operands = Vec[Operand, u8].load(data)
         return cls(operands=operands)
-
-
-class Decrement(Serialize, Deserialize):
-
-    # @type_check
-    def __init__(self, *, mapping: Identifier, first: Operand, second: Operand):
-        self.mapping = mapping
-        self.first = first
-        self.second = second
-
-    def dump(self) -> bytes:
-        return self.mapping.dump() + self.first.dump() + self.second.dump()
-
-    @classmethod
-    # @type_check
-    def load(cls, data: bytearray):
-        mapping = Identifier.load(data)
-        first = Operand.load(data)
-        second = Operand.load(data)
-        return cls(mapping=mapping, first=first, second=second)
-
-
-class Increment(Serialize, Deserialize):
-
-    # @type_check
-    def __init__(self, *, mapping: Identifier, first: Operand, second: Operand):
-        self.mapping = mapping
-        self.first = first
-        self.second = second
-
-    def dump(self) -> bytes:
-        return self.mapping.dump() + self.first.dump() + self.second.dump()
-
-    @classmethod
-    # @type_check
-    def load(cls, data: bytearray):
-        mapping = Identifier.load(data)
-        first = Operand.load(data)
-        second = Operand.load(data)
-        return cls(mapping=mapping, first=first, second=second)
 
 
 class Command(Serialize, Deserialize):  # enum
@@ -1475,6 +1442,96 @@ class StructPlaintext(Plaintext):
             del data[:num_bytes]
             members.append(Tuple[Identifier, Plaintext]([identifier, plaintext]))
         return cls(members=Vec[Tuple[Identifier, Plaintext], u8](members))
+
+    @classmethod
+    # @type_check
+    def loads(cls, data: str, struct_type: Struct, struct_types: {Identifier: Struct}):
+        members = []
+        identifier_regex = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*")
+        has_begin_brace: bool = False
+        has_end_brace: bool = False
+        data = data.replace(" ", "")
+        def get_identifier(s):
+            m = identifier_regex.search(s)
+            if not m:
+                raise ValueError("invalid identifier")
+            i = m.group(0)
+            if s[len(i)] != ":":
+                raise ValueError("invalid identifier")
+            return Identifier.loads(i), s[len(i) + 1:]
+        def get_literal_value(s):
+            is_comma = True
+            comma = s.find(",")
+            if comma == -1:
+                comma = s.find("}")
+                if comma == -1:
+                    raise ValueError("invalid literal")
+                else:
+                    is_comma = False
+            return s[:comma], s[comma + int(is_comma):]
+        def get_struct_value(s):
+            if s[0] != "{":
+                raise ValueError("invalid struct literal")
+            i = s.find("}")
+            if i == -1:
+                raise ValueError("invalid struct literal")
+            is_comma = True
+            comma = s.find(",")
+            if comma == -1:
+                comma = s.find("}")
+                if comma == -1:
+                    raise ValueError("invalid struct literal")
+                else:
+                    is_comma = False
+            return s[:i], s[i + int(is_comma):]
+        while data:
+            if not has_begin_brace:
+                if data[0] != "{":
+                    raise ValueError("opening brace not found")
+                data = data[1:]
+                has_begin_brace = True
+            elif has_end_brace:
+                raise ValueError("trailing characters after closing brace")
+            elif data[0] == "}":
+                data = data[1:]
+                has_end_brace = True
+            else:
+                identifier, data = get_identifier(data)
+                if data[0] != ":":
+                    raise ValueError("colon not found")
+                data = data[1:]
+                member_type: PlaintextType = struct_type.get_member_type(identifier)
+                if member_type.type == PlaintextType.Type.Literal:
+                    member_type: LiteralPlaintextType
+                    literal_value, data = get_literal_value(data)
+                    primitive_type = member_type.literal_type.get_primitive_type()
+                    members.append(
+                        Tuple[Identifier, Plaintext](
+                            (identifier, LiteralPlaintext(
+                                literal=Literal(
+                                    type_=Literal.reverse_primitive_type_map[primitive_type],
+                                    primitive=primitive_type.loads(literal_value),
+                                )
+                            ))
+                        )
+                    )
+                elif member_type.type == PlaintextType.Type.Struct:
+                    member_type: StructPlaintextType
+                    struct_type = struct_types[member_type.struct]
+                    struct_value, data = get_struct_value(data)
+                    members.append(
+                        Tuple[Identifier, Plaintext](
+                            (identifier, StructPlaintext.loads(struct_value, struct_type, struct_types))
+                        )
+                    )
+                else:
+                    raise ValueError("invalid type")
+        if not has_begin_brace:
+            raise ValueError("opening brace not found")
+        if not has_end_brace:
+            raise ValueError("closing brace not found")
+        return cls(members=Vec[Tuple[Identifier, Plaintext], u8](members))
+
 
     def __str__(self):
         data = {}

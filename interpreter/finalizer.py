@@ -5,8 +5,8 @@ from .environment import Registers
 from .instruction import execute_instruction
 from .utils import load_plaintext_from_operand, store_plaintext_to_register
 
-async def mapping_cache_read(db: Database, cur, mapping_id: Field) -> list:
-    mapping = await db.get_mapping_cache(cur, str(mapping_id))
+async def mapping_cache_read(db: Database, mapping_id: Field) -> list:
+    mapping = await db.get_mapping_cache(str(mapping_id))
     if not mapping:
         return []
     res = []
@@ -29,7 +29,13 @@ def mapping_find_index(mapping: list, key_id: Field) -> int:
             return i
     return -1
 
-async def execute_finalizer(db: Database, cur, program: Program, function_name: Identifier, inputs: [Plaintext],
+class ExecuteError(Exception):
+    def __init__(self, message: str, exception: Exception, instruction: str):
+        super().__init__(message)
+        self.original_exception = exception
+        self.instruction = instruction
+
+async def execute_finalizer(db: Database, program: Program, function_name: Identifier, inputs: [Plaintext],
                             mapping_cache: dict) -> list:
     registers = Registers()
     operations = []
@@ -60,7 +66,10 @@ async def execute_finalizer(db: Database, cur, program: Program, function_name: 
                 c: InstructionCommand
                 instruction: Instruction = c.instruction
                 print(disasm_instruction(instruction))
-                execute_instruction(instruction, program, registers)
+                try:
+                    execute_instruction(instruction, program, registers)
+                except Exception as e:
+                    raise ExecuteError(f"failed to execute instruction: {e}", e, disasm_instruction(instruction))
                 registers.dump()
 
             case Command.Type.Get | Command.Type.GetOrUse:
@@ -71,7 +80,7 @@ async def execute_finalizer(db: Database, cur, program: Program, function_name: 
                     c: GetOrUseCommand
                 mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(c.mapping)))
                 if mapping_id not in mapping_cache:
-                    mapping_cache[mapping_id] = await mapping_cache_read(db, cur, mapping_id)
+                    mapping_cache[mapping_id] = await mapping_cache_read(db, mapping_id)
                 key = load_plaintext_from_operand(c.key, registers)
                 key_id = Field.loads(aleo.get_key_id(str(mapping_id), key.dump()))
                 index = mapping_find_index(mapping_cache[mapping_id], key_id)
@@ -91,7 +100,7 @@ async def execute_finalizer(db: Database, cur, program: Program, function_name: 
                 c: SetCommand
                 mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(c.mapping)))
                 if mapping_id not in mapping_cache:
-                    mapping_cache[mapping_id] = await mapping_cache_read(db, cur, mapping_id)
+                    mapping_cache[mapping_id] = await mapping_cache_read(db, mapping_id)
                 key = load_plaintext_from_operand(c.key, registers)
                 value = PlaintextValue(plaintext=load_plaintext_from_operand(c.value, registers))
                 key_id = Field.loads(aleo.get_key_id(str(mapping_id), key.dump()))
