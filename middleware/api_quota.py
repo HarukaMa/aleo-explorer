@@ -22,10 +22,12 @@ class APIQuotaMiddleware:
 
     def start_call(self, ip):
         remaining, last_call, outstanding_call = self.ip_remaining_time[ip]
-        print(f"ip {ip} remaining {remaining} last_call {last_call} outstanding_call {outstanding_call}")
+        print(f"ip {ip} has quota {remaining}s, last call {last_call}, outstanding call {outstanding_call}")
         if outstanding_call == 0 and last_call != -1:
             quota = remaining + (time.monotonic() - last_call) * self.recover_rate
-            print(f"ip {ip} quota {quota}")
+            if quota > self.max_call_time:
+                quota = self.max_call_time
+            print(f"ip {ip} quota recovered to {quota}")
         else:
             quota = remaining
         # save current quota subtract 1 second right now to avoid flood attack
@@ -46,7 +48,8 @@ class APIQuotaMiddleware:
             self.ip_remaining_time[ip] = (remaining + 1, time.monotonic(), outstanding_call - 1)
         else:
             self.ip_remaining_time[ip] = (remaining - cost + 1, time.monotonic(), outstanding_call - 1)
-        print(f"ip {ip} remaining {remaining} outstanding_call {outstanding_call} cost {cost}")
+        remaining, last_call, outstanding_call = self.ip_remaining_time[ip]
+        print(f"ip {ip} used {cost}s, remaining {remaining}s, last call {last_call}, outstanding call {outstanding_call}")
 
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
@@ -95,6 +98,6 @@ class APIQuotaMiddleware:
             headers = MutableHeaders(scope=message)
             headers["Quota-Used"] = str(cost)
             headers["Quota-Remaining"] = str(remaining)
-            headers["Max-Quota"] = str(self.max_call_time)
-            headers["Recover-Rate"] = str(self.recover_rate)
+            headers["Quota-Max"] = str(self.max_call_time)
+            headers["Quota-Recover-Rate"] = str(self.recover_rate)
             await send(message)
