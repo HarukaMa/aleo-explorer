@@ -120,6 +120,7 @@ async def execute_finalizer(db: Database, program: Program, function_name: Ident
                     "index": index,
                     "key_id": key_id,
                     "value_id": value_id,
+                    "mapping": c.mapping,
                     "key": key,
                     "value": value,
                 })

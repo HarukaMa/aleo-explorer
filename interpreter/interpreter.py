@@ -85,5 +85,5 @@ async def execute_operations(db: Database, cur, operations: [dict]):
             case _:
                 raise NotImplementedError
 
-async def preview_finalize_execution(db: Database, program: Program, function_name: Identifier, inputs: [Value]):
+async def preview_finalize_execution(db: Database, program: Program, function_name: Identifier, inputs: [Value]) -> [FinalizeOperation]:
     return await execute_finalizer(db, program, function_name, inputs, {})

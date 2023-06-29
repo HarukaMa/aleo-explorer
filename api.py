@@ -21,7 +21,7 @@ from middleware.api_quota import APIQuotaMiddleware
 from middleware.asgi_logger import AccessLoggerMiddleware
 from middleware.server_timing import ServerTimingMiddleware
 from node.types import Program, Identifier, PlaintextType, LiteralPlaintextType, StructPlaintextType, LiteralPlaintext, \
-    Literal, Value, Function, Finalize, FinalizeInput, StructPlaintext
+    Literal, Value, Function, Finalize, FinalizeInput, StructPlaintext, FinalizeOperation
 
 
 class UvicornServer(multiprocessing.Process):
@@ -136,7 +136,32 @@ async def preview_finalize_route(request: Request):
         result = await preview_finalize_execution(db, program, function_name, values)
     except ExecuteError as e:
         return JSONResponse({"error": f"Execution error on instruction \"{e.instruction}\": {e.original_exception}"}, status_code=400)
-    return JSONResponse({"result": result})
+    updates = []
+    for operation in result:
+        operation_type = operation["type"]
+        upd = {"type": operation_type.name}
+        if operation_type == FinalizeOperation.Type.InitializeMapping:
+            raise RuntimeError("InitializeMapping should not be returned by preview_finalize_execution (only used in deployments)")
+        elif operation_type == FinalizeOperation.Type.InsertKeyValue:
+            raise RuntimeError("InsertKeyValue should not be returned by preview_finalize_execution (only used in tests)")
+        elif operation_type == FinalizeOperation.Type.UpdateKeyValue:
+            upd.update({
+                "mapping_id": str(operation["mapping_id"]),
+                "index": operation["index"],
+                "key_id": str(operation["key_id"]),
+                "value_id": str(operation["value_id"]),
+                "mapping": str(operation["mapping"]),
+                "key": str(operation["key"]),
+                "value": str(operation["value"]),
+            })
+        elif operation_type == FinalizeOperation.Type.RemoveKeyValue:
+            raise NotImplementedError("operation not implemented in the interpreter")
+        elif operation_type == FinalizeOperation.Type.RemoveMapping:
+            raise RuntimeError("RemoveMapping should not be returned by preview_finalize_execution (only used in tests)")
+        else:
+            raise RuntimeError("Unknown operation type")
+        updates.append(upd)
+    return JSONResponse({"mapping_updates": updates})
 
 
 

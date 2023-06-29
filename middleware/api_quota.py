@@ -73,10 +73,12 @@ class APIQuotaMiddleware:
             response = JSONResponse({"error": "Request timed out - API quota exceeded"}, status_code=429, headers=headers)
             await response(scope, receive, send)
             cost = -1
-        except:
-            if timing.end_ns == 0:
-                timing.end_ns = time.perf_counter_ns()
-            cost = (timing.end_ns - timing.start_ns) / 1e9
+        except Exception as e:
+            # internal bug, refunding time used
+            timing.end_ns = timing.start_ns
+            response = JSONResponse({"error": f"Server error: {e}. Please report with the feedback feature."}, status_code=500)
+            await response(scope, receive, send)
+            cost = 0
         finally:
             self.end_call(ip, cost)
 
@@ -89,7 +91,8 @@ class APIQuotaMiddleware:
 
 
     async def timing_send(self, message: Message, scope: Scope, timing: RequestTiming, send: Send) -> None:
-        timing.end_ns = time.perf_counter_ns()
+        if timing.end_ns == 0:
+            timing.end_ns = time.perf_counter_ns()
         if message["type"] != "http.response.start":
             await send(message)
         else:
