@@ -41,8 +41,11 @@ class Int(Sized, Serialize, Deserialize, int, metaclass=ABCMeta):
             raise ValueError("value must be between {} and {}".format(self.min, self.max))
 
     @classmethod
-    def loads(cls, value: int):
-        return cls(value)
+    def loads(cls, value: str):
+        if not isinstance(value, str):
+            raise TypeError("value must be str")
+        value = value.replace(cls.__name__, "")
+        return cls(int(value))
 
     def __add__(self, other):
         if type(other) is int:

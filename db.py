@@ -741,7 +741,7 @@ class Database:
                             update_kv = await cur.fetchone()
                             f.append(UpdateKeyValue(
                                 mapping_id=Field.loads(update_kv["mapping_id"]),
-                                index=u64.loads(update_kv["index"]),
+                                index=u64(update_kv["index"]),
                                 key_id=Field.loads(update_kv["key_id"]),
                                 value_id=Field.loads(update_kv["value_id"]),
                             ))
@@ -753,7 +753,7 @@ class Database:
                             remove_kv = await cur.fetchone()
                             f.append(RemoveKeyValue(
                                 mapping_id=Field.loads(remove_kv["mapping_id"]),
-                                index=u64.loads(remove_kv["index"]),
+                                index=u64(remove_kv["index"]),
                             ))
                         case FinalizeOperation.Type.RemoveMapping.name:
                             await cur.execute(
