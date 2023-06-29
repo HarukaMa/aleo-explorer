@@ -92,7 +92,7 @@ async def preview_finalize_route(request: Request):
         return JSONResponse({"error": "Missing program_id"}, status_code=400)
     if not transition_name:
         return JSONResponse({"error": "Missing transition_name"}, status_code=400)
-    if not inputs:
+    if inputs is None:
         return JSONResponse({"error": "Missing inputs (pass empty array for no input)"}, status_code=400)
     if not isinstance(inputs, list):
         return JSONResponse({"error": "Inputs must be an array"}, status_code=400)
