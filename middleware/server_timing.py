@@ -14,7 +14,6 @@ class RequestTiming:
 
 async def timing_receive(timing: RequestTiming, receive: Receive) -> Message:
     message = await receive()
-    print(message)
     if not message.get("more_body", False):
         timing.start_ns = time.perf_counter_ns()
     return message

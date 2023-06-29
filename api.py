@@ -15,6 +15,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 from db import Database
+from middleware.api_quota import APIQuotaMiddleware
 from middleware.asgi_logger import AccessLoggerMiddleware
 from middleware.server_timing import ServerTimingMiddleware
 from node.types import Program, Identifier, PlaintextType, LiteralPlaintextType, StructPlaintextType, LiteralPlaintext, \
@@ -35,6 +36,7 @@ class UvicornServer(multiprocessing.Process):
         self.server.run()
 
 async def commitment_route(request: Request):
+    db = request.app.state.db
     if time.time() >= 1675209600:
         return JSONResponse(None)
     commitment = request.query_params.get("commitment")
@@ -43,6 +45,7 @@ async def commitment_route(request: Request):
     return JSONResponse(await db.get_puzzle_commitment(commitment))
 
 async def mapping_route(request: Request):
+    db = request.app.state.db
     version = request.path_params["version"]
     program_id = request.path_params["program_id"]
     mapping = request.path_params["mapping"]
@@ -84,12 +87,12 @@ routes = [
 async def startup():
     async def noop(_): pass
 
-    global db
     # different thread so need to get a new database instance
     db = Database(server=os.environ["DB_HOST"], user=os.environ["DB_USER"], password=os.environ["DB_PASS"],
                   database=os.environ["DB_DATABASE"], schema=os.environ["DB_SCHEMA"],
                   message_callback=noop)
     await db.connect()
+    app.state.db = db
 
 
 log_format = '\033[92mAPI\033[0m: \033[94m%(client_addr)s\033[0m - - %(t)s \033[96m"%(request_line)s"\033[0m \033[93m%(s)s\033[0m %(B)s "%(f)s" "%(a)s" %(L)s'
@@ -102,6 +105,7 @@ app = Starlette(
         Middleware(AccessLoggerMiddleware, format=log_format),
         Middleware(CORSMiddleware, allow_origins=['*']),
         Middleware(ServerTimingMiddleware),
+        Middleware(APIQuotaMiddleware)
     ]
 )
 
