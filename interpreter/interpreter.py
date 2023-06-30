@@ -12,6 +12,7 @@ async def init_builtin_program(db: Database, program: Program):
 
 async def finalize_block(db: Database, cur, block: Block):
     finalize_state = FinalizeState(block)
+    mapping_cache = {}
     for confirmed_transaction in block.transactions.transactions:
         confirmed_transaction: ConfirmedTransaction
         if confirmed_transaction.type == ConfirmedTransaction.Type.AcceptedDeploy:
@@ -35,7 +36,6 @@ async def finalize_block(db: Database, cur, block: Block):
             transaction: Transaction = confirmed_transaction.transaction
             transaction: ExecuteTransaction
             execution = transaction.execution
-            mapping_cache = {}
             expected_operations = confirmed_transaction.finalize
             operations = []
             for transition in execution.transitions:
