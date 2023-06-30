@@ -1504,7 +1504,7 @@ class StructPlaintext(Plaintext):
                 if member_type.type == PlaintextType.Type.Literal:
                     member_type: LiteralPlaintextType
                     literal_value, data = get_literal_value(data)
-                    primitive_type = member_type.literal_type.get_primitive_type()
+                    primitive_type = member_type.literal_type.primitive_type
                     members.append(
                         Tuple[Identifier, Plaintext](
                             (identifier, LiteralPlaintext(
@@ -3013,3 +3013,19 @@ class Block(Serialize, Deserialize):
 
     def get_epoch_number(self) -> int:
         return self.header.metadata.height // 256
+
+    @property
+    def height(self) -> u32:
+        return self.header.metadata.height
+
+    @property
+    def round(self) -> u64:
+        return self.header.metadata.round
+
+    @property
+    def cumulative_weight(self) -> u128:
+        return self.header.metadata.cumulative_weight
+
+    @property
+    def cumulative_proof_target(self) -> u128:
+        return self.header.metadata.cumulative_proof_target

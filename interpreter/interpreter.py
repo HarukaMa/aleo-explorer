@@ -1,6 +1,8 @@
 from db import Database
 from interpreter.finalizer import execute_finalizer
+from interpreter.utils import FinalizeState
 from node.types import *
+
 
 async def init_builtin_program(db: Database, program: Program):
     for mapping in program.mappings.keys():
@@ -9,6 +11,7 @@ async def init_builtin_program(db: Database, program: Program):
 
 
 async def finalize_block(db: Database, cur, block: Block):
+    finalize_state = FinalizeState(block)
     for confirmed_transaction in block.transactions.transactions:
         confirmed_transaction: ConfirmedTransaction
         if confirmed_transaction.type == ConfirmedTransaction.Type.AcceptedDeploy:
@@ -42,7 +45,7 @@ async def finalize_block(db: Database, cur, block: Block):
                     program = Program.load(bytearray(await db.get_program(str(transition.program_id))))
                     inputs = list(map(lambda x: x.plaintext, finalize))
                     operations.extend(
-                        await execute_finalizer(db, program, transition.function_name, inputs, mapping_cache)
+                        await execute_finalizer(db, finalize_state, transition.id, program, transition.function_name, inputs, mapping_cache)
                     )
 
         else:
@@ -86,4 +89,4 @@ async def execute_operations(db: Database, cur, operations: [dict]):
                 raise NotImplementedError
 
 async def preview_finalize_execution(db: Database, program: Program, function_name: Identifier, inputs: [Value]) -> [FinalizeOperation]:
-    return await execute_finalizer(db, program, function_name, inputs, {})
+    return await execute_finalizer(db, None, None, program, function_name, inputs, {})

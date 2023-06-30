@@ -63,7 +63,7 @@ async def mapping_route(request: Request):
     map_key_type = program.mappings[mapping_name].key.plaintext_type
     if map_key_type.type == PlaintextType.Type.Literal:
         map_key_type: LiteralPlaintextType
-        primitive_type = map_key_type.literal_type.get_primitive_type()
+        primitive_type = map_key_type.literal_type.primitive_type
         try:
             key = primitive_type.loads(key)
         except:
@@ -115,7 +115,7 @@ async def preview_finalize_route(request: Request):
         plaintext_type: PlaintextType = finalize_input.plaintext_type
         if plaintext_type.type == PlaintextType.Type.Literal:
             plaintext_type: LiteralPlaintextType
-            primitive_type = plaintext_type.literal_type.get_primitive_type()
+            primitive_type = plaintext_type.literal_type.primitive_type
             try:
                 value = primitive_type.loads(str(inputs[index]))
             except:

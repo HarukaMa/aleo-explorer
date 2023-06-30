@@ -554,7 +554,8 @@ class LiteralType(IntEnumu8):
     Scalar = 14
     String = 15
 
-    def get_primitive_type(self):
+    @property
+    def primitive_type(self):
         return {
             self.Address: Address,
             self.Boolean: bool_,

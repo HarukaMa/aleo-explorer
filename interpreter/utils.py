@@ -1,8 +1,20 @@
 from node.types import *
 from .environment import Registers
 
+class FinalizeState:
+    def __init__(self, block: Block):
+        self.block_height = block.height
+        self.random_seed = bytes(aleo.finalize_random_seed(
+            block.round,
+            block.height,
+            block.cumulative_weight,
+            block.cumulative_proof_target,
+            block.previous_hash.dump(),
+        ))
+        if len(self.random_seed) != 32:
+            raise RuntimeError("invalid random seed length")
 
-def load_plaintext_from_operand(operand: Operand, registers: Registers) -> Plaintext:
+def load_plaintext_from_operand(operand: Operand, registers: Registers, finalize_state: FinalizeState) -> Plaintext:
     match operand.type:
         case Operand.Type.Literal:
             operand: LiteralOperand
@@ -24,6 +36,13 @@ def load_plaintext_from_operand(operand: Operand, registers: Registers) -> Plain
                             return struct_.get_member(identifier)
                         else:
                             struct_ = struct_.get_member(identifier)
+        case Operand.Type.BlockHeight:
+            return LiteralPlaintext(
+                literal=Literal(
+                    type_=Literal.Type.U32,
+                    primitive=finalize_state.block_height
+                )
+            )
         case _:
             raise NotImplementedError
 

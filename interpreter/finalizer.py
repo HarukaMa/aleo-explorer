@@ -3,7 +3,7 @@ from disasm.aleo import disasm_instruction, disasm_command
 from node.types import *
 from .environment import Registers
 from .instruction import execute_instruction
-from .utils import load_plaintext_from_operand, store_plaintext_to_register
+from .utils import load_plaintext_from_operand, store_plaintext_to_register, FinalizeState
 
 async def mapping_cache_read(db: Database, mapping_id: Field) -> list:
     mapping = await db.get_mapping_cache(str(mapping_id))
@@ -35,8 +35,8 @@ class ExecuteError(Exception):
         self.original_exception = exception
         self.instruction = instruction
 
-async def execute_finalizer(db: Database, program: Program, function_name: Identifier, inputs: [Plaintext],
-                            mapping_cache: dict) -> list:
+async def execute_finalizer(db: Database, finalize_state: FinalizeState, transition_id: TransitionID, program: Program,
+                            function_name: Identifier, inputs: [Plaintext], mapping_cache: dict) -> list:
     registers = Registers()
     operations = []
     function: Function = program.functions[function_name]
@@ -67,7 +67,7 @@ async def execute_finalizer(db: Database, program: Program, function_name: Ident
                 instruction: Instruction = c.instruction
                 print(disasm_instruction(instruction))
                 try:
-                    execute_instruction(instruction, program, registers)
+                    execute_instruction(instruction, program, registers, finalize_state)
                 except Exception as e:
                     raise ExecuteError(f"failed to execute instruction: {e}", e, disasm_instruction(instruction))
                 registers.dump()
@@ -81,13 +81,13 @@ async def execute_finalizer(db: Database, program: Program, function_name: Ident
                 mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(c.mapping)))
                 if mapping_id not in mapping_cache:
                     mapping_cache[mapping_id] = await mapping_cache_read(db, mapping_id)
-                key = load_plaintext_from_operand(c.key, registers)
+                key = load_plaintext_from_operand(c.key, registers, finalize_state)
                 key_id = Field.loads(aleo.get_key_id(str(mapping_id), key.dump()))
                 index = mapping_find_index(mapping_cache[mapping_id], key_id)
                 if index == -1:
                     if c.type == Command.Type.Get:
                         raise RuntimeError("key not found")
-                    default = load_plaintext_from_operand(c.default, registers)
+                    default = load_plaintext_from_operand(c.default, registers, finalize_state)
                     value = PlaintextValue(plaintext=default)
                 else:
                     value = mapping_cache[mapping_id][index][3]
@@ -101,8 +101,8 @@ async def execute_finalizer(db: Database, program: Program, function_name: Ident
                 mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(c.mapping)))
                 if mapping_id not in mapping_cache:
                     mapping_cache[mapping_id] = await mapping_cache_read(db, mapping_id)
-                key = load_plaintext_from_operand(c.key, registers)
-                value = PlaintextValue(plaintext=load_plaintext_from_operand(c.value, registers))
+                key = load_plaintext_from_operand(c.key, registers, finalize_state)
+                value = PlaintextValue(plaintext=load_plaintext_from_operand(c.value, registers, finalize_state))
                 key_id = Field.loads(aleo.get_key_id(str(mapping_id), key.dump()))
                 value_id = Field.loads(aleo.get_value_id(str(key_id), value.dump()))
                 index = mapping_find_index(mapping_cache[mapping_id], key_id)
@@ -125,6 +125,31 @@ async def execute_finalizer(db: Database, program: Program, function_name: Ident
                     "value": value,
                 })
                 registers.dump()
+
+            case Command.Type.RandChaCha:
+                print(disasm_command(c))
+                c: RandChaChaCommand
+                additional_seeds = list(map(lambda x: PlaintextValue(plaintext=load_plaintext_from_operand(x, registers, finalize_state)), c.operands))
+                chacha_seed = bytes(aleo.chacha_random_seed(
+                    finalize_state.random_seed,
+                    transition_id.dump(),
+                    program.id.dump(),
+                    function_name.dump(),
+                    int(c.destination.locator),
+                    c.destination_type.value,
+                    additional_seeds,
+                ))
+                primitive_type = c.destination_type.primitive_type
+                value = primitive_type.load(bytearray(aleo.chacha_random_value(chacha_seed, c.destination_type.dump())))
+                res = LiteralPlaintext(
+                    literal=Literal(
+                        type_=Literal.Type(c.destination_type.value),
+                        primitive=value,
+                    )
+                )
+                store_plaintext_to_register(res, c.destination, registers)
+                registers.dump()
+
             case _:
                 raise NotImplementedError
 
