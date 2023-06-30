@@ -89,4 +89,6 @@ async def execute_operations(db: Database, cur, operations: [dict]):
                 raise NotImplementedError
 
 async def preview_finalize_execution(db: Database, program: Program, function_name: Identifier, inputs: [Value]) -> [FinalizeOperation]:
-    return await execute_finalizer(db, None, None, program, function_name, inputs, {})
+    block = await db.get_latest_block()
+    finalize_state = FinalizeState(block)
+    return await execute_finalizer(db, finalize_state, TransitionID.load(bytearray(b"\x00" * 32)), program, function_name, inputs, {})
