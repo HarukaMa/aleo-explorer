@@ -78,7 +78,7 @@
             {% if type == "Execute" %}
                 {% call sub_data_line("Breakdown") %}
                     <span class="box-drawing">├</span> Storage fee: {{ storage_cost | format_aleo_credit | safe }}<br>
-                    <span class="box-drawing">├</span> Finalize fee: {{ finalize_costs | sum }}<br>
+                    <span class="box-drawing">├</span> Finalize fee: {{ finalize_costs | sum | format_aleo_credit | safe }}<br>
                     {% for cost in finalize_costs %}
                         <span class="box-drawing">│{% if loop.revindex0 == 0 %}└{% else %}├{% endif %}</span> Transition #{{ loop.index0 }}: {{ cost | format_aleo_credit | safe }}<br>
                     {% endfor %}
