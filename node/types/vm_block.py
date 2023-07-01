@@ -2580,12 +2580,65 @@ class AcceptedExecute(ConfirmedTransaction):
         finalize = Vec[FinalizeOperation, u16].load(data)
         return cls(index=index, transaction=transaction, finalize=finalize)
 
+class Rejected(Serialize, Deserialize):
+    class Type(IntEnumu8):
+        Deployment = 0
+        Execution = 1
+
+    @abstractmethod
+    def type(self):
+        raise NotImplementedError
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        type_ = cls.Type.load(data)
+        if type_ == cls.Type.Deployment:
+            return RejectedDeployment.load(data)
+        elif type_ == cls.Type.Execution:
+            return RejectedExecution.load(data)
+        else:
+            raise ValueError("Invalid Rejected Type")
+
+class RejectedDeployment(Rejected):
+    type = Rejected.Type.Deployment
+
+    # @type_check
+    def __init__(self, *, program_owner: ProgramOwner, deploy: Deployment):
+        self.program_owner = program_owner
+        self.deploy = deploy
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.program_owner.dump() + self.deploy.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        program_owner = ProgramOwner.load(data)
+        deploy = Deployment.load(data)
+        return cls(program_owner=program_owner, deploy=deploy)
+
+class RejectedExecution(Rejected):
+    type = Rejected.Type.Execution
+
+    # @type_check
+    def __init__(self, *, execution: Execution):
+        self.execution = execution
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.execution.dump()
+
+    @classmethod
+    # @type_check
+    def load(cls, data: bytearray):
+        execution = Execution.load(data)
+        return cls(execution=execution)
 
 class RejectedDeploy(ConfirmedTransaction):
     type = ConfirmedTransaction.Type.RejectedDeploy
 
     # @type_check
-    def __init__(self, *, index: u32, transaction: Transaction, rejected: Deployment):
+    def __init__(self, *, index: u32, transaction: Transaction, rejected: Rejected):
         self.index = index
         self.transaction = transaction
         self.rejected = rejected
@@ -2598,7 +2651,7 @@ class RejectedDeploy(ConfirmedTransaction):
     def load(cls, data: bytearray):
         index = u32.load(data)
         transaction = Transaction.load(data)
-        rejected = Deployment.load(data)
+        rejected = Rejected.load(data)
         return cls(index=index, transaction=transaction, rejected=rejected)
 
 
@@ -2606,7 +2659,7 @@ class RejectedExecute(ConfirmedTransaction):
     type = ConfirmedTransaction.Type.RejectedExecute
 
     # @type_check
-    def __init__(self, *, index: u32, transaction: Transaction, rejected: Execution):
+    def __init__(self, *, index: u32, transaction: Transaction, rejected: Rejected):
         self.index = index
         self.transaction = transaction
         self.rejected = rejected
@@ -2619,7 +2672,7 @@ class RejectedExecute(ConfirmedTransaction):
     def load(cls, data: bytearray):
         index = u32.load(data)
         transaction = Transaction.load(data)
-        rejected = Execution.load(data)
+        rejected = Rejected.load(data)
         return cls(index=index, transaction=transaction, rejected=rejected)
 
 
