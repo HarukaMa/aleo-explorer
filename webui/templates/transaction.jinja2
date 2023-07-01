@@ -18,6 +18,10 @@
             color: #cc4b37;
         }
 
+        .box-drawing {
+            font-family: "MS Gothic", "AppleGothic", "Hiragino Maru Gothic ProN", "SimSun", monospace;
+        }
+
     </style>
 
 {% endblock %}
@@ -73,18 +77,18 @@
             {% endcall %}
             {% if type == "Execute" %}
                 {% call sub_data_line("Breakdown") %}
-                    <span class="mono">├</span> Storage fee: {{ storage_cost | format_aleo_credit | safe }}<br>
-                    <span class="mono">├</span> Finalize fee: {{ finalize_costs | sum }}<br>
+                    <span class="box-drawing">├</span> Storage fee: {{ storage_cost | format_aleo_credit | safe }}<br>
+                    <span class="box-drawing">├</span> Finalize fee: {{ finalize_costs | sum }}<br>
                     {% for cost in finalize_costs %}
-                        <span class="mono">│ {% if loop.revindex0 == 0 %}└{% else %}├{% endif %}</span> Transition #{{ loop.index0 }}: {{ cost | format_aleo_credit | safe }}<br>
+                        <span class="box-drawing">│{% if loop.revindex0 == 0 %}└{% else %}├{% endif %}</span> Transition #{{ loop.index0 }}: {{ cost | format_aleo_credit | safe }}<br>
                     {% endfor %}
-                    <span class="mono">└</span> Priority fee: {{ priority_fee | format_aleo_credit | safe }}
+                    <span class="box-drawing">└</span> Priority fee: {{ priority_fee | format_aleo_credit | safe }}
                 {% endcall %}
             {% elif type == "Deploy" %}
                 {% call sub_data_line("Breakdown") %}
-                    <span class="mono">├</span> Storage fee: {{ storage_cost | format_aleo_credit | safe }}<br>
-                    <span class="mono">├</span> Namespace fee: {{ namespace_cost | format_aleo_credit | safe }}<br>
-                    <span class="mono">└</span> Priority fee: {{ priority_fee | format_aleo_credit | safe }}
+                    <span class="box-drawing">├</span> Storage fee: {{ storage_cost | format_aleo_credit | safe }}<br>
+                    <span class="box-drawing">├</span> Namespace fee: {{ namespace_cost | format_aleo_credit | safe }}<br>
+                    <span class="box-drawing">└</span> Priority fee: {{ priority_fee | format_aleo_credit | safe }}
                 {% endcall %}
             {% endif %}
         </div>
