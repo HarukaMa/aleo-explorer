@@ -192,8 +192,8 @@ async def mapping_value_list_route(request: Request):
     for item in mapping_cache:
         res.append({
             "index": item["index"],
-            "key": Plaintext.load(bytearray(item["key"])),
-            "value": Value.load(bytearray(item["value"])),
+            "key": str(Plaintext.load(bytearray(item["key"]))),
+            "value": str(Value.load(bytearray(item["value"]))),
             "key_id": item["key_id"],
             "value_id": item["value_id"],
         })
