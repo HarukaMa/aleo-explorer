@@ -61,7 +61,7 @@ async def mapping_route(request: Request):
     mapping = request.path_params["mapping"]
     key = request.path_params["key"]
     outdated = request.query_params.get("outdated")
-    if out_of_sync_check(db) and outdated != "1":
+    if await out_of_sync_check(db) and outdated != "1":
         return JSONResponse({"error": "This explorer is out of sync. To ignore this and continue anyway, add ?outdated=1 to the end of URL."}, status_code=500)
     try:
         program = Program.load(bytearray(await db.get_program(program_id)))
@@ -178,7 +178,7 @@ async def mapping_list_route(request: Request):
     version = request.path_params["version"]
     program_id = request.path_params["program_id"]
     outdated = request.query_params.get("outdated")
-    if out_of_sync_check(db) and outdated != "1":
+    if await out_of_sync_check(db) and outdated != "1":
         return JSONResponse({"error": "This explorer is out of sync. To ignore this and continue anyway, add ?outdated=1 to the end of URL."}, status_code=500)
     program = await db.get_program(program_id)
     if not program:
@@ -193,7 +193,7 @@ async def mapping_value_list_route(request: Request):
     program_id = request.path_params["program_id"]
     mapping = request.path_params["mapping"]
     outdated = request.query_params.get("outdated")
-    if out_of_sync_check(db) and outdated != "1":
+    if await out_of_sync_check(db) and outdated != "1":
         return JSONResponse({"error": "This explorer is out of sync. To ignore this and continue anyway, add ?outdated=1 to the end of URL."}, status_code=500)
     program = await db.get_program(program_id)
     if not program:
