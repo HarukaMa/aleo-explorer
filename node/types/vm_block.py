@@ -2292,7 +2292,20 @@ class Execution(Serialize, Deserialize):
         return cls(transitions=transitions, global_state_root=global_state_root, proof=proof)
 
     @property
+    def is_free_execution(self):
+        if len(self.transitions) != 1:
+            return False
+        transition: Transition = self.transitions[0]
+        if transition.program_id != "credits.aleo":
+            return False
+        if transition.function_name in ["mint", "fee", "split"]:
+            return True
+        return False
+
+    @property
     def cost(self) -> (int, int):
+        if self.is_free_execution:
+            return 0, 0
         storage_cost = len(self.dump())
         # we can't get the finalize cost without the program, and we don't have database here,
         # plus we want to give a detailed breakdown, so we just return -1
