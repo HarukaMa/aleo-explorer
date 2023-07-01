@@ -37,6 +37,14 @@ class UvicornServer(multiprocessing.Process):
     def run(self, *args, **kwargs):
         self.server.run()
 
+async def out_of_sync_check(db: Database) -> bool:
+    last_block = await db.get_latest_block()
+    last_timestamp = last_block.header.metadata.timestamp
+    now = int(time.time())
+    if now - last_timestamp > 120:
+        return True
+    return False
+
 async def commitment_route(request: Request):
     db: Database = request.app.state.db
     if time.time() >= 1675209600:
@@ -52,7 +60,9 @@ async def mapping_route(request: Request):
     program_id = request.path_params["program_id"]
     mapping = request.path_params["mapping"]
     key = request.path_params["key"]
-
+    outdated = request.query_params.get("outdated")
+    if out_of_sync_check(db) and outdated != "1":
+        return JSONResponse({"error": "This explorer is out of sync. To ignore this and continue anyway, add ?outdated=1 to the end of URL."}, status_code=500)
     try:
         program = Program.load(bytearray(await db.get_program(program_id)))
     except:
@@ -167,6 +177,9 @@ async def mapping_list_route(request: Request):
     db: Database = request.app.state.db
     version = request.path_params["version"]
     program_id = request.path_params["program_id"]
+    outdated = request.query_params.get("outdated")
+    if out_of_sync_check(db) and outdated != "1":
+        return JSONResponse({"error": "This explorer is out of sync. To ignore this and continue anyway, add ?outdated=1 to the end of URL."}, status_code=500)
     program = await db.get_program(program_id)
     if not program:
         return JSONResponse({"error": "Program not found"}, status_code=404)
@@ -179,6 +192,9 @@ async def mapping_value_list_route(request: Request):
     version = request.path_params["version"]
     program_id = request.path_params["program_id"]
     mapping = request.path_params["mapping"]
+    outdated = request.query_params.get("outdated")
+    if out_of_sync_check(db) and outdated != "1":
+        return JSONResponse({"error": "This explorer is out of sync. To ignore this and continue anyway, add ?outdated=1 to the end of URL."}, status_code=500)
     program = await db.get_program(program_id)
     if not program:
         return JSONResponse({"error": "Program not found"}, status_code=404)
