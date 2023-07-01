@@ -73,18 +73,18 @@
             {% endcall %}
             {% if type == "Execute" %}
                 {% call sub_data_line("Breakdown") %}
-                    Storage fee: {{ storage_cost | format_aleo_credit | safe }}<br>
-                    Finalize fee: <br>
+                    <span class="mono">├</span> Storage fee: {{ storage_cost | format_aleo_credit | safe }}<br>
+                    <span class="mono">├</span> Finalize fee: {{ finalize_costs | sum }}<br>
                     {% for cost in finalize_costs %}
-                        &nbsp;&nbsp;Transition #{{ loop.index0 }}: {{ cost | format_aleo_credit | safe }}<br>
+                        <span class="mono">│ {% if loop.revindex0 == 0 %}└{% else %}├{% endif %}</span> Transition #{{ loop.index0 }}: {{ cost | format_aleo_credit | safe }}<br>
                     {% endfor %}
-                    Priority fee: {{ priority_fee | format_aleo_credit | safe }}
+                    <span class="mono">└</span> Priority fee: {{ priority_fee | format_aleo_credit | safe }}
                 {% endcall %}
             {% elif type == "Deploy" %}
                 {% call sub_data_line("Breakdown") %}
-                    Storage fee: {{ storage_cost | format_aleo_credit | safe }}<br>
-                    Namespace fee: {{ namespace_cost | format_aleo_credit | safe }}<br>
-                    Priority fee: {{ priority_fee | format_aleo_credit | safe }}
+                    <span class="mono">├</span> Storage fee: {{ storage_cost | format_aleo_credit | safe }}<br>
+                    <span class="mono">├</span> Namespace fee: {{ namespace_cost | format_aleo_credit | safe }}<br>
+                    <span class="mono">└</span> Priority fee: {{ priority_fee | format_aleo_credit | safe }}
                 {% endcall %}
             {% endif %}
         </div>
