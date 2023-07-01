@@ -162,6 +162,8 @@ class Identifier(Serialize, Deserialize):
         return self.data
 
     def __eq__(self, other):
+        if isinstance(other, str):
+            return self.data == other
         return self.data == other.data
 
     def __hash__(self):
@@ -1090,6 +1092,77 @@ class Instruction(Serialize, Deserialize): # enum
         Type.Xor: "B",
     }
 
+    fee_map = {
+        Type.Abs: 2_000,
+        Type.AbsWrapped: 2_000,
+        Type.Add: 2_000,
+        Type.AddWrapped: 2_000,
+        Type.And: 2_000,
+        Type.AssertEq: 2_000,
+        Type.AssertNeq: 2_000,
+        Type.Call: -1,
+        Type.Cast: 2_000,
+        Type.CommitBHP256: 200_000,
+        Type.CommitBHP512: 200_000,
+        Type.CommitBHP768: 200_000,
+        Type.CommitBHP1024: 200_000,
+        Type.CommitPED64: 100_000,
+        Type.CommitPED128: 100_000,
+        Type.Div: 10_000,
+        Type.DivWrapped: 2_000,
+        Type.Double: 2_000,
+        Type.GreaterThan: 2_000,
+        Type.GreaterThanOrEqual: 2_000,
+        Type.HashBHP256: 200_000,
+        Type.HashBHP512: 100_000,
+        Type.HashBHP768: 100_000,
+        Type.HashBHP1024: 100_000,
+        Type.HashPED64: 20_000,
+        Type.HashPED128: 30_000,
+        Type.HashPSD2: {
+            "high": 600_000,
+            "low": 60_000,
+        },
+        Type.HashPSD4: {
+            "high": 700_000,
+            "low": 100_000,
+        },
+        Type.HashPSD8: {
+            "high": 800_000,
+            "low": 200_000,
+        },
+        Type.HashManyPSD2: -1,
+        Type.HashManyPSD4: -1,
+        Type.HashManyPSD8: -1,
+        Type.Inv: 10_000,
+        Type.IsEq: 2_000,
+        Type.IsNeq: 2_000,
+        Type.LessThan: 2_000,
+        Type.LessThanOrEqual: 2_000,
+        Type.Modulo: 2_000,
+        Type.Mul: 150_000,
+        Type.MulWrapped: 2_000,
+        Type.Nand: 2_000,
+        Type.Neg: 2_000,
+        Type.Nor: 2_000,
+        Type.Not: 2_000,
+        Type.Or: 2_000,
+        Type.Pow: 20_000,
+        Type.PowWrapped: 2_000,
+        Type.Rem: 2_000,
+        Type.RemWrapped: 2_000,
+        Type.Shl: 2_000,
+        Type.ShlWrapped: 2_000,
+        Type.Shr: 2_000,
+        Type.ShrWrapped: 2_000,
+        Type.Square: 2_000,
+        Type.SquareRoot: 120_000,
+        Type.Sub: 10_000,
+        Type.SubWrapped: 2_000,
+        Type.Ternary: 2_000,
+        Type.Xor: 2_000,
+    }
+
     # @type_check
     def __init__(self, *, type_: Type, literals: Literals | AssertInstruction | CallInstruction | CastInstruction | CommitInstruction | HashInstruction):
         self.type = type_
@@ -1104,3 +1177,16 @@ class Instruction(Serialize, Deserialize): # enum
         type_ = cls.Type.load(data)
         literals = deepcopy(cls.type_map[type_]).load(data)
         return cls(type_=type_, literals=literals)
+
+    @property
+    def cost(self) -> int:
+        if self.type in (self.Type.HashPSD2, self.Type.HashPSD4, self.Type.HashPSD8):
+            self: HashInstruction
+            if self.destination_type in (LiteralType.Address, LiteralType.Group):
+                return Instruction.fee_map[self.type]["high"]
+            else:
+                return Instruction.fee_map[self.type]["low"]
+        cost = Instruction.fee_map[self.type]
+        if cost == -1:
+            raise ValueError(f"instruction {self.type} is not supported in finalize")
+        return cost

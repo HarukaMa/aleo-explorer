@@ -22,7 +22,7 @@
 
 {% endblock %}
 
-{% from "macros.jinja2" import data_line, state_label %}
+{% from "macros.jinja2" import data_line, sub_data_line, state_label %}
 
 {% block content %}
 
@@ -71,6 +71,22 @@
             {% call data_line("Total fee") %}
                 {{ total_fee | format_aleo_credit | safe }} Aleo credits
             {% endcall %}
+            {% if type == "Execute" %}
+                {% call sub_data_line("Breakdown") %}
+                    Storage fee: {{ storage_cost | format_aleo_credit | safe }}<br>
+                    Finalize fee: <br>
+                    {% for cost in finalize_costs %}
+                        &nbsp;&nbsp;Transition #{{ loop.index0 }}: {{ cost | format_aleo_credit | safe }}<br>
+                    {% endfor %}
+                    Priority fee: {{ priority_fee | format_aleo_credit | safe }}
+                {% endcall %}
+            {% elif type == "Deploy" %}
+                {% call sub_data_line("Breakdown") %}
+                    Storage fee: {{ storage_cost | format_aleo_credit | safe }}<br>
+                    Namespace fee: {{ namespace_cost | format_aleo_credit | safe }}<br>
+                    Priority fee: {{ priority_fee | format_aleo_credit | safe }}
+                {% endcall %}
+            {% endif %}
         </div>
 
         <div id="transitions">
@@ -78,6 +94,7 @@
             <table id="transitions-table" class="unstriped">
                 <thead>
                 <tr>
+                    <td>Index</td>
                     <td>Transition ID</td>
                     <td>Program / Function call</td>
                 </tr>
@@ -85,12 +102,22 @@
                 <tbody>
                 {% for transition in transitions %}
                     <tr>
+                        <td>{{ loop.index0 }}</td>
                         <td>
                             <span class="mono"><a href="/transition?id={{ transition.transition_id }}">{{ transition.transition_id }}</a></span>
                         </td>
                         <td><span class="mono">{{ transition.action }}</span></td>
                     </tr>
                 {% endfor %}
+                {% if fee_transition %}
+                    <tr>
+                        <td>Fee</td>
+                        <td>
+                            <span class="mono"><a href="/transition?id={{ fee_transition.transition_id }}">{{ fee_transition.transition_id }}</a></span>
+                        </td>
+                        <td><span class="mono">{{ fee_transition.action }}</span></td>
+                    </tr>
+                {% endif %}
                 </tbody>
             </table>
         </div>

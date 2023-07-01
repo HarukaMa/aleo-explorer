@@ -194,10 +194,15 @@ async def transaction_route(request: Request):
         deployment: Deployment = transaction.deployment
         program: Program = deployment.program
         fee_transition = transaction.fee.transition
+        storage_cost, namespace_cost = deployment.cost
+        total_fee = int(fee_transition.inputs[1].plaintext.value.literal.primitive)
         ctx.update({
             "edition": int(deployment.edition),
             "program_id": str(program.id),
-            "total_fee": int(fee_transition.inputs[1].plaintext.value.literal.primitive),
+            "total_fee": total_fee,
+            "storage_cost": storage_cost,
+            "namespace_cost": namespace_cost,
+            "priority_fee": total_fee - storage_cost - namespace_cost,
             "transitions": [{
                 "transition_id": transaction.fee.transition.id,
                 "action": await function_signature(db, str(fee_transition.program_id), str(fee_transition.function_name)),
@@ -208,27 +213,45 @@ async def transaction_route(request: Request):
         global_state_root = transaction.execution.global_state_root
         proof = transaction.execution.proof.value
         transitions = []
+
+        storage_cost, _ = transaction.execution.cost
+        finalize_costs = []
+
         for transition in transaction.execution.transitions:
             transition: Transition
             transitions.append({
                 "transition_id": transition.id,
                 "action": await function_signature(db, str(transition.program_id), str(transition.function_name)),
             })
+            if transition.program_id == "credits.aleo" and transition.function_name in ["mint", "fee", "split"]:
+                finalize_costs.append(0)
+            else:
+                program = Program.load(bytearray(await db.get_program(str(transition.program_id))))
+                function = program.functions[transition.function_name]
+                if function.finalize.value is not None:
+                    finalize_costs.append(function.finalize.value[1].cost)
+                else:
+                    finalize_costs.append(0)
         if transaction.additional_fee.value is not None:
             transition = transaction.additional_fee.value.transition
             total_fee = int(transition.inputs[1].plaintext.value.literal.primitive)
-            transitions.append({
+            fee_transition = {
                 "transition_id": transition.id,
                 "action": await function_signature(db, str(transition.program_id), str(transition.function_name)),
-            })
+            }
         else:
             total_fee = 0
+            fee_transition = None
         ctx.update({
             "global_state_root": global_state_root,
             "proof": proof,
             "proof_trunc": str(proof)[:30] + "..." + str(proof)[-30:] if proof else None,
             "total_fee": total_fee,
+            "storage_cost": storage_cost,
+            "finalize_costs": finalize_costs,
+            "priority_fee": total_fee - storage_cost - sum(finalize_costs),
             "transitions": transitions,
+            "fee_transition": fee_transition,
         })
     elif transaction.type == Transaction.Type.Fee:
         transaction: FeeTransaction

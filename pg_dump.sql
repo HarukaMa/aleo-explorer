@@ -815,7 +815,8 @@ CREATE TABLE explorer.transaction (
 CREATE TABLE explorer.transaction_deploy (
     id integer NOT NULL,
     transaction_id integer NOT NULL,
-    edition integer NOT NULL
+    edition integer NOT NULL,
+    verifying_keys bytea NOT NULL
 );
 
 

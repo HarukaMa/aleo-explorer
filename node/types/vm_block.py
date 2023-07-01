@@ -315,6 +315,19 @@ class Command(Serialize, Deserialize):  # enum
         BranchNeq = 8
         Position = 9
 
+    fee_map = {
+        Type.Instruction: 0,
+        Type.Contains: 250_000,
+        Type.Get: 500_000,
+        Type.GetOrUse: 500_000,
+        Type.RandChaCha: 500_000,
+        Type.Remove: 10_000,
+        Type.Set: 1_000_000,
+        Type.BranchEq: 5_000,
+        Type.BranchNeq: 5_000,
+        Type.Position: 1_000,
+    }
+
     @property
     @abstractmethod
     def type(self):
@@ -346,6 +359,13 @@ class Command(Serialize, Deserialize):  # enum
             return PositionCommand.load(data)
         else:
             raise ValueError("Invalid variant")
+
+    @property
+    def cost(self) -> int:
+        if self.type == self.Type.Instruction:
+            self: InstructionCommand
+            return self.instruction.cost
+        return self.fee_map[self.type]
 
 class InstructionCommand(Command):
     type = Command.Type.Instruction
@@ -578,6 +598,10 @@ class Finalize(Serialize, Deserialize):
         inputs = Vec[FinalizeInput, u16].load(data)
         commands = Vec[Command, u16].load(data)
         return cls(name=name, inputs=inputs, commands=commands)
+
+    @property
+    def cost(self) -> int:
+        return sum(command.cost for command in self.commands)
 
 
 class ValueType(Serialize, Deserialize): # enum
@@ -1118,6 +1142,14 @@ class Deployment(Serialize, Deserialize):
         program = Program.load(data)
         verifying_keys = Vec[Tuple[Identifier, VerifyingKey, Certificate], u16].load(data)
         return cls(edition=edition, program=program, verifying_keys=verifying_keys)
+
+    @property
+    def cost(self) -> (int, int):
+        from node.testnet3 import Testnet3
+        x = self.__class__.load(bytearray(self.dump()))
+        storage_cost = len(self.dump()) * Testnet3.deployment_fee_multiplier
+        namespace_cost = 10 ** max(0, 10 - len(self.program.id.name.data)) * 1e6
+        return storage_cost, namespace_cost
 
 
 class WitnessCommitments(Serialize, Deserialize):
@@ -2258,6 +2290,13 @@ class Execution(Serialize, Deserialize):
         global_state_root = StateRoot.load(data)
         proof = Option[Proof].load(data)
         return cls(transitions=transitions, global_state_root=global_state_root, proof=proof)
+
+    @property
+    def cost(self) -> (int, int):
+        storage_cost = len(self.dump())
+        # we can't get the finalize cost without the program, and we don't have database here,
+        # plus we want to give a detailed breakdown, so we just return -1
+        return storage_cost, -1
 
 
 class Transaction(Serialize, Deserialize):  # Enum

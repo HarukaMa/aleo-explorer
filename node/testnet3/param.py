@@ -21,3 +21,5 @@ class Testnet3:
     block_locator_num_recents = 100
     block_locator_recent_interval = 1
     block_locator_checkpoint_interval = 10000
+
+    deployment_fee_multiplier = 1000

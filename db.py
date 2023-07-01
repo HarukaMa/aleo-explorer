@@ -278,9 +278,9 @@ class Database:
                                     )
                                     transaction_db_id = (await cur.fetchone())["id"]
                                     await cur.execute(
-                                        "INSERT INTO transaction_deploy (transaction_id, edition) "
-                                        "VALUES (%s, %s) RETURNING id",
-                                        (transaction_db_id, transaction.deployment.edition)
+                                        "INSERT INTO transaction_deploy (transaction_id, edition, verifying_keys) "
+                                        "VALUES (%s, %s, %s) RETURNING id",
+                                        (transaction_db_id, transaction.deployment.edition, transaction.deployment.verifying_keys.dump())
                                     )
                                     deploy_transaction_db_id = (await cur.fetchone())["id"]
 
@@ -352,14 +352,16 @@ class Database:
                                     fee_db_id = (await cur.fetchone())["id"]
                                     await self._insert_transition(conn, None, fee_db_id, fee.transition, 0)
 
+                                    rejected: Rejected = confirmed_transaction.rejected
+                                    rejected: RejectedExecution
                                     await cur.execute(
                                         "INSERT INTO transaction_execute (transaction_id, global_state_root, proof) "
                                         "VALUES (%s, %s, %s) RETURNING id",
-                                        (transaction_db_id, str(confirmed_transaction.rejected.global_state_root),
-                                         confirmed_transaction.rejected.proof.dumps())
+                                        (transaction_db_id, str(rejected.execution.global_state_root),
+                                         rejected.execution.proof.dumps())
                                     )
                                     execute_transaction_db_id = (await cur.fetchone())["id"]
-                                    for ts_index, transition in enumerate(confirmed_transaction.rejected.transitions):
+                                    for ts_index, transition in enumerate(rejected.execution.transitions):
                                         await self._insert_transition(conn, execute_transaction_db_id, None, transition, ts_index)
 
                             if confirmed_transaction.type in [ConfirmedTransaction.Type.AcceptedDeploy, ConfirmedTransaction.Type.AcceptedExecute]:
@@ -780,10 +782,11 @@ class Database:
                         )
                         program_data = await cur.fetchone()
                         program = program_data["raw_data"]
+                        # noinspection PyArgumentList
                         deployment = Deployment(
                             edition=u16(deploy_transaction["edition"]),
                             program=Program.load(bytearray(program)),
-                            verifying_keys=Vec[Tuple[Identifier, VerifyingKey, Certificate], u16]([]),
+                            verifying_keys=Vec[Tuple[Identifier, VerifyingKey, Certificate], u16].load(bytearray(deploy_transaction["verifying_keys"])),
                         )
                         await cur.execute(
                             "SELECT * FROM fee WHERE transaction_id = %s",
@@ -881,10 +884,12 @@ class Database:
                                     id_=TransactionID.loads(transaction["transaction_id"]),
                                     fee=fee,
                                 ),
-                                rejected=Execution(
-                                    transitions=Vec[Transition, u8](tss),
-                                    global_state_root=StateRoot.loads(execute_transaction["global_state_root"]),
-                                    proof=Option[Proof](proof),
+                                rejected=RejectedExecution(
+                                    execution=Execution(
+                                        transitions=Vec[Transition, u8](tss),
+                                        global_state_root=StateRoot.loads(execute_transaction["global_state_root"]),
+                                        proof=Option[Proof](proof),
+                                    )
                                 )
                             ))
                     case _:
