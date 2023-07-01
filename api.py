@@ -21,7 +21,7 @@ from middleware.api_quota import APIQuotaMiddleware
 from middleware.asgi_logger import AccessLoggerMiddleware
 from middleware.server_timing import ServerTimingMiddleware
 from node.types import Program, Identifier, PlaintextType, LiteralPlaintextType, StructPlaintextType, LiteralPlaintext, \
-    Literal, Value, Function, Finalize, FinalizeInput, StructPlaintext, FinalizeOperation
+    Literal, Value, Function, Finalize, FinalizeInput, StructPlaintext, FinalizeOperation, Plaintext
 
 
 class UvicornServer(multiprocessing.Process):
@@ -38,7 +38,7 @@ class UvicornServer(multiprocessing.Process):
         self.server.run()
 
 async def commitment_route(request: Request):
-    db = request.app.state.db
+    db: Database = request.app.state.db
     if time.time() >= 1675209600:
         return JSONResponse(None)
     commitment = request.query_params.get("commitment")
@@ -47,7 +47,7 @@ async def commitment_route(request: Request):
     return JSONResponse(await db.get_puzzle_commitment(commitment))
 
 async def mapping_route(request: Request):
-    db = request.app.state.db
+    db: Database = request.app.state.db
     version = request.path_params["version"]
     program_id = request.path_params["program_id"]
     mapping = request.path_params["mapping"]
@@ -82,7 +82,7 @@ async def mapping_route(request: Request):
     return JSONResponse({"value": str(Value.load(bytearray(value)))})
 
 async def preview_finalize_route(request: Request):
-    db = request.app.state.db
+    db: Database = request.app.state.db
     version = request.path_params["version"]
     json = await request.json()
     program_id = json.get("program_id")
@@ -163,11 +163,48 @@ async def preview_finalize_route(request: Request):
         updates.append(upd)
     return JSONResponse({"mapping_updates": updates})
 
+async def mapping_list_route(request: Request):
+    db: Database = request.app.state.db
+    version = request.path_params["version"]
+    program_id = request.path_params["program_id"]
+    program = await db.get_program(program_id)
+    if not program:
+        return JSONResponse({"error": "Program not found"}, status_code=404)
+    program = Program.load(bytearray(program))
+    mappings = program.mappings
+    return JSONResponse({"mappings": list(map(str, mappings.keys()))})
+
+async def mapping_value_list_route(request: Request):
+    db: Database = request.app.state.db
+    version = request.path_params["version"]
+    program_id = request.path_params["program_id"]
+    mapping = request.path_params["mapping"]
+    program = await db.get_program(program_id)
+    if not program:
+        return JSONResponse({"error": "Program not found"}, status_code=404)
+    program = Program.load(bytearray(program))
+    mappings = program.mappings
+    if mapping not in mappings.keys():
+        return JSONResponse({"error": "Mapping not found"}, status_code=404)
+    mapping_id = aleo.get_mapping_id(program_id, mapping)
+    mapping_cache = await db.get_mapping_cache(mapping_id)
+    res = []
+    for item in mapping_cache:
+        res.append({
+            "index": item["index"],
+            "key": Plaintext.load(bytearray(item["key"])),
+            "value": Value.load(bytearray(item["value"])),
+            "key_id": item["key_id"],
+            "value_id": item["value_id"],
+        })
+    return JSONResponse({"values": res})
 
 
 routes = [
     Route("/commitment", commitment_route),
-    Route("/v{version:int}/mapping/{program_id}/{mapping}/{key}", mapping_route),
+    Route("/v{version:int}/mapping/get_value/{program_id}/{mapping}/{key}", mapping_route),
+    Route("/v{version:int}/mapping/list_program_mappings/{program_id}", mapping_list_route),
+    Route("/v{version:int}/mapping/list_program_mapping_values/{program_id}/{mapping}", mapping_value_list_route),
     Route("/v{version:int}/preview_finalize_execution", preview_finalize_route, methods=["POST"]),
 ]
 

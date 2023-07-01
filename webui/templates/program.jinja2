@@ -254,7 +254,7 @@
         }
 
         try {
-            const response = await fetch(`{{ "API_HOST" | get_env }}/v1/mapping/{{ program_id }}/${mapping}/${input.value}`)
+            const response = await fetch(`{{ "API_HOST" | get_env }}/v1/mapping/get_value/{{ program_id }}/${mapping}/${input.value}`)
             const data = await response.json()
             if ("error" in data) {
                 value.innerText = "Error loading data: " + data.error
