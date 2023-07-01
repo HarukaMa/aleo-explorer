@@ -29,10 +29,13 @@ async def out_of_sync_check(db: Database):
     if now - last_timestamp > 120:
         out_of_sync = True
         if rpc_root := os.environ.get("RPC_URL_ROOT"):
-            async with aiohttp.ClientSession() as session:
-                async with session.get(f"{rpc_root}/testnet3/latest/height") as resp:
-                    if resp.status == 200:
-                        remote_height = await resp.text()
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(f"{rpc_root}/testnet3/latest/height") as resp:
+                        if resp.status == 200:
+                            remote_height = await resp.text()
+            except:
+                remote_height = "?"
     return {
         "out_of_sync": out_of_sync,
         "maintenance_info": maintenance_info,
