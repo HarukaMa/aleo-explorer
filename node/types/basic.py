@@ -1,5 +1,4 @@
 import socket
-from io import BytesIO
 
 from .traits import *
 
@@ -239,7 +238,7 @@ class SocketAddr(Deserialize):
     @classmethod
     # @type_check
     def load(cls, data: BytesIO):
-        del data[:4]
+        data.read(4)
         ip = u32.load(data)
         port = u16.load(data)
         return cls(ip=ip, port=port)

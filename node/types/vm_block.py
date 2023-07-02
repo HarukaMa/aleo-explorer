@@ -1471,7 +1471,6 @@ class StructPlaintext(Plaintext):
             identifier = Identifier.load(data)
             num_bytes = u16.load(data)
             plaintext = Plaintext.load(BytesIO(data.read(num_bytes)))
-            del data[:num_bytes]
             members.append(Tuple[Identifier, Plaintext]([identifier, plaintext]))
         return cls(members=Vec[Tuple[Identifier, Plaintext], u8](members))
 
