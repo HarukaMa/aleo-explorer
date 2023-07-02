@@ -1,4 +1,4 @@
-
+import asyncio
 import os
 import time
 
@@ -19,27 +19,34 @@ def get_relative_time(timestamp):
     return f"{int(delta)} hours ago"
 
 
+async def get_remote_height(rpc_root: str) -> str:
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{rpc_root}/testnet3/latest/height") as resp:
+                if resp.status == 200:
+                    remote_height = await resp.text()
+    except:
+        remote_height = "?"
+    return remote_height
+
+
 async def out_of_sync_check(db: Database):
-    last_block = await db.get_latest_block()
-    last_timestamp = last_block.header.metadata.timestamp
+    last_timestamp, last_height = await asyncio.gather(
+        db.get_latest_block_timestamp(),
+        db.get_latest_height()
+    )
     now = int(time.time())
     maintenance_info = os.environ.get("MAINTENANCE_INFO")
-    out_of_sync = False
+    out_of_sync = now - last_timestamp > 120
     remote_height = None
-    if now - last_timestamp > 120:
-        out_of_sync = True
+    if out_of_sync:
         if rpc_root := os.environ.get("RPC_URL_ROOT"):
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(f"{rpc_root}/testnet3/latest/height") as resp:
-                        if resp.status == 200:
-                            remote_height = await resp.text()
-            except:
-                remote_height = "?"
+            remote_height = await get_remote_height(rpc_root)
+
     return {
         "out_of_sync": out_of_sync,
         "maintenance_info": maintenance_info,
-        "local_height": last_block.header.metadata.height,
+        "local_height": last_height,
         "remote_height": remote_height,
         "relative_time": get_relative_time(last_timestamp),
     }
