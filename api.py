@@ -38,12 +38,23 @@ class UvicornServer(multiprocessing.Process):
         self.server.run()
 
 async def out_of_sync_check(db: Database) -> bool:
-    last_block = await db.get_latest_block()
-    last_timestamp = last_block.header.metadata.timestamp
+    last_timestamp = await db.get_latest_block_timestamp()
     now = int(time.time())
     if now - last_timestamp > 120:
         return True
     return False
+
+def async_check_sync(func):
+    async def wrapper(*args, **kwargs):
+        if len(args) < 1 or not isinstance(args[0], Request):
+            raise TypeError("this decorator cannot be used on this function")
+        request: Request = args[0]
+        db: Database = request.app.state.db
+        forced = request.query_params.get("outdated") == "1"
+        if not forced and await out_of_sync_check(db):
+            return JSONResponse({"error": "This explorer is out of sync. To ignore this and continue anyway, add ?outdated=1 to the end of URL."}, status_code=500)
+        return await func(*args, **kwargs)
+    return wrapper
 
 async def commitment_route(request: Request):
     db: Database = request.app.state.db
@@ -54,15 +65,13 @@ async def commitment_route(request: Request):
         return HTTPException(400, "Missing commitment")
     return JSONResponse(await db.get_puzzle_commitment(commitment))
 
+@async_check_sync
 async def mapping_route(request: Request):
     db: Database = request.app.state.db
     version = request.path_params["version"]
     program_id = request.path_params["program_id"]
     mapping = request.path_params["mapping"]
     key = request.path_params["key"]
-    outdated = request.query_params.get("outdated")
-    if await out_of_sync_check(db) and outdated != "1":
-        return JSONResponse({"error": "This explorer is out of sync. To ignore this and continue anyway, add ?outdated=1 to the end of URL."}, status_code=500)
     try:
         program = Program.load(bytearray(await db.get_program(program_id)))
     except:
@@ -173,13 +182,11 @@ async def preview_finalize_route(request: Request):
         updates.append(upd)
     return JSONResponse({"mapping_updates": updates})
 
+@async_check_sync
 async def mapping_list_route(request: Request):
     db: Database = request.app.state.db
     version = request.path_params["version"]
     program_id = request.path_params["program_id"]
-    outdated = request.query_params.get("outdated")
-    if await out_of_sync_check(db) and outdated != "1":
-        return JSONResponse({"error": "This explorer is out of sync. To ignore this and continue anyway, add ?outdated=1 to the end of URL."}, status_code=500)
     program = await db.get_program(program_id)
     if not program:
         return JSONResponse({"error": "Program not found"}, status_code=404)
@@ -187,14 +194,12 @@ async def mapping_list_route(request: Request):
     mappings = program.mappings
     return JSONResponse({"mappings": list(map(str, mappings.keys()))})
 
+@async_check_sync
 async def mapping_value_list_route(request: Request):
     db: Database = request.app.state.db
     version = request.path_params["version"]
     program_id = request.path_params["program_id"]
     mapping = request.path_params["mapping"]
-    outdated = request.query_params.get("outdated")
-    if await out_of_sync_check(db) and outdated != "1":
-        return JSONResponse({"error": "This explorer is out of sync. To ignore this and continue anyway, add ?outdated=1 to the end of URL."}, status_code=500)
     program = await db.get_program(program_id)
     if not program:
         return JSONResponse({"error": "Program not found"}, status_code=404)

@@ -1002,6 +1002,20 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
+    async def get_latest_block_timestamp(self):
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute("SELECT timestamp FROM block ORDER BY height DESC LIMIT 1")
+                    result = await cur.fetchone()
+                    if result is None:
+                        return None
+                    return result['timestamp']
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+
     async def get_latest_block(self):
         conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
