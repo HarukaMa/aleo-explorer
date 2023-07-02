@@ -1,4 +1,5 @@
 import aleo
+from io import BytesIO
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
@@ -70,7 +71,7 @@ async def program_route(request: Request):
         program_bytes = await db.get_program(program_id)
         if not program_bytes:
             raise HTTPException(status_code=404, detail="Program not found")
-        program = Program.load(bytearray(program_bytes))
+        program = Program.load(BytesIO(program_bytes))
         transaction = None
     functions = []
     for f in program.functions.keys():
@@ -172,7 +173,7 @@ async def upload_source_route(request: Request):
         has_imports = None
     else:
         has_leo_source = False
-        program = Program.load(bytearray(program))
+        program = Program.load(BytesIO(program))
         has_imports = False
         for i in program.imports:
             i: Import

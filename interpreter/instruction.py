@@ -221,7 +221,7 @@ def GreaterThanOrEqual(operands: [Operand], destination: Register, registers: Re
 def HashBHP256(operands: [Operand], destination: Register, destination_type: LiteralType, registers: Registers, finalize_state: FinalizeState):
     op = load_plaintext_from_operand(operands[0], registers, finalize_state)
     value_type = destination_type.primitive_type
-    value = value_type.load(bytearray(aleo.hash_ops(PlaintextValue(plaintext=op).dump(), "bhp256", destination_type.dump())))
+    value = value_type.load(BytesIO(bytes(aleo.hash_ops(PlaintextValue(plaintext=op).dump(), "bhp256", destination_type.dump()))))
     res = LiteralPlaintext(
         literal=Literal(
             type_=Literal.Type(destination_type.value),

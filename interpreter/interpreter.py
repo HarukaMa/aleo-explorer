@@ -42,7 +42,7 @@ async def finalize_block(db: Database, cur, block: Block):
                 transition: Transition
                 finalize: Vec[Value, u8] = transition.finalize.value
                 if finalize is not None:
-                    program = Program.load(bytearray(await db.get_program(str(transition.program_id))))
+                    program = Program.load(BytesIO(await db.get_program(str(transition.program_id))))
                     inputs = list(map(lambda x: x.plaintext, finalize))
                     operations.extend(
                         await execute_finalizer(db, finalize_state, transition.id, program, transition.function_name, inputs, mapping_cache)
@@ -91,4 +91,4 @@ async def execute_operations(db: Database, cur, operations: [dict]):
 async def preview_finalize_execution(db: Database, program: Program, function_name: Identifier, inputs: [Value]) -> [FinalizeOperation]:
     block = await db.get_latest_block()
     finalize_state = FinalizeState(block)
-    return await execute_finalizer(db, finalize_state, TransitionID.load(bytearray(b"\x00" * 32)), program, function_name, inputs, {})
+    return await execute_finalizer(db, finalize_state, TransitionID.load(BytesIO(b"\x00" * 32)), program, function_name, inputs, {})

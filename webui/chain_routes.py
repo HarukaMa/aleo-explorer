@@ -1,3 +1,4 @@
+from io import BytesIO
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
@@ -226,7 +227,7 @@ async def transaction_route(request: Request):
             if transition.program_id == "credits.aleo" and transition.function_name in ["mint", "fee", "split"]:
                 finalize_costs.append(0)
             else:
-                program = Program.load(bytearray(await db.get_program(str(transition.program_id))))
+                program = Program.load(BytesIO(await db.get_program(str(transition.program_id))))
                 function = program.functions[transition.function_name]
                 if function.finalize.value is not None:
                     finalize_costs.append(function.finalize.value[1].cost)

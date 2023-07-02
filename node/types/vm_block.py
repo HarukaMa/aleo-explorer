@@ -37,7 +37,7 @@ class EvaluationDomain(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         size = u64.load(data)
         log_size_of_group = u32.load(data)
         size_as_field_element = Field.load(data)
@@ -60,7 +60,7 @@ class EvaluationsOnDomain(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         evaluations = Vec[Field, u64].load(data)
         domain = EvaluationDomain.load(data)
         return cls(evaluations=evaluations, domain=domain)
@@ -82,7 +82,7 @@ class EpochChallenge(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         epoch_number = u32.load(data)
         epoch_block_hash = BlockHash.load(data)
         epoch_polynomial = Vec[Field, u64].load(data)
@@ -103,7 +103,7 @@ class MapKey(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         name = Identifier.load(data)
         plaintext_type = PlaintextType.load(data)
         return cls(name=name, plaintext_type=plaintext_type)
@@ -121,7 +121,7 @@ class MapValue(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         name = Identifier.load(data)
         plaintext_type = PlaintextType.load(data)
         return cls(name=name, plaintext_type=plaintext_type)
@@ -140,7 +140,7 @@ class Mapping(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         name = Identifier.load(data)
         key = MapKey.load(data)
         value = MapValue.load(data)
@@ -160,7 +160,7 @@ class Struct(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         name = Identifier.load(data)
         members = Vec[Tuple[Identifier, PlaintextType], u16].load(data)
         return cls(name=name, members=members)
@@ -194,7 +194,7 @@ class EntryType(Serialize, Deserialize):  # enum
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         type_ = cls.Type.load(data)
         plaintext_type = PlaintextType.load(data)
         return cls(type_=type_, plaintext_type=plaintext_type)
@@ -214,7 +214,7 @@ class RecordType(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         name = Identifier.load(data)
         owner = PublicOrPrivate.load(data)
         entries = Vec[Tuple[Identifier, EntryType], u16].load(data)
@@ -233,7 +233,7 @@ class ClosureInput(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         register = Register.load(data)
         register_type = RegisterType.load(data)
         return cls(register=register, register_type=register_type)
@@ -251,7 +251,7 @@ class ClosureOutput(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         operand = Operand.load(data)
         register_type = RegisterType.load(data)
         return cls(operand=operand, register_type=register_type)
@@ -273,7 +273,7 @@ class Closure(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         name = Identifier.load(data)
         inputs = Vec[ClosureInput, u16].load(data)
         instructions = Vec[Instruction, u32].load(data)
@@ -296,7 +296,7 @@ class FinalizeCommand(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         operands = Vec[Operand, u8].load(data)
         return cls(operands=operands)
 
@@ -335,7 +335,7 @@ class Command(Serialize, Deserialize):  # enum
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         type_ = cls.Type.load(data)
         if type_ == cls.Type.Instruction:
             return InstructionCommand.load(data)
@@ -379,7 +379,7 @@ class InstructionCommand(Command):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         instruction = Instruction.load(data)
         return cls(instruction=instruction)
 
@@ -397,7 +397,7 @@ class ContainsCommand(Command):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         mapping = Identifier.load(data)
         key = Operand.load(data)
         destination = Register.load(data)
@@ -417,7 +417,7 @@ class GetCommand(Command):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         mapping = Identifier.load(data)
         key = Operand.load(data)
         destination = Register.load(data)
@@ -439,7 +439,7 @@ class GetOrUseCommand(Command):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         mapping = Identifier.load(data)
         key = Operand.load(data)
         default = Operand.load(data)
@@ -461,7 +461,7 @@ class RandChaChaCommand(Command):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         operands = Vec[Operand, u8].load(data)
         destination = Register.load(data)
         destination_type = LiteralType.load(data)
@@ -480,7 +480,7 @@ class RemoveCommand(Command):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         mapping = Identifier.load(data)
         key = Operand.load(data)
         return cls(mapping=mapping, key=key)
@@ -499,7 +499,7 @@ class SetCommand(Command):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         mapping = Identifier.load(data)
         key = Operand.load(data)
         value = Operand.load(data)
@@ -519,7 +519,7 @@ class BranchEqCommand(Command):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         first = Operand.load(data)
         second = Operand.load(data)
         position = Identifier.load(data)
@@ -539,7 +539,7 @@ class BranchNeqCommand(Command):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         first = Operand.load(data)
         second = Operand.load(data)
         position = Identifier.load(data)
@@ -557,7 +557,7 @@ class PositionCommand(Command):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         position = Identifier.load(data)
         return cls(position=position)
 
@@ -574,7 +574,7 @@ class FinalizeInput(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         register = Register.load(data)
         plaintext_type = PlaintextType.load(data)
         return cls(register=register, plaintext_type=plaintext_type)
@@ -593,7 +593,7 @@ class Finalize(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         name = Identifier.load(data)
         inputs = Vec[FinalizeInput, u16].load(data)
         commands = Vec[Command, u16].load(data)
@@ -620,7 +620,7 @@ class ValueType(Serialize, Deserialize): # enum
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         type_ = cls.Type.load(data)
         if type_ == cls.Type.Constant:
             return ConstantValueType.load(data)
@@ -648,7 +648,7 @@ class ConstantValueType(ValueType):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         plaintext_type = PlaintextType.load(data)
         return cls(plaintext_type=plaintext_type)
 
@@ -665,7 +665,7 @@ class PublicValueType(ValueType):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         plaintext_type = PlaintextType.load(data)
         return cls(plaintext_type=plaintext_type)
 
@@ -682,7 +682,7 @@ class PrivateValueType(ValueType):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         plaintext_type = PlaintextType.load(data)
         return cls(plaintext_type=plaintext_type)
 
@@ -699,7 +699,7 @@ class RecordValueType(ValueType):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         identifier = Identifier.load(data)
         return cls(identifier=identifier)
 
@@ -716,7 +716,7 @@ class ExternalRecordValueType(ValueType):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         locator = Locator.load(data)
         return cls(locator=locator)
 
@@ -733,7 +733,7 @@ class FunctionInput(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         register = Register.load(data)
         value_type = ValueType.load(data)
         return cls(register=register, value_type=value_type)
@@ -751,7 +751,7 @@ class FunctionOutput(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         operand = Operand.load(data)
         value_type = ValueType.load(data)
         return cls(operand=operand, value_type=value_type)
@@ -780,7 +780,7 @@ class Function(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         name = Identifier.load(data)
         inputs = Vec[FunctionInput, u16].load(data)
         instructions = Vec[Instruction, u32].load(data)
@@ -849,7 +849,7 @@ class Program(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         version = u8.load(data)
         if version != cls.version:
             raise ValueError("Invalid version")
@@ -925,7 +925,7 @@ class CircuitInfo(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         num_public_inputs = usize.load(data)
         num_variables = usize.load(data)
         num_constraints = usize.load(data)
@@ -947,7 +947,7 @@ class KZGCommitment(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         return cls(element=G1Affine.load(data))
 
 
@@ -970,7 +970,7 @@ class KZGVerifierKey(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         g = G1Affine.load(data)
         gamma_g = G1Affine.load(data)
         h = G2Affine.load(data)
@@ -1000,7 +1000,7 @@ class SonicVerifierKey(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         vk = KZGVerifierKey.load(data)
         degree_bounds_and_neg_powers_of_h = Option[Vec[Tuple[usize, G2Affine], u64]].load(data)
         supported_degree = usize.load(data)
@@ -1030,7 +1030,7 @@ class VerifyingKey(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         version = u8.load(data)
         if version != cls.version:
             raise ValueError("Invalid version")
@@ -1052,7 +1052,7 @@ class KZGProof(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         w = G1Affine.load(data)
         random_v = Option[Field].load(data)
         return cls(w=w, random_v=random_v)
@@ -1068,7 +1068,7 @@ class BatchProof(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         proof = Vec[KZGProof, u64].load(data)
         return cls(proof=proof)
 
@@ -1086,7 +1086,7 @@ class BatchLCProof(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         proof = BatchProof.load(data)
         evaluations = Option[Vec[Field, u64]].load(data)
         return cls(proof=proof, evaluations=evaluations)
@@ -1105,7 +1105,7 @@ class Certificate(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         version = u8.load(data)
         if version != cls.version:
             raise ValueError("Invalid version")
@@ -1134,7 +1134,7 @@ class Deployment(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         version = u8.load(data)
         if version != cls.version:
             raise ValueError("Invalid version")
@@ -1146,7 +1146,7 @@ class Deployment(Serialize, Deserialize):
     @property
     def cost(self) -> (int, int):
         from node.testnet3 import Testnet3
-        x = self.__class__.load(bytearray(self.dump()))
+        x = self.__class__.load(BytesIO(self.dump()))
         storage_cost = len(self.dump()) * Testnet3.deployment_fee_multiplier
         namespace_cost = 10 ** max(0, 10 - len(self.program.id.name.data)) * 1e6
         return storage_cost, namespace_cost
@@ -1165,7 +1165,7 @@ class WitnessCommitments(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         w = KZGCommitment.load(data)
         z_a = KZGCommitment.load(data)
         z_b = KZGCommitment.load(data)
@@ -1207,7 +1207,7 @@ class Commitments(Serialize, Deserialize):
     # noinspection PyMethodOverriding
     @classmethod
     # @type_check
-    def load(cls, data: bytearray, batch_sizes: Vec[u64, u64]):
+    def load(cls, data: BytesIO, batch_sizes: Vec[u64, u64]):
         witness_commitments = []
         for _ in range(sum(batch_sizes)):
             witness_commitments.append(WitnessCommitments.load(data))
@@ -1262,7 +1262,7 @@ class Evaluations(Serialize, Deserialize):
     # noinspection PyMethodOverriding
     @classmethod
     # @type_check
-    def load(cls, data: bytearray, batch_sizes: Vec[u64, u64]):
+    def load(cls, data: BytesIO, batch_sizes: Vec[u64, u64]):
         z_b_evals = []
         for batch_size in batch_sizes:
             batch = []
@@ -1299,7 +1299,7 @@ class MatrixSums(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         sum_a = Field.load(data)
         sum_b = Field.load(data)
         sum_c = Field.load(data)
@@ -1317,7 +1317,7 @@ class ThirdMessage(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         sums = Vec[MatrixSums, u64].load(data)
         return cls(sums=sums)
 
@@ -1347,7 +1347,7 @@ class Proof(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         version = u8.load(data)
         if version != cls.version:
             raise Exception("Invalid proof version")
@@ -1379,7 +1379,7 @@ class Ciphertext(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         ciphertext = Vec[Field, u16].load(data)
         return cls(ciphertext=ciphertext)
 
@@ -1405,7 +1405,7 @@ class Plaintext(Serialize, Deserialize):  # enum
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         type_ = Plaintext.Type.load(data)
         if type_ == Plaintext.Type.Literal:
             return LiteralPlaintext.load(data)
@@ -1427,7 +1427,7 @@ class LiteralPlaintext(Plaintext):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         literal = Literal.load(data)
         return cls(literal=literal)
 
@@ -1464,13 +1464,13 @@ class StructPlaintext(Plaintext):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         members = []
         num_members = u8.load(data)
         for _ in range(num_members):
             identifier = Identifier.load(data)
             num_bytes = u16.load(data)
-            plaintext = Plaintext.load(data[:num_bytes])
+            plaintext = Plaintext.load(BytesIO(data.read(num_bytes)))
             del data[:num_bytes]
             members.append(Tuple[Identifier, Plaintext]([identifier, plaintext]))
         return cls(members=Vec[Tuple[Identifier, Plaintext], u8](members))
@@ -1612,7 +1612,7 @@ class Owner(TypeParameter, Serialize, Deserialize):  # enum
         raise NotImplementedError
 
     # @type_check
-    def load(self, data: bytearray):
+    def load(self, data: BytesIO):
         type_ = Owner.Type.load(data)
         if type_ == Owner.Type.Public:
             return PublicOwner.load(data)
@@ -1636,7 +1636,7 @@ class PublicOwner(Owner):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         owner = Address.load(data)
         return cls(owner=owner)
 
@@ -1663,7 +1663,7 @@ class PrivateOwner(Owner):
         return self.type.dump() + self.owner.dump()
 
     # @type_check
-    def load(self, data: bytearray):
+    def load(self, data: BytesIO):
         self.owner = self.Private.load(data)
         return self
 
@@ -1691,7 +1691,7 @@ class Entry(Generic, Serialize, Deserialize):  # enum
         raise NotImplementedError
 
     # @type_check
-    def load(self, data: bytearray):
+    def load(self, data: BytesIO):
         type_ = Entry.Type.load(data)
         if type_ == Entry.Type.Constant:
             return ConstantEntry.load(data)
@@ -1719,7 +1719,7 @@ class ConstantEntry(Entry):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         plaintext = Plaintext.load(data)
         return cls(plaintext=plaintext)
 
@@ -1739,7 +1739,7 @@ class PublicEntry(Entry):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         plaintext = Plaintext.load(data)
         return cls(plaintext=plaintext)
 
@@ -1766,7 +1766,7 @@ class PrivateEntry(Entry):
         return self.type.dump() + self.plaintext.dump()
 
     # @type_check
-    def load(self, data: bytearray):
+    def load(self, data: BytesIO):
         self.plaintext = self.Private.load(data)
         return self
 
@@ -1801,16 +1801,15 @@ class Record(Generic, Serialize, Deserialize):
         return res
 
     # @type_check
-    def load(self, data: bytearray):
+    def load(self, data: BytesIO):
         self.owner = Owner[self.Private].load(data)
         data_len = u8.load(data)
         d = []
         for _ in range(data_len):
             identifier = Identifier.load(data)
             entry_len = u16.load(data)
-            entry = Entry[self.Private].load(data[:entry_len])
+            entry = Entry[self.Private].load(BytesIO(data.read(entry_len)))
             d.append(Tuple[Identifier, Entry]([identifier, entry]))
-            del data[:entry_len]
         self.data = Vec[Tuple[Identifier, Entry], u8](d)
         self.nonce = Group.load(data)
         return self
@@ -1836,7 +1835,7 @@ class Value(Serialize, Deserialize):  # enum
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         type_ = Value.Type.load(data)
         if type_ == Value.Type.Plaintext:
             return PlaintextValue.load(data)
@@ -1858,7 +1857,7 @@ class PlaintextValue(Value):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         plaintext = Plaintext.load(data)
         return cls(plaintext=plaintext)
 
@@ -1880,7 +1879,7 @@ class RecordValue(Value):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         record = Record[Plaintext].load(data)
         return cls(record=record)
 
@@ -1901,7 +1900,7 @@ class TransitionInput(Serialize, Deserialize): # enum
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         type_ = TransitionInput.Type.load(data)
         if type_ == TransitionInput.Type.Constant:
             return ConstantTransitionInput.load(data)
@@ -1941,7 +1940,7 @@ class ConstantTransitionInput(TransitionInput):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         plaintext_hash = Field.load(data)
         plaintext = Option[Plaintext].load(data)
         return cls(plaintext_hash=plaintext_hash, plaintext=plaintext)
@@ -1960,7 +1959,7 @@ class PublicTransitionInput(TransitionInput):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         plaintext_hash = Field.load(data)
         plaintext = Option[Plaintext].load(data)
         return cls(plaintext_hash=plaintext_hash, plaintext=plaintext)
@@ -1979,7 +1978,7 @@ class PrivateTransitionInput(TransitionInput):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         ciphertext_hash = Field.load(data)
         ciphertext = Option[Ciphertext].load(data)
         return cls(ciphertext_hash=ciphertext_hash, ciphertext=ciphertext)
@@ -2008,7 +2007,7 @@ class RecordTransitionInput(TransitionInput):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         serial_number = Field.load(data)
         tag = Field.load(data)
         return cls(serial_number=serial_number, tag=tag)
@@ -2033,7 +2032,7 @@ class ExternalRecordTransitionInput(TransitionInput):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         input_commitment = Field.load(data)
         return cls(input_commitment=input_commitment)
 
@@ -2054,7 +2053,7 @@ class TransitionOutput(Serialize, Deserialize): # enum
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         type_ = TransitionOutput.Type.load(data)
         if type_ == TransitionOutput.Type.Constant:
             return ConstantTransitionOutput.load(data)
@@ -2092,7 +2091,7 @@ class ConstantTransitionOutput(TransitionOutput):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         plaintext_hash = Field.load(data)
         plaintext = Option[Plaintext].load(data)
         return cls(plaintext_hash=plaintext_hash, plaintext=plaintext)
@@ -2111,7 +2110,7 @@ class PublicTransitionOutput(TransitionOutput):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         plaintext_hash = Field.load(data)
         plaintext = Option[Plaintext].load(data)
         return cls(plaintext_hash=plaintext_hash, plaintext=plaintext)
@@ -2130,7 +2129,7 @@ class PrivateTransitionOutput(TransitionOutput):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         ciphertext_hash = Field.load(data)
         ciphertext = Option[Ciphertext].load(data)
         return cls(ciphertext_hash=ciphertext_hash, ciphertext=ciphertext)
@@ -2150,7 +2149,7 @@ class RecordTransitionOutput(TransitionOutput):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         commitment = Field.load(data)
         checksum = Field.load(data)
         record_ciphertext = Option[Record[Ciphertext]].load(data)
@@ -2180,7 +2179,7 @@ class ExternalRecordTransitionOutput(TransitionOutput):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         commitment = Field.load(data)
         return cls(commitment=commitment)
 
@@ -2216,7 +2215,7 @@ class Transition(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         version = u8.load(data)
         if version != cls.version:
             raise ValueError(f"version mismatch: expected {cls.version}, got {version}")
@@ -2251,7 +2250,7 @@ class Fee(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         version = u8.load(data)
         if version != cls.version:
             raise ValueError(f"version mismatch: expected {cls.version}, got {version}")
@@ -2282,7 +2281,7 @@ class Execution(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         version = u8.load(data)
         if version != cls.version:
             raise ValueError(f"version mismatch: expected {cls.version}, got {version}")
@@ -2327,12 +2326,11 @@ class Transaction(Serialize, Deserialize):  # Enum
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
-        if len(data) < 1:
+    def load(cls, data: BytesIO):
+        if data.getbuffer().nbytes < 1:
             raise ValueError("incorrect length")
         version = u8.load(data)
-        type_ = cls.Type(data[0])
-        del data[0]
+        type_ = cls.Type.load(data)
         if type_ == cls.Type.Deploy:
             if version != DeployTransaction.version:
                 raise ValueError("incorrect version")
@@ -2362,7 +2360,7 @@ class ProgramOwner(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         version = u8.load(data)
         if version != cls.version:
             raise ValueError(f"version mismatch: expected {cls.version}, got {version}")
@@ -2387,7 +2385,7 @@ class DeployTransaction(Transaction):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         id_ = TransactionID.load(data)
         owner = ProgramOwner.load(data)
         deployment = Deployment.load(data)
@@ -2409,7 +2407,7 @@ class ExecuteTransaction(Transaction):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         id_ = TransactionID.load(data)
         execution = Execution.load(data)
         additional_fee = Option[Fee].load(data)
@@ -2428,7 +2426,7 @@ class FeeTransaction(Transaction):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         id_ = TransactionID.load(data)
         fee = Fee.load(data)
         return cls(id_=id_, fee=fee)
@@ -2447,9 +2445,8 @@ class ConfirmedTransaction(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
-        type_ = cls.Type(data[0])
-        del data[0]
+    def load(cls, data: BytesIO):
+        type_ = cls.Type.load(data)
         if type_ == cls.Type.AcceptedDeploy:
             return AcceptedDeploy.load(data)
         elif type_ == cls.Type.AcceptedExecute:
@@ -2477,9 +2474,8 @@ class FinalizeOperation(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
-        type_ = cls.Type(data[0])
-        del data[0]
+    def load(cls, data: BytesIO):
+        type_ = cls.Type.load(data)
         if type_ == cls.Type.InitializeMapping:
             return InitializeMapping.load(data)
         elif type_ == cls.Type.InsertKeyValue:
@@ -2506,7 +2502,7 @@ class InitializeMapping(FinalizeOperation):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         mapping_id = Field.load(data)
         return cls(mapping_id=mapping_id)
 
@@ -2525,7 +2521,7 @@ class InsertKeyValue(FinalizeOperation):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         mapping_id = Field.load(data)
         key_id = Field.load(data)
         value_id = Field.load(data)
@@ -2547,7 +2543,7 @@ class UpdateKeyValue(FinalizeOperation):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         mapping_id = Field.load(data)
         index = u64.load(data)
         key_id = Field.load(data)
@@ -2568,7 +2564,7 @@ class RemoveKeyValue(FinalizeOperation):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         mapping_id = Field.load(data)
         index = u64.load(data)
         return cls(mapping_id=mapping_id, index=index)
@@ -2586,7 +2582,7 @@ class RemoveMapping(FinalizeOperation):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         mapping_id = Field.load(data)
         return cls(mapping_id=mapping_id)
 
@@ -2605,7 +2601,7 @@ class AcceptedDeploy(ConfirmedTransaction):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         index = u32.load(data)
         transaction = Transaction.load(data)
         finalize = Vec[FinalizeOperation, u16].load(data)
@@ -2626,7 +2622,7 @@ class AcceptedExecute(ConfirmedTransaction):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         index = u32.load(data)
         transaction = Transaction.load(data)
         finalize = Vec[FinalizeOperation, u16].load(data)
@@ -2643,7 +2639,7 @@ class Rejected(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         type_ = cls.Type.load(data)
         if type_ == cls.Type.Deployment:
             return RejectedDeployment.load(data)
@@ -2665,7 +2661,7 @@ class RejectedDeployment(Rejected):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         program_owner = ProgramOwner.load(data)
         deploy = Deployment.load(data)
         return cls(program_owner=program_owner, deploy=deploy)
@@ -2682,7 +2678,7 @@ class RejectedExecution(Rejected):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         execution = Execution.load(data)
         return cls(execution=execution)
 
@@ -2700,7 +2696,7 @@ class RejectedDeploy(ConfirmedTransaction):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         index = u32.load(data)
         transaction = Transaction.load(data)
         rejected = Rejected.load(data)
@@ -2721,7 +2717,7 @@ class RejectedExecute(ConfirmedTransaction):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         index = u32.load(data)
         transaction = Transaction.load(data)
         rejected = Rejected.load(data)
@@ -2741,7 +2737,7 @@ class Transactions(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         version = u8.load(data)
         if version != cls.version:
             raise ValueError("invalid transactions version")
@@ -2781,7 +2777,7 @@ class BlockHeaderMetadata(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         version = u8.load(data)
         if version != cls.version:
             raise ValueError("invalid metadata version")
@@ -2825,7 +2821,7 @@ class BlockHeader(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         version = u8.load(data)
         previous_state_root = Field.load(data)
         transactions_root = Field.load(data)
@@ -2851,7 +2847,7 @@ class PuzzleCommitment(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         commitment = KZGCommitment.load(data)
         return cls(commitment=commitment)
 
@@ -2880,7 +2876,7 @@ class PartialSolution(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         address = Address.load(data)
         nonce = u64.load(data)
         commitment = PuzzleCommitment.load(data)
@@ -2913,7 +2909,7 @@ class ProverSolution(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         partial_solution = PartialSolution.load(data)
         proof = PuzzleProof.load(data)
         return cls(partial_solution=partial_solution, proof=proof)
@@ -2932,7 +2928,7 @@ class CoinbaseSolution(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         partial_solutions = Vec[PartialSolution, u32].load(data)
         proof = PuzzleProof.load(data)
         return cls(partial_solutions=partial_solutions, proof=proof)
@@ -2950,7 +2946,7 @@ class ComputeKey(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         pk_sig = Group.load(data)
         pr_sig = Group.load(data)
         return cls(pk_sig=pk_sig, pr_sig=pr_sig)
@@ -2969,7 +2965,7 @@ class Signature(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         challange = Scalar.load(data)
         response = Scalar.load(data)
         compute_key = ComputeKey.load(data)
@@ -2998,7 +2994,7 @@ class Ratify(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         version = u8.load(data)
         if version != cls.version:
             raise ValueError(f"invalid version {version}")
@@ -3023,7 +3019,7 @@ class ProvingReward(Ratify):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         address = Address.load(data)
         amount = u64.load(data)
         return cls(address=address, amount=amount)
@@ -3041,7 +3037,7 @@ class StakingReward(Ratify):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         address = Address.load(data)
         amount = u64.load(data)
         return cls(address=address, amount=amount)
@@ -3088,7 +3084,7 @@ class Block(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         version = u8.load(data)
         block_hash = BlockHash.load(data)
         previous_hash = BlockHash.load(data)

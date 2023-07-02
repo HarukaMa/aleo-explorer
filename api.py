@@ -1,11 +1,11 @@
+import aleo
 import asyncio
 import logging
 import multiprocessing
 import os
 import time
-
-import aleo
 import uvicorn
+from io import BytesIO
 from starlette.applications import Starlette
 from starlette.exceptions import HTTPException
 from starlette.middleware import Middleware
@@ -73,7 +73,7 @@ async def mapping_route(request: Request):
     mapping = request.path_params["mapping"]
     key = request.path_params["key"]
     try:
-        program = Program.load(bytearray(await db.get_program(program_id)))
+        program = Program.load(BytesIO(await db.get_program(program_id)))
     except:
         return JSONResponse({"error": "Program not found"}, status_code=404)
     mapping_name = Identifier.loads(mapping)
@@ -98,7 +98,7 @@ async def mapping_route(request: Request):
     value = await db.get_mapping_value(program_id, mapping, key_id)
     if value is None:
         return JSONResponse({"value": None})
-    return JSONResponse({"value": str(Value.load(bytearray(value)))})
+    return JSONResponse({"value": str(Value.load(BytesIO(value)))})
 
 async def preview_finalize_route(request: Request):
     db: Database = request.app.state.db
@@ -117,7 +117,7 @@ async def preview_finalize_route(request: Request):
         return JSONResponse({"error": "Inputs must be an array"}, status_code=400)
 
     try:
-        program = Program.load(bytearray(await db.get_program(program_id)))
+        program = Program.load(BytesIO(await db.get_program(program_id)))
     except:
         return JSONResponse({"error": "Program not found"}, status_code=404)
     function_name = Identifier.loads(transition_name)
@@ -190,7 +190,7 @@ async def mapping_list_route(request: Request):
     program = await db.get_program(program_id)
     if not program:
         return JSONResponse({"error": "Program not found"}, status_code=404)
-    program = Program.load(bytearray(program))
+    program = Program.load(BytesIO(program))
     mappings = program.mappings
     return JSONResponse({"mappings": list(map(str, mappings.keys()))})
 
@@ -203,7 +203,7 @@ async def mapping_value_list_route(request: Request):
     program = await db.get_program(program_id)
     if not program:
         return JSONResponse({"error": "Program not found"}, status_code=404)
-    program = Program.load(bytearray(program))
+    program = Program.load(BytesIO(program))
     mappings = program.mappings
     if mapping not in mappings.keys():
         return JSONResponse({"error": "Mapping not found"}, status_code=404)
@@ -213,8 +213,8 @@ async def mapping_value_list_route(request: Request):
     for item in mapping_cache:
         res.append({
             "index": item["index"],
-            "key": str(Plaintext.load(bytearray(item["key"]))),
-            "value": str(Value.load(bytearray(item["value"]))),
+            "key": str(Plaintext.load(BytesIO(item["key"]))),
+            "value": str(Value.load(BytesIO(item["value"]))),
             "key_id": item["key_id"],
             "value_id": item["value_id"],
         })

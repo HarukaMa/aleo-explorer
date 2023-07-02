@@ -2,6 +2,7 @@ import struct
 from abc import abstractmethod
 from decimal import Decimal
 from enum import IntEnum
+from io import BytesIO
 
 from .utils import *
 
@@ -9,7 +10,7 @@ from .utils import *
 class Deserialize(metaclass=ABCMeta):
 
     @abstractmethod
-    def load(self, data: bytearray):
+    def load(self, data: BytesIO):
         raise NotImplementedError
 
 
@@ -102,11 +103,10 @@ class IntEnumu8(Serialize, Deserialize, IntEnum, metaclass=ABCEnumMeta):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
-        if len(data) < 1:
+    def load(cls, data: BytesIO):
+        if data.tell() >= data.getbuffer().nbytes:
             raise ValueError("incorrect length")
-        self = cls(struct.unpack("<B", data[:1])[0])
-        del data[:1]
+        self = cls(struct.unpack("<B", data.read(1))[0])
         return self
 
 
@@ -117,11 +117,10 @@ class IntEnumu16(Serialize, Deserialize, IntEnum, metaclass=ABCEnumMeta):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
-        if len(data) < 2:
+    def load(cls, data: BytesIO):
+        if data.tell() + 2 > data.getbuffer().nbytes:
             raise ValueError("incorrect length")
-        self = cls(struct.unpack("<H", data[:2])[0])
-        del data[:2]
+        self = cls(struct.unpack("<H", data.read(2))[0])
         return self
 
 
@@ -132,9 +131,8 @@ class IntEnumu32(Serialize, Deserialize, IntEnum, metaclass=ABCEnumMeta):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
-        if len(data) < 4:
+    def load(cls, data: BytesIO):
+        if data.tell() + 4 > data.getbuffer().nbytes:
             raise ValueError("incorrect length")
-        self = cls(struct.unpack("<I", data[:4])[0])
-        del data[:4]
+        self = cls(struct.unpack("<I", data.read(4))[0])
         return self

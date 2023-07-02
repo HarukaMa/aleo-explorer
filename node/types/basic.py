@@ -1,4 +1,5 @@
 import socket
+from io import BytesIO
 
 from .traits import *
 
@@ -30,9 +31,8 @@ class u8(Int):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
-        self = cls(struct.unpack("<B", data[:1])[0])
-        del data[0]
+    def load(cls, data: BytesIO):
+        self = cls(struct.unpack("<B", data.read(1))[0])
         return self
 
 
@@ -46,9 +46,8 @@ class u16(Int):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
-        self = cls(struct.unpack("<H", data[:2])[0])
-        del data[:2]
+    def load(cls, data: BytesIO):
+        self = cls(struct.unpack("<H", data.read(2))[0])
         return self
 
 
@@ -62,9 +61,8 @@ class u32(Int):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
-        self = cls(struct.unpack("<I", data[:4])[0])
-        del data[:4]
+    def load(cls, data: BytesIO):
+        self = cls(struct.unpack("<I", data.read(4))[0])
         return self
 
 
@@ -78,9 +76,8 @@ class u64(Int):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
-        self = cls(struct.unpack("<Q", data[:8])[0])
-        del data[:8]
+    def load(cls, data: BytesIO):
+        self = cls(struct.unpack("<Q", data.read(8))[0])
         return self
 
 # Obviously we only support 64bit
@@ -96,10 +93,9 @@ class u128(Int):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
-        lo, hi = struct.unpack("<QQ", data[:16])
+    def load(cls, data: BytesIO):
+        lo, hi = struct.unpack("<QQ", data.read(16))
         self = cls((hi << 64) | lo)
-        del data[:16]
         return self
 
 
@@ -113,9 +109,8 @@ class i8(Int):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
-        self = cls(struct.unpack("<b", data[:1])[0])
-        del data[0]
+    def load(cls, data: BytesIO):
+        self = cls(struct.unpack("<b", data.read(1))[0])
         return self
 
 
@@ -129,9 +124,8 @@ class i16(Int):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
-        self = cls(struct.unpack("<h", data[:2])[0])
-        del data[:2]
+    def load(cls, data: BytesIO):
+        self = cls(struct.unpack("<h", data.read(2))[0])
         return self
 
 
@@ -145,9 +139,8 @@ class i32(Int):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
-        self = cls(struct.unpack("<i", data[:4])[0])
-        del data[:4]
+    def load(cls, data: BytesIO):
+        self = cls(struct.unpack("<i", data.read(4))[0])
         return self
 
 
@@ -161,9 +154,8 @@ class i64(Int):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
-        self = cls(struct.unpack("<q", data[:8])[0])
-        del data[:8]
+    def load(cls, data: BytesIO):
+        self = cls(struct.unpack("<q", data.read(8))[0])
         return self
 
 
@@ -177,10 +169,9 @@ class i128(Int):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
-        lo, hi = struct.unpack("<qq", data[:16])
+    def load(cls, data: BytesIO):
+        lo, hi = struct.unpack("<qq", data.read(16))
         self = cls((hi << 64) | lo)
-        del data[:16]
         return self
 
 
@@ -198,8 +189,8 @@ class bool_(Int):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
-        value = struct.unpack("<B", data[:1])[0]
+    def load(cls, data: BytesIO):
+        value = struct.unpack("<B", data.read(1))[0]
         if value == 0:
             value = False
         elif value == 1:
@@ -208,7 +199,6 @@ class bool_(Int):
             breakpoint()
             raise ValueError("invalid value for bool")
         self = cls(value)
-        del data[:1]
         return self
 
     @classmethod
@@ -248,7 +238,7 @@ class SocketAddr(Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         del data[:4]
         ip = u32.load(data)
         port = u16.load(data)

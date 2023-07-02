@@ -17,8 +17,8 @@ async def mapping_cache_read(db: Database, mapping_id: Field) -> list:
         res.append((
             Field.loads(m["key_id"]),
             Field.loads(m["value_id"]),
-            Plaintext.load(bytearray(m["key"])),
-            Value.load(bytearray(m["value"])),
+            Plaintext.load(BytesIO(m["key"])),
+            Value.load(BytesIO(m["value"])),
         ))
         index += 1
     return res
@@ -140,7 +140,7 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
                     additional_seeds,
                 ))
                 primitive_type = c.destination_type.primitive_type
-                value = primitive_type.load(bytearray(aleo.chacha_random_value(chacha_seed, c.destination_type.dump())))
+                value = primitive_type.load(BytesIO(bytes(aleo.chacha_random_value(chacha_seed, c.destination_type.dump()))))
                 res = LiteralPlaintext(
                     literal=Literal(
                         type_=Literal.Type(c.destination_type.value),

@@ -19,10 +19,10 @@ class Generic(metaclass=ABCMeta):
         return cls(item)
 
 
-class TypeParameter:
+class TypeParameter(metaclass=ABCMeta):
     @abstractmethod
-    def __init__(self, types):
-        self.types = types
+    def __init__(self, _):
+        raise NotImplementedError
 
     def __class_getitem__(cls, item):
         if not isinstance(item, tuple):
@@ -63,7 +63,7 @@ class Tuple(Generic, Serialize, Deserialize, Sequence):
         return b"".join(x.dump() for x in self.value)
 
     # @type_check
-    def load(self, data: bytearray):
+    def load(self, data: BytesIO):
         if not all(issubclass(x, Deserialize) for x in self.types):
             raise TypeError("value must be deserializable")
         self.value = tuple(t.load(data) for t in self.types)
@@ -130,7 +130,7 @@ class Vec(Generic, Serialize, Deserialize, Sequence):
         return res
 
     # @type_check
-    def load(self, data: bytearray):
+    def load(self, data: BytesIO):
         if isinstance(self.type, type):
             if not issubclass(self.type, Deserialize):
                 raise TypeError(f"{self.type.__name__} must be Deserialize")
@@ -138,7 +138,7 @@ class Vec(Generic, Serialize, Deserialize, Sequence):
             if not issubclass(type(self.type), Deserialize):
                 raise TypeError(f"{type(self.type).__name__} must be Deserialize")
         if hasattr(self, "size_type"):
-            if len(data) < self.size_type.size:
+            if data.tell() + self.size_type.size > data.getbuffer().nbytes:
                 raise ValueError("data is too short")
             self.size = self.size_type.load(data)
         self._list = []
@@ -184,26 +184,24 @@ class VarInt(Generic, Serialize, Deserialize):
             raise ValueError("unreachable")
 
     # @type_check
-    def load(self, data: bytearray):
-        if len(data) == 0:
+    def load(self, data: BytesIO):
+        if data.tell() >= data.getbuffer().nbytes:
             raise ValueError("data is too short")
-        if data[0] == 0xfd:
-            if len(data) < 3:
+        value = data.read(1)[0]
+        if value == 0xfd:
+            if data.tell() + 2 > data.getbuffer().nbytes:
                 raise ValueError("data is too short")
-            self.value = u16.load(data[1:])
-            del data[:3]
-        elif data[0] == 0xfe:
-            if len(data) < 5:
+            self.value = u16.load(data)
+        elif value == 0xfe:
+            if data.tell() + 4 > data.getbuffer().nbytes:
                 raise ValueError("data is too short")
-            self.value = u32.load(data[1:])
-            del data[:5]
-        elif data[0] == 0xff:
-            if len(data) < 9:
+            self.value = u32.load(data)
+        elif value == 0xff:
+            if data.tell() + 8 > data.getbuffer().nbytes:
                 raise ValueError("data is too short")
-            self.value = u64.load(data[1:])
-            del data[:9]
+            self.value = u64.load(data)
         else:
-            self.value = u8.load(data)
+            self.value = u8(value)
         self.value = self.type(self.value)
         return self
 
@@ -255,7 +253,7 @@ class Option(Generic, Serialize, Deserialize):
             return self.value.dump()
 
     # @type_check
-    def load(self, data: bytearray):
+    def load(self, data: BytesIO):
         is_some = bool_.load(data)
         if is_some:
             self.value = self.type.load(data)

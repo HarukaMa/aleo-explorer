@@ -72,7 +72,7 @@ class Node:
                     frame = await self.reader.readexactly(size)
                 except:
                     raise Exception("connection closed")
-                await self.parse_message(Frame.load(bytearray(frame)))
+                await self.parse_message(Frame.load(BytesIO(frame)))
         except Exception:
             traceback.print_exc()
             await self.explorer_message(explorer.Message(explorer.Message.Type.NodeDisconnected, None))
@@ -116,7 +116,7 @@ class Node:
                 nonce = msg.nonce
                 response = ChallengeResponse(
                     genesis_header=Testnet3.genesis_block.header,
-                    signature=Signature.load(bytearray(aleo.sign_nonce("APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH", nonce.dump()))),
+                    signature=Signature.load(BytesIO(bytes(aleo.sign_nonce("APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH", nonce.dump())))),
                 )
                 self.handshake_state = 1
                 await self.send_message(response)

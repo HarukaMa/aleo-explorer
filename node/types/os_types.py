@@ -61,7 +61,7 @@ class BeaconPropose(Message):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         version = u8.load(data)
         round_ = u64.load(data)
         block_height = u32.load(data)
@@ -87,7 +87,7 @@ class BeaconTimeout(Message):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         version = u8.load(data)
         round_ = u64.load(data)
         block_height = u32.load(data)
@@ -115,7 +115,7 @@ class BeaconVote(Message):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         version = u8.load(data)
         round_ = u64.load(data)
         block_height = u32.load(data)
@@ -138,7 +138,7 @@ class BlockRequest(Message):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         start_height = u32.load(data)
         end_height = u32.load(data)
         return cls(start_height=start_height, end_height=end_height)
@@ -158,7 +158,7 @@ class BlockResponse(Message):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         request = BlockRequest.load(data)
         blocks = Vec[Block, u8].load(data)
         return cls(request=request, blocks=blocks)
@@ -187,7 +187,7 @@ class ChallengeRequest(Message):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         version = u32.load(data)
         listener_port = u16.load(data)
         node_type = NodeType.load(data)
@@ -217,7 +217,7 @@ class ChallengeResponse(Message):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         genesis_header = BlockHeader.load(data)
         signature = Signature.load(data)
         return cls(genesis_header=genesis_header, signature=signature)
@@ -233,7 +233,7 @@ class YourPortIsClosed(int):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         port = u16.load(data)
         return cls(port=port)
 
@@ -263,7 +263,7 @@ class DisconnectReason(IntEnumu32):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         if len(data) == 0:
             return cls(cls.NoReasonGiven)
         reason = u32.load(data)
@@ -284,7 +284,7 @@ class Disconnect(Message):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         return cls(reason=DisconnectReason.load(data))
 
 
@@ -298,7 +298,7 @@ class PeerRequest(Message):
         return b""
 
     @classmethod
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         return cls()
 
 
@@ -314,7 +314,7 @@ class PeerResponse(Message):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         peers = Vec[SocketAddr, u64].load(data)
         return cls(peers=peers)
 
@@ -336,7 +336,7 @@ class BlockLocators(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         num_locators = u64.load(data)
         recents = {}
         for _ in range(num_locators):
@@ -366,7 +366,7 @@ class Ping(Message):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         version = u32.load(data)
         node_type = NodeType.load(data)
         block_locators = Option[BlockLocators].load(data)
@@ -393,7 +393,7 @@ class Pong(Message):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         fork_flag = u8.load(data)
         match fork_flag:
             case 0:
@@ -418,7 +418,7 @@ class PuzzleRequest(Message):
         return b""
 
     @classmethod
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         return cls()
 
 
@@ -435,7 +435,7 @@ class PuzzleResponse(Message):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         epoch_challenge = EpochChallenge.load(data)
         block_header = BlockHeader.load(data)
         return cls(epoch_challenge=epoch_challenge, block_header=block_header)
@@ -454,7 +454,7 @@ class UnconfirmedSolution(Message):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         puzzle_commitment = PuzzleCommitment.load(data)
         solution = ProverSolution.load(data)
         return cls(puzzle_commitment=puzzle_commitment, solution=solution)
@@ -473,7 +473,7 @@ class UnconfirmedTransaction(Message):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
+    def load(cls, data: BytesIO):
         transaction_id = TransactionID.load(data)
         transaction = Transaction.load(data)
         return cls(transaction_id=transaction_id, transaction=transaction)
@@ -491,11 +491,10 @@ class Frame(Serialize, Deserialize):
 
     @classmethod
     # @type_check
-    def load(cls, data: bytearray):
-        if len(data) < 2:
+    def load(cls, data: BytesIO):
+        if data.tell() + 2 > data.getbuffer().nbytes:
             raise ValueError("missing message id")
-        type_ = Message.Type(struct.unpack("<H", data[:2])[0])
-        del data[:2]
+        type_ = Message.Type(struct.unpack("<H", data.read(2))[0])
         match type_:
             case Message.Type.BeaconPropose:
                 message = BeaconPropose.load(data)

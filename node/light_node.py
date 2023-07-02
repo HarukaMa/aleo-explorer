@@ -1,9 +1,9 @@
+import aleo
 import asyncio
 import random
-import time
-
-import aleo
 import requests
+import time
+from io import BytesIO
 
 from node.testnet3 import Testnet3
 from node.types import ChallengeRequest, NodeType, u16, u64, Frame, Message, ChallengeResponse, \
@@ -113,7 +113,7 @@ class LightNode:
                 self.state.node_connected(self.ip, self.port, str(msg.address))
                 response = ChallengeResponse(
                     genesis_header=Testnet3.genesis_block.header,
-                    signature=Signature.load(bytearray(aleo.sign_nonce("APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH", nonce.dump()))),
+                    signature=Signature.load(BytesIO(bytes(aleo.sign_nonce("APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH", nonce.dump())))),
                 )
                 await self.send_message(response)
 

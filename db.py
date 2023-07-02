@@ -1,8 +1,7 @@
 import os
+import psycopg
 import time
 from collections import defaultdict
-
-import psycopg
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 
@@ -548,7 +547,7 @@ class Database:
                         if transition_input_public["plaintext"] is None:
                             plaintext = None
                         else:
-                            plaintext = Plaintext.load(bytearray(transition_input_public["plaintext"]))
+                            plaintext = Plaintext.load(BytesIO(transition_input_public["plaintext"]))
                         tis.append((PublicTransitionInput(
                             plaintext_hash=Field.loads(transition_input_public["plaintext_hash"]),
                             plaintext=Option[Plaintext](plaintext)
@@ -612,7 +611,7 @@ class Database:
                         if transition_output_public["plaintext"] is None:
                             plaintext = None
                         else:
-                            plaintext = Plaintext.load(bytearray(transition_output_public["plaintext"]))
+                            plaintext = Plaintext.load(BytesIO(transition_output_public["plaintext"]))
                         tos.append((PublicTransitionOutput(
                             plaintext_hash=Field.loads(transition_output_public["plaintext_hash"]),
                             plaintext=Option[Plaintext](plaintext)
@@ -679,7 +678,7 @@ class Database:
                             )
                             transition_finalize_plaintext = await cur.fetchone()
                             finalize.append((PlaintextValue(
-                                plaintext=Plaintext.load(bytearray(transition_finalize_plaintext["plaintext"]))
+                                plaintext=Plaintext.load(BytesIO(transition_finalize_plaintext["plaintext"]))
                             ), transition_finalize["index"]))
                         case Value.Type.Record.name:
                             await cur.execute(
@@ -785,8 +784,8 @@ class Database:
                         # noinspection PyArgumentList
                         deployment = Deployment(
                             edition=u16(deploy_transaction["edition"]),
-                            program=Program.load(bytearray(program)),
-                            verifying_keys=Vec[Tuple[Identifier, VerifyingKey, Certificate], u16].load(bytearray(deploy_transaction["verifying_keys"])),
+                            program=Program.load(BytesIO(program)),
+                            verifying_keys=Vec[Tuple[Identifier, VerifyingKey, Certificate], u16].load(BytesIO(deploy_transaction["verifying_keys"])),
                         )
                         await cur.execute(
                             "SELECT * FROM fee WHERE transaction_id = %s",
