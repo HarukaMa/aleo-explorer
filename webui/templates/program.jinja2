@@ -256,12 +256,12 @@
         try {
             const response = await fetch(`{{ "API_HOST" | get_env }}/v1/mapping/get_value/{{ program_id }}/${mapping}/${input.value}`)
             const data = await response.json()
-            if ("error" in data) {
+            if (!response.ok) {
                 value.innerText = "Error loading data: " + data.error
-            } else if (data.value == null) {
+            } else if (data == null) {
                 value.innerText = "Key not found"
             } else {
-                value.innerText = data.value
+                value.innerText = data
             }
         } catch (e) {
             value.innerText = "Error fetching data: " + e
