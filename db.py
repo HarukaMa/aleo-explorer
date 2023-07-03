@@ -1,7 +1,8 @@
 import os
-import psycopg
 import time
 from collections import defaultdict
+
+import psycopg
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 
@@ -437,7 +438,7 @@ class Database:
                                 ratification_map[data[2]][data[3]].append(ratify_db_id[index])
 
                         if block.coinbase.value is not None and not os.environ.get("DEBUG_SKIP_COINBASE"):
-                            coinbase_reward = block.get_coinbase_reward((await self.get_latest_block()).header.metadata.last_coinbase_timestamp)
+                            coinbase_reward = block.get_coinbase_reward(await self.get_latest_coinbase_timestamp())
                             await cur.execute(
                                 "UPDATE block SET coinbase_reward = %s WHERE id = %s",
                                 (coinbase_reward, block_db_id)
@@ -1025,6 +1026,19 @@ class Database:
                     if block is None:
                         return None
                     return await self._get_full_block(block, conn)
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+                
+    async def get_latest_coinbase_timestamp(self):
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute("SELECT last_coinbase_timestamp FROM block ORDER BY height DESC LIMIT 1")
+                    result = await cur.fetchone()
+                    if result is None:
+                        return None
+                    return result['last_coinbase_timestamp']
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
