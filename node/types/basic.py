@@ -203,9 +203,9 @@ class bool_(Int):
     @classmethod
     def loads(cls, data: str):
         if data.lower() == "true":
-            return True
+            return cls(True)
         if data.lower() == "false":
-            return False
+            return cls()
         raise ValueError("invalid value for bool")
 
     def __str__(self):
