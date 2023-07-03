@@ -1,5 +1,3 @@
-from io import BytesIO
-
 from .generic import *
 
 
@@ -204,6 +202,26 @@ class Field(Serialize, Deserialize):
         if not isinstance(other, Field):
             raise TypeError("other must be Field")
         return Field.load(BytesIO(bytes(aleo.field_ops(self.dump(), other.dump(), "add"))))
+
+    def __gt__(self, other):
+        if not isinstance(other, Field):
+            raise TypeError("other must be Field")
+        return bool_.load(BytesIO(bytes(aleo.field_ops(self.dump(), other.dump(), "gt"))))
+
+    def __lt__(self, other):
+        if not isinstance(other, Field):
+            raise TypeError("other must be Field")
+        return bool_.load(BytesIO(bytes(aleo.field_ops(self.dump(), other.dump(), "lt"))))
+
+    def __ge__(self, other):
+        if not isinstance(other, Field):
+            raise TypeError("other must be Field")
+        return bool_.load(BytesIO(bytes(aleo.field_ops(self.dump(), other.dump(), "gte"))))
+
+    def __le__(self, other):
+        if not isinstance(other, Field):
+            raise TypeError("other must be Field")
+        return bool_.load(BytesIO(bytes(aleo.field_ops(self.dump(), other.dump(), "lte"))))
 
 
 class Group(Serialize, Deserialize):

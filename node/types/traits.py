@@ -2,7 +2,6 @@ import struct
 from abc import abstractmethod
 from decimal import Decimal
 from enum import IntEnum
-from io import BytesIO
 
 from .utils import *
 
@@ -93,7 +92,19 @@ class Int(Sized, Serialize, Deserialize, int, metaclass=ABCMeta):
             raise TypeError("unsupported operand type(s) for //: '{}' and '{}'".format(type(self), type(other)))
         return self.__class__(int(self / other))
 
+    def __lshift__(self, other):
+        if type(other) is int:
+            return self.__class__(int.__lshift__(self, other))
+        if not issubclass(type(other), Int):
+            raise TypeError("unsupported operand type(s) for <<: '{}' and '{}'".format(type(self), type(other)))
+        return self.__class__(int.__lshift__(self, other))
 
+    def __rshift__(self, other):
+        if type(other) is int:
+            return self.__class__(int.__rshift__(self, other))
+        if not issubclass(type(other), Int):
+            raise TypeError("unsupported operand type(s) for >>: '{}' and '{}'".format(type(self), type(other)))
+        return self.__class__(int.__rshift__(self, other))
 
 
 class IntEnumu8(Serialize, Deserialize, IntEnum, metaclass=ABCEnumMeta):

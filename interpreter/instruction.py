@@ -424,13 +424,47 @@ def RemWrapped(operands: [Operand], destination: Register, registers: Registers,
     raise NotImplementedError
 
 def Shl(operands: [Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
+    allowed_value_types = [i8, i16, i32, i64, i128, u8, u16, u32, u64, u128]
+    allowed_magnitude_types = [u8, u16, u32]
+    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
+    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+    if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
+        raise TypeError("operands must be literals")
+    op1_type = Literal.primitive_type_map[op1.literal.type]
+    op2_type = Literal.primitive_type_map[op2.literal.type]
+    if op1_type not in allowed_value_types:
+        raise TypeError("invalid operand types")
+    if op2_type not in allowed_magnitude_types:
+        raise TypeError("invalid operand types")
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=op1.literal.type,
+            primitive=op1.literal.primitive << op2.literal.primitive,
+        )
+    )
+    store_plaintext_to_register(res, destination, registers)
 
 def ShlWrapped(operands: [Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
 def Shr(operands: [Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
+    allowed_value_types = [i8, i16, i32, i64, i128, u8, u16, u32, u64, u128]
+    allowed_magnitude_types = [u8, u16, u32]
+    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
+    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+    if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
+        raise TypeError("operands must be literals")
+    op1_type = Literal.primitive_type_map[op1.literal.type]
+    op2_type = Literal.primitive_type_map[op2.literal.type]
+    if op1_type not in allowed_value_types or op2_type not in allowed_magnitude_types:
+        raise TypeError("invalid operand types")
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=op1.literal.type,
+            primitive=op1.literal.primitive >> op2.literal.primitive,
+        )
+    )
+    store_plaintext_to_register(res, destination, registers)
 
 def ShrWrapped(operands: [Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
