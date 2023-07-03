@@ -72,6 +72,28 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
                     raise ExecuteError(f"failed to execute instruction: {e}", e, disasm_instruction(instruction))
                 registers.dump()
 
+            case Command.Type.Contains:
+                print(disasm_command(c))
+                c: ContainsCommand
+                mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(c.mapping)))
+                if mapping_id not in mapping_cache:
+                    mapping_cache[mapping_id] = await mapping_cache_read(db, mapping_id)
+                key = load_plaintext_from_operand(c.key, registers, finalize_state)
+                key_id = Field.loads(aleo.get_key_id(str(mapping_id), key.dump()))
+                index = mapping_find_index(mapping_cache[mapping_id], key_id)
+                contains = index != -1
+                value = PlaintextValue(
+                    plaintext=LiteralPlaintext(
+                        literal=Literal(
+                            type_=Literal.Type.Boolean,
+                            primitive=bool_(contains)
+                        )
+                    )
+                )
+                destination: Register = c.destination
+                store_plaintext_to_register(value.plaintext, destination, registers)
+                registers.dump()
+
             case Command.Type.Get | Command.Type.GetOrUse:
                 print(disasm_command(c))
                 if c.type == Command.Type.Get:
