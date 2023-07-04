@@ -16,10 +16,12 @@ COST_TIMEOUT = -1
 COST_UNKNOWN = -2
 
 class APIQuotaMiddleware:
-    def __init__(self, app: ASGIApp, *, max_call_time = 10.0, recover_rate = 0.1) -> None:
+    def __init__(self, app: ASGIApp, *, max_call_time = 5.0, recover_rate = 0.1, max_concurrency = 10) -> None:
         self.app = app
         self.max_call_time = max_call_time
         self.recover_rate = recover_rate
+        self.max_concurrency = max_concurrency
+        self.concurrency_penalty = max_call_time / max_concurrency
         self.ip_remaining_time = defaultdict(lambda: (max_call_time, -1.0, 0))
         self.ip_remaining_time_lock = asyncio.Lock()
 
@@ -35,7 +37,7 @@ class APIQuotaMiddleware:
             else:
                 quota = remaining
             # save current quota subtract 1 second right now to avoid flood attack
-            self.ip_remaining_time[ip] = (quota - 1, last_call, outstanding_call + 1)
+            self.ip_remaining_time[ip] = (quota - self.concurrency_penalty, last_call, outstanding_call + 1)
         return quota
 
     def get_quota_for_header(self, ip, cost):
@@ -47,14 +49,14 @@ class APIQuotaMiddleware:
             remaining, _, outstanding_call = self.ip_remaining_time[ip]
             if cost == COST_TIMEOUT:
                 # don't add the 1 sec back as the user has depleted the quota
-                cost = remaining + 1
+                cost = remaining + self.concurrency_penalty
             elif cost == COST_UNKNOWN:
                 # honestly, unknown exception, refunding time used
                 cost = 0
             elif cost < 0:
                 # just in case
                 cost = 0
-            self.ip_remaining_time[ip] = (remaining - cost + 1, time.monotonic(), outstanding_call - 1)
+            self.ip_remaining_time[ip] = (remaining - cost + self.concurrency_penalty, time.monotonic(), outstanding_call - 1)
         remaining, last_call, outstanding_call = self.ip_remaining_time[ip]
         print(f"ip {ip} used {cost}s, remaining {remaining}s, last call {last_call}, outstanding call {outstanding_call}")
 
