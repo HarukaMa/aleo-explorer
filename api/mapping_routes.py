@@ -7,7 +7,7 @@ from starlette.responses import JSONResponse
 from api.utils import async_check_sync
 from db import Database
 from node.types import Program, Plaintext, Value, PlaintextType, LiteralPlaintextType, LiteralPlaintext, \
-    Literal, StructPlaintextType
+    Literal, StructPlaintextType, StructPlaintext
 
 
 @async_check_sync
@@ -34,7 +34,13 @@ async def mapping_route(request: Request):
         key = LiteralPlaintext(literal=Literal(type_=Literal.reverse_primitive_type_map[primitive_type], primitive=key))
     elif map_key_type.type == PlaintextType.Type.Struct:
         map_key_type: StructPlaintextType
-        return JSONResponse({"error": "Struct keys not supported yet"}, status_code=500)
+        structs = program.structs
+        struct_type = structs[map_key_type.struct]
+        try:
+            value = StructPlaintext.loads(key, struct_type, structs)
+        except Exception as e:
+            return JSONResponse({"error": f"Invalid struct key: {e} (experimental feature, if you believe this is an error please submit a feedback)"}, status_code=400)
+        key = value
     else:
         return JSONResponse({"error": "Unknown key type"}, status_code=500)
     mapping_id = aleo.get_mapping_id(program_id, mapping)
