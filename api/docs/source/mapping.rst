@@ -18,8 +18,6 @@ Get Mapping Value
 
    .. tip::
       Equivalent snarkOS API: ``/testnet3/program/{programID}/mapping/{mappingName}/{mappingKey}``
-   .. important::
-      Currently ``struct`` keys are not supported. Please either use the snarkOS API or list all mapping values.
 
    **Example request**:
 
