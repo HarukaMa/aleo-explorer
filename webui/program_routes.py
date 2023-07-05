@@ -1,5 +1,6 @@
-import aleo
 from io import BytesIO
+
+import aleo
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
@@ -160,7 +161,7 @@ async def upload_source_route(request: Request):
     program_id = request.query_params.get("id")
     if program_id is None:
         raise HTTPException(status_code=400, detail="Missing program id")
-    program = await db.get_program_bytes(program_id)
+    program = await db.get_program(program_id)
     if program is None:
         raise HTTPException(status_code=404, detail="Program not found")
     if request.method == "POST":
@@ -197,7 +198,7 @@ async def submit_source_route(request: Request):
     program_id = form.get("id")
     if program_id is None:
         return RedirectResponse(url=f"/upload_source?id={program_id}&message=Missing program id")
-    program = await db.get_program_bytes(program_id)
+    program = await db.get_program(program_id)
     if program is None:
         return RedirectResponse(url=f"/upload_source?id={program_id}&message=Program not found")
     source = form.get("source")

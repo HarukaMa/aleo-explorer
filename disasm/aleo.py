@@ -188,78 +188,79 @@ def disassemble_program(program: Program) -> str:
     res.insert_line("")
     res.insert_line(f"program {program.id};")
     res.insert_line("")
-    for m in program.mappings.values():
-        m: Mapping
-        res.insert_line(f"mapping {m.name}:")
-        res.indent()
-        res.insert_line(f"key {m.key.name} as {plaintext_type_to_str(m.key.plaintext_type)};")
-        res.insert_line(f"value {m.value.name} as {plaintext_type_to_str(m.value.plaintext_type)};")
-        res.unindent()
-        res.insert_line("")
-    for i in program.structs.values():
-        i: Struct
-        res.insert_line(f"struct {i.name}:")
-        res.indent()
-        for m, t in i.members:
-            res.insert_line(f"{m} as {plaintext_type_to_str(t)};")
-        res.unindent()
-        res.insert_line("")
-    for r in program.records.values():
-        r: RecordType
-        res.insert_line(f"record {r.name}:")
-        res.indent()
-        res.insert_line(f"owner as address.{public_or_private_to_str(r.owner)};")
-        for identifier, entry in r.entries:
-            res.insert_line(f"{identifier} as {disasm_entry_type(entry)};")
-        res.unindent()
-        res.insert_line("")
-    for c in program.closures.values():
-        c: Closure
-        res.insert_line(f"closure {c.name}:")
-        res.indent()
-        for i in c.inputs:
-            i: ClosureInput
-            res.insert_line(f"input {disasm_register(i.register)} as {disasm_register_type(i.register_type)};")
-        for i in c.instructions:
-            i: Instruction
-            res.insert_line(f"{disasm_instruction(i)};")
-        for o in c.outputs:
-            o: ClosureOutput
-            res.insert_line(f"output {disasm_operand(o.operand)} as {disasm_register_type(o.register_type)};")
-        res.unindent()
-        res.insert_line("")
-    for f in program.functions.values():
-        f: Function
-        res.insert_line(f"function {f.name}:")
-        res.indent()
-        for i in f.inputs:
-            i: FunctionInput
-            res.insert_line(f"input {disasm_register(i.register)} as {disasm_value_type(i.value_type)};")
-        for i in f.instructions:
-            i: Instruction
-            res.insert_line(f"{disasm_instruction(i)};")
-        for o in f.outputs:
-            o: FunctionOutput
-            res.insert_line(f"output {disasm_operand(o.operand)} as {disasm_value_type(o.value_type)};")
-        if f.finalize.value is not None:
-            finalize: Finalize
-            finalize_command: FinalizeCommand
-            finalize_command, finalize = f.finalize.value
-            if len(finalize_command.operands) > 0:
-                res.insert_line(f"finalize {' '.join(map(disasm_operand, finalize_command.operands))};")
-            else:
-                res.insert_line("finalize;")
+    for identifier, definition in program.identifiers:
+        if definition == ProgramDefinition.Mapping:
+            m = program.mappings[identifier]
+            res.insert_line(f"mapping {m.name}:")
+            res.indent()
+            res.insert_line(f"key {m.key.name} as {plaintext_type_to_str(m.key.plaintext_type)};")
+            res.insert_line(f"value {m.value.name} as {plaintext_type_to_str(m.value.plaintext_type)};")
             res.unindent()
             res.insert_line("")
-            res.insert_line(f"finalize {finalize.name}:")
+        elif definition == ProgramDefinition.Struct:
+            s = program.structs[identifier]
+            res.insert_line(f"struct {s.name}:")
             res.indent()
-            for i in finalize.inputs:
-                i: FinalizeInput
-                res.insert_line(f"input {disasm_register(i.register)} as {plaintext_type_to_str(i.plaintext_type)};")
-            for c in finalize.commands:
-                c: Command
-                res.insert_line(f"{disasm_command(c)};")
-        res.unindent()
-        res.insert_line("")
+            for m, t in s.members:
+                res.insert_line(f"{m} as {plaintext_type_to_str(t)};")
+            res.unindent()
+            res.insert_line("")
+        elif definition == ProgramDefinition.Record:
+            r = program.records[identifier]
+            res.insert_line(f"record {r.name}:")
+            res.indent()
+            res.insert_line(f"owner as address.{public_or_private_to_str(r.owner)};")
+            for identifier, entry in r.entries:
+                res.insert_line(f"{identifier} as {disasm_entry_type(entry)};")
+            res.unindent()
+            res.insert_line("")
+        elif definition == ProgramDefinition.Closure:
+            c: Closure = program.closures[identifier]
+            res.insert_line(f"closure {c.name}:")
+            res.indent()
+            for i in c.inputs:
+                i: ClosureInput
+                res.insert_line(f"input {disasm_register(i.register)} as {disasm_register_type(i.register_type)};")
+            for i in c.instructions:
+                i: Instruction
+                res.insert_line(f"{disasm_instruction(i)};")
+            for o in c.outputs:
+                o: ClosureOutput
+                res.insert_line(f"output {disasm_operand(o.operand)} as {disasm_register_type(o.register_type)};")
+            res.unindent()
+            res.insert_line("")
+        elif definition == ProgramDefinition.Function:
+            f = program.functions[identifier]
+            res.insert_line(f"function {f.name}:")
+            res.indent()
+            for i in f.inputs:
+                i: FunctionInput
+                res.insert_line(f"input {disasm_register(i.register)} as {disasm_value_type(i.value_type)};")
+            for i in f.instructions:
+                i: Instruction
+                res.insert_line(f"{disasm_instruction(i)};")
+            for o in f.outputs:
+                o: FunctionOutput
+                res.insert_line(f"output {disasm_operand(o.operand)} as {disasm_value_type(o.value_type)};")
+            if f.finalize.value is not None:
+                finalize: Finalize
+                finalize_command: FinalizeCommand
+                finalize_command, finalize = f.finalize.value
+                if len(finalize_command.operands) > 0:
+                    res.insert_line(f"finalize {' '.join(map(disasm_operand, finalize_command.operands))};")
+                else:
+                    res.insert_line("finalize;")
+                res.unindent()
+                res.insert_line("")
+                res.insert_line(f"finalize {finalize.name}:")
+                res.indent()
+                for i in finalize.inputs:
+                    i: FinalizeInput
+                    res.insert_line(f"input {disasm_register(i.register)} as {plaintext_type_to_str(i.plaintext_type)};")
+                for c in finalize.commands:
+                    c: Command
+                    res.insert_line(f"{disasm_command(c)};")
+            res.unindent()
+            res.insert_line("")
 
     return str(res)

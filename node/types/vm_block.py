@@ -807,7 +807,8 @@ class Program(Serialize, Deserialize):
     @generic_type_check
     def __init__(self, *, id_: ProgramID, imports: Vec[Import, u8], mappings: dict[Identifier, Mapping],
                  structs: dict[Identifier, Struct], records: dict[Identifier, RecordType],
-                 closures: dict[Identifier, Closure], functions: dict[Identifier, Function]):
+                 closures: dict[Identifier, Closure], functions: dict[Identifier, Function],
+                 identifiers: [(Identifier, ProgramDefinition)]):
         self.id = id_
         self.imports = imports
         self.mappings = mappings
@@ -815,17 +816,7 @@ class Program(Serialize, Deserialize):
         self.records = records
         self.closures = closures
         self.functions = functions
-        self.identifiers: dict[Identifier, ProgramDefinition] = {}
-        for i in self.mappings:
-            self.identifiers[i] = ProgramDefinition.Mapping
-        for i in self.structs:
-            self.identifiers[i] = ProgramDefinition.Struct
-        for i in self.records:
-            self.identifiers[i] = ProgramDefinition.Record
-        for i in self.closures:
-            self.identifiers[i] = ProgramDefinition.Closure
-        for i in self.functions:
-            self.identifiers[i] = ProgramDefinition.Function
+        self.identifiers = identifiers
 
     def dump(self) -> bytes:
         res = b""
@@ -833,7 +824,7 @@ class Program(Serialize, Deserialize):
         res += self.id.dump()
         res += self.imports.dump()
         res += u16(len(self.identifiers)).dump()
-        for i, d in self.identifiers.items():
+        for i, d in self.identifiers:
             res += d.dump()
             if d == ProgramDefinition.Mapping:
                 res += self.mappings[i].dump()
@@ -855,6 +846,7 @@ class Program(Serialize, Deserialize):
             raise ValueError("Invalid version")
         id_ = ProgramID.load(data)
         imports = Vec[Import, u8].load(data)
+        identifiers = []
         mappings = {}
         structs = {}
         records = {}
@@ -866,20 +858,25 @@ class Program(Serialize, Deserialize):
             if d == ProgramDefinition.Mapping:
                 m = Mapping.load(data)
                 mappings[m.name] = m
+                identifiers.append((m.name, d))
             elif d == ProgramDefinition.Struct:
                 i = Struct.load(data)
                 structs[i.name] = i
+                identifiers.append((i.name, d))
             elif d == ProgramDefinition.Record:
                 r = RecordType.load(data)
                 records[r.name] = r
+                identifiers.append((r.name, d))
             elif d == ProgramDefinition.Closure:
                 c = Closure.load(data)
                 closures[c.name] = c
+                identifiers.append((c.name, d))
             elif d == ProgramDefinition.Function:
                 f = Function.load(data)
                 functions[f.name] = f
+                identifiers.append((f.name, d))
         return cls(id_=id_, imports=imports, mappings=mappings, structs=structs, records=records,
-                   closures=closures, functions=functions)
+                   closures=closures, functions=functions, identifiers=identifiers)
 
     def is_helloworld(self) -> bool:
         header_length = len(self.version.dump() + self.id.dump())

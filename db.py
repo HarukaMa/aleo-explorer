@@ -1733,18 +1733,6 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_program_bytes(self, program_id: str) -> bytes:
-        conn: psycopg.AsyncConnection
-        async with self.pool.connection() as conn:
-            async with conn.cursor() as cur:
-                try:
-                    await cur.execute("SELECT raw_data FROM program WHERE program_id = %s", (program_id,))
-                    return (await cur.fetchone())['raw_data']
-                except Exception as e:
-                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
-                    raise
-
-
     async def get_program(self, program_id: str) -> bytes | None:
         conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
