@@ -1,5 +1,5 @@
 from db import Database
-from interpreter.finalizer import execute_finalizer
+from interpreter.finalizer import execute_finalizer, ExecuteError
 from interpreter.utils import FinalizeState
 from node.types import *
 
@@ -10,7 +10,7 @@ async def init_builtin_program(db: Database, program: Program):
         await db.initialize_builtin_mapping(str(mapping_id), str(program.id), str(mapping))
 
 
-async def finalize_block(db: Database, cur, block: Block):
+async def finalize_block(db: Database, cur, block: Block) -> str | None:
     finalize_state = FinalizeState(block)
     mapping_cache = {}
     for confirmed_transaction in block.transactions.transactions:
@@ -31,22 +31,34 @@ async def finalize_block(db: Database, cur, block: Block):
                     "program_id": program.id,
                     "mapping": mapping,
                 })
-        elif confirmed_transaction.type == ConfirmedTransaction.Type.AcceptedExecute:
-            confirmed_transaction: AcceptedExecute
-            transaction: Transaction = confirmed_transaction.transaction
-            transaction: ExecuteTransaction
-            execution = transaction.execution
-            expected_operations = confirmed_transaction.finalize
+        elif confirmed_transaction.type in [ConfirmedTransaction.Type.AcceptedExecute, ConfirmedTransaction.Type.RejectedExecute]:
+            if confirmed_transaction.type == ConfirmedTransaction.Type.AcceptedExecute:
+                confirmed_transaction: AcceptedExecute
+                transaction: Transaction = confirmed_transaction.transaction
+                transaction: ExecuteTransaction
+                execution = transaction.execution
+                expected_operations = confirmed_transaction.finalize
+            else:
+                confirmed_transaction: RejectedExecute
+                if not isinstance(confirmed_transaction.rejected, RejectedExecution):
+                    raise TypeError("invalid rejected execute transaction")
+                execution = confirmed_transaction.rejected.execution
+                expected_operations = []
             operations = []
-            for transition in execution.transitions:
+            for index, transition in enumerate(execution.transitions):
                 transition: Transition
                 finalize: Vec[Value, u8] = transition.finalize.value
                 if finalize is not None:
                     program = Program.load(BytesIO(await db.get_program(str(transition.program_id))))
                     inputs = list(map(lambda x: x.plaintext, finalize))
-                    operations.extend(
-                        await execute_finalizer(db, finalize_state, transition.id, program, transition.function_name, inputs, mapping_cache)
-                    )
+                    try:
+                        operations.extend(
+                            await execute_finalizer(db, finalize_state, transition.id, program, transition.function_name, inputs, mapping_cache)
+                        )
+                    except ExecuteError as e:
+                        return f"execute error: {e}, at transition #{index}, instruction \"{e.instruction}\""
+            if confirmed_transaction.type == ConfirmedTransaction.Type.RejectedExecute:
+                raise RuntimeError("rejected execute transaction should not finalize without ExecuteError")
 
         else:
             expected_operations = []
