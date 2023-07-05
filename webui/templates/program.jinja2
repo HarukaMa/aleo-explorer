@@ -202,16 +202,19 @@
                     {% if not mappings %}
                         Program has no mappings.
                     {% else %}
+                        <div style="overflow: auto">
+                            <span style="float: right"><em><a href="{{ "api_doc_root" | get_env }}">API docs & quota</a></em></span>
+                        </div>
                         {% for mapping in mappings %}
-                        <form data-mapping="{{ mapping.name }}" action="#">
-                            <label>
-                                <span class="mono">{{ mapping.name }} ({{ mapping.key_type }} -> {{ mapping.value_type }})</span>
-                                <input class="mono" type="text" id="mapping-{{ mapping.name }}-input" placeholder="{{ mapping.key_type }}" />
-                            </label>
-                            <input type="submit" class="button mapping-read-submit" value="Read" />
-                        </form>
-                        <span class="mono" id="mapping-{{ mapping.name }}-value"></span>
-                        <br><br>
+                            <form data-mapping="{{ mapping.name }}" action="#">
+                                <label>
+                                    <span class="mono">{{ mapping.name }} ({{ mapping.key_type }} -> {{ mapping.value_type }})</span>
+                                    <input class="mono" type="text" id="mapping-{{ mapping.name }}-input" placeholder="{{ mapping.key_type }}" />
+                                </label>
+                                <input type="submit" class="button mapping-read-submit" value="Read" />
+                            </form>
+                            <span class="mono" id="mapping-{{ mapping.name }}-value"></span>
+                            <br><br>
                         {% endfor %}
                     {% endif %}
                 </div>
