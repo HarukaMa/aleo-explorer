@@ -30,7 +30,7 @@ def mapping_find_index(mapping: list, key_id: Field) -> int:
     return -1
 
 class ExecuteError(Exception):
-    def __init__(self, message: str, exception: Exception, instruction: str):
+    def __init__(self, message: str, exception: Exception | None, instruction: str):
         super().__init__(message)
         self.original_exception = exception
         self.instruction = instruction
@@ -68,8 +68,10 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
                 print(disasm_instruction(instruction))
                 try:
                     execute_instruction(instruction, program, registers, finalize_state)
-                except Exception as e:
-                    raise ExecuteError(f"failed to execute instruction: {e}", e, disasm_instruction(instruction))
+                except AssertionError as e:
+                    raise ExecuteError(str(e), e, disasm_instruction(instruction))
+                except Exception:
+                    raise
                 registers.dump()
 
             case Command.Type.Contains:
@@ -108,7 +110,7 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
                 index = mapping_find_index(mapping_cache[mapping_id], key_id)
                 if index == -1:
                     if c.type == Command.Type.Get:
-                        raise RuntimeError("key not found")
+                        raise ExecuteError(f"key {key} not found in mapping {c.mapping}", None, disasm_command(c))
                     default = load_plaintext_from_operand(c.default, registers, finalize_state)
                     value = PlaintextValue(plaintext=default)
                 else:

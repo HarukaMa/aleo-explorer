@@ -64,7 +64,7 @@ async def preview_finalize_route(request: Request):
     try:
         result = await preview_finalize_execution(db, program, function_name, values)
     except ExecuteError as e:
-        return JSONResponse({"error": f"Execution error on instruction \"{e.instruction}\": {e.original_exception}"}, status_code=400)
+        return JSONResponse({"error": f"Execution error on instruction \"{e.instruction}\": {e}"}, status_code=400)
     updates = []
     for operation in result:
         operation_type = operation["type"]

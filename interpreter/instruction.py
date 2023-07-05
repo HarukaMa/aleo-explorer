@@ -96,7 +96,7 @@ def AssertEq(operands: [Operand], registers: Registers, finalize_state: Finalize
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
     op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
     if op1 != op2:
-        raise RuntimeError("assertion failed")
+        raise AssertionError("assertion failed: {} != {}".format(op1, op2))
 
 def AssertNeq(operands: [Operand], registers: Registers, finalize_state: FinalizeState):
     if len(operands) != 2:
@@ -104,7 +104,7 @@ def AssertNeq(operands: [Operand], registers: Registers, finalize_state: Finaliz
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
     op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
     if op1 == op2:
-        raise RuntimeError("assertion failed")
+        raise AssertionError("assertion failed: {} == {}".format(op1, op2))
 
 def CallOp(operands: [Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
