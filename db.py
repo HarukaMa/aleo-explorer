@@ -1874,7 +1874,7 @@ class Database:
     # migration methods
     async def migrate(self):
         migrations = [
-
+            (1, self.migrate_1_add_reject_reason_to_confirmed_transaction)
         ]
         conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
@@ -1885,11 +1885,18 @@ class Database:
                         if (await cur.fetchone())['count'] == 0:
                             print(f"DB migrating {migrated_id}")
                             async with conn.transaction():
-                                await method()
+                                await method(conn)
                                 await cur.execute("INSERT INTO _migration (migrated_id) VALUES (%s)", (migrated_id,))
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
+
+    # noinspection PyMethodMayBeStatic
+    async def migrate_1_add_reject_reason_to_confirmed_transaction(self, conn: psycopg.AsyncConnection):
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "ALTER TABLE confirmed_transaction ADD COLUMN reject_reason TEXT"
+            )
 
     # debug method
     async def clear_database(self):
