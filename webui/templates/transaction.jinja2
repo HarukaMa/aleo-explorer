@@ -132,6 +132,7 @@
                 <table id="transitions-table" class="unstriped">
                     <thead>
                     <tr>
+                        <td>Index</td>
                         <td>Transition ID</td>
                         <td>Program / Function call</td>
                     </tr>
@@ -139,6 +140,7 @@
                     <tbody>
                     {% for transition in rejected_transitions %}
                         <tr>
+                            <td>{{ loop.index0 }}</td>
                             <td>
                                 <span class="mono"><a href="/transition?id={{ transition.transition_id }}">{{ transition.transition_id }}</a></span>
                             </td>
