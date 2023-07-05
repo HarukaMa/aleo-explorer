@@ -1486,7 +1486,7 @@ class StructPlaintext(Plaintext):
             i = m.group(0)
             if s[len(i)] != ":":
                 raise ValueError("invalid identifier")
-            return Identifier.loads(i), s[len(i) + 1:]
+            return Identifier.loads(i), s[len(i):]
         def get_literal_value(s):
             is_comma = True
             comma = s.find(",")
