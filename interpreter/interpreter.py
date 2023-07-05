@@ -10,59 +10,77 @@ async def init_builtin_program(db: Database, program: Program):
         await db.initialize_builtin_mapping(str(mapping_id), str(program.id), str(mapping))
 
 
-async def finalize_block(db: Database, cur, block: Block) -> str | None:
+async def finalize_deploy(confirmed_transaction: ConfirmedTransaction) -> (list, list, str | None):
+    CTType = ConfirmedTransaction.Type
+    if confirmed_transaction.type == CTType.AcceptedDeploy:
+        confirmed_transaction: AcceptedDeploy
+        transaction: Transaction = confirmed_transaction.transaction
+        transaction: DeployTransaction
+        deployment = transaction.deployment
+        program = deployment.program
+        expected_operations = confirmed_transaction.finalize
+        operations = []
+        for mapping in program.mappings.keys():
+            mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(mapping)))
+            operations.append({
+                "type": FinalizeOperation.Type.InitializeMapping,
+                "mapping_id": mapping_id,
+                "program_id": program.id,
+                "mapping": mapping,
+            })
+    else:
+        raise NotImplementedError
+    return expected_operations, operations, None
+
+
+async def finalize_execute(db: Database, finalize_state: FinalizeState, confirmed_transaction: ConfirmedTransaction,
+                           mapping_cache: dict) -> (list, list, str | None):
+    CTType = ConfirmedTransaction.Type
+    if confirmed_transaction.type == CTType.AcceptedExecute:
+        confirmed_transaction: AcceptedExecute
+        transaction: Transaction = confirmed_transaction.transaction
+        transaction: ExecuteTransaction
+        execution = transaction.execution
+        expected_operations = confirmed_transaction.finalize
+    else:
+        confirmed_transaction: RejectedExecute
+        if not isinstance(confirmed_transaction.rejected, RejectedExecution):
+            raise TypeError("invalid rejected execute transaction")
+        execution = confirmed_transaction.rejected.execution
+        expected_operations = []
+    operations = []
+    reject_reason: str | None = None
+    for index, transition in enumerate(execution.transitions):
+        transition: Transition
+        finalize: Vec[Value, u8] = transition.finalize.value
+        if finalize is not None:
+            program = Program.load(BytesIO(await db.get_program(str(transition.program_id))))
+            inputs = list(map(lambda x: x.plaintext, finalize))
+            try:
+                operations.extend(
+                    await execute_finalizer(db, finalize_state, transition.id, program, transition.function_name, inputs, mapping_cache)
+                )
+            except ExecuteError as e:
+                reject_reason = f"execute error: {e}, at transition #{index}, instruction \"{e.instruction}\""
+                operations = []
+                break
+    if confirmed_transaction.type == CTType.RejectedExecute and reject_reason is None:
+        raise RuntimeError("rejected execute transaction should not finalize without ExecuteError")
+    return expected_operations, operations, reject_reason
+
+async def finalize_block(db: Database, cur, block: Block) -> [str | None]:
     finalize_state = FinalizeState(block)
     mapping_cache = {}
+    reject_reasons = []
     for confirmed_transaction in block.transactions.transactions:
         confirmed_transaction: ConfirmedTransaction
-        if confirmed_transaction.type == ConfirmedTransaction.Type.AcceptedDeploy:
-            confirmed_transaction: AcceptedDeploy
-            transaction: Transaction = confirmed_transaction.transaction
-            transaction: DeployTransaction
-            deployment = transaction.deployment
-            program = deployment.program
-            expected_operations = confirmed_transaction.finalize
-            operations = []
-            for mapping in program.mappings.keys():
-                mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(mapping)))
-                operations.append({
-                    "type": FinalizeOperation.Type.InitializeMapping,
-                    "mapping_id": mapping_id,
-                    "program_id": program.id,
-                    "mapping": mapping,
-                })
-        elif confirmed_transaction.type in [ConfirmedTransaction.Type.AcceptedExecute, ConfirmedTransaction.Type.RejectedExecute]:
-            if confirmed_transaction.type == ConfirmedTransaction.Type.AcceptedExecute:
-                confirmed_transaction: AcceptedExecute
-                transaction: Transaction = confirmed_transaction.transaction
-                transaction: ExecuteTransaction
-                execution = transaction.execution
-                expected_operations = confirmed_transaction.finalize
-            else:
-                confirmed_transaction: RejectedExecute
-                if not isinstance(confirmed_transaction.rejected, RejectedExecution):
-                    raise TypeError("invalid rejected execute transaction")
-                execution = confirmed_transaction.rejected.execution
-                expected_operations = []
-            operations = []
-            for index, transition in enumerate(execution.transitions):
-                transition: Transition
-                finalize: Vec[Value, u8] = transition.finalize.value
-                if finalize is not None:
-                    program = Program.load(BytesIO(await db.get_program(str(transition.program_id))))
-                    inputs = list(map(lambda x: x.plaintext, finalize))
-                    try:
-                        operations.extend(
-                            await execute_finalizer(db, finalize_state, transition.id, program, transition.function_name, inputs, mapping_cache)
-                        )
-                    except ExecuteError as e:
-                        return f"execute error: {e}, at transition #{index}, instruction \"{e.instruction}\""
-            if confirmed_transaction.type == ConfirmedTransaction.Type.RejectedExecute:
-                raise RuntimeError("rejected execute transaction should not finalize without ExecuteError")
-
+        CTType = ConfirmedTransaction.Type
+        if confirmed_transaction.type in [CTType.AcceptedDeploy, CTType.RejectedDeploy]:
+            expected_operations, operations, reject_reason = await finalize_deploy(confirmed_transaction)
+        elif confirmed_transaction.type in [CTType.AcceptedExecute, CTType.RejectedExecute]:
+            expected_operations, operations, reject_reason = await finalize_execute(db, finalize_state, confirmed_transaction, mapping_cache)
         else:
-            expected_operations = []
-            operations = []
+            raise NotImplementedError
 
         for e, o in zip(expected_operations, operations):
             if e.type != o["type"]:
@@ -79,6 +97,8 @@ async def finalize_block(db: Database, cur, block: Block) -> str | None:
                     raise NotImplementedError
 
         await execute_operations(db, cur, operations)
+        reject_reasons.append(reject_reason)
+    return reject_reasons
 
 
 async def execute_operations(db: Database, cur, operations: [dict]):

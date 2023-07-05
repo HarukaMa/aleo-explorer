@@ -236,7 +236,7 @@ class Database:
                 async with conn.cursor() as cur:
                     try:
                         from interpreter.interpreter import finalize_block
-                        await finalize_block(self, cur, block)
+                        reject_reasons = await finalize_block(self, cur, block)
                         await cur.execute(
                             "INSERT INTO block (height, block_hash, previous_hash, previous_state_root, transactions_root, "
                             "coinbase_accumulator_point, round, coinbase_target, proof_target, last_coinbase_target, "
@@ -257,7 +257,7 @@ class Database:
                         block_db_id = (await cur.fetchone())["id"]
 
                         confirmed_transaction: ConfirmedTransaction
-                        for confirmed_transaction in block.transactions:
+                        for ct_index, confirmed_transaction in enumerate(block.transactions):
                             # noinspection PyUnresolvedReferences
                             await cur.execute(
                                 "INSERT INTO confirmed_transaction (block_id, index, type) VALUES (%s, %s, %s) RETURNING id",
@@ -266,6 +266,8 @@ class Database:
                             confirmed_transaction_db_id = (await cur.fetchone())["id"]
                             match confirmed_transaction.type:
                                 case ConfirmedTransaction.Type.AcceptedDeploy:
+                                    if reject_reasons[ct_index] is not None:
+                                        raise RuntimeError("expected no rejected reason for accepted deploy transaction")
                                     confirmed_transaction: AcceptedDeploy
                                     transaction: Transaction = confirmed_transaction.transaction
                                     if transaction.type != Transaction.Type.Deploy:
@@ -295,6 +297,8 @@ class Database:
                                     await self._insert_transition(conn, None, fee_db_id, transaction.fee.transition, 0)
 
                                 case ConfirmedTransaction.Type.AcceptedExecute:
+                                    if reject_reasons[ct_index] is not None:
+                                        raise RuntimeError("expected no rejected reason for accepted execute transaction")
                                     confirmed_transaction: AcceptedExecute
                                     transaction: Transaction = confirmed_transaction.transaction
                                     if transaction.type != Transaction.Type.Execute:
@@ -332,6 +336,10 @@ class Database:
                                     raise ValueError("transaction type not implemented")
 
                                 case ConfirmedTransaction.Type.RejectedExecute:
+                                    if reject_reasons[ct_index] is None:
+                                        raise RuntimeError("expected a rejected reason for rejected execute transaction")
+                                    cur.execute("UPDATE confirmed_transaction SET reject_reason = %s WHERE id = %s",
+                                                (reject_reasons[ct_index], confirmed_transaction_db_id))
                                     confirmed_transaction: RejectedExecute
                                     transaction: Transaction = confirmed_transaction.transaction
                                     if transaction.type != Transaction.Type.Fee:
