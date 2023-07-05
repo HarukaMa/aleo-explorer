@@ -87,5 +87,5 @@
 {% endmacro %}
 
 {% macro state_label_with_reason(state, reason) %}
-    {% call state_label(state) %}{% if state == "Rejected" %} {{ reason }}{% endif %}
+    {{ state_label(state) }}{% if state == "Rejected" %} {{ reason }}{% endif %}
 {% endmacro %}
