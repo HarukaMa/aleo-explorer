@@ -203,7 +203,7 @@
                         Program has no mappings.
                     {% else %}
                         <div style="overflow: auto">
-                            <span style="float: right"><em><a href="{{ "api_doc_root" | get_env }}">API docs & quota</a></em></span>
+                            <span style="float: right"><em><a href="{{ "API_DOC_ROOT" | get_env }}">API docs & quota</a></em></span>
                         </div>
                         {% for mapping in mappings %}
                             <form data-mapping="{{ mapping.name }}" action="#">
