@@ -1152,6 +1152,22 @@ class Database:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
+    async def get_transaction_reject_reason(self, transaction_id: TransactionID | str) -> str | None:
+        conn: psycopg.AsyncConnection
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT reject_reason FROM confirmed_transaction ct "
+                        "JOIN transaction t on ct.id = t.confimed_transaction_id "
+                        "WHERE t.transaction_id = %s",
+                        (str(transaction_id),)
+                    )
+                    return (await cur.fetchone())["reject_reason"]
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
     async def get_block_from_transaction_id(self, transaction_id: TransactionID | str) -> Block | None:
         conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:

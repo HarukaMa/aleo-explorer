@@ -85,3 +85,7 @@
 {% macro state_label(state) %}
     <span class="label {% if state == 'Accepted' %}success{% else %}alert{% endif %}">{{ state }}</span>
 {% endmacro %}
+
+{% macro state_label_with_reason(state, reason) %}
+    {% call state_label(state) %}{% if state == "Rejected" %} {{ reason }}{% endif %}
+{% endmacro %}

@@ -26,7 +26,7 @@
 
 {% endblock %}
 
-{% from "macros.jinja2" import data_line, sub_data_line, state_label %}
+{% from "macros.jinja2" import data_line, sub_data_line, state_label_with_reason %}
 
 {% block content %}
 
@@ -49,7 +49,7 @@
                 {{ type }}
             {% endcall %}
             {% call data_line("State") %}
-                {{ state_label(state) }}
+                {{ state_label_with_reason(state, reject_reason) }}
             {% endcall %}
             {% if type == "Execute" %}
                 {% call data_line("Global state root") %}

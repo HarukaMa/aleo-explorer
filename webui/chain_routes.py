@@ -1,4 +1,5 @@
 from io import BytesIO
+
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
@@ -188,6 +189,7 @@ async def transaction_route(request: Request):
         "transaction": transaction,
         "type": transaction_type,
         "state": transaction_state,
+        "reject_reason": await db.get_transaction_reject_reason(tx_id) if transaction_state == "Rejected" else None,
     }
 
     if transaction.type == Transaction.Type.Deploy:
