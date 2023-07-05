@@ -182,6 +182,7 @@ class bool_(Int):
     def __init__(self, value=False):
         if not isinstance(value, bool):
             raise TypeError("value must be bool")
+        self.value = value
 
     def dump(self) -> bytes:
         return struct.pack("<B", self)
@@ -220,6 +221,17 @@ class bool_(Int):
 
     def __invert__(self):
         return bool_(not self)
+
+    def __and__(self, other):
+        if isinstance(other, bool):
+            return bool_(self.value and other)
+        return bool_(self.value and other.value)
+
+    def __or__(self, other):
+        if isinstance(other, bool):
+            return bool_(self.value or other)
+        return bool_(self.value or other.value)
+
 
 
 class SocketAddr(Deserialize):

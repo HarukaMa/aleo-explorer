@@ -106,6 +106,20 @@ class Int(Sized, Serialize, Deserialize, int, metaclass=ABCMeta):
             raise TypeError("unsupported operand type(s) for >>: '{}' and '{}'".format(type(self), type(other)))
         return self.__class__(int.__rshift__(self, other))
 
+    def __and__(self, other):
+        if type(other) is int:
+            return self.__class__(int.__and__(self, other))
+        if not issubclass(type(other), Int):
+            raise TypeError("unsupported operand type(s) for &: '{}' and '{}'".format(type(self), type(other)))
+        return self.__class__(int.__and__(self, other))
+
+    def __or__(self, other):
+        if type(other) is int:
+            return self.__class__(int.__or__(self, other))
+        if not issubclass(type(other), Int):
+            raise TypeError("unsupported operand type(s) for |: '{}' and '{}'".format(type(self), type(other)))
+        return self.__class__(int.__or__(self, other))
+
 
 class IntEnumu8(Serialize, Deserialize, IntEnum, metaclass=ABCEnumMeta):
 

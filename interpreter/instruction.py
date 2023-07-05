@@ -73,7 +73,22 @@ def AddWrapped(operands: [Operand], destination: Register, registers: Registers,
     raise NotImplementedError
 
 def And(operands: [Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
+    allowed_types = [bool_, i8, i16, i32, i64, i128, u8, u16, u32, u64, u128]
+    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
+    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+    if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
+        raise TypeError("operands must be literals")
+    op1_type = Literal.primitive_type_map[op1.literal.type]
+    op2_type = Literal.primitive_type_map[op2.literal.type]
+    if not (op1_type in allowed_types and op2_type == op1_type):
+        raise TypeError("invalid operand types")
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=Literal.reverse_primitive_type_map[op1_type],
+            primitive=op1.literal.primitive & op2.literal.primitive
+        )
+    )
+    store_plaintext_to_register(res, destination, registers)
 
 def AssertEq(operands: [Operand], registers: Registers, finalize_state: FinalizeState):
     if len(operands) != 2:
@@ -409,7 +424,16 @@ def Not(operands: [Operand], destination: Register, registers: Registers, finali
     store_plaintext_to_register(res, destination, registers)
 
 def Or(operands: [Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
+    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
+    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+    op1_type = Literal.primitive_type_map[op1.literal.type]
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=Literal.reverse_primitive_type_map[op1_type],
+            primitive=op1.literal.primitive | op2.literal.primitive
+        )
+    )
+    store_plaintext_to_register(res, destination, registers)
 
 def Pow(operands: [Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
