@@ -38,7 +38,7 @@ class Int(Sized, Serialize, Deserialize, int, metaclass=ABCMeta):
         if isinstance(value, Decimal):
             value = int(value)
         if not self.min <= value <= self.max:
-            raise ValueError("value must be between {} and {}".format(self.min, self.max))
+            raise OverflowError(f"value {value} out of range for {self.__class__.__name__}")
 
     @classmethod
     def loads(cls, value: str):

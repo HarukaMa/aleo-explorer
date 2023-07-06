@@ -338,7 +338,7 @@ class Database:
                                 case ConfirmedTransaction.Type.RejectedExecute:
                                     if reject_reasons[ct_index] is None:
                                         raise RuntimeError("expected a rejected reason for rejected execute transaction")
-                                    cur.execute("UPDATE confirmed_transaction SET reject_reason = %s WHERE id = %s",
+                                    await cur.execute("UPDATE confirmed_transaction SET reject_reason = %s WHERE id = %s",
                                                 (reject_reasons[ct_index], confirmed_transaction_db_id))
                                     confirmed_transaction: RejectedExecute
                                     transaction: Transaction = confirmed_transaction.transaction
@@ -1910,6 +1910,7 @@ class Database:
                         if (await cur.fetchone())['count'] == 0:
                             print(f"DB migrating {migrated_id}")
                             async with conn.transaction():
+                                # noinspection PyArgumentList
                                 await method(conn)
                                 await cur.execute("INSERT INTO _migration (migrated_id) VALUES (%s)", (migrated_id,))
                 except Exception as e:

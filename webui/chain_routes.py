@@ -10,7 +10,7 @@ from node.types import u32, Transaction, Transition, ExecuteTransaction, Transit
     PublicTransitionInput, \
     PublicTransitionOutput, PrivateTransitionOutput, Value, PlaintextValue, ExternalRecordTransitionInput, \
     ExternalRecordTransitionOutput, ConfirmedTransaction, AcceptedDeploy, AcceptedExecute, RejectedExecute, \
-    FeeTransaction
+    FeeTransaction, RejectedDeploy, Rejected, RejectedExecution
 from .template import templates
 from .utils import function_signature, out_of_sync_check, function_definition
 
@@ -125,6 +125,17 @@ async def block_route(request: Request):
     return templates.TemplateResponse('block.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'})
 
 
+async def get_transition_finalize_cost(db: Database, ts: Transition):
+    if ts.program_id == "credits.aleo" and ts.function_name in ["mint", "fee", "split"]:
+        return 0
+    else:
+        p = Program.load(BytesIO(await db.get_program(str(ts.program_id))))
+        f = p.functions[ts.function_name]
+        if f.finalize.value is not None:
+            return f.finalize.value[1].cost
+        else:
+            return 0
+
 async def transaction_route(request: Request):
     db: Database = request.app.state.db
     tx_id = request.query_params.get("id")
@@ -135,6 +146,7 @@ async def transaction_route(request: Request):
         raise HTTPException(status_code=404, detail="Transaction not found")
 
     transaction: DeployTransaction | ExecuteTransaction | FeeTransaction | None = None
+    confirmed_transaction: AcceptedDeploy | AcceptedExecute | RejectedDeploy | RejectedExecute | None = None
     transaction_type = ""
     transaction_state = ""
     index = -1
@@ -226,15 +238,7 @@ async def transaction_route(request: Request):
                 "transition_id": transition.id,
                 "action": await function_signature(db, str(transition.program_id), str(transition.function_name)),
             })
-            if transition.program_id == "credits.aleo" and transition.function_name in ["mint", "fee", "split"]:
-                finalize_costs.append(0)
-            else:
-                program = Program.load(BytesIO(await db.get_program(str(transition.program_id))))
-                function = program.functions[transition.function_name]
-                if function.finalize.value is not None:
-                    finalize_costs.append(function.finalize.value[1].cost)
-                else:
-                    finalize_costs.append(0)
+            finalize_costs.append(await get_transition_finalize_cost(db, transition))
         if transaction.additional_fee.value is not None:
             transition = transaction.additional_fee.value.transition
             total_fee = int(transition.inputs[1].plaintext.value.literal.primitive)
@@ -268,12 +272,16 @@ async def transaction_route(request: Request):
             "transition_id": transition.id,
             "action": await function_signature(db, str(transition.program_id), str(transition.function_name)),
         })
-        # noinspection PyUnboundLocalVariable
         if confirmed_transaction.type == ConfirmedTransaction.Type.RejectedExecute:
             confirmed_transaction: RejectedExecute
-            # noinspection PyUnboundLocalVariable
-            for transition in confirmed_transaction.rejected.transitions:
+            rejected: Rejected = confirmed_transaction.rejected
+            if not isinstance(rejected, RejectedExecution):
+                raise HTTPException(status_code=550, detail="invalid rejected transaction")
+            storage_cost, _ = rejected.execution.cost
+            finalize_costs = []
+            for transition in rejected.execution.transitions:
                 transition: Transition
+                finalize_costs.append(await get_transition_finalize_cost(db, transition))
                 rejected_transitions.append({
                     "transition_id": transition.id,
                     "action": await function_signature(db, str(transition.program_id), str(transition.function_name)),
@@ -285,6 +293,9 @@ async def transaction_route(request: Request):
             "proof": proof,
             "proof_trunc": str(proof)[:30] + "..." + str(proof)[-30:] if proof else None,
             "total_fee": total_fee,
+            "storage_cost": storage_cost,
+            "finalize_costs": finalize_costs,
+            "priority_fee": total_fee - storage_cost - sum(finalize_costs),
             "transitions": transitions,
             "rejected_transitions": rejected_transitions,
         })
@@ -342,7 +353,8 @@ async def transition_route(request: Request):
                 transaction_id = tx.id
                 state = "Accepted"
             else:
-                for ts in ct.rejected.transitions:
+                # noinspection PyUnresolvedReferences
+                for ts in ct.rejected.execution.transitions:
                     ts: Transition
                     if str(ts.id) == ts_id:
                         transition = ts
