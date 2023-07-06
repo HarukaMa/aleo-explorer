@@ -1,6 +1,7 @@
-import aleo
 import os
 from io import BytesIO
+
+import aleo
 
 from ..types import u16, Block, u32, Program
 
@@ -11,7 +12,7 @@ def load_program(program_id: str) -> Program:
 class Testnet3:
     edition = u16()
     network_id = u16(3)
-    version = u32(7)
+    version = u32(8)
 
     genesis_block = Block.load(BytesIO(open(os.path.join(os.path.dirname(__file__), "block.genesis"), "rb").read()))
     builtin_programs = [
