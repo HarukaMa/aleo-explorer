@@ -425,25 +425,26 @@ class Database:
                         ratification_map = defaultdict(lambda: defaultdict(list))
 
                         copy_data = []
-                        for index, ratify in enumerate(block.ratifications):
-                            ratify: Ratify
-                            # noinspection PyUnresolvedReferences
-                            copy_data.append((block_db_id, ratify.type.name, str(ratify.address), ratify.amount, index))
-                        if copy_data:
-                            await cur.executemany(
-                                "INSERT INTO ratification (block_id, type, address, amount, index) "
-                                "VALUES (%s, %s, %s, %s, %s) RETURNING id",
-                                copy_data,
-                                returning=True,
-                            )
-                            ratify_db_id = []
-                            while True:
-                                ratify_db_id.append((await cur.fetchone())["id"])
-                                if not cur.nextset():
-                                    break
-                            for index, data in enumerate(copy_data):
-                                #                addr     amount
-                                ratification_map[data[2]][data[3]].append(ratify_db_id[index])
+                        if not os.environ.get("DEBUG_SKIP_COINBASE"):
+                            for index, ratify in enumerate(block.ratifications):
+                                ratify: Ratify
+                                # noinspection PyUnresolvedReferences
+                                copy_data.append((block_db_id, ratify.type.name, str(ratify.address), ratify.amount, index))
+                            if copy_data:
+                                await cur.executemany(
+                                    "INSERT INTO ratification (block_id, type, address, amount, index) "
+                                    "VALUES (%s, %s, %s, %s, %s) RETURNING id",
+                                    copy_data,
+                                    returning=True,
+                                )
+                                ratify_db_id = []
+                                while True:
+                                    ratify_db_id.append((await cur.fetchone())["id"])
+                                    if not cur.nextset():
+                                        break
+                                for index, data in enumerate(copy_data):
+                                    #                addr     amount
+                                    ratification_map[data[2]][data[3]].append(ratify_db_id[index])
 
                         if block.coinbase.value is not None and not os.environ.get("DEBUG_SKIP_COINBASE"):
                             coinbase_reward = block.get_coinbase_reward(await self.get_latest_coinbase_timestamp())
