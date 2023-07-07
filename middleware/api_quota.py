@@ -42,7 +42,7 @@ class APIQuotaMiddleware:
 
     def get_quota_for_header(self, ip, cost):
         remaining, _, outstanding_call = self.ip_remaining_time[ip]
-        return remaining - cost + outstanding_call
+        return remaining - cost + outstanding_call * self.concurrency_penalty
 
     async def end_call(self, ip, cost):
         async with self.ip_remaining_time_lock:
@@ -85,10 +85,10 @@ class APIQuotaMiddleware:
         except Exception as e:
             # internal bug, refunding time used
             timing.end_ns = timing.start_ns
-            response = JSONResponse({"error": f"Server error: {e}. Please report with the feedback feature."}, status_code=500)
+            msg = str(e) if str(e) else type(e).__name__
+            response = JSONResponse({"error": f"Server error: {msg}. Please report with the feedback feature."}, status_code=500)
             await response(scope, receive, send)
             cost = 0
-            print(f"Unknown exception {e} in APIQuotaMiddleware")
             import traceback
             traceback.print_exc()
         finally:
