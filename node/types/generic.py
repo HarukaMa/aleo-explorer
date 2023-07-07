@@ -1,5 +1,4 @@
 from collections.abc import Sequence
-from copy import deepcopy
 from types import UnionType
 
 from .basic import *
@@ -147,7 +146,7 @@ class Vec(Generic, Serialize, Deserialize, Sequence):
                 self._list.append(self.type.load(data))
             elif isinstance(self.type, Generic):
                 # Python version 3.10 does not support starred expressions in subscriptions
-                self._list.append(deepcopy(self.type).load(data))
+                self._list.append(self.type.__class__[*self.type.types].load(data))
             else:
                 # What else can be here?
                 raise TypeError(f"cannot handle type {self.type} in Generic.load")

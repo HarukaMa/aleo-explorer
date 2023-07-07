@@ -388,6 +388,7 @@ class BlockHeightOperand(Operand):
 class Literals(Generic, Serialize, Deserialize):
     # The generic here is for the number of the literals
     def __init__(self, types):
+        super().__init__(types)
         if len(types) != 1:
             raise ValueError("Literals must have exactly one type")
         if not isinstance(types[0], int):
@@ -421,6 +422,7 @@ class Literals(Generic, Serialize, Deserialize):
 class AssertInstruction(Generic, Serialize, Deserialize):
     # The generic here is for the variant of the assert instruction
     def __init__(self, types):
+        super().__init__(types)
         if len(types) != 1:
             raise ValueError("AssertInstruction must have exactly one type")
         if not isinstance(types[0], int):
@@ -834,6 +836,7 @@ class CommitInstruction(Generic, Serialize, Deserialize):
 
     # The generic here is for the commit type
     def __init__(self, types):
+        super().__init__(types)
         if len(types) != 1:
             raise ValueError("CommitInstruction must have exactly one type")
         self.type = types[0]
@@ -871,6 +874,7 @@ class HashInstruction(Generic, Serialize, Deserialize):
 
     # The generic here is for the hash type
     def __init__(self, types):
+        super().__init__(types)
         if len(types) != 1:
             raise ValueError("HashInstruction must have exactly one type")
         self.type = types[0]
@@ -1176,7 +1180,11 @@ class Instruction(Serialize, Deserialize): # enum
     # @type_check
     def load(cls, data: BytesIO):
         type_ = cls.Type.load(data)
-        literals = deepcopy(cls.type_map[type_]).load(data)
+        instruction_type = cls.type_map[type_]
+        if isinstance(instruction_type, Generic):
+            literals = instruction_type.__class__[instruction_type.types].load(data)
+        else:
+            literals = instruction_type.load(data)
         return cls(type_=type_, literals=literals)
 
     @property
