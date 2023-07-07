@@ -54,6 +54,25 @@ class Int(Sized, Serialize, Deserialize, int, metaclass=ABCMeta):
             raise TypeError("unsupported operand type(s) for +: '{}' and '{}'".format(type(self), type(other)))
         return self.__class__(int.__add__(self, other))
 
+    @classmethod
+    def wrap_value(cls, value):
+        if value < 0:
+            value &= cls.max
+        elif value > cls.max:
+            if cls.min == 0:
+                value = value & cls.max
+            else:
+                value = value & ((cls.max << 1) + 1)
+                value = (value & cls.max) + cls.min
+        return value
+
+    def add_wrapped(self, other):
+        if isinstance(other, Int):
+            other = int(other)
+        value = int(self) + other
+        return self.__class__(self.wrap_value(value))
+
+
     def __sub__(self, other):
         if type(other) is int:
             return self.__class__(int.__sub__(self, other))
@@ -61,12 +80,24 @@ class Int(Sized, Serialize, Deserialize, int, metaclass=ABCMeta):
             raise TypeError("unsupported operand type(s) for -: '{}' and '{}'".format(type(self), type(other)))
         return self.__class__(int.__sub__(self, other))
 
+    def sub_wrapped(self, other):
+        if isinstance(other, Int):
+            other = int(other)
+        value = int(self) - other
+        return self.__class__(self.wrap_value(value))
+
     def __mul__(self, other):
         if type(other) is int:
             return self.__class__(int.__mul__(self, other))
         if type(other) is not type(self):
             raise TypeError("unsupported operand type(s) for *: '{}' and '{}'".format(type(self), type(other)))
         return self.__class__(int.__mul__(self, other))
+
+    def mul_wrapped(self, other):
+        if isinstance(other, Int):
+            other = int(other)
+        value = int(self) * other
+        return self.__class__(self.wrap_value(value))
 
     def __eq__(self, other):
         if type(other) is int:
@@ -91,6 +122,12 @@ class Int(Sized, Serialize, Deserialize, int, metaclass=ABCMeta):
         if type(other) is not type(self):
             raise TypeError("unsupported operand type(s) for //: '{}' and '{}'".format(type(self), type(other)))
         return self.__class__(int(self / other))
+
+    def div_wrapped(self, other):
+        if isinstance(other, Int):
+            other = int(other)
+        value = int(int(self) / other)
+        return self.__class__(self.wrap_value(value))
 
     def __lshift__(self, other):
         if type(other) is int:

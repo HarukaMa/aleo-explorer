@@ -71,8 +71,8 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
                 except (AssertionError, OverflowError) as e:
                     raise ExecuteError(str(e), e, disasm_instruction(instruction))
                 except Exception:
+                    registers.dump()
                     raise
-                registers.dump()
 
             case Command.Type.Contains:
                 print(disasm_command(c))
@@ -94,7 +94,6 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
                 )
                 destination: Register = c.destination
                 store_plaintext_to_register(value.plaintext, destination, registers)
-                registers.dump()
 
             case Command.Type.Get | Command.Type.GetOrUse:
                 print(disasm_command(c))
@@ -117,7 +116,6 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
                     value = mapping_cache[mapping_id][index][3]
                 destination: Register = c.destination
                 store_plaintext_to_register(value.plaintext, destination, registers)
-                registers.dump()
 
             case Command.Type.Set:
                 print(disasm_command(c))
@@ -148,7 +146,6 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
                     "key": key,
                     "value": value,
                 })
-                registers.dump()
 
             case Command.Type.RandChaCha:
                 print(disasm_command(c))
@@ -172,7 +169,6 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
                     )
                 )
                 store_plaintext_to_register(res, c.destination, registers)
-                registers.dump()
 
             case _:
                 raise NotImplementedError

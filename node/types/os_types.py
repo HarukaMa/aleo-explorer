@@ -264,7 +264,7 @@ class DisconnectReason(IntEnumu32):
     @classmethod
     # @type_check
     def load(cls, data: BytesIO):
-        if len(data) == 0:
+        if data.getbuffer().nbytes == 0:
             return cls(cls.NoReasonGiven)
         reason = u32.load(data)
         if reason == 14:

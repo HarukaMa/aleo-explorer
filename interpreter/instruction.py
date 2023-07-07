@@ -70,7 +70,15 @@ def Add(operands: [Operand], destination: Register, registers: Registers, finali
     store_plaintext_to_register(res, destination, registers)
 
 def AddWrapped(operands: [Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
+    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
+    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=op1.literal.type,
+            primitive=op1.literal.primitive.add_wrapped(op2.literal.primitive),
+        )
+    )
+    store_plaintext_to_register(res, destination, registers)
 
 def And(operands: [Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     allowed_types = [bool_, i8, i16, i32, i64, i128, u8, u16, u32, u64, u128]
@@ -190,7 +198,15 @@ def Div(operands: [Operand], destination: Register, registers: Registers, finali
     store_plaintext_to_register(res, destination, registers)
 
 def DivWrapped(operands: [Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
+    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
+    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=op1.literal.type,
+            primitive=op1.literal.primitive.div_wrapped(op2.literal.primitive),
+        )
+    )
+    store_plaintext_to_register(res, destination, registers)
 
 def Double(operands: [Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
@@ -402,7 +418,15 @@ def Mul(operands: [Operand], destination: Register, registers: Registers, finali
     store_plaintext_to_register(res, destination, registers)
 
 def MulWrapped(operands: [Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
+    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
+    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=op1.literal.type,
+            primitive=op1.literal.primitive.mul_wrapped(op2.literal.primitive),
+        )
+    )
+    store_plaintext_to_register(res, destination, registers)
 
 def Nand(operands: [Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
@@ -532,7 +556,15 @@ def Sub(operands: [Operand], destination: Register, registers: Registers, finali
     store_plaintext_to_register(res, destination, registers)
 
 def SubWrapped(operands: [Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
+    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
+    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=op1.literal.type,
+            primitive=op1.literal.primitive.sub_wrapped(op2.literal.primitive),
+        )
+    )
+    store_plaintext_to_register(res, destination, registers)
 
 def Ternary(operands: [Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
