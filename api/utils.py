@@ -24,3 +24,13 @@ def async_check_sync(func):
             return JSONResponse({"error": "This explorer is out of sync. To ignore this and continue anyway, add ?outdated=1 to the end of URL."}, status_code=500)
         return await func(*args, **kwargs)
     return wrapper
+
+def use_program_cache(func):
+    async def wrapper(*args, **kwargs):
+        if len(args) < 1 or not isinstance(args[0], Request):
+            raise TypeError("this decorator cannot be used on this function")
+        request: Request = args[0]
+        program_cache = request.app.state.program_cache
+        kwargs["program_cache"] = program_cache
+        return await func(*args, **kwargs)
+    return wrapper

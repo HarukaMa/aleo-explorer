@@ -3,6 +3,7 @@ from io import BytesIO
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from api.utils import use_program_cache
 from db import Database
 from interpreter.finalizer import ExecuteError
 from interpreter.interpreter import preview_finalize_execution
@@ -10,7 +11,8 @@ from node.types import Program, Identifier, Function, Finalize, FinalizeInput, P
     LiteralPlaintext, Literal, StructPlaintextType, StructPlaintext, FinalizeOperation
 
 
-async def preview_finalize_route(request: Request):
+@use_program_cache
+async def preview_finalize_route(request: Request, program_cache):
     db: Database = request.app.state.db
     version = request.path_params["version"]
     json = await request.json()
@@ -27,7 +29,11 @@ async def preview_finalize_route(request: Request):
         return JSONResponse({"error": "Inputs must be an array"}, status_code=400)
 
     try:
-        program = Program.load(BytesIO(await db.get_program(program_id)))
+        try:
+            program = program_cache[program_id]
+        except KeyError:
+            program = Program.load(BytesIO(await db.get_program(program_id)))
+            program_cache[program_id] = program
     except:
         return JSONResponse({"error": "Program not found"}, status_code=404)
     function_name = Identifier.loads(transition_name)

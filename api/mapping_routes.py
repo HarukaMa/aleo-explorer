@@ -4,23 +4,28 @@ import aleo
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from api.utils import async_check_sync
+from api.utils import async_check_sync, use_program_cache
 from db import Database
 from node.types import Program, Plaintext, Value, PlaintextType, LiteralPlaintextType, LiteralPlaintext, \
     Literal, StructPlaintextType, StructPlaintext
 
 
 @async_check_sync
-async def mapping_route(request: Request):
+@use_program_cache
+async def mapping_route(request: Request, program_cache):
     db: Database = request.app.state.db
     version = request.path_params["version"]
     program_id = request.path_params["program_id"]
     mapping = request.path_params["mapping"]
     key = request.path_params["key"]
     try:
-        program = Program.load(BytesIO(await db.get_program(program_id)))
-    except:
-        return JSONResponse({"error": "Program not found"}, status_code=404)
+        program = program_cache[program_id]
+    except KeyError:
+        program = await db.get_program(program_id)
+        if not program:
+            return JSONResponse({"error": "Program not found"}, status_code=404)
+        program = Program.load(BytesIO(program))
+        program_cache[program_id] = program
     if mapping not in program.mappings:
         return JSONResponse({"error": "Mapping not found"}, status_code=404)
     map_key_type = program.mappings[mapping].key.plaintext_type
@@ -51,27 +56,36 @@ async def mapping_route(request: Request):
     return JSONResponse(str(Value.load(BytesIO(value))))
 
 @async_check_sync
-async def mapping_list_route(request: Request):
+@use_program_cache
+async def mapping_list_route(request: Request, program_cache):
     db: Database = request.app.state.db
     version = request.path_params["version"]
     program_id = request.path_params["program_id"]
-    program = await db.get_program(program_id)
-    if not program:
-        return JSONResponse({"error": "Program not found"}, status_code=404)
-    program = Program.load(BytesIO(program))
+    try:
+        program = program_cache[program_id]
+    except KeyError:
+        program = await db.get_program(program_id)
+        if not program:
+            return JSONResponse({"error": "Program not found"}, status_code=404)
+        program = Program.load(BytesIO(program))
+        program_cache[program_id] = program
     mappings = program.mappings
     return JSONResponse(list(map(str, mappings.keys())))
 
 @async_check_sync
-async def mapping_value_list_route(request: Request):
+async def mapping_value_list_route(request: Request, program_cache):
     db: Database = request.app.state.db
     version = request.path_params["version"]
     program_id = request.path_params["program_id"]
     mapping = request.path_params["mapping"]
-    program = await db.get_program(program_id)
-    if not program:
-        return JSONResponse({"error": "Program not found"}, status_code=404)
-    program = Program.load(BytesIO(program))
+    try:
+        program = program_cache[program_id]
+    except KeyError:
+        program = await db.get_program(program_id)
+        if not program:
+            return JSONResponse({"error": "Program not found"}, status_code=404)
+        program = Program.load(BytesIO(program))
+        program_cache[program_id] = program
     mappings = program.mappings
     if mapping not in mappings:
         return JSONResponse({"error": "Mapping not found"}, status_code=404)
