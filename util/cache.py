@@ -42,6 +42,7 @@ class Cache(Generic[KT, VT]):
                 raise KeyError(key)
         else:
             self.__lru[key] = time.monotonic()
+            self.__lru.move_to_end(key)
         self.purge()
         return self._content[key]
 
