@@ -1,4 +1,5 @@
-from types import UnionType
+import typing
+from types import UnionType, GenericAlias
 from typing import Generic, TypeVar
 
 from .basic import *
@@ -6,6 +7,34 @@ from .basic import *
 T = TypeVar('T')
 L = TypeVar('L', bound=type|int)
 
+
+class TypedGenericAlias(GenericAlias):
+    def __call__(self, *args, **kwargs):
+        kwargs["types"] = typing.get_args(self)
+        return super().__call__(*args, **kwargs)
+
+def access_generic_type(c):
+    def __class_getitem__(cls, item):
+        if not (hasattr(super(cls, cls), "__class_getitem__") and callable(super(cls, cls).__class_getitem__)):
+            raise TypeError
+        __generic_alias = super(cls, cls).__class_getitem__(item)
+        if not isinstance(__generic_alias, GenericAlias):
+            raise TypeError
+        return TypedGenericAlias(cls, typing.get_args(__generic_alias))
+
+    def inject_types(f):
+        def wrapper(self, *args, **kwargs):
+            if "types" in kwargs:
+                types = kwargs.pop("types")
+                self.types = types
+            return f(self, *args, **kwargs)
+        return wrapper
+
+    c.__class_getitem__ = __class_getitem__.__get__(c)
+    c.__init__ = inject_types(c.__init__)
+    return c
+
+@access_generic_type
 class Tuple(Serialize, Deserialize, tuple[T]):
 
     def __init__(self, value: tuple[T]):
