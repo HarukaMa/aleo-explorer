@@ -385,7 +385,7 @@ class BlockHeightOperand(Operand):
         return cls()
 
 
-class Literals(Generic, Serialize, Deserialize):
+class Literals(Generic[T], Serialize, Deserialize):
     # The generic here is for the number of the literals
     def __init__(self, types):
         super().__init__(types)
@@ -419,7 +419,7 @@ class Literals(Generic, Serialize, Deserialize):
         return self(operands=Vec[Operand | NoneType, 3](operands), destination=destination)
 
 
-class AssertInstruction(Generic, Serialize, Deserialize):
+class AssertInstruction(Generic[T], Serialize, Deserialize):
     # The generic here is for the variant of the assert instruction
     def __init__(self, types):
         super().__init__(types)
@@ -825,7 +825,7 @@ class CastInstruction(Serialize, Deserialize):
         cast_Type = CastType.load(data)
         return cls(operands=operands, destination=destination, cast_type=cast_Type)
 
-class CommitInstruction(Generic, Serialize, Deserialize):
+class CommitInstruction(Generic[T], Serialize, Deserialize):
     class Type(Enum):
         CommitBHP256 = 0
         CommitBHP512 = 1
@@ -857,7 +857,7 @@ class CommitInstruction(Generic, Serialize, Deserialize):
         return self(operands=self.operands, destination=self.destination, destination_type=self.destination_type)
 
 
-class HashInstruction(Generic, Serialize, Deserialize):
+class HashInstruction(Generic[T], Serialize, Deserialize):
     class Type(Enum):
         HashBHP256 = 0
         HashBHP512 = 1

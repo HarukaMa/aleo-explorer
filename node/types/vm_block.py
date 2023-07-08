@@ -1589,7 +1589,7 @@ class StructPlaintext(Plaintext):
         return True
 
 
-class Owner(TypeParameter, Serialize, Deserialize):  # enum
+class Owner(Generic[T], Serialize, Deserialize):  # enum
 
     def __init__(self, types):
         if len(types) != 1:
@@ -1667,7 +1667,7 @@ class PrivateOwner(Owner):
         return str(self.owner)
 
 
-class Entry(Generic, Serialize, Deserialize):  # enum
+class Entry(Generic[T], Serialize, Deserialize):  # enum
 
     def __init__(self, types):
         if len(types) != 1:
@@ -1770,7 +1770,7 @@ class PrivateEntry(Entry):
         return str(self.plaintext)
 
 
-class Record(Generic, Serialize, Deserialize):
+class Record(Generic[T], Serialize, Deserialize):
     # Generic for the Private type parameter
     def __init__(self, types):
         if len(types) != 1:

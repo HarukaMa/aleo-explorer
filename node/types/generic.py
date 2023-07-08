@@ -1,75 +1,31 @@
-from collections.abc import Sequence
 from types import UnionType
+from typing import Generic, TypeVar
 
 from .basic import *
 
+T = TypeVar('T')
+L = TypeVar('L', bound=type|int)
 
-class Generic(metaclass=ABCMeta):
-    @abstractmethod
-    def __init__(self, types):
-        self.types = types
+class Tuple(Serialize, Deserialize, tuple[T]):
 
-    def __class_getitem__(cls, item):
-        if not isinstance(item, tuple):
-            item = item,
-        ## Unfortunately we have sized vec, so we can't have this check anymore
-        # if not all(isinstance(x, type) or isinstance(x, Generic) for x in item):
-        #     raise TypeError("expected type or generic types as generic types")
-        return cls(item)
-
-
-class TypeParameter(metaclass=ABCMeta):
-    @abstractmethod
-    def __init__(self, _):
-        raise NotImplementedError
-
-    def __class_getitem__(cls, item):
-        if not isinstance(item, tuple):
-            item = item,
-        return cls(item)
-
-
-class Tuple(Generic, Serialize, Deserialize, Sequence):
-
-    def __init__(self, types):
-        self.types = types
-
-    def __call__(self, value: Sequence):
-        if not isinstance(value, Sequence):
-            raise TypeError("value must be Sequence")
-        if len(value) != len(self.types):
-            raise ValueError("value must have the same length as the tuple")
-        for i, (t, v) in enumerate(zip(self.types, value)):
-            if not isinstance(v, t):
-                raise TypeError(f"value[{i}] must be {t}")
-        self.value = tuple(value)
-        return self
-
-    def __len__(self):
-        return len(self.value)
-
-    def __iter__(self):
-        return iter(self.value)
-
-    def __getitem__(self, item):
-        if not isinstance(item, int):
-            raise TypeError("index must be int")
-        return self.value[item]
+    def __init__(self, value: tuple[T]):
+        super().__init__(value)
 
     def dump(self) -> bytes:
-        if not all(isinstance(x, Serialize) for x in self.value):
+        if not all(isinstance(x, Serialize) for x in self):
             raise TypeError("value must be serializable")
-        return b"".join(x.dump() for x in self.value)
+        return b"".join(x.dump() for x in self)
 
     # @type_check
     def load(self, data: BytesIO):
-        if not all(issubclass(x, Deserialize) for x in self.types):
+        types = self.__orig_class__.__args__
+        if not all(issubclass(x, Deserialize) for x in types):
             raise TypeError("value must be deserializable")
-        self.value = tuple(t.load(data) for t in self.types)
+        self.value = tuple(t.load(data) for t in types)
         return self
 
 
-class Vec(Generic, Serialize, Deserialize, Sequence):
+class Vec(Serialize, Deserialize, list[T], Generic[T, L]):
 
     def __init__(self, types):
         if len(types) != 2:
@@ -84,16 +40,6 @@ class Vec(Generic, Serialize, Deserialize, Sequence):
         super().__init__(types)
 
     def __call__(self, value):
-        if not isinstance(value, list):
-            raise TypeError("value must be list")
-        if isinstance(self.type, type) or isinstance(self.type, UnionType):
-            if not all(isinstance(x, self.type) for x in value):
-                raise TypeError("value must be of type {}".format(self.type))
-        else:
-            if not all(isinstance(x, type(self.type)) for x in value):
-                raise TypeError("value must be of type {}".format(type(self.type)))
-        if hasattr(self, "size") and len(value) != self.size:
-            raise ValueError("value must be of size {}".format(self.size))
         self._list = value
         if hasattr(self, "size_type"):
             self.size = len(value)
@@ -156,7 +102,7 @@ class Vec(Generic, Serialize, Deserialize, Sequence):
         return iter(self._list)
 
 
-class VarInt(Generic, Serialize, Deserialize):
+class VarInt(Generic[T], Serialize, Deserialize):
 
     def __init__(self, types):
         if len(types) != 1:
@@ -210,7 +156,7 @@ class VarInt(Generic, Serialize, Deserialize):
     def __int__(self):
         return int(self.value)
 
-class Option(Generic, Serialize, Deserialize):
+class Option(Generic[T], Serialize, Deserialize):
 
     def __init__(self, types):
         if len(types) != 1:
