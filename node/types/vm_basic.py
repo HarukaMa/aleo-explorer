@@ -7,6 +7,7 @@ class AleoIDProtocol(Sized, Serializable, Protocol):
 
 class AleoID(AleoIDProtocol):
     size = 32
+    _prefix = ""
 
     def __init__(self, data: bytes):
         if len(self._prefix) != 2:
@@ -47,6 +48,9 @@ class AleoID(AleoIDProtocol):
 
 
 class AleoObject(AleoIDProtocol):
+    size = 0
+    _prefix = ""
+
     def __init__(self, data: bytes):
         self._data = data
         self._bech32m = Bech32m(data, self._prefix)
@@ -78,7 +82,7 @@ class AleoObject(AleoIDProtocol):
     def __repr__(self):
         return self.__class__.__name__ + "(" + str(self) + ")"
 
-    def __eq__(self, other):
+    def __eq__(self, other: object):
         if not isinstance(other, AleoObject):
             return False
         return self._data == other._data
@@ -118,17 +122,12 @@ class Address(AleoObject):
     _prefix = "aleo"
     size = 32
 
-    def __init__(self, data):
-        AleoObject.__init__(self, data)
-
 
 class Field(Serializable):
     # Fr, Fp256
     # Just store as a large integer now
     # Hopefully this will not be used later...
-    def __init__(self, data):
-        if not isinstance(data, int):
-            raise TypeError("data must be int")
+    def __init__(self, data: int):
         self.data = data
 
     def dump(self) -> bytes:
@@ -148,7 +147,7 @@ class Field(Serializable):
     def __str__(self):
         return str(self.data) + "field"
 
-    def __eq__(self, other):
+    def __eq__(self, other: object):
         if not isinstance(other, Field):
             return False
         return self.data == other.data
@@ -156,29 +155,19 @@ class Field(Serializable):
     def __hash__(self):
         return hash(self.data)
 
-    def __add__(self, other):
-        if not isinstance(other, Field):
-            raise TypeError("other must be Field")
+    def __add__(self, other: Self):
         return Field.load(BytesIO(bytes(aleo.field_ops(self.dump(), other.dump(), "add"))))
 
-    def __gt__(self, other):
-        if not isinstance(other, Field):
-            raise TypeError("other must be Field")
+    def __gt__(self, other: Self):
         return bool_.load(BytesIO(bytes(aleo.field_ops(self.dump(), other.dump(), "gt"))))
 
-    def __lt__(self, other):
-        if not isinstance(other, Field):
-            raise TypeError("other must be Field")
+    def __lt__(self, other: Self):
         return bool_.load(BytesIO(bytes(aleo.field_ops(self.dump(), other.dump(), "lt"))))
 
-    def __ge__(self, other):
-        if not isinstance(other, Field):
-            raise TypeError("other must be Field")
+    def __ge__(self, other: Self):
         return bool_.load(BytesIO(bytes(aleo.field_ops(self.dump(), other.dump(), "gte"))))
 
-    def __le__(self, other):
-        if not isinstance(other, Field):
-            raise TypeError("other must be Field")
+    def __le__(self, other: Self):
         return bool_.load(BytesIO(bytes(aleo.field_ops(self.dump(), other.dump(), "lte"))))
 
 
@@ -209,9 +198,7 @@ class Group(Serializable):
 
 class Scalar(Serializable):
     # Could be wrong as well
-    def __init__(self, data):
-        if not isinstance(data, int):
-            raise TypeError("data must be int")
+    def __init__(self, data: int):
         self.data = data
 
     def dump(self) -> bytes:
@@ -282,7 +269,7 @@ class Fq2(Serializable):
 
     @classmethod
     def load(cls, data: BytesIO):
-        data_ = data.read(96)
+        data_ = bytearray(data.read(96))
         flags = bool(data_[-1] >> 7)
         data_[-1] &= 0x7f
         c0 = Fq.load(BytesIO(data_))
