@@ -117,7 +117,7 @@ class Vec(list[T], Serializable, Generic[T, L]):
         return cls[*types](list(value_type.load(data) for _ in range(size)))
 
 
-class Option(Generic[T], Serializable):
+class Option(Serializable, Generic[T]):
     types: tuple[Type[T]]
 
     def __init__(self, value: Optional[T]):

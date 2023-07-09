@@ -203,7 +203,7 @@ class Int(int, Serializable, IntProtocol):
         raise TypeError("cannot serialize Int base class")
 
 
-class IntEnumu8(Serializable, IntEnum):
+class IntEnumu8(Serializable, IntEnum, metaclass=ProtocolEnumMeta):
 
     def dump(self) -> bytes:
         return struct.pack("<B", self.value)
@@ -216,7 +216,7 @@ class IntEnumu8(Serializable, IntEnum):
         return self
 
 
-class IntEnumu16(Serializable, IntEnum):
+class IntEnumu16(Serializable, IntEnum, metaclass=ProtocolEnumMeta):
 
     def dump(self) -> bytes:
         return struct.pack("<H", self.value)
@@ -229,7 +229,7 @@ class IntEnumu16(Serializable, IntEnum):
         return self
 
 
-class IntEnumu32(Serializable, IntEnum):
+class IntEnumu32(Serializable, IntEnum, metaclass=ProtocolEnumMeta):
 
     def dump(self) -> bytes:
         return struct.pack("<I", self.value)
@@ -242,10 +242,10 @@ class IntEnumu32(Serializable, IntEnum):
         return self
 
 
-class RustEnumProtocol(Protocol):
+class RustEnum(Protocol):
     Type: Type[IntEnum]
 
-class RustEnum(RustEnumProtocol):
+class EnumBaseSerialize(Serialize):
 
     def dump(self) -> bytes:
-        raise TypeError("cannot deserialize rust enum base class")
+        raise TypeError("cannot serialize base class")

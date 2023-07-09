@@ -213,7 +213,7 @@ class Import(Serializable):
         program_id = ProgramID.load(data)
         return cls(program_id=program_id)
 
-class Register(Serializable, RustEnum):
+class Register(EnumBaseSerialize, Serialize, RustEnum):
 
     class Type(IntEnumu8):
         Locator = 0
@@ -306,7 +306,7 @@ class MemberRegister(Register):
         return cls(locator=locator, identifiers=identifiers)
 
 
-class Operand(Serialize, RustEnum): # enum
+class Operand(EnumBaseSerialize, Serialize, RustEnum):
 
     class Type(IntEnumu8):
         Literal = 0
@@ -404,7 +404,7 @@ class BlockHeightOperand(Operand):
 N = TypeVar("N", bound=int)
 
 @access_generic_type
-class Literals(Generic[N], Serializable):
+class Literals(Serializable, Generic[N]):
     types: tuple[N]
 
     def __init__(self, *, operands: Vec[Operand | NoneType, N], destination: Register):
@@ -432,7 +432,7 @@ class Literals(Generic[N], Serializable):
 
 
 @access_generic_type
-class AssertInstruction(Generic[N], Serializable):
+class AssertInstruction(Serializable, Generic[N]):
     types: tuple[N]
 
     def __init__(self, *, operands: Vec[Operand, 2]):
@@ -465,7 +465,7 @@ class Locator(Serializable):
         return f"{self.id}/{self.resource}"
 
 
-class CallOperator(Serializable, RustEnum):
+class CallOperator(EnumBaseSerialize, Serialize, RustEnum):
 
     class Type(IntEnumu8):
         Locator = 0
@@ -589,7 +589,7 @@ class LiteralType(IntEnumu8):
         }[self]
 
 
-class PlaintextType(Serializable, RustEnum): # enum
+class PlaintextType(EnumBaseSerialize, Serialize, RustEnum):
 
     class Type(IntEnumu8):
         Literal = 0
@@ -642,7 +642,7 @@ class StructPlaintextType(PlaintextType):
     def __str__(self):
         return str(self.struct)
 
-class RegisterType(Serializable, RustEnum): # enum
+class RegisterType(EnumBaseSerialize, Serialize, RustEnum):
 
     class Type(IntEnumu8):
         Plaintext = 0
@@ -706,7 +706,7 @@ class ExternalRecordRegisterType(RegisterType):
         locator = Locator.load(data)
         return cls(locator=locator)
 
-class CastType(Serializable, RustEnum):
+class CastType(EnumBaseSerialize, Serialize, RustEnum):
 
     class Type(IntEnumu8):
         GroupXCoordinate = 0
@@ -780,7 +780,7 @@ class CastInstruction(Serializable):
 E = TypeVar('E', bound=Enum)
 
 @access_generic_type
-class CommitInstruction(Generic[E], Serializable):
+class CommitInstruction(Serializable, Generic[E]):
     types: tuple[E]
 
     class Type(Enum):
@@ -811,7 +811,7 @@ class CommitInstruction(Generic[E], Serializable):
 
 
 @access_generic_type
-class HashInstruction(Generic[E], Serializable):
+class HashInstruction(Serializable, Generic[E]):
     types: tuple[E]
 
     class Type(Enum):

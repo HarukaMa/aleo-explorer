@@ -1,31 +1,18 @@
 from .generic import *
 
 
-class AleoID(Sized, Serializable, metaclass=ABCMeta):
+class AleoIDProtocol(Sized, Serializable, Protocol):
+    size: int
+    _prefix: str
+
+class AleoID(AleoIDProtocol):
     size = 32
 
-    def __init__(self, data):
-        if not isinstance(self._prefix, str):
-            raise TypeError("locator_prefix must be str")
+    def __init__(self, data: bytes):
         if len(self._prefix) != 2:
             raise ValueError("locator_prefix must be 2 bytes")
-        self.data = data
-
-    @property
-    @abstractmethod
-    def _prefix(self):
-        raise NotImplementedError
-
-    @property
-    def data(self):
-        return self._data
-
-    @data.setter
-    def data(self, value):
-        if not isinstance(value, bytes):
-            raise TypeError("data must be bytes")
-        self._data = value
-        self._bech32m = Bech32m(value, self._prefix)
+        self._data = data
+        self._bech32m = Bech32m(data, self._prefix)
 
     def dump(self) -> bytes:
         return self._data
@@ -53,39 +40,16 @@ class AleoID(Sized, Serializable, metaclass=ABCMeta):
     def __repr__(self):
         return self.__class__.__name__ + "(" + str(self) + ")"
 
-    def __eq__(self, other):
+    def __eq__(self, other: object):
         if not isinstance(other, AleoID):
             return False
-        return self.data == other.data
+        return self._data == other._data
 
 
-class AleoObject(Sized, Serializable, metaclass=ABCMeta):
-    def __init__(self, data):
-        if not isinstance(self._prefix, str):
-            raise TypeError("object_prefix must be str")
-        # if len(self._prefix) != 4:
-        #     raise ValueError("object_prefix must be 4 bytes")
-        self.data = data
-
-    @property
-    @abstractmethod
-    def _prefix(self):
-        raise NotImplementedError
-
-    size: int
-
-    @property
-    def data(self):
-        return self._data
-
-    @data.setter
-    def data(self, value):
-        if not isinstance(value, bytes):
-            raise TypeError("data must be bytes")
-        if len(value) != self.size:
-            raise ValueError("data must be %d bytes" % self.size)
-        self._data = value
-        self._bech32m = Bech32m(value, self._prefix)
+class AleoObject(AleoIDProtocol):
+    def __init__(self, data: bytes):
+        self._data = data
+        self._bech32m = Bech32m(data, self._prefix)
 
     def dump(self) -> bytes:
         return self._data
@@ -117,7 +81,7 @@ class AleoObject(Sized, Serializable, metaclass=ABCMeta):
     def __eq__(self, other):
         if not isinstance(other, AleoObject):
             return False
-        return self.data == other.data
+        return self._data == other._data
 
 
 class BlockHash(AleoID):
