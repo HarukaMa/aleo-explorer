@@ -18,9 +18,9 @@ def feature_string_from_instructions(instructions: [Instruction]) -> str:
         res.append(s[i])
     return "".join(res)
 
-class EvaluationDomain(Serialize, Deserialize):
+class EvaluationDomain(Serializable):
 
-    # @type_check
+    
     def __init__(self, *, size: u64, log_size_of_group: u32, size_as_field_element: Field, size_inv: Field,
                  group_gen: Field, group_gen_inv: Field, generator_inv: Field):
         self.size = size
@@ -36,7 +36,6 @@ class EvaluationDomain(Serialize, Deserialize):
                self.size_inv.dump() + self.group_gen.dump() + self.group_gen_inv.dump() + self.generator_inv.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         size = u64.load(data)
         log_size_of_group = u32.load(data)
@@ -48,9 +47,8 @@ class EvaluationDomain(Serialize, Deserialize):
         return cls(size=size, log_size_of_group=log_size_of_group, size_as_field_element=size_as_field_element,
                    size_inv=size_inv, group_gen=group_gen, group_gen_inv=group_gen_inv, generator_inv=generator_inv)
 
-class EvaluationsOnDomain(Serialize, Deserialize):
+class EvaluationsOnDomain(Serializable):
 
-    # @type_check
     def __init__(self, *, evaluations: Vec[Field, u64], domain: EvaluationDomain):
         self.evaluations = evaluations
         self.domain = domain
@@ -59,16 +57,14 @@ class EvaluationsOnDomain(Serialize, Deserialize):
         return self.evaluations.dump() + self.domain.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         evaluations = Vec[Field, u64].load(data)
         domain = EvaluationDomain.load(data)
         return cls(evaluations=evaluations, domain=domain)
 
 
-class EpochChallenge(Serialize, Deserialize):
+class EpochChallenge(Serializable):
 
-    # @type_check
     def __init__(self, *, epoch_number: u32, epoch_block_hash: BlockHash, epoch_polynomial: Vec[Field, u64],
                  epoch_polynomial_evaluations: EvaluationsOnDomain):
         self.epoch_number = epoch_number
@@ -81,7 +77,6 @@ class EpochChallenge(Serialize, Deserialize):
                self.epoch_polynomial_evaluations.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         epoch_number = u32.load(data)
         epoch_block_hash = BlockHash.load(data)
@@ -91,9 +86,8 @@ class EpochChallenge(Serialize, Deserialize):
                    epoch_polynomial_evaluations=epoch_polynomial_evaluations)
 
 
-class MapKey(Serialize, Deserialize):
+class MapKey(Serializable):
 
-    # @type_check
     def __init__(self, *, name: Identifier, plaintext_type: PlaintextType):
         self.name = name
         self.plaintext_type = plaintext_type
@@ -102,16 +96,14 @@ class MapKey(Serialize, Deserialize):
         return self.name.dump() + self.plaintext_type.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         name = Identifier.load(data)
         plaintext_type = PlaintextType.load(data)
         return cls(name=name, plaintext_type=plaintext_type)
 
 
-class MapValue(Serialize, Deserialize):
+class MapValue(Serializable):
 
-    # @type_check
     def __init__(self, *, name: Identifier, plaintext_type: PlaintextType):
         self.name = name
         self.plaintext_type = plaintext_type
@@ -120,16 +112,14 @@ class MapValue(Serialize, Deserialize):
         return self.name.dump() + self.plaintext_type.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         name = Identifier.load(data)
         plaintext_type = PlaintextType.load(data)
         return cls(name=name, plaintext_type=plaintext_type)
 
 
-class Mapping(Serialize, Deserialize):
+class Mapping(Serializable):
 
-    # @type_check
     def __init__(self, *, name: Identifier, key: MapKey, value: MapValue):
         self.name = name
         self.key = key
@@ -139,7 +129,6 @@ class Mapping(Serialize, Deserialize):
         return self.name.dump() + self.key.dump() + self.value.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         name = Identifier.load(data)
         key = MapKey.load(data)
@@ -147,10 +136,8 @@ class Mapping(Serialize, Deserialize):
         return cls(name=name, key=key, value=value)
 
 
-class Struct(Serialize, Deserialize):
+class Struct(Serializable):
 
-    # @type_check
-    @generic_type_check
     def __init__(self, *, name: Identifier, members: Vec[Tuple[Identifier, PlaintextType], u16]):
         self.name = name
         self.members = members
@@ -159,7 +146,6 @@ class Struct(Serialize, Deserialize):
         return self.name.dump() + self.members.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         name = Identifier.load(data)
         members = Vec[Tuple[Identifier, PlaintextType], u16].load(data)
@@ -177,14 +163,13 @@ class PublicOrPrivate(IntEnumu8):
     Private = 1
 
 
-class EntryType(Serialize, Deserialize):  # enum
+class EntryType(Serializable):  # enum
 
     class Type(IntEnumu8):
         Constant = 0
         Public = 1
         Private = 2
 
-    # @type_check
     def __init__(self, *, type_: Type, plaintext_type: PlaintextType):
         self.type = type_
         self.plaintext_type = plaintext_type
@@ -193,17 +178,14 @@ class EntryType(Serialize, Deserialize):  # enum
         return self.type.dump() + self.plaintext_type.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         type_ = cls.Type.load(data)
         plaintext_type = PlaintextType.load(data)
         return cls(type_=type_, plaintext_type=plaintext_type)
 
 
-class RecordType(Serialize, Deserialize):
+class RecordType(Serializable):
 
-    # @type_check
-    @generic_type_check
     def __init__(self, *, name: Identifier, owner: PublicOrPrivate, entries: Vec[Tuple[Identifier, EntryType], u16]):
         self.name = name
         self.owner = owner
@@ -213,7 +195,6 @@ class RecordType(Serialize, Deserialize):
         return self.name.dump() + self.owner.dump() + self.entries.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         name = Identifier.load(data)
         owner = PublicOrPrivate.load(data)
@@ -221,9 +202,8 @@ class RecordType(Serialize, Deserialize):
         return cls(name=name, owner=owner, entries=entries)
 
 
-class ClosureInput(Serialize, Deserialize):
+class ClosureInput(Serializable):
 
-    # @type_check
     def __init__(self, *, register: Register, register_type: RegisterType):
         self.register = register
         self.register_type = register_type
@@ -232,16 +212,14 @@ class ClosureInput(Serialize, Deserialize):
         return self.register.dump() + self.register_type.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         register = Register.load(data)
         register_type = RegisterType.load(data)
         return cls(register=register, register_type=register_type)
 
 
-class ClosureOutput(Serialize, Deserialize):
+class ClosureOutput(Serializable):
 
-    # @type_check
     def __init__(self, *, operand: Operand, register_type: RegisterType):
         self.operand = operand
         self.register_type = register_type
@@ -250,17 +228,14 @@ class ClosureOutput(Serialize, Deserialize):
         return self.operand.dump() + self.register_type.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         operand = Operand.load(data)
         register_type = RegisterType.load(data)
         return cls(operand=operand, register_type=register_type)
 
 
-class Closure(Serialize, Deserialize):
+class Closure(Serializable):
 
-    # @type_check
-    @generic_type_check
     def __init__(self, *, name: Identifier, inputs: Vec[ClosureInput, u16], instructions: Vec[Instruction, u32],
                  outputs: Vec[ClosureOutput, u16]):
         self.name = name
@@ -272,7 +247,6 @@ class Closure(Serialize, Deserialize):
         return self.name.dump() + self.inputs.dump() + self.instructions.dump() + self.outputs.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         name = Identifier.load(data)
         inputs = Vec[ClosureInput, u16].load(data)
@@ -284,10 +258,8 @@ class Closure(Serialize, Deserialize):
         return feature_string_from_instructions(self.instructions)
 
 
-class FinalizeCommand(Serialize, Deserialize):
+class FinalizeCommand(Serializable):
 
-    # @type_check
-    @generic_type_check
     def __init__(self, *, operands: Vec[Operand, u8]):
         self.operands = operands
 
@@ -295,13 +267,12 @@ class FinalizeCommand(Serialize, Deserialize):
         return self.operands.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         operands = Vec[Operand, u8].load(data)
         return cls(operands=operands)
 
 
-class Command(Serialize, Deserialize):  # enum
+class Command(Serializable):  # enum
 
     class Type(IntEnumu8):
         Instruction = 0
@@ -334,7 +305,6 @@ class Command(Serialize, Deserialize):  # enum
         raise NotImplementedError
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         type_ = cls.Type.load(data)
         if type_ == cls.Type.Instruction:
@@ -370,7 +340,6 @@ class Command(Serialize, Deserialize):  # enum
 class InstructionCommand(Command):
     type = Command.Type.Instruction
 
-    # @type_check
     def __init__(self, *, instruction: Instruction):
         self.instruction = instruction
 
@@ -378,7 +347,6 @@ class InstructionCommand(Command):
         return self.type.dump() + self.instruction.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         instruction = Instruction.load(data)
         return cls(instruction=instruction)
@@ -386,7 +354,6 @@ class InstructionCommand(Command):
 class ContainsCommand(Command):
     type = Command.Type.Contains
 
-    # @type_check
     def __init__(self, *, mapping: Identifier, key: Operand, destination: Register):
         self.mapping = mapping
         self.key = key
@@ -396,7 +363,6 @@ class ContainsCommand(Command):
         return self.type.dump() + self.mapping.dump() + self.key.dump() + self.destination.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         mapping = Identifier.load(data)
         key = Operand.load(data)
@@ -406,7 +372,6 @@ class ContainsCommand(Command):
 class GetCommand(Command):
     type = Command.Type.Get
 
-    # @type_check
     def __init__(self, *, mapping: Identifier, key: Operand, destination: Register):
         self.mapping = mapping
         self.key = key
@@ -416,7 +381,6 @@ class GetCommand(Command):
         return self.type.dump() + self.mapping.dump() + self.key.dump() + self.destination.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         mapping = Identifier.load(data)
         key = Operand.load(data)
@@ -427,7 +391,6 @@ class GetCommand(Command):
 class GetOrUseCommand(Command):
     type = Command.Type.GetOrUse
 
-    # @type_check
     def __init__(self, *, mapping: Identifier, key: Operand, default: Operand, destination: Register):
         self.mapping = mapping
         self.key = key
@@ -438,7 +401,6 @@ class GetOrUseCommand(Command):
         return self.type.dump() + self.mapping.dump() + self.key.dump() + self.default.dump() + self.destination.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         mapping = Identifier.load(data)
         key = Operand.load(data)
@@ -450,7 +412,6 @@ class GetOrUseCommand(Command):
 class RandChaChaCommand(Command):
     type = Command.Type.RandChaCha
 
-    # @type_check
     def __init__(self, *, operands: Vec[Operand, u8], destination: Register, destination_type: LiteralType):
         self.operands = operands
         self.destination = destination
@@ -460,7 +421,6 @@ class RandChaChaCommand(Command):
         return self.type.dump() + self.operands.dump() + self.destination.dump() + self.destination_type.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         operands = Vec[Operand, u8].load(data)
         destination = Register.load(data)
@@ -470,7 +430,6 @@ class RandChaChaCommand(Command):
 class RemoveCommand(Command):
     type = Command.Type.Remove
 
-    # @type_check
     def __init__(self, *, mapping: Identifier, key: Operand):
         self.mapping = mapping
         self.key = key
@@ -479,7 +438,6 @@ class RemoveCommand(Command):
         return self.type.dump() + self.mapping.dump() + self.key.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         mapping = Identifier.load(data)
         key = Operand.load(data)
@@ -488,7 +446,6 @@ class RemoveCommand(Command):
 class SetCommand(Command):
     type = Command.Type.Set
 
-    # @type_check
     def __init__(self, *, mapping: Identifier, key: Operand, value: Operand):
         self.mapping = mapping
         self.key = key
@@ -498,7 +455,6 @@ class SetCommand(Command):
         return self.type.dump() + self.mapping.dump() + self.key.dump() + self.value.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         mapping = Identifier.load(data)
         key = Operand.load(data)
@@ -508,7 +464,6 @@ class SetCommand(Command):
 class BranchEqCommand(Command):
     type = Command.Type.BranchEq
 
-    # @type_check
     def __init__(self, *, first: Operand, second: Operand, position: Identifier):
         self.first = first
         self.second = second
@@ -518,7 +473,6 @@ class BranchEqCommand(Command):
         return self.type.dump() + self.first.dump() + self.second.dump() + self.position.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         first = Operand.load(data)
         second = Operand.load(data)
@@ -528,7 +482,6 @@ class BranchEqCommand(Command):
 class BranchNeqCommand(Command):
     type = Command.Type.BranchNeq
 
-    # @type_check
     def __init__(self, *, first: Operand, second: Operand, position: Identifier):
         self.first = first
         self.second = second
@@ -538,7 +491,6 @@ class BranchNeqCommand(Command):
         return self.type.dump() + self.first.dump() + self.second.dump() + self.position.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         first = Operand.load(data)
         second = Operand.load(data)
@@ -548,7 +500,6 @@ class BranchNeqCommand(Command):
 class PositionCommand(Command):
     type = Command.Type.Position
 
-    # @type_check
     def __init__(self, *, position: Identifier):
         self.position = position
 
@@ -556,15 +507,13 @@ class PositionCommand(Command):
         return self.type.dump() + self.position.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         position = Identifier.load(data)
         return cls(position=position)
 
 
-class FinalizeInput(Serialize, Deserialize):
+class FinalizeInput(Serializable):
 
-    # @type_check
     def __init__(self, *, register: Register, plaintext_type: PlaintextType):
         self.register = register
         self.plaintext_type = plaintext_type
@@ -573,16 +522,13 @@ class FinalizeInput(Serialize, Deserialize):
         return self.register.dump() + self.plaintext_type.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         register = Register.load(data)
         plaintext_type = PlaintextType.load(data)
         return cls(register=register, plaintext_type=plaintext_type)
 
-class Finalize(Serialize, Deserialize):
+class Finalize(Serializable):
 
-    # @type_check
-    @generic_type_check
     def __init__(self, *, name: Identifier, inputs: Vec[FinalizeInput, u16], commands: Vec[Command, u16]):
         self.name = name
         self.inputs = inputs
@@ -592,7 +538,6 @@ class Finalize(Serialize, Deserialize):
         return self.name.dump() + self.inputs.dump() + self.commands.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         name = Identifier.load(data)
         inputs = Vec[FinalizeInput, u16].load(data)
@@ -604,7 +549,7 @@ class Finalize(Serialize, Deserialize):
         return sum(command.cost for command in self.commands)
 
 
-class ValueType(Serialize, Deserialize): # enum
+class ValueType(Serializable): # enum
 
     class Type(IntEnumu8):
         Constant = 0
@@ -619,7 +564,6 @@ class ValueType(Serialize, Deserialize): # enum
         raise NotImplementedError
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         type_ = cls.Type.load(data)
         if type_ == cls.Type.Constant:
@@ -639,7 +583,6 @@ class ValueType(Serialize, Deserialize): # enum
 class ConstantValueType(ValueType):
     type = ValueType.Type.Constant
 
-    # @type_check
     def __init__(self, *, plaintext_type: PlaintextType):
         self.plaintext_type = plaintext_type
 
@@ -647,7 +590,6 @@ class ConstantValueType(ValueType):
         return self.type.dump() + self.plaintext_type.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         plaintext_type = PlaintextType.load(data)
         return cls(plaintext_type=plaintext_type)
@@ -656,7 +598,6 @@ class ConstantValueType(ValueType):
 class PublicValueType(ValueType):
     type = ValueType.Type.Public
 
-    # @type_check
     def __init__(self, *, plaintext_type: PlaintextType):
         self.plaintext_type = plaintext_type
 
@@ -664,7 +605,6 @@ class PublicValueType(ValueType):
         return self.type.dump() + self.plaintext_type.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         plaintext_type = PlaintextType.load(data)
         return cls(plaintext_type=plaintext_type)
@@ -673,7 +613,6 @@ class PublicValueType(ValueType):
 class PrivateValueType(ValueType):
     type = ValueType.Type.Private
 
-    # @type_check
     def __init__(self, *, plaintext_type: PlaintextType):
         self.plaintext_type = plaintext_type
 
@@ -681,7 +620,6 @@ class PrivateValueType(ValueType):
         return self.type.dump() + self.plaintext_type.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         plaintext_type = PlaintextType.load(data)
         return cls(plaintext_type=plaintext_type)
@@ -690,7 +628,6 @@ class PrivateValueType(ValueType):
 class RecordValueType(ValueType):
     type = ValueType.Type.Record
 
-    # @type_check
     def __init__(self, *, identifier: Identifier):
         self.identifier = identifier
 
@@ -698,7 +635,6 @@ class RecordValueType(ValueType):
         return self.type.dump() + self.identifier.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         identifier = Identifier.load(data)
         return cls(identifier=identifier)
@@ -707,7 +643,6 @@ class RecordValueType(ValueType):
 class ExternalRecordValueType(ValueType):
     type = ValueType.Type.ExternalRecord
 
-    # @type_check
     def __init__(self, *, locator: Locator):
         self.locator = locator
 
@@ -715,15 +650,13 @@ class ExternalRecordValueType(ValueType):
         return self.type.dump() + self.locator.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         locator = Locator.load(data)
         return cls(locator=locator)
 
 
-class FunctionInput(Serialize, Deserialize):
+class FunctionInput(Serializable):
 
-    # @type_check
     def __init__(self, *, register: Register, value_type: ValueType):
         self.register = register
         self.value_type = value_type
@@ -732,16 +665,14 @@ class FunctionInput(Serialize, Deserialize):
         return self.register.dump() + self.value_type.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         register = Register.load(data)
         value_type = ValueType.load(data)
         return cls(register=register, value_type=value_type)
 
 
-class FunctionOutput(Serialize, Deserialize):
+class FunctionOutput(Serializable):
 
-    # @type_check
     def __init__(self, *, operand: Operand, value_type: ValueType):
         self.operand = operand
         self.value_type = value_type
@@ -750,17 +681,14 @@ class FunctionOutput(Serialize, Deserialize):
         return self.operand.dump() + self.value_type.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         operand = Operand.load(data)
         value_type = ValueType.load(data)
         return cls(operand=operand, value_type=value_type)
 
 
-class Function(Serialize, Deserialize):
+class Function(Serializable):
 
-    # @type_check
-    @generic_type_check
     def __init__(self, *, name: Identifier, inputs: Vec[FunctionInput, u16], instructions: Vec[Instruction, u32],
                  outputs: Vec[FunctionOutput, u16], finalize: Option[Tuple[FinalizeCommand, Finalize]]):
         self.name = name
@@ -779,7 +707,6 @@ class Function(Serialize, Deserialize):
         return res
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         name = Identifier.load(data)
         inputs = Vec[FunctionInput, u16].load(data)
@@ -800,11 +727,9 @@ class ProgramDefinition(IntEnumu8):
     Function = 4
 
 
-class Program(Serialize, Deserialize):
+class Program(Serializable):
     version = u8()
 
-    # @type_check
-    @generic_type_check
     def __init__(self, *, id_: ProgramID, imports: Vec[Import, u8], mappings: dict[Identifier, Mapping],
                  structs: dict[Identifier, Struct], records: dict[Identifier, RecordType],
                  closures: dict[Identifier, Closure], functions: dict[Identifier, Function],
@@ -839,7 +764,6 @@ class Program(Serialize, Deserialize):
         return res
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         version = u8.load(data)
         if version != cls.version:
@@ -898,9 +822,8 @@ class Program(Serialize, Deserialize):
 
 
 
-class CircuitInfo(Serialize, Deserialize):
+class CircuitInfo(Serializable):
 
-    # @type_check
     def __init__(self, *, num_public_inputs: usize, num_variables: usize, num_constraints: usize,
                  num_non_zero_a: usize, num_non_zero_b: usize, num_non_zero_c: usize):
         self.num_public_inputs = num_public_inputs
@@ -921,7 +844,6 @@ class CircuitInfo(Serialize, Deserialize):
         return res
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         num_public_inputs = usize.load(data)
         num_variables = usize.load(data)
@@ -933,9 +855,8 @@ class CircuitInfo(Serialize, Deserialize):
                    num_non_zero_a=num_non_zero_a, num_non_zero_b=num_non_zero_b, num_non_zero_c=num_non_zero_c)
 
 
-class KZGCommitment(Serialize, Deserialize):
+class KZGCommitment(Serializable):
     # Compressed for serde
-    # @type_check
     def __init__(self, *, element: G1Affine):
         self.element = element
 
@@ -943,14 +864,12 @@ class KZGCommitment(Serialize, Deserialize):
         return self.element.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         return cls(element=G1Affine.load(data))
 
 
-class KZGVerifierKey(Serialize, Deserialize):
+class KZGVerifierKey(Serializable):
 
-    # @type_check
     def __init__(self, *, g: G1Affine, gamma_g: G1Affine, h: G2Affine, beta_h: G2Affine):
         self.g = g
         self.gamma_g = gamma_g
@@ -966,7 +885,6 @@ class KZGVerifierKey(Serialize, Deserialize):
         return res
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         g = G1Affine.load(data)
         gamma_g = G1Affine.load(data)
@@ -975,10 +893,8 @@ class KZGVerifierKey(Serialize, Deserialize):
         return cls(g=g, gamma_g=gamma_g, h=h, beta_h=beta_h)
 
 
-class SonicVerifierKey(Serialize, Deserialize):
+class SonicVerifierKey(Serializable):
 
-    # @type_check
-    @generic_type_check
     def __init__(self, *, vk: KZGVerifierKey,
                  degree_bounds_and_neg_powers_of_h: Option[Vec[Tuple[usize, G2Affine], u64]],
                  supported_degree: usize, max_degree: usize):
@@ -996,7 +912,6 @@ class SonicVerifierKey(Serialize, Deserialize):
         return res
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         vk = KZGVerifierKey.load(data)
         degree_bounds_and_neg_powers_of_h = Option[Vec[Tuple[usize, G2Affine], u64]].load(data)
@@ -1006,12 +921,10 @@ class SonicVerifierKey(Serialize, Deserialize):
                    supported_degree=supported_degree, max_degree=max_degree)
 
 
-class VerifyingKey(Serialize, Deserialize):
+class VerifyingKey(Serializable):
     version = u8()
 
     # Skipping a layer of marlin::CircuitVerifyingKey
-    # @type_check
-    @generic_type_check
     def __init__(self, *, circuit_info: CircuitInfo, circuit_commitments: Vec[KZGCommitment, u64], id_: Vec[u8, 32]):
         self.circuit_info = circuit_info
         self.circuit_commitments = circuit_commitments
@@ -1026,7 +939,6 @@ class VerifyingKey(Serialize, Deserialize):
         return res
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         version = u8.load(data)
         if version != cls.version:
@@ -1037,9 +949,8 @@ class VerifyingKey(Serialize, Deserialize):
         return cls(circuit_info=circuit_info, circuit_commitments=circuit_commitments, id_=id_)
 
 
-class KZGProof(Serialize, Deserialize):
+class KZGProof(Serializable):
 
-    # @type_check
     def __init__(self, *, w: G1Affine, random_v: Option[Field]):
         self.w = w
         self.random_v = random_v
@@ -1048,15 +959,13 @@ class KZGProof(Serialize, Deserialize):
         return self.w.dump() + self.random_v.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         w = G1Affine.load(data)
         random_v = Option[Field].load(data)
         return cls(w=w, random_v=random_v)
 
-class BatchProof(Serialize, Deserialize):
+class BatchProof(Serializable):
 
-    # @type_check
     def __init__(self, *, proof: Vec[KZGProof, u64]):
         self.proof = proof
 
@@ -1064,16 +973,13 @@ class BatchProof(Serialize, Deserialize):
         return self.proof.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         proof = Vec[KZGProof, u64].load(data)
         return cls(proof=proof)
 
 
-class BatchLCProof(Serialize, Deserialize):
+class BatchLCProof(Serializable):
 
-    # @type_check
-    @generic_type_check
     def __init__(self, *, proof: BatchProof, evaluations: Option[Vec[Field, u64]]):
         self.proof = proof
         self.evaluations = evaluations
@@ -1082,18 +988,16 @@ class BatchLCProof(Serialize, Deserialize):
         return self.proof.dump() + self.evaluations.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         proof = BatchProof.load(data)
         evaluations = Option[Vec[Field, u64]].load(data)
         return cls(proof=proof, evaluations=evaluations)
 
 
-class Certificate(Serialize, Deserialize):
+class Certificate(Serializable):
     version = u8()
 
     # Skipping a layer of marlin::Certificate
-    # @type_check
     def __init__(self, *, pc_proof: BatchLCProof):
         self.pc_proof = pc_proof
 
@@ -1101,7 +1005,6 @@ class Certificate(Serialize, Deserialize):
         return self.version.dump() + self.pc_proof.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         version = u8.load(data)
         if version != cls.version:
@@ -1110,11 +1013,9 @@ class Certificate(Serialize, Deserialize):
         return cls(pc_proof=pc_proof)
 
 
-class Deployment(Serialize, Deserialize):
+class Deployment(Serializable):
     version = u8()
 
-    # @type_check
-    @generic_type_check
     def __init__(self, *, edition: u16, program: Program,
                  verifying_keys: Vec[Tuple[Identifier, VerifyingKey, Certificate], u16]):
         self.edition = edition
@@ -1130,7 +1031,6 @@ class Deployment(Serialize, Deserialize):
         return res
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         version = u8.load(data)
         if version != cls.version:
@@ -1149,9 +1049,8 @@ class Deployment(Serialize, Deserialize):
         return storage_cost, namespace_cost
 
 
-class WitnessCommitments(Serialize, Deserialize):
+class WitnessCommitments(Serializable):
 
-    # @type_check
     def __init__(self, *, w: KZGCommitment, z_a: KZGCommitment, z_b: KZGCommitment):
         self.w = w
         self.z_a = z_a
@@ -1161,7 +1060,6 @@ class WitnessCommitments(Serialize, Deserialize):
         return self.w.dump() + self.z_a.dump() + self.z_b.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         w = KZGCommitment.load(data)
         z_a = KZGCommitment.load(data)
@@ -1169,10 +1067,8 @@ class WitnessCommitments(Serialize, Deserialize):
         return cls(w=w, z_a=z_a, z_b=z_b)
 
 
-class Commitments(Serialize, Deserialize):
+class Commitments(Serializable):
 
-    # @type_check
-    @generic_type_check
     def __init__(self, *, witness_commitments: Vec[WitnessCommitments, u64], mask_poly: Option[KZGCommitment],
                  g_1: KZGCommitment, h_1: KZGCommitment, g_a_commitments: Vec[KZGCommitment, u64],
                  g_b_commitments: Vec[KZGCommitment, u64], g_c_commitments: Vec[KZGCommitment, u64], h_2: KZGCommitment):
@@ -1203,7 +1099,6 @@ class Commitments(Serialize, Deserialize):
 
     # noinspection PyMethodOverriding
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO, batch_sizes: Vec[u64, u64]):
         witness_commitments = []
         for _ in range(sum(batch_sizes)):
@@ -1230,10 +1125,8 @@ class Commitments(Serialize, Deserialize):
                    g_c_commitments=g_c_commitments, h_2=h_2)
 
 
-class Evaluations(Serialize, Deserialize):
+class Evaluations(Serializable):
 
-    # @type_check
-    @generic_type_check
     def __init__(self, *, z_b_evals: Vec[Vec[Field, u64], u64], g_1_eval: Field, g_a_evals: Vec[Field, u64],
                  g_b_evals: Vec[Field, u64], g_c_evals: Vec[Field, u64]):
         self.z_b_evals = z_b_evals
@@ -1258,7 +1151,6 @@ class Evaluations(Serialize, Deserialize):
 
     # noinspection PyMethodOverriding
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO, batch_sizes: Vec[u64, u64]):
         z_b_evals = []
         for batch_size in batch_sizes:
@@ -1283,9 +1175,8 @@ class Evaluations(Serialize, Deserialize):
         return cls(z_b_evals=z_b_evals, g_1_eval=g_1_eval, g_a_evals=g_a_evals, g_b_evals=g_b_evals, g_c_evals=g_c_evals)
 
 
-class MatrixSums(Serialize, Deserialize):
+class MatrixSums(Serializable):
 
-    # @type_check
     def __init__(self, *, sum_a: Field, sum_b: Field, sum_c: Field):
         self.sum_a = sum_a
         self.sum_b = sum_b
@@ -1295,7 +1186,6 @@ class MatrixSums(Serialize, Deserialize):
         return self.sum_a.dump() + self.sum_b.dump() + self.sum_c.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         sum_a = Field.load(data)
         sum_b = Field.load(data)
@@ -1303,9 +1193,8 @@ class MatrixSums(Serialize, Deserialize):
         return cls(sum_a=sum_a, sum_b=sum_b, sum_c=sum_c)
 
 
-class ThirdMessage(Serialize, Deserialize):
+class ThirdMessage(Serializable):
 
-    # @type_check
     def __init__(self, *, sums: Vec[MatrixSums, u64]):
         self.sums = sums
 
@@ -1313,17 +1202,15 @@ class ThirdMessage(Serialize, Deserialize):
         return self.sums.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         sums = Vec[MatrixSums, u64].load(data)
         return cls(sums=sums)
 
 
-class Proof(Serialize, Deserialize):
+class Proof(Serializable):
     version = u8()
 
     # Skipping a layer of marlin::Proof
-    # @type_check
     def __init__(self, *, batch_sizes: Vec[u64, u64], commitments: Commitments, evaluations: Evaluations, msg: ThirdMessage,
                  pc_proof: BatchLCProof):
         self.batch_sizes = batch_sizes
@@ -1343,7 +1230,6 @@ class Proof(Serialize, Deserialize):
         return res
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         version = u8.load(data)
         if version != cls.version:
@@ -1356,7 +1242,6 @@ class Proof(Serialize, Deserialize):
         return cls(batch_sizes=batch_sizes, commitments=commitments, evaluations=evaluations, msg=msg, pc_proof=pc_proof)
 
     @classmethod
-    # @type_check
     def loads(cls, data: str):
         return cls.load(bech32_to_bytes(data))
 
@@ -1365,9 +1250,8 @@ class Proof(Serialize, Deserialize):
         return str(Bech32m(self.dump(), "proof"))
 
 
-class Ciphertext(Serialize, Deserialize):
+class Ciphertext(Serializable):
 
-    # @type_check
     def __init__(self, *, ciphertext: Vec[Field, u16]):
         self.ciphertext = ciphertext
 
@@ -1375,13 +1259,11 @@ class Ciphertext(Serialize, Deserialize):
         return self.ciphertext.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         ciphertext = Vec[Field, u16].load(data)
         return cls(ciphertext=ciphertext)
 
     @classmethod
-    # @type_check
     def loads(cls, data: str):
         return cls.load(bech32_to_bytes(data))
 
@@ -1389,7 +1271,7 @@ class Ciphertext(Serialize, Deserialize):
         return str(Bech32m(self.dump(), "ciphertext"))
 
 
-class Plaintext(Serialize, Deserialize):  # enum
+class Plaintext(Serializable):  # enum
 
     class Type(IntEnumu8):
         Literal = 0
@@ -1401,7 +1283,6 @@ class Plaintext(Serialize, Deserialize):  # enum
         raise NotImplementedError
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         type_ = Plaintext.Type.load(data)
         if type_ == Plaintext.Type.Literal:
@@ -1415,7 +1296,6 @@ class Plaintext(Serialize, Deserialize):  # enum
 class LiteralPlaintext(Plaintext):
     type = Plaintext.Type.Literal
 
-    # @type_check
     def __init__(self, *, literal: Literal):
         self.literal = literal
 
@@ -1423,7 +1303,6 @@ class LiteralPlaintext(Plaintext):
         return self.type.dump() + self.literal.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         literal = Literal.load(data)
         return cls(literal=literal)
@@ -1444,8 +1323,6 @@ class LiteralPlaintext(Plaintext):
 class StructPlaintext(Plaintext):
     type = Plaintext.Type.Struct
 
-    # @type_check
-    @generic_type_check
     def __init__(self, *, members: Vec[Tuple[Identifier, Plaintext], u8]):
         self.members = members
 
@@ -1460,7 +1337,6 @@ class StructPlaintext(Plaintext):
         return res
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         members = []
         num_members = u8.load(data)
@@ -1472,7 +1348,6 @@ class StructPlaintext(Plaintext):
         return cls(members=Vec[Tuple[Identifier, Plaintext], u8](members))
 
     @classmethod
-    # @type_check
     def loads(cls, data: str, struct_type: Struct, struct_types: {Identifier: Struct}):
         members = []
         identifier_regex = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*")
@@ -1589,7 +1464,7 @@ class StructPlaintext(Plaintext):
         return True
 
 
-class Owner(Generic[T], Serialize, Deserialize):  # enum
+class Owner(Generic[T], Serializable):  # enum
 
     def __init__(self, types):
         if len(types) != 1:
@@ -1607,7 +1482,6 @@ class Owner(Generic[T], Serialize, Deserialize):  # enum
     def dump(self) -> bytes:
         raise NotImplementedError
 
-    # @type_check
     def load(self, data: BytesIO):
         type_ = Owner.Type.load(data)
         if type_ == Owner.Type.Public:
@@ -1623,7 +1497,6 @@ class PublicOwner(Owner):
 
     # This subtype is not generic
     # noinspection PyMissingConstructor
-    # @type_check
     def __init__(self, *, owner: Address):
         self.owner = owner
 
@@ -1631,7 +1504,6 @@ class PublicOwner(Owner):
         return self.type.dump() + self.owner.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         owner = Address.load(data)
         return cls(owner=owner)
@@ -1649,7 +1521,6 @@ class PrivateOwner(Owner):
             raise ValueError("PrivateOwner must have exactly one type parameter")
         self.Private = types[0]
 
-    # @type_check
     def __call__(self, *, owner):
         if not isinstance(owner, self.Private):
             raise ValueError(f"owner must be of type {self.Private}")
@@ -1658,7 +1529,6 @@ class PrivateOwner(Owner):
     def dump(self) -> bytes:
         return self.type.dump() + self.owner.dump()
 
-    # @type_check
     def load(self, data: BytesIO):
         self.owner = self.Private.load(data)
         return self
@@ -1667,7 +1537,7 @@ class PrivateOwner(Owner):
         return str(self.owner)
 
 
-class Entry(Generic[T], Serialize, Deserialize):  # enum
+class Entry(Generic[T], Serializable):  # enum
 
     def __init__(self, types):
         if len(types) != 1:
@@ -1686,7 +1556,6 @@ class Entry(Generic[T], Serialize, Deserialize):  # enum
     def type(self):
         raise NotImplementedError
 
-    # @type_check
     def load(self, data: BytesIO):
         type_ = Entry.Type.load(data)
         if type_ == Entry.Type.Constant:
@@ -1714,7 +1583,6 @@ class ConstantEntry(Entry):
         return self.type.dump() + self.plaintext.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         plaintext = Plaintext.load(data)
         return cls(plaintext=plaintext)
@@ -1734,7 +1602,6 @@ class PublicEntry(Entry):
         return self.type.dump() + self.plaintext.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         plaintext = Plaintext.load(data)
         return cls(plaintext=plaintext)
@@ -1752,7 +1619,6 @@ class PrivateEntry(Entry):
             raise ValueError("PrivateEntry must have exactly one type parameter")
         self.Private = types[0]
 
-    # @type_check
     def __call__(self, *, plaintext):
         if not isinstance(plaintext, self.Private):
             raise ValueError(f"plaintext must be of type {self.Private}")
@@ -1761,7 +1627,6 @@ class PrivateEntry(Entry):
     def dump(self) -> bytes:
         return self.type.dump() + self.plaintext.dump()
 
-    # @type_check
     def load(self, data: BytesIO):
         self.plaintext = self.Private.load(data)
         return self
@@ -1770,15 +1635,13 @@ class PrivateEntry(Entry):
         return str(self.plaintext)
 
 
-class Record(Generic[T], Serialize, Deserialize):
+class Record(Generic[T], Serializable):
     # Generic for the Private type parameter
     def __init__(self, types):
         if len(types) != 1:
             raise ValueError("Record must have exactly one type parameter")
         self.Private = types[0]
 
-    # @type_check
-    @generic_type_check
     def __call__(self, *, owner: Owner, data: Vec[Tuple[Identifier, Entry], u8], nonce: Group):
         self.owner = owner
         self.data = data
@@ -1796,7 +1659,6 @@ class Record(Generic[T], Serialize, Deserialize):
         res += self.nonce.dump()
         return res
 
-    # @type_check
     def load(self, data: BytesIO):
         self.owner = Owner[self.Private].load(data)
         data_len = u8.load(data)
@@ -1810,7 +1672,6 @@ class Record(Generic[T], Serialize, Deserialize):
         self.nonce = Group.load(data)
         return self
 
-    # @type_check
     def loads(self, data: str):
         return self.load(bech32_to_bytes(data))
 
@@ -1818,7 +1679,7 @@ class Record(Generic[T], Serialize, Deserialize):
         return str(Bech32m(self.dump(), "record"))
 
 
-class Value(Serialize, Deserialize):  # enum
+class Value(Serializable):  # enum
 
     class Type(IntEnumu8):
         Plaintext = 0
@@ -1830,7 +1691,6 @@ class Value(Serialize, Deserialize):  # enum
         raise NotImplementedError
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         type_ = Value.Type.load(data)
         if type_ == Value.Type.Plaintext:
@@ -1844,7 +1704,6 @@ class Value(Serialize, Deserialize):  # enum
 class PlaintextValue(Value):
     type = Value.Type.Plaintext
 
-    # @type_check
     def __init__(self, *, plaintext: Plaintext):
         self.plaintext = plaintext
 
@@ -1852,7 +1711,6 @@ class PlaintextValue(Value):
         return self.type.dump() + self.plaintext.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         plaintext = Plaintext.load(data)
         return cls(plaintext=plaintext)
@@ -1864,7 +1722,6 @@ class PlaintextValue(Value):
 class RecordValue(Value):
     type = Value.Type.Record
 
-    # @type_check
     def __init__(self, *, record: Record[Plaintext]):
         if record.Private != Plaintext:
             raise ValueError("record must be of type Record[Plaintext]")
@@ -1874,13 +1731,12 @@ class RecordValue(Value):
         return self.type.dump() + self.record.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         record = Record[Plaintext].load(data)
         return cls(record=record)
 
 
-class TransitionInput(Serialize, Deserialize): # enum
+class TransitionInput(Serializable): # enum
 
     class Type(IntEnumu8):
         Constant = 0
@@ -1895,7 +1751,6 @@ class TransitionInput(Serialize, Deserialize): # enum
         raise NotImplementedError
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         type_ = TransitionInput.Type.load(data)
         if type_ == TransitionInput.Type.Constant:
@@ -1912,7 +1767,6 @@ class TransitionInput(Serialize, Deserialize): # enum
             raise ValueError("unknown transition input type")
 
     @classmethod
-    # @type_check
     def load_json(cls, data: dict):
         type_ = data["type"]
         if type_ == "private":
@@ -1926,7 +1780,6 @@ class TransitionInput(Serialize, Deserialize): # enum
 class ConstantTransitionInput(TransitionInput):
     type = TransitionInput.Type.Constant
 
-    # @type_check
     def __init__(self, *, plaintext_hash: Field, plaintext: Option[Plaintext]):
         self.plaintext_hash = plaintext_hash
         self.plaintext = plaintext
@@ -1935,7 +1788,6 @@ class ConstantTransitionInput(TransitionInput):
         return self.type.dump() + self.plaintext_hash.dump() + self.plaintext.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         plaintext_hash = Field.load(data)
         plaintext = Option[Plaintext].load(data)
@@ -1945,7 +1797,6 @@ class ConstantTransitionInput(TransitionInput):
 class PublicTransitionInput(TransitionInput):
     type = TransitionInput.Type.Public
 
-    # @type_check
     def __init__(self, *, plaintext_hash: Field, plaintext: Option[Plaintext]):
         self.plaintext_hash = plaintext_hash
         self.plaintext = plaintext
@@ -1954,7 +1805,6 @@ class PublicTransitionInput(TransitionInput):
         return self.type.dump() + self.plaintext_hash.dump() + self.plaintext.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         plaintext_hash = Field.load(data)
         plaintext = Option[Plaintext].load(data)
@@ -1964,7 +1814,6 @@ class PublicTransitionInput(TransitionInput):
 class PrivateTransitionInput(TransitionInput):
     type = TransitionInput.Type.Private
 
-    # @type_check
     def __init__(self, *, ciphertext_hash: Field, ciphertext: Option[Ciphertext]):
         self.ciphertext_hash = ciphertext_hash
         self.ciphertext = ciphertext
@@ -1973,14 +1822,12 @@ class PrivateTransitionInput(TransitionInput):
         return self.type.dump() + self.ciphertext_hash.dump() + self.ciphertext.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         ciphertext_hash = Field.load(data)
         ciphertext = Option[Ciphertext].load(data)
         return cls(ciphertext_hash=ciphertext_hash, ciphertext=ciphertext)
 
     @classmethod
-    # @type_check
     def load_json(cls, data: dict):
         ciphertext_hash = Field.loads(data["id"])
         if "value" in data:
@@ -1993,7 +1840,6 @@ class PrivateTransitionInput(TransitionInput):
 class RecordTransitionInput(TransitionInput):
     type = TransitionInput.Type.Record
 
-    # @type_check
     def __init__(self, *, serial_number: Field, tag: Field):
         self.serial_number = serial_number
         self.tag = tag
@@ -2002,14 +1848,12 @@ class RecordTransitionInput(TransitionInput):
         return self.type.dump() + self.serial_number.dump() + self.tag.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         serial_number = Field.load(data)
         tag = Field.load(data)
         return cls(serial_number=serial_number, tag=tag)
 
     @classmethod
-    # @type_check
     def load_json(cls, data: dict):
         serial_number = Field.loads(data["id"])
         tag = Field.loads(data["tag"])
@@ -2019,7 +1863,6 @@ class RecordTransitionInput(TransitionInput):
 class ExternalRecordTransitionInput(TransitionInput):
     type = TransitionInput.Type.ExternalRecord
 
-    # @type_check
     def __init__(self, *, input_commitment: Field):
         self.input_commitment = input_commitment
 
@@ -2027,13 +1870,12 @@ class ExternalRecordTransitionInput(TransitionInput):
         return self.type.dump() + self.input_commitment.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         input_commitment = Field.load(data)
         return cls(input_commitment=input_commitment)
 
 
-class TransitionOutput(Serialize, Deserialize): # enum
+class TransitionOutput(Serializable): # enum
 
     class Type(IntEnumu8):
         Constant = 0
@@ -2048,7 +1890,6 @@ class TransitionOutput(Serialize, Deserialize): # enum
         raise NotImplementedError
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         type_ = TransitionOutput.Type.load(data)
         if type_ == TransitionOutput.Type.Constant:
@@ -2065,7 +1906,6 @@ class TransitionOutput(Serialize, Deserialize): # enum
             raise ValueError("unknown transition output type")
 
     @classmethod
-    # @type_check
     def load_json(cls, data: dict):
         type_ = data["type"]
         if type_ == "record":
@@ -2077,7 +1917,6 @@ class TransitionOutput(Serialize, Deserialize): # enum
 class ConstantTransitionOutput(TransitionOutput):
     type = TransitionOutput.Type.Constant
 
-    # @type_check
     def __init__(self, *, plaintext_hash: Field, plaintext: Option[Plaintext]):
         self.plaintext_hash = plaintext_hash
         self.plaintext = plaintext
@@ -2086,7 +1925,6 @@ class ConstantTransitionOutput(TransitionOutput):
         return self.type.dump() + self.plaintext_hash.dump() + self.plaintext.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         plaintext_hash = Field.load(data)
         plaintext = Option[Plaintext].load(data)
@@ -2096,7 +1934,6 @@ class ConstantTransitionOutput(TransitionOutput):
 class PublicTransitionOutput(TransitionOutput):
     type = TransitionOutput.Type.Public
 
-    # @type_check
     def __init__(self, *, plaintext_hash: Field, plaintext: Option[Plaintext]):
         self.plaintext_hash = plaintext_hash
         self.plaintext = plaintext
@@ -2105,7 +1942,6 @@ class PublicTransitionOutput(TransitionOutput):
         return self.type.dump() + self.plaintext_hash.dump() + self.plaintext.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         plaintext_hash = Field.load(data)
         plaintext = Option[Plaintext].load(data)
@@ -2115,7 +1951,6 @@ class PublicTransitionOutput(TransitionOutput):
 class PrivateTransitionOutput(TransitionOutput):
     type = TransitionOutput.Type.Private
 
-    # @type_check
     def __init__(self, *, ciphertext_hash: Field, ciphertext: Option[Ciphertext]):
         self.ciphertext_hash = ciphertext_hash
         self.ciphertext = ciphertext
@@ -2124,7 +1959,6 @@ class PrivateTransitionOutput(TransitionOutput):
         return self.type.dump() + self.ciphertext_hash.dump() + self.ciphertext.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         ciphertext_hash = Field.load(data)
         ciphertext = Option[Ciphertext].load(data)
@@ -2134,7 +1968,6 @@ class PrivateTransitionOutput(TransitionOutput):
 class RecordTransitionOutput(TransitionOutput):
     type = TransitionOutput.Type.Record
 
-    # @type_check
     def __init__(self, *, commitment: Field, checksum: Field, record_ciphertext: Option[Record[Ciphertext]]):
         self.commitment = commitment
         self.checksum = checksum
@@ -2144,7 +1977,6 @@ class RecordTransitionOutput(TransitionOutput):
         return self.type.dump() + self.commitment.dump() + self.checksum.dump() + self.record_ciphertext.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         commitment = Field.load(data)
         checksum = Field.load(data)
@@ -2152,7 +1984,6 @@ class RecordTransitionOutput(TransitionOutput):
         return cls(commitment=commitment, checksum=checksum, record_ciphertext=record_ciphertext)
 
     @classmethod
-    # @type_check
     def load_json(cls, data: dict):
         commitment = Field.loads(data["id"])
         checksum = Field.loads(data["checksum"])
@@ -2166,7 +1997,6 @@ class RecordTransitionOutput(TransitionOutput):
 class ExternalRecordTransitionOutput(TransitionOutput):
     type = TransitionOutput.Type.ExternalRecord
 
-    # @type_check
     def __init__(self, *, commitment: Field):
         self.commitment = commitment
 
@@ -2174,16 +2004,14 @@ class ExternalRecordTransitionOutput(TransitionOutput):
         return self.type.dump() + self.commitment.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         commitment = Field.load(data)
         return cls(commitment=commitment)
 
 
-class Transition(Serialize, Deserialize):
+class Transition(Serializable):
     version = u8()
 
-    @generic_type_check
     def __init__(self, *, id_: TransitionID, program_id: ProgramID, function_name: Identifier,
                  inputs: Vec[TransitionInput, u8], outputs: Vec[TransitionOutput, u8], finalize: Option[Vec[Value, u8]],
                  tpk: Group, tcm: Field):
@@ -2210,7 +2038,6 @@ class Transition(Serialize, Deserialize):
         return res
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         version = u8.load(data)
         if version != cls.version:
@@ -2227,10 +2054,9 @@ class Transition(Serialize, Deserialize):
                    finalize=finalize, tpk=tpk, tcm=tcm)
 
 
-class Fee(Serialize, Deserialize):
+class Fee(Serializable):
     version = u8()
 
-    # @type_check
     def __init__(self, *, transition: Transition, global_state_root: StateRoot, proof: Option[Proof]):
         self.transition = transition
         self.global_state_root = global_state_root
@@ -2245,7 +2071,6 @@ class Fee(Serialize, Deserialize):
         return res
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         version = u8.load(data)
         if version != cls.version:
@@ -2256,11 +2081,9 @@ class Fee(Serialize, Deserialize):
         return cls(transition=transition, global_state_root=global_state_root, proof=proof)
 
 
-class Execution(Serialize, Deserialize):
+class Execution(Serializable):
     version = u8()
 
-    # @type_check
-    @generic_type_check
     def __init__(self, *, transitions: Vec[Transition, u8], global_state_root: StateRoot,
                  proof: Option[Proof]):
         self.transitions = transitions
@@ -2276,7 +2099,6 @@ class Execution(Serialize, Deserialize):
         return res
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         version = u8.load(data)
         if version != cls.version:
@@ -2307,7 +2129,7 @@ class Execution(Serialize, Deserialize):
         return storage_cost, -1
 
 
-class Transaction(Serialize, Deserialize):  # Enum
+class Transaction(Serializable):  # Enum
     version = u8()
 
     class Type(IntEnumu8):
@@ -2321,7 +2143,6 @@ class Transaction(Serialize, Deserialize):  # Enum
         raise NotImplementedError
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         if data.getbuffer().nbytes < 1:
             raise ValueError("incorrect length")
@@ -2343,10 +2164,9 @@ class Transaction(Serialize, Deserialize):  # Enum
             raise ValueError("incorrect type")
 
 
-class ProgramOwner(Serialize, Deserialize):
+class ProgramOwner(Serializable):
     version = u8()
 
-    # @type_check
     def __init__(self, *, address: Address, signature: "Signature"):
         self.address = address
         self.signature = signature
@@ -2355,7 +2175,6 @@ class ProgramOwner(Serialize, Deserialize):
         return self.version.dump() + self.address.dump() + self.signature.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         version = u8.load(data)
         if version != cls.version:
@@ -2368,7 +2187,6 @@ class ProgramOwner(Serialize, Deserialize):
 class DeployTransaction(Transaction):
     type = Transaction.Type.Deploy
 
-    # @type_check
     def __init__(self, *, id_: TransactionID, owner: ProgramOwner, deployment: Deployment, fee: Fee):
         self.id = id_
         self.owner = owner
@@ -2380,7 +2198,6 @@ class DeployTransaction(Transaction):
             + self.owner.dump() + self.deployment.dump() + self.fee.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         id_ = TransactionID.load(data)
         owner = ProgramOwner.load(data)
@@ -2392,7 +2209,6 @@ class DeployTransaction(Transaction):
 class ExecuteTransaction(Transaction):
     type = Transaction.Type.Execute
 
-    # @type_check
     def __init__(self, *, id_: TransactionID, execution: Execution, additional_fee: Option[Fee]):
         self.id = id_
         self.execution = execution
@@ -2402,7 +2218,6 @@ class ExecuteTransaction(Transaction):
         return self.version.dump() + self.type.dump() + self.id.dump() + self.execution.dump() + self.additional_fee.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         id_ = TransactionID.load(data)
         execution = Execution.load(data)
@@ -2412,7 +2227,6 @@ class ExecuteTransaction(Transaction):
 class FeeTransaction(Transaction):
     type = Transaction.Type.Fee
 
-    # @type_check
     def __init__(self, *, id_: TransactionID, fee: Fee):
         self.id = id_
         self.fee = fee
@@ -2421,13 +2235,12 @@ class FeeTransaction(Transaction):
         return self.version.dump() + self.type.dump() + self.id.dump() + self.fee.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         id_ = TransactionID.load(data)
         fee = Fee.load(data)
         return cls(id_=id_, fee=fee)
 
-class ConfirmedTransaction(Serialize, Deserialize):
+class ConfirmedTransaction(Serializable):
     class Type(IntEnumu8):
         AcceptedDeploy = 0
         AcceptedExecute = 1
@@ -2440,7 +2253,6 @@ class ConfirmedTransaction(Serialize, Deserialize):
         raise NotImplementedError
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         type_ = cls.Type.load(data)
         if type_ == cls.Type.AcceptedDeploy:
@@ -2455,7 +2267,7 @@ class ConfirmedTransaction(Serialize, Deserialize):
             raise ValueError("incorrect type")
 
 
-class FinalizeOperation(Serialize, Deserialize):
+class FinalizeOperation(Serializable):
     class Type(IntEnumu8):
         InitializeMapping = 0
         InsertKeyValue = 1
@@ -2469,7 +2281,6 @@ class FinalizeOperation(Serialize, Deserialize):
         raise NotImplementedError
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         type_ = cls.Type.load(data)
         if type_ == cls.Type.InitializeMapping:
@@ -2489,7 +2300,6 @@ class FinalizeOperation(Serialize, Deserialize):
 class InitializeMapping(FinalizeOperation):
     type = FinalizeOperation.Type.InitializeMapping
 
-    # @type_check
     def __init__(self, *, mapping_id: Field):
         self.mapping_id = mapping_id
 
@@ -2497,7 +2307,6 @@ class InitializeMapping(FinalizeOperation):
         return self.type.dump() + self.mapping_id.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         mapping_id = Field.load(data)
         return cls(mapping_id=mapping_id)
@@ -2506,7 +2315,6 @@ class InitializeMapping(FinalizeOperation):
 class InsertKeyValue(FinalizeOperation):
     type = FinalizeOperation.Type.InsertKeyValue
 
-    # @type_check
     def __init__(self, *, mapping_id: Field, key_id: Field, value_id: Field):
         self.mapping_id = mapping_id
         self.key_id = key_id
@@ -2516,7 +2324,6 @@ class InsertKeyValue(FinalizeOperation):
         return self.type.dump() + self.mapping_id.dump() + self.key_id.dump() + self.value_id.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         mapping_id = Field.load(data)
         key_id = Field.load(data)
@@ -2527,7 +2334,6 @@ class InsertKeyValue(FinalizeOperation):
 class UpdateKeyValue(FinalizeOperation):
     type = FinalizeOperation.Type.UpdateKeyValue
 
-    # @type_check
     def __init__(self, *, mapping_id: Field, index: u64, key_id: Field, value_id: Field):
         self.mapping_id = mapping_id
         self.index = index
@@ -2538,7 +2344,6 @@ class UpdateKeyValue(FinalizeOperation):
         return self.type.dump() + self.mapping_id.dump() + self.index.dump() + self.key_id.dump() + self.value_id.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         mapping_id = Field.load(data)
         index = u64.load(data)
@@ -2550,7 +2355,6 @@ class UpdateKeyValue(FinalizeOperation):
 class RemoveKeyValue(FinalizeOperation):
     type = FinalizeOperation.Type.RemoveKeyValue
 
-    # @type_check
     def __init__(self, *, mapping_id: Field, index: u64):
         self.mapping_id = mapping_id
         self.index = index
@@ -2559,7 +2363,6 @@ class RemoveKeyValue(FinalizeOperation):
         return self.type.dump() + self.mapping_id.dump() + self.index.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         mapping_id = Field.load(data)
         index = u64.load(data)
@@ -2569,7 +2372,6 @@ class RemoveKeyValue(FinalizeOperation):
 class RemoveMapping(FinalizeOperation):
     type = FinalizeOperation.Type.RemoveMapping
 
-    # @type_check
     def __init__(self, *, mapping_id: Field):
         self.mapping_id = mapping_id
 
@@ -2577,7 +2379,6 @@ class RemoveMapping(FinalizeOperation):
         return self.type.dump() + self.mapping_id.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         mapping_id = Field.load(data)
         return cls(mapping_id=mapping_id)
@@ -2586,7 +2387,6 @@ class RemoveMapping(FinalizeOperation):
 class AcceptedDeploy(ConfirmedTransaction):
     type = ConfirmedTransaction.Type.AcceptedDeploy
 
-    # @type_check
     def __init__(self, *, index: u32, transaction: Transaction, finalize: Vec[FinalizeOperation, u16]):
         self.index = index
         self.transaction = transaction
@@ -2596,7 +2396,6 @@ class AcceptedDeploy(ConfirmedTransaction):
         return self.type.dump() + self.index.dump() + self.transaction.dump() + self.finalize.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         index = u32.load(data)
         transaction = Transaction.load(data)
@@ -2607,7 +2406,6 @@ class AcceptedDeploy(ConfirmedTransaction):
 class AcceptedExecute(ConfirmedTransaction):
     type = ConfirmedTransaction.Type.AcceptedExecute
 
-    # @type_check
     def __init__(self, *, index: u32, transaction: Transaction, finalize: Vec[FinalizeOperation, u16]):
         self.index = index
         self.transaction = transaction
@@ -2617,14 +2415,13 @@ class AcceptedExecute(ConfirmedTransaction):
         return self.type.dump() + self.index.dump() + self.transaction.dump() + self.finalize.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         index = u32.load(data)
         transaction = Transaction.load(data)
         finalize = Vec[FinalizeOperation, u16].load(data)
         return cls(index=index, transaction=transaction, finalize=finalize)
 
-class Rejected(Serialize, Deserialize):
+class Rejected(Serializable):
     class Type(IntEnumu8):
         Deployment = 0
         Execution = 1
@@ -2634,7 +2431,6 @@ class Rejected(Serialize, Deserialize):
         raise NotImplementedError
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         type_ = cls.Type.load(data)
         if type_ == cls.Type.Deployment:
@@ -2647,7 +2443,6 @@ class Rejected(Serialize, Deserialize):
 class RejectedDeployment(Rejected):
     type = Rejected.Type.Deployment
 
-    # @type_check
     def __init__(self, *, program_owner: ProgramOwner, deploy: Deployment):
         self.program_owner = program_owner
         self.deploy = deploy
@@ -2656,7 +2451,6 @@ class RejectedDeployment(Rejected):
         return self.type.dump() + self.program_owner.dump() + self.deploy.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         program_owner = ProgramOwner.load(data)
         deploy = Deployment.load(data)
@@ -2665,7 +2459,6 @@ class RejectedDeployment(Rejected):
 class RejectedExecution(Rejected):
     type = Rejected.Type.Execution
 
-    # @type_check
     def __init__(self, *, execution: Execution):
         self.execution = execution
 
@@ -2673,7 +2466,6 @@ class RejectedExecution(Rejected):
         return self.type.dump() + self.execution.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         execution = Execution.load(data)
         return cls(execution=execution)
@@ -2681,7 +2473,6 @@ class RejectedExecution(Rejected):
 class RejectedDeploy(ConfirmedTransaction):
     type = ConfirmedTransaction.Type.RejectedDeploy
 
-    # @type_check
     def __init__(self, *, index: u32, transaction: Transaction, rejected: Rejected):
         self.index = index
         self.transaction = transaction
@@ -2691,7 +2482,6 @@ class RejectedDeploy(ConfirmedTransaction):
         return self.type.dump() + self.index.dump() + self.transaction.dump() + self.rejected.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         index = u32.load(data)
         transaction = Transaction.load(data)
@@ -2702,7 +2492,6 @@ class RejectedDeploy(ConfirmedTransaction):
 class RejectedExecute(ConfirmedTransaction):
     type = ConfirmedTransaction.Type.RejectedExecute
 
-    # @type_check
     def __init__(self, *, index: u32, transaction: Transaction, rejected: Rejected):
         self.index = index
         self.transaction = transaction
@@ -2712,7 +2501,6 @@ class RejectedExecute(ConfirmedTransaction):
         return self.type.dump() + self.index.dump() + self.transaction.dump() + self.rejected.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         index = u32.load(data)
         transaction = Transaction.load(data)
@@ -2720,11 +2508,9 @@ class RejectedExecute(ConfirmedTransaction):
         return cls(index=index, transaction=transaction, rejected=rejected)
 
 
-class Transactions(Serialize, Deserialize):
+class Transactions(Serializable):
     version = u8()
 
-    # @type_check
-    @generic_type_check
     def __init__(self, *, transactions: Vec[ConfirmedTransaction, u32]):  # we probably don't need IDs here so using Vec
         self.transactions = transactions
 
@@ -2732,7 +2518,6 @@ class Transactions(Serialize, Deserialize):
         return self.version.dump() + self.transactions.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         version = u8.load(data)
         if version != cls.version:
@@ -2745,10 +2530,9 @@ class Transactions(Serialize, Deserialize):
         return iter(self.transactions)
 
 
-class BlockHeaderMetadata(Serialize, Deserialize):
+class BlockHeaderMetadata(Serializable):
     version = u8()
 
-    # @type_check
     def __init__(self, *, network: u16, round_: u64, height: u32, total_supply_in_microcredits: u64,
                  cumulative_weight: u128, cumulative_proof_target: u128, coinbase_target: u64, proof_target: u64,
                  last_coinbase_target: u64, last_coinbase_timestamp: i64, timestamp: i64):
@@ -2772,7 +2556,6 @@ class BlockHeaderMetadata(Serialize, Deserialize):
 
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         version = u8.load(data)
         if version != cls.version:
@@ -2797,10 +2580,9 @@ class BlockHeaderMetadata(Serialize, Deserialize):
                    last_coinbase_timestamp=last_coinbase_timestamp, timestamp=timestamp)
 
 
-class BlockHeader(Serialize, Deserialize):
+class BlockHeader(Serializable):
     version = u8()
 
-    # @type_check
     def __init__(self, *, previous_state_root: Field, transactions_root: Field, coinbase_accumulator_point: Field,
                  finalize_root: Field, ratifications_root: Field, metadata: BlockHeaderMetadata):
         self.previous_state_root = previous_state_root
@@ -2816,7 +2598,6 @@ class BlockHeader(Serialize, Deserialize):
                + self.metadata.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         version = u8.load(data)
         previous_state_root = Field.load(data)
@@ -2832,9 +2613,8 @@ class BlockHeader(Serialize, Deserialize):
                    coinbase_accumulator_point=coinbase_accumulator_point, metadata=metadata)
 
 
-class PuzzleCommitment(Serialize, Deserialize):
+class PuzzleCommitment(Serializable):
 
-    # @type_check
     def __init__(self, *, commitment: KZGCommitment):
         self.commitment = commitment
 
@@ -2842,13 +2622,11 @@ class PuzzleCommitment(Serialize, Deserialize):
         return self.commitment.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         commitment = KZGCommitment.load(data)
         return cls(commitment=commitment)
 
     @classmethod
-    # @type_check
     def loads(cls, data: str):
         return cls.load(bech32_to_bytes(data))
 
@@ -2859,9 +2637,8 @@ class PuzzleCommitment(Serialize, Deserialize):
         return str(Bech32m(self.dump(), "puzzle"))
 
 
-class PartialSolution(Serialize, Deserialize):
+class PartialSolution(Serializable):
 
-    # @type_check
     def __init__(self, *, address: Address, nonce: u64, commitment: PuzzleCommitment):
         self.address = address
         self.nonce = nonce
@@ -2871,7 +2648,6 @@ class PartialSolution(Serialize, Deserialize):
         return self.address.dump() + self.nonce.dump() + self.commitment.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         address = Address.load(data)
         nonce = u64.load(data)
@@ -2879,7 +2655,6 @@ class PartialSolution(Serialize, Deserialize):
         return cls(address=address, nonce=nonce, commitment=commitment)
 
     @classmethod
-    # @type_check
     def load_json(cls, data: dict):
         address = Address.loads(data['address'])
         nonce = u64(data['nonce'])
@@ -2893,9 +2668,8 @@ class PartialSolution(Serialize, Deserialize):
 PuzzleProof = KZGProof
 
 
-class ProverSolution(Serialize, Deserialize):
+class ProverSolution(Serializable):
 
-    # @type_check
     def __init__(self, *, partial_solution: PartialSolution, proof: PuzzleProof):
         self.partial_solution = partial_solution
         self.proof = proof
@@ -2904,17 +2678,14 @@ class ProverSolution(Serialize, Deserialize):
         return self.partial_solution.dump() + self.proof.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         partial_solution = PartialSolution.load(data)
         proof = PuzzleProof.load(data)
         return cls(partial_solution=partial_solution, proof=proof)
 
 
-class CoinbaseSolution(Serialize, Deserialize):
+class CoinbaseSolution(Serializable):
 
-    # @type_check
-    @generic_type_check
     def __init__(self, *, partial_solutions: Vec[PartialSolution, u32], proof: PuzzleProof):
         self.partial_solutions = partial_solutions
         self.proof = proof
@@ -2923,16 +2694,14 @@ class CoinbaseSolution(Serialize, Deserialize):
         return self.partial_solutions.dump() + self.proof.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         partial_solutions = Vec[PartialSolution, u32].load(data)
         proof = PuzzleProof.load(data)
         return cls(partial_solutions=partial_solutions, proof=proof)
 
 
-class ComputeKey(Serialize, Deserialize):
+class ComputeKey(Serializable):
 
-    # @type_check
     def __init__(self, *, pk_sig: Group, pr_sig: Group):
         self.pk_sig = pk_sig
         self.pr_sig = pr_sig
@@ -2941,16 +2710,14 @@ class ComputeKey(Serialize, Deserialize):
         return self.pk_sig.dump() + self.pr_sig.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         pk_sig = Group.load(data)
         pr_sig = Group.load(data)
         return cls(pk_sig=pk_sig, pr_sig=pr_sig)
 
 
-class Signature(Serialize, Deserialize):
+class Signature(Serializable):
 
-    # @type_check
     def __init__(self, *, challange: Scalar, response: Scalar, compute_key: ComputeKey):
         self.challange = challange
         self.response = response
@@ -2960,7 +2727,6 @@ class Signature(Serialize, Deserialize):
         return self.challange.dump() + self.response.dump() + self.compute_key.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         challange = Scalar.load(data)
         response = Scalar.load(data)
@@ -2968,7 +2734,6 @@ class Signature(Serialize, Deserialize):
         return cls(challange=challange, response=response, compute_key=compute_key)
 
     @classmethod
-    # @type_check
     def loads(cls, data: str):
         return cls.load(bech32_to_bytes(data))
 
@@ -2976,7 +2741,7 @@ class Signature(Serialize, Deserialize):
         return str(Bech32m(self.dump(), "sign"))
 
 
-class Ratify(Serialize, Deserialize):
+class Ratify(Serializable):
     version = 0
 
     class Type(IntEnumu8):
@@ -2989,7 +2754,6 @@ class Ratify(Serialize, Deserialize):
         raise NotImplementedError
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         version = u8.load(data)
         if version != cls.version:
@@ -3005,7 +2769,6 @@ class Ratify(Serialize, Deserialize):
 class ProvingReward(Ratify):
     type = Ratify.Type.ProvingReward
 
-    # @type_check
     def __init__(self, *, address: Address, amount: u64):
         self.address = address
         self.amount = amount
@@ -3014,7 +2777,6 @@ class ProvingReward(Ratify):
         return self.address.dump() + self.amount.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         address = Address.load(data)
         amount = u64.load(data)
@@ -3023,7 +2785,6 @@ class ProvingReward(Ratify):
 class StakingReward(Ratify):
     type = Ratify.Type.StakingReward
 
-    # @type_check
     def __init__(self, *, address: Address, amount: u64):
         self.address = address
         self.amount = amount
@@ -3032,7 +2793,6 @@ class StakingReward(Ratify):
         return self.address.dump() + self.amount.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         address = Address.load(data)
         amount = u64.load(data)
@@ -3059,10 +2819,9 @@ def retarget(prev_target, prev_block_timestamp, block_timestamp, half_life, inve
     return candidate_target
 
 
-class Block(Serialize, Deserialize):
+class Block(Serializable):
     version = u8()
 
-    # @type_check
     def __init__(self, *, block_hash: BlockHash, previous_hash: BlockHash, header: BlockHeader,
                  transactions: Transactions, ratifications: Vec[Ratify, u32], coinbase: Option[CoinbaseSolution],
                  signature: Signature):
@@ -3079,7 +2838,6 @@ class Block(Serialize, Deserialize):
                + self.transactions.dump() + self.ratifications.dump() + self.coinbase.dump() + self.signature.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         version = u8.load(data)
         block_hash = BlockHash.load(data)

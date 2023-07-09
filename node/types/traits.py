@@ -1,7 +1,7 @@
 import struct
 from decimal import Decimal
 from enum import IntEnum
-from typing import Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable, Self
 
 from .utils import *
 
@@ -9,7 +9,8 @@ from .utils import *
 @runtime_checkable
 class Deserialize(Protocol):
 
-    def load(self, data: BytesIO):
+    @classmethod
+    def load(cls, data: BytesIO) -> Self:
         ...
 
 
@@ -20,19 +21,17 @@ class Serialize(Protocol):
         ...
 
 
-class SerDe(Serialize, Deserialize, Protocol):
+@runtime_checkable
+class Serializable(Serialize, Deserialize, Protocol):
     pass
 
 
 @runtime_checkable
 class Sized(Protocol):
-
-    @property
-    def size(self) -> int:
-        ...
+    size: int
 
 
-class Int(Sized, Serialize, Deserialize, int, metaclass=ABCMeta):
+class Int(Sized, Serializable, int):
 
     def __new__(cls, value=0):
         return int.__new__(cls, value)
@@ -163,13 +162,12 @@ class Int(Sized, Serialize, Deserialize, int, metaclass=ABCMeta):
         return self.__class__(int.__or__(self, other))
 
 
-class IntEnumu8(Serialize, Deserialize, IntEnum, metaclass=ABCEnumMeta):
+class IntEnumu8(Serializable, IntEnum, metaclass=ABCEnumMeta):
 
     def dump(self) -> bytes:
         return struct.pack("<B", self.value)
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         if data.tell() >= data.getbuffer().nbytes:
             raise ValueError("incorrect length")
@@ -177,13 +175,12 @@ class IntEnumu8(Serialize, Deserialize, IntEnum, metaclass=ABCEnumMeta):
         return self
 
 
-class IntEnumu16(Serialize, Deserialize, IntEnum, metaclass=ABCEnumMeta):
+class IntEnumu16(Serializable, IntEnum, metaclass=ABCEnumMeta):
 
     def dump(self) -> bytes:
         return struct.pack("<H", self.value)
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         if data.tell() + 2 > data.getbuffer().nbytes:
             raise ValueError("incorrect length")
@@ -191,13 +188,12 @@ class IntEnumu16(Serialize, Deserialize, IntEnum, metaclass=ABCEnumMeta):
         return self
 
 
-class IntEnumu32(Serialize, Deserialize, IntEnum, metaclass=ABCEnumMeta):
+class IntEnumu32(Serializable, IntEnum, metaclass=ABCEnumMeta):
 
     def dump(self) -> bytes:
         return struct.pack("<I", self.value)
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         if data.tell() + 4 > data.getbuffer().nbytes:
             raise ValueError("incorrect length")

@@ -4,9 +4,8 @@ from types import NoneType
 from .vm_basic import *
 
 
-class StringType(Serialize, Deserialize):
+class StringType(Serializable):
 
-    # @type_check
     def __init__(self, *, string: str):
         self.string = string
 
@@ -17,7 +16,6 @@ class StringType(Serialize, Deserialize):
         return u16(len(bytes_)).dump() + bytes_
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         length = u16.load(data)
         string = data.read(length).decode("utf-8")
@@ -30,7 +28,7 @@ class StringType(Serialize, Deserialize):
     def __str__(self):
         return self.string
 
-class Literal(Serialize, Deserialize): # enum
+class Literal(Serializable): # enum
 
     class Type(IntEnumu16):
         Address = 0
@@ -88,7 +86,6 @@ class Literal(Serialize, Deserialize): # enum
         StringType: Type.String,
     }
 
-    # @type_check
     def __init__(self, *, type_: Type, primitive: Serialize):
         self.type = type_
         self.primitive = primitive
@@ -97,7 +94,6 @@ class Literal(Serialize, Deserialize): # enum
         return self.type.dump() + self.primitive.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         type_ = cls.Type.load(data)
         primitive = cls.primitive_type_map[type_].load(data)
@@ -121,9 +117,8 @@ class Literal(Serialize, Deserialize): # enum
         return self.type == other.type and self.primitive >= other.primitive
 
 
-class Identifier(Serialize, Deserialize):
+class Identifier(Serializable):
 
-    # @type_check
     def __init__(self, *, value: str):
         if value == "":
             raise ValueError("identifier cannot be empty")
@@ -140,7 +135,6 @@ class Identifier(Serialize, Deserialize):
         return len(self.data).to_bytes(1, "little") + self.data.encode("ascii")
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         if data.tell() >= data.getbuffer().nbytes:
             raise ValueError("incorrect length")
@@ -151,7 +145,6 @@ class Identifier(Serialize, Deserialize):
         return cls(value=value)
 
     @classmethod
-    # @type_check
     def loads(cls, data: str):
         return cls(value=data)
 
@@ -166,9 +159,8 @@ class Identifier(Serialize, Deserialize):
     def __hash__(self):
         return hash(self.data)
 
-class ProgramID(Serialize, Deserialize):
+class ProgramID(Serializable):
 
-    # @type_check
     def __init__(self, *, name: Identifier, network: Identifier):
         self.name = name
         self.network = network
@@ -177,14 +169,12 @@ class ProgramID(Serialize, Deserialize):
         return self.name.dump() + self.network.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         name = Identifier.load(data)
         network = Identifier.load(data)
         return cls(name=name, network=network)
 
     @classmethod
-    # @type_check
     def loads(cls, data: str):
         (name, network) = data.split(".")
         return cls(name=Identifier(value=name), network=Identifier(value=network))
@@ -198,9 +188,8 @@ class ProgramID(Serialize, Deserialize):
         return self.name == other.name and self.network == other.network
 
 
-class Import(Serialize, Deserialize):
+class Import(Serializable):
 
-    # @type_check
     def __init__(self, *, program_id: ProgramID):
         self.program_id = program_id
 
@@ -208,12 +197,11 @@ class Import(Serialize, Deserialize):
         return self.program_id.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         program_id = ProgramID.load(data)
         return cls(program_id=program_id)
 
-class Register(Serialize, Deserialize): # enum
+class Register(Serializable): # enum
 
     class Type(IntEnumu8):
         Locator = 0
@@ -225,7 +213,6 @@ class Register(Serialize, Deserialize): # enum
         raise NotImplementedError
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         type_ = cls.Type.load(data)
         if type_ == cls.Type.Locator:
@@ -236,10 +223,53 @@ class Register(Serialize, Deserialize): # enum
             raise ValueError(f"Invalid register type {type_}")
 
 
+class VarInt(int, Serializable):
+
+    def __new__(cls, value: int):
+        if value > 0xffffffffffffffff:
+            raise ValueError("value is too big")
+        return int.__new__(cls, value)
+
+    def __init__(self, _): # type: ignore[reportInconsistentConstructor]
+        pass
+
+    def dump(self) -> bytes:
+        if 0 <= self <= 0xfc:
+            return self.to_bytes(1, "little")
+        elif 0xfd <= self <= 0xffff:
+            return b"\xfd" + self.to_bytes(2, "little")
+        elif 0x10000 <= self <= 0xffffffff:
+            return b"\xfe" + self.to_bytes(4, "little")
+        elif 0x100000000 <= self <= 0xffffffffffffffff:
+            return b"\xff" + self.to_bytes(8, "little")
+        else:
+            raise ValueError("unreachable")
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        if data.tell() >= data.getbuffer().nbytes:
+            raise ValueError("data is too short")
+        value = data.read(1)[0]
+        if value == 0xfd:
+            if data.tell() + 2 > data.getbuffer().nbytes:
+                raise ValueError("data is too short")
+            value = u16.load(data)
+        elif value == 0xfe:
+            if data.tell() + 4 > data.getbuffer().nbytes:
+                raise ValueError("data is too short")
+            value = u32.load(data)
+        elif value == 0xff:
+            if data.tell() + 8 > data.getbuffer().nbytes:
+                raise ValueError("data is too short")
+            value = u64.load(data)
+        else:
+            value = u8(value)
+        return cls(value)
+
+
 class LocatorRegister(Register):
     type = Register.Type.Locator
 
-    # @type_check
     def __init__(self, *, locator: VarInt[u64]):
         self.locator = locator
 
@@ -247,7 +277,6 @@ class LocatorRegister(Register):
         return self.type.dump() + self.locator.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         locator = VarInt[u64].load(data)
         return cls(locator=locator)
@@ -256,8 +285,6 @@ class LocatorRegister(Register):
 class MemberRegister(Register):
     type = Register.Type.Member
 
-    # @type_check
-    @generic_type_check
     def __init__(self, *, locator: VarInt[u64], identifiers: Vec[Identifier, u16]):
         self.locator = locator
         self.identifiers = identifiers
@@ -266,14 +293,13 @@ class MemberRegister(Register):
         return self.type.dump() + self.locator.dump() + self.identifiers.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         locator = VarInt[u64].load(data)
         identifiers = Vec[Identifier, u16].load(data)
         return cls(locator=locator, identifiers=identifiers)
 
 
-class Operand(Serialize, Deserialize): # enum
+class Operand(Serializable): # enum
 
     class Type(IntEnumu8):
         Literal = 0
@@ -288,7 +314,6 @@ class Operand(Serialize, Deserialize): # enum
         raise NotImplementedError
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         if data.tell() >= data.getbuffer().nbytes:
             raise ValueError("incorrect length")
@@ -309,7 +334,6 @@ class Operand(Serialize, Deserialize): # enum
 class LiteralOperand(Operand):
     type = Operand.Type.Literal
 
-    # @type_check
     def __init__(self, *, literal: Literal):
         self.literal = literal
 
@@ -317,7 +341,6 @@ class LiteralOperand(Operand):
         return self.type.dump() + self.literal.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         return cls(literal=Literal.load(data))
 
@@ -325,7 +348,6 @@ class LiteralOperand(Operand):
 class RegisterOperand(Operand):
     type = Operand.Type.Register
 
-    # @type_check
     def __init__(self, *, register: Register):
         self.register = register
 
@@ -333,7 +355,6 @@ class RegisterOperand(Operand):
         return self.type.dump() + self.register.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         return cls(register=Register.load(data))
 
@@ -341,7 +362,6 @@ class RegisterOperand(Operand):
 class ProgramIDOperand(Operand):
     type = Operand.Type.ProgramID
 
-    # @type_check
     def __init__(self, *, program_id: ProgramID):
         self.program_id = program_id
 
@@ -349,7 +369,6 @@ class ProgramIDOperand(Operand):
         return self.type.dump() + self.program_id.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         return cls(program_id=ProgramID.load(data))
 
@@ -357,7 +376,6 @@ class ProgramIDOperand(Operand):
 class CallerOperand(Operand):
     type = Operand.Type.Caller
 
-    # @type_check
     def __init__(self):
         pass
 
@@ -365,14 +383,12 @@ class CallerOperand(Operand):
         return self.type.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         return cls()
 
 class BlockHeightOperand(Operand):
     type = Operand.Type.BlockHeight
 
-    # @type_check
     def __init__(self):
         pass
 
@@ -380,12 +396,11 @@ class BlockHeightOperand(Operand):
         return self.type.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         return cls()
 
 
-class Literals(Generic[T], Serialize, Deserialize):
+class Literals(Generic[T], Serializable):
     # The generic here is for the number of the literals
     def __init__(self, types):
         super().__init__(types)
@@ -395,8 +410,6 @@ class Literals(Generic[T], Serialize, Deserialize):
             raise ValueError("Literals type must be an int")
         self.num_operands = types[0]
 
-    # @type_check
-    @generic_type_check
     def __call__(self, *, operands: Vec[Operand | NoneType, 3], destination: Register):
         # the max operand count is 3, fill in the rest with None
         self.operands = operands
@@ -410,7 +423,6 @@ class Literals(Generic[T], Serialize, Deserialize):
         res += self.destination.dump()
         return res
 
-    # @type_check
     def load(self, data: BytesIO):
         operands = [None] * 3
         for i in range(self.num_operands):
@@ -419,7 +431,7 @@ class Literals(Generic[T], Serialize, Deserialize):
         return self(operands=Vec[Operand | NoneType, 3](operands), destination=destination)
 
 
-class AssertInstruction(Generic[T], Serialize, Deserialize):
+class AssertInstruction(Generic[T], Serializable):
     # The generic here is for the variant of the assert instruction
     def __init__(self, types):
         super().__init__(types)
@@ -429,8 +441,6 @@ class AssertInstruction(Generic[T], Serialize, Deserialize):
             raise ValueError("AssertInstruction type must be an int")
         self.variant = types[0]
 
-    # @type_check
-    @generic_type_check
     def __call__(self, *, operands: Vec[Operand, 2]):
         self.operands = operands
         return self
@@ -438,14 +448,12 @@ class AssertInstruction(Generic[T], Serialize, Deserialize):
     def dump(self) -> bytes:
         return self.operands.dump()
 
-    # @type_check
     def load(self, data: BytesIO):
         return self(operands=Vec[Operand, 2].load(data))
 
 
-class Locator(Serialize, Deserialize):
+class Locator(Serializable):
 
-    # @type_check
     def __init__(self, *, id_: ProgramID, resource: Identifier):
         self.id = id_
         self.resource = resource
@@ -454,7 +462,6 @@ class Locator(Serialize, Deserialize):
         return self.id.dump() + self.resource.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         id_ = ProgramID.load(data)
         resource = Identifier.load(data)
@@ -465,7 +472,7 @@ class Locator(Serialize, Deserialize):
 
 
 
-class CallOperator(Serialize, Deserialize): # enum
+class CallOperator(Serializable): # enum
 
     class Type(IntEnumu8):
         Locator = 0
@@ -477,7 +484,6 @@ class CallOperator(Serialize, Deserialize): # enum
         raise NotImplementedError
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         if data.tell() >= data.getbuffer().nbytes:
             raise ValueError("incorrect length")
@@ -493,7 +499,6 @@ class CallOperator(Serialize, Deserialize): # enum
 class LocatorCallOperator(CallOperator):
     type = CallOperator.Type.Locator
 
-    # @type_check
     def __init__(self, *, locator: Locator):
         self.locator = locator
 
@@ -501,7 +506,6 @@ class LocatorCallOperator(CallOperator):
         return self.type.dump() + self.locator.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         return cls(locator=Locator.load(data))
 
@@ -509,7 +513,6 @@ class LocatorCallOperator(CallOperator):
 class ResourceCallOperator(CallOperator):
     type = CallOperator.Type.Resource
 
-    # @type_check
     def __init__(self, *, resource: Identifier):
         self.resource = resource
 
@@ -517,15 +520,12 @@ class ResourceCallOperator(CallOperator):
         return self.type.dump() + self.resource.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         return cls(resource=Identifier.load(data))
 
 
-class CallInstruction(Serialize, Deserialize):
+class CallInstruction(Serializable):
 
-    # @type_check
-    @generic_type_check
     def __init__(self, *, operator: CallOperator, operands: Vec[Operand, u8], destinations: Vec[Register, u8]):
         self.operator = operator
         self.operands = operands
@@ -535,7 +535,6 @@ class CallInstruction(Serialize, Deserialize):
         return self.operator.dump() + self.operands.dump() + self.destinations.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         operator = CallOperator.load(data)
         operands = Vec[Operand, u8].load(data)
@@ -602,7 +601,7 @@ class LiteralType(IntEnumu8):
         }[self]
 
 
-class PlaintextType(Serialize, Deserialize): # enum
+class PlaintextType(Serializable): # enum
 
     class Type(IntEnumu8):
         Literal = 0
@@ -614,7 +613,6 @@ class PlaintextType(Serialize, Deserialize): # enum
         raise NotImplementedError
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         if data.tell() >= data.getbuffer().nbytes:
             raise ValueError("incorrect length")
@@ -629,7 +627,6 @@ class PlaintextType(Serialize, Deserialize): # enum
 class LiteralPlaintextType(PlaintextType):
     type = PlaintextType.Type.Literal
 
-    # @type_check
     def __init__(self, *, literal_type: LiteralType):
         self.literal_type = literal_type
 
@@ -637,7 +634,6 @@ class LiteralPlaintextType(PlaintextType):
         return self.type.dump() + self.literal_type.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         literal_type = LiteralType.load(data)
         return cls(literal_type=literal_type)
@@ -649,7 +645,6 @@ class LiteralPlaintextType(PlaintextType):
 class StructPlaintextType(PlaintextType):
     type = PlaintextType.Type.Struct
 
-    # @type_check
     def __init__(self, *, struct_: Identifier):
         self.struct = struct_
 
@@ -657,7 +652,6 @@ class StructPlaintextType(PlaintextType):
         return self.type.dump() + self.struct.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         struct_ = Identifier.load(data)
         return cls(struct_=struct_)
@@ -665,7 +659,7 @@ class StructPlaintextType(PlaintextType):
     def __str__(self):
         return str(self.struct)
 
-class RegisterType(Serialize, Deserialize): # enum
+class RegisterType(Serializable): # enum
 
     class Type(IntEnumu8):
         Plaintext = 0
@@ -678,7 +672,6 @@ class RegisterType(Serialize, Deserialize): # enum
         raise NotImplementedError
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         type_ = cls.Type.load(data)
         if type_ == cls.Type.Plaintext:
@@ -694,7 +687,6 @@ class RegisterType(Serialize, Deserialize): # enum
 class PlaintextRegisterType(RegisterType):
     type = RegisterType.Type.Plaintext
 
-    # @type_check
     def __init__(self, *, plaintext_type: PlaintextType):
         self.plaintext_type = plaintext_type
 
@@ -702,7 +694,6 @@ class PlaintextRegisterType(RegisterType):
         return self.type.dump() + self.plaintext_type.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         plaintext_type = PlaintextType.load(data)
         return cls(plaintext_type=plaintext_type)
@@ -711,7 +702,6 @@ class PlaintextRegisterType(RegisterType):
 class RecordRegisterType(RegisterType):
     type = RegisterType.Type.Record
 
-    # @type_check
     def __init__(self, *, identifier: Identifier):
         self.identifier = identifier
 
@@ -719,7 +709,6 @@ class RecordRegisterType(RegisterType):
         return self.type.dump() + self.identifier.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         identifier = Identifier.load(data)
         return cls(identifier=identifier)
@@ -728,7 +717,6 @@ class RecordRegisterType(RegisterType):
 class ExternalRecordRegisterType(RegisterType):
     type = RegisterType.Type.ExternalRecord
 
-    # @type_check
     def __init__(self, *, locator: Locator):
         self.locator = locator
 
@@ -736,12 +724,11 @@ class ExternalRecordRegisterType(RegisterType):
         return self.type.dump() + self.locator.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         locator = Locator.load(data)
         return cls(locator=locator)
 
-class CastType(Serialize, Deserialize):
+class CastType(Serializable):
 
     class Type(IntEnumu8):
         GroupXCoordinate = 0
@@ -754,7 +741,6 @@ class CastType(Serialize, Deserialize):
         raise NotImplementedError
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         type_ = cls.Type.load(data)
         if type_ == cls.Type.GroupXCoordinate:
@@ -773,7 +759,6 @@ class GroupXCoordinateCastType(CastType):
         return self.type.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         return cls()
 
@@ -784,14 +769,12 @@ class GroupYCoordinateCastType(CastType):
         return self.type.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         return cls()
 
 class RegisterTypeCastType(CastType):
     type = CastType.Type.RegisterType
 
-    # @type_check
     def __init__(self, *, register_type: RegisterType):
         self.register_type = register_type
 
@@ -799,16 +782,13 @@ class RegisterTypeCastType(CastType):
         return self.type.dump() + self.register_type.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         register_type = RegisterType.load(data)
         return cls(register_type=register_type)
 
 
-class CastInstruction(Serialize, Deserialize):
+class CastInstruction(Serializable):
 
-    # @type_check
-    @generic_type_check
     def __init__(self, *, operands: Vec[Operand, u8], destination: Register, cast_type: CastType):
         self.operands = operands
         self.destination = destination
@@ -818,14 +798,13 @@ class CastInstruction(Serialize, Deserialize):
         return self.operands.dump() + self.destination.dump() + self.cast_type.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         operands = Vec[Operand, u8].load(data)
         destination = Register.load(data)
         cast_Type = CastType.load(data)
         return cls(operands=operands, destination=destination, cast_type=cast_Type)
 
-class CommitInstruction(Generic[T], Serialize, Deserialize):
+class CommitInstruction(Generic[T], Serializable):
     class Type(Enum):
         CommitBHP256 = 0
         CommitBHP512 = 1
@@ -857,7 +836,7 @@ class CommitInstruction(Generic[T], Serialize, Deserialize):
         return self(operands=self.operands, destination=self.destination, destination_type=self.destination_type)
 
 
-class HashInstruction(Generic[T], Serialize, Deserialize):
+class HashInstruction(Generic[T], Serializable):
     class Type(Enum):
         HashBHP256 = 0
         HashBHP512 = 1
@@ -880,7 +859,6 @@ class HashInstruction(Generic[T], Serialize, Deserialize):
         self.type = types[0]
 
     # shortcut here so check doesn't work
-    # @generic_type_check
     def __call__(self, *, operands: Vec[Operand | NoneType, 2], destination: Register, destination_type: LiteralType):
         self.operands = operands
         self.destination = destination
@@ -902,7 +880,7 @@ class HashInstruction(Generic[T], Serialize, Deserialize):
         return self(operands=self.operands, destination=self.destination, destination_type=self.destination_type)
 
 
-class Instruction(Serialize, Deserialize): # enum
+class Instruction(Serializable): # enum
 
     class Type(IntEnumu16):
 
@@ -1168,7 +1146,6 @@ class Instruction(Serialize, Deserialize): # enum
         Type.Xor: 2_000,
     }
 
-    # @type_check
     def __init__(self, *, type_: Type, literals: Literals | AssertInstruction | CallInstruction | CastInstruction | CommitInstruction | HashInstruction):
         self.type = type_
         self.literals = literals
@@ -1177,7 +1154,6 @@ class Instruction(Serialize, Deserialize): # enum
         return self.type.dump() + self.literals.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         type_ = cls.Type.load(data)
         instruction_type = cls.type_map[type_]

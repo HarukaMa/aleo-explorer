@@ -1,7 +1,7 @@
 from .generic import *
 
 
-class AleoID(Sized, Serialize, Deserialize, metaclass=ABCMeta):
+class AleoID(Sized, Serializable, metaclass=ABCMeta):
     size = 32
 
     def __init__(self, data):
@@ -31,7 +31,6 @@ class AleoID(Sized, Serialize, Deserialize, metaclass=ABCMeta):
         return self._data
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         if data.tell() + cls.size > data.getbuffer().nbytes:
             raise ValueError("incorrect length")
@@ -40,7 +39,6 @@ class AleoID(Sized, Serialize, Deserialize, metaclass=ABCMeta):
         return self
 
     @classmethod
-    # @type_check
     def loads(cls, data: str):
         hrp, data = aleo.bech32_decode(data)
         if hrp != cls._prefix:
@@ -61,7 +59,7 @@ class AleoID(Sized, Serialize, Deserialize, metaclass=ABCMeta):
         return self.data == other.data
 
 
-class AleoObject(Sized, Serialize, Deserialize, metaclass=ABCMeta):
+class AleoObject(Sized, Serializable, metaclass=ABCMeta):
     def __init__(self, data):
         if not isinstance(self._prefix, str):
             raise TypeError("object_prefix must be str")
@@ -93,7 +91,6 @@ class AleoObject(Sized, Serialize, Deserialize, metaclass=ABCMeta):
         return self._data
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         size = cls.size
         # noinspection PyTypeChecker
@@ -103,7 +100,6 @@ class AleoObject(Sized, Serialize, Deserialize, metaclass=ABCMeta):
         return self
 
     @classmethod
-    # @type_check
     def loads(cls, data: str):
         hrp, data = aleo.bech32_decode(data)
         if hrp != cls._prefix:
@@ -162,11 +158,10 @@ class Address(AleoObject):
         AleoObject.__init__(self, data)
 
 
-class Field(Serialize, Deserialize):
+class Field(Serializable):
     # Fr, Fp256
     # Just store as a large integer now
     # Hopefully this will not be used later...
-    # @type_check
     def __init__(self, data):
         if not isinstance(data, int):
             raise TypeError("data must be int")
@@ -176,7 +171,6 @@ class Field(Serialize, Deserialize):
         return self.data.to_bytes(32, "little")
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         if data.tell() + 32 > data.getbuffer().nbytes:
             raise ValueError("incorrect length")
@@ -224,9 +218,8 @@ class Field(Serialize, Deserialize):
         return bool_.load(BytesIO(bytes(aleo.field_ops(self.dump(), other.dump(), "lte"))))
 
 
-class Group(Serialize, Deserialize):
+class Group(Serializable):
     # This is definitely wrong, but we are not using the internals
-    # @type_check
     def __init__(self, data):
         if not isinstance(data, int):
             raise TypeError("data must be int")
@@ -236,7 +229,6 @@ class Group(Serialize, Deserialize):
         return self.data.to_bytes(32, "little")
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         if data.tell() + 32 > data.getbuffer().nbytes:
             raise ValueError("incorrect length")
@@ -251,9 +243,8 @@ class Group(Serialize, Deserialize):
         return str(self.data) + "group"
 
 
-class Scalar(Serialize, Deserialize):
+class Scalar(Serializable):
     # Could be wrong as well
-    # @type_check
     def __init__(self, data):
         if not isinstance(data, int):
             raise TypeError("data must be int")
@@ -263,7 +254,6 @@ class Scalar(Serialize, Deserialize):
         return self.data.to_bytes(32, "little")
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         if data.tell() + 32 > data.getbuffer().nbytes:
             raise ValueError("incorrect length")
@@ -278,9 +268,8 @@ class Scalar(Serialize, Deserialize):
         return str(self.data) + "scalar"
 
 
-class Fq(Serialize, Deserialize):
+class Fq(Serializable):
     # Fp384, G1
-    # @type_check
     def __init__(self, value: int):
         self.value = value
 
@@ -288,7 +277,6 @@ class Fq(Serialize, Deserialize):
         return self.value.to_bytes(48, "little")
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         if data.tell() + 48 > data.getbuffer().nbytes:
             raise ValueError("incorrect length")
@@ -298,9 +286,8 @@ class Fq(Serialize, Deserialize):
     def __str__(self):
         return str(self.value)
 
-class G1Affine(Serialize, Deserialize):
+class G1Affine(Serializable):
 
-    # @type_check
     def __init__(self, *, x: Fq, flags: bool):
         self.x = x
         self.flags = flags
@@ -311,16 +298,14 @@ class G1Affine(Serialize, Deserialize):
         return bytes(res)
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         data_ = bytearray(data.read(48))
         flags = bool(data_[-1] >> 7)
         data_[-1] &= 0x7f
         return cls(x=Fq.load(BytesIO(data_)), flags=flags)
 
-class Fq2(Serialize, Deserialize):
+class Fq2(Serializable):
 
-    # @type_check
     def __init__(self, c0: Fq, c1: Fq, flags: bool):
         self.c0 = c0
         self.c1 = c1
@@ -332,7 +317,6 @@ class Fq2(Serialize, Deserialize):
         return res
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         data_ = data.read(96)
         flags = bool(data_[-1] >> 7)
@@ -341,9 +325,8 @@ class Fq2(Serialize, Deserialize):
         c1 = Fq.load(BytesIO(data_))
         return cls(c0=c0, c1=c1, flags=flags)
 
-class G2Affine(Serialize, Deserialize):
+class G2Affine(Serializable):
 
-    # @type_check
     def __init__(self, *, x: Fq2):
         self.x = x
 
@@ -351,15 +334,12 @@ class G2Affine(Serialize, Deserialize):
         return self.x.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         x = Fq2.load(data)
         return cls(x=x)
 
-class G2Prepared(Serialize, Deserialize):
+class G2Prepared(Serializable):
 
-    # @type_check
-    @generic_type_check
     def __init__(self, *, ell_coeffs: Vec[Tuple[Fq2, Fq2, Fq2], u64], infinity: bool_):
         self.ell_coeffs = ell_coeffs
         self.infinity = infinity
@@ -368,7 +348,6 @@ class G2Prepared(Serialize, Deserialize):
         return self.ell_coeffs.dump() + self.infinity.dump()
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         ell_coeffs = Vec[Tuple[Fq2, Fq2, Fq2], u64].load(data)
         infinity = bool_.load(data)

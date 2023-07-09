@@ -29,7 +29,6 @@ class u8(Int):
         return struct.pack("<B", self)
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         self = cls(struct.unpack("<B", data.read(1))[0])
         return self
@@ -44,7 +43,6 @@ class u16(Int):
         return struct.pack("<H", self)
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         self = cls(struct.unpack("<H", data.read(2))[0])
         return self
@@ -59,7 +57,6 @@ class u32(Int):
         return struct.pack("<I", self)
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         self = cls(struct.unpack("<I", data.read(4))[0])
         return self
@@ -74,7 +71,6 @@ class u64(Int):
         return struct.pack("<Q", self)
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         self = cls(struct.unpack("<Q", data.read(8))[0])
         return self
@@ -91,7 +87,6 @@ class u128(Int):
         return struct.pack("<QQ", self & 0xFFFF_FFFF_FFFF_FFFF, self >> 64)
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         lo, hi = struct.unpack("<QQ", data.read(16))
         self = cls((hi << 64) | lo)
@@ -107,7 +102,6 @@ class i8(Int):
         return struct.pack("<b", self)
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         self = cls(struct.unpack("<b", data.read(1))[0])
         return self
@@ -122,7 +116,6 @@ class i16(Int):
         return struct.pack("<h", self)
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         self = cls(struct.unpack("<h", data.read(2))[0])
         return self
@@ -137,7 +130,6 @@ class i32(Int):
         return struct.pack("<i", self)
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         self = cls(struct.unpack("<i", data.read(4))[0])
         return self
@@ -152,7 +144,6 @@ class i64(Int):
         return struct.pack("<q", self)
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         self = cls(struct.unpack("<q", data.read(8))[0])
         return self
@@ -167,7 +158,6 @@ class i128(Int):
         return struct.pack("<qq", self & 0xFFFF_FFFF_FFFF_FFFF, self >> 64)
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         lo, hi = struct.unpack("<qq", data.read(16))
         self = cls((hi << 64) | lo)
@@ -188,7 +178,6 @@ class bool_(Int):
         return struct.pack("<B", self)
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         value = struct.unpack("<B", data.read(1))[0]
         if value == 0:
@@ -248,7 +237,6 @@ class SocketAddr(Deserialize):
         self.port = port
 
     @classmethod
-    # @type_check
     def load(cls, data: BytesIO):
         data.read(4)
         ip = u32.load(data)
