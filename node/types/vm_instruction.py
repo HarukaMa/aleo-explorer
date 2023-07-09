@@ -86,7 +86,7 @@ class Literal(Serializable): # enum
         StringType: Type.String,
     }
 
-    def __init__(self, *, type_: Type, primitive: Serialize):
+    def __init__(self, *, type_: Type, primitive: Serializable):
         self.type = type_
         self.primitive = primitive
 
@@ -107,13 +107,21 @@ class Literal(Serializable): # enum
         import disasm.aleo
         return disasm.aleo.disasm_literal(self)
 
-    def __eq__(self, other):
+    def __eq__(self, other: object):
+        if not isinstance(other, Literal):
+            return False
+        if not isinstance(self.primitive, Comparable):
+            return False
         return self.type == other.type and self.primitive == other.primitive
 
-    def __gt__(self, other):
+    def __gt__(self, other: Self):
+        if not isinstance(self.primitive, Comparable):
+            return False
         return self.type == other.type and self.primitive > other.primitive
 
-    def __ge__(self, other):
+    def __ge__(self, other: Self):
+        if not isinstance(self.primitive, Comparable):
+            return False
         return self.type == other.type and self.primitive >= other.primitive
 
 
@@ -151,10 +159,12 @@ class Identifier(Serializable):
     def __str__(self):
         return self.data
 
-    def __eq__(self, other):
+    def __eq__(self, other: object):
         if isinstance(other, str):
             return self.data == other
-        return self.data == other.data
+        if isinstance(other, Identifier):
+            return self.data == other.data
+        return False
 
     def __hash__(self):
         return hash(self.data)
@@ -182,10 +192,12 @@ class ProgramID(Serializable):
     def __str__(self):
         return f"{self.name}.{self.network}"
 
-    def __eq__(self, other):
+    def __eq__(self, other: object):
         if isinstance(other, str):
             return str(self) == other
-        return self.name == other.name and self.network == other.network
+        if isinstance(other, ProgramID):
+            return self.name == other.name and self.network == other.network
+        return False
 
 
 class Import(Serializable):
@@ -201,16 +213,11 @@ class Import(Serializable):
         program_id = ProgramID.load(data)
         return cls(program_id=program_id)
 
-class Register(Serializable): # enum
+class Register(Serializable, RustEnum):
 
     class Type(IntEnumu8):
         Locator = 0
         Member = 1
-
-    @property
-    @abstractmethod
-    def type(self):
-        raise NotImplementedError
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -270,7 +277,7 @@ class VarInt(int, Serializable):
 class LocatorRegister(Register):
     type = Register.Type.Locator
 
-    def __init__(self, *, locator: VarInt[u64]):
+    def __init__(self, *, locator: VarInt):
         self.locator = locator
 
     def dump(self) -> bytes:
@@ -278,14 +285,14 @@ class LocatorRegister(Register):
 
     @classmethod
     def load(cls, data: BytesIO):
-        locator = VarInt[u64].load(data)
+        locator = VarInt.load(data)
         return cls(locator=locator)
 
 
 class MemberRegister(Register):
     type = Register.Type.Member
 
-    def __init__(self, *, locator: VarInt[u64], identifiers: Vec[Identifier, u16]):
+    def __init__(self, *, locator: VarInt, identifiers: Vec[Identifier, u16]):
         self.locator = locator
         self.identifiers = identifiers
 
@@ -294,12 +301,12 @@ class MemberRegister(Register):
 
     @classmethod
     def load(cls, data: BytesIO):
-        locator = VarInt[u64].load(data)
+        locator = VarInt.load(data)
         identifiers = Vec[Identifier, u16].load(data)
         return cls(locator=locator, identifiers=identifiers)
 
 
-class Operand(Serializable): # enum
+class Operand(Serialize, RustEnum): # enum
 
     class Type(IntEnumu8):
         Literal = 0
@@ -307,11 +314,6 @@ class Operand(Serializable): # enum
         ProgramID = 2
         Caller = 3
         BlockHeight = 4
-
-    @property
-    @abstractmethod
-    def type(self):
-        raise NotImplementedError
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -399,22 +401,16 @@ class BlockHeightOperand(Operand):
     def load(cls, data: BytesIO):
         return cls()
 
+N = TypeVar("N", bound=int)
 
-class Literals(Generic[T], Serializable):
-    # The generic here is for the number of the literals
-    def __init__(self, types):
-        super().__init__(types)
-        if len(types) != 1:
-            raise ValueError("Literals must have exactly one type")
-        if not isinstance(types[0], int):
-            raise ValueError("Literals type must be an int")
-        self.num_operands = types[0]
+@access_generic_type
+class Literals(Generic[N], Serializable):
+    types: tuple[N]
 
-    def __call__(self, *, operands: Vec[Operand | NoneType, 3], destination: Register):
-        # the max operand count is 3, fill in the rest with None
+    def __init__(self, *, operands: Vec[Operand | NoneType, N], destination: Register):
+        self.num_operands = self.types[0]
         self.operands = operands
         self.destination = destination
-        return self
 
     def dump(self) -> bytes:
         res = b""
@@ -423,33 +419,31 @@ class Literals(Generic[T], Serializable):
         res += self.destination.dump()
         return res
 
-    def load(self, data: BytesIO):
-        operands = [None] * 3
-        for i in range(self.num_operands):
-            operands[i] = Operand.load(data)
+    @classmethod
+    def load(cls, data: BytesIO, *, types: Optional[tuple[N]] = None):
+        if types is None:
+            raise ValueError("types must be specified")
+        num_operands = types[0]
+        operands: list[Operand] = []
+        for _ in range(num_operands):
+            operands.append(Operand.load(data))
         destination = Register.load(data)
-        return self(operands=Vec[Operand | NoneType, 3](operands), destination=destination)
+        return cls[*types](operands=Vec[Operand | NoneType, num_operands](operands), destination=destination)
 
 
-class AssertInstruction(Generic[T], Serializable):
-    # The generic here is for the variant of the assert instruction
-    def __init__(self, types):
-        super().__init__(types)
-        if len(types) != 1:
-            raise ValueError("AssertInstruction must have exactly one type")
-        if not isinstance(types[0], int):
-            raise ValueError("AssertInstruction type must be an int")
-        self.variant = types[0]
+@access_generic_type
+class AssertInstruction(Generic[N], Serializable):
+    types: tuple[N]
 
-    def __call__(self, *, operands: Vec[Operand, 2]):
+    def __init__(self, *, operands: Vec[Operand, 2]):
         self.operands = operands
-        return self
 
     def dump(self) -> bytes:
         return self.operands.dump()
 
-    def load(self, data: BytesIO):
-        return self(operands=Vec[Operand, 2].load(data))
+    @classmethod
+    def load(cls, data: BytesIO, *, types: Optional[tuple[N]] = None):
+        return cls[*types](operands=Vec[Operand, 2].load(data))
 
 
 class Locator(Serializable):
@@ -471,17 +465,11 @@ class Locator(Serializable):
         return f"{self.id}/{self.resource}"
 
 
-
-class CallOperator(Serializable): # enum
+class CallOperator(Serializable, RustEnum):
 
     class Type(IntEnumu8):
         Locator = 0
         Resource = 1
-
-    @property
-    @abstractmethod
-    def type(self):
-        raise NotImplementedError
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -601,16 +589,11 @@ class LiteralType(IntEnumu8):
         }[self]
 
 
-class PlaintextType(Serializable): # enum
+class PlaintextType(Serializable, RustEnum): # enum
 
     class Type(IntEnumu8):
         Literal = 0
         Struct = 1
-
-    @property
-    @abstractmethod
-    def type(self):
-        raise NotImplementedError
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -659,17 +642,12 @@ class StructPlaintextType(PlaintextType):
     def __str__(self):
         return str(self.struct)
 
-class RegisterType(Serializable): # enum
+class RegisterType(Serializable, RustEnum): # enum
 
     class Type(IntEnumu8):
         Plaintext = 0
         Record = 1
         ExternalRecord = 2
-
-    @property
-    @abstractmethod
-    def type(self):
-        raise NotImplementedError
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -728,17 +706,12 @@ class ExternalRecordRegisterType(RegisterType):
         locator = Locator.load(data)
         return cls(locator=locator)
 
-class CastType(Serializable):
+class CastType(Serializable, RustEnum):
 
     class Type(IntEnumu8):
         GroupXCoordinate = 0
         GroupYCoordinate = 1
         RegisterType = 2
-
-    @property
-    @abstractmethod
-    def type(self):
-        raise NotImplementedError
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -804,7 +777,12 @@ class CastInstruction(Serializable):
         cast_Type = CastType.load(data)
         return cls(operands=operands, destination=destination, cast_type=cast_Type)
 
-class CommitInstruction(Generic[T], Serializable):
+E = TypeVar('E', bound=Enum)
+
+@access_generic_type
+class CommitInstruction(Generic[E], Serializable):
+    types: tuple[E]
+
     class Type(Enum):
         CommitBHP256 = 0
         CommitBHP512 = 1
@@ -813,30 +791,29 @@ class CommitInstruction(Generic[T], Serializable):
         CommitPED64 = 4
         CommitPED128 = 5
 
-    # The generic here is for the commit type
-    def __init__(self, types):
-        super().__init__(types)
-        if len(types) != 1:
-            raise ValueError("CommitInstruction must have exactly one type")
-        self.type = types[0]
-
-    def __call__(self, *, operands: Vec[Operand, 2], destination: Register, destination_type: LiteralType):
+    def __init__(self, *, operands: Vec[Operand, 2], destination: Register, destination_type: LiteralType):
+        self.type = self.types[0]
         self.operands = operands
         self.destination = destination
         self.destination_type = destination_type
-        return self
 
     def dump(self) -> bytes:
         return self.operands.dump() + self.destination.dump() + self.destination_type.dump()
 
-    def load(self, data: BytesIO):
-        self.operands = Vec[Operand, 2].load(data)
-        self.destination = Register.load(data)
-        self.destination_type = LiteralType.load(data)
-        return self(operands=self.operands, destination=self.destination, destination_type=self.destination_type)
+    @classmethod
+    def load(cls, data: BytesIO, *, types: Optional[tuple[E]] = None):
+        if not types:
+            raise ValueError("expected types")
+        operands = Vec[Operand, 2].load(data)
+        destination = Register.load(data)
+        destination_type = LiteralType.load(data)
+        return cls[*types](operands=operands, destination=destination, destination_type=destination_type)
 
 
-class HashInstruction(Generic[T], Serializable):
+@access_generic_type
+class HashInstruction(Generic[E], Serializable):
+    types: tuple[E]
+
     class Type(Enum):
         HashBHP256 = 0
         HashBHP512 = 1
@@ -851,33 +828,32 @@ class HashInstruction(Generic[T], Serializable):
         HashManyPSD4 = 10
         HashManyPSD8 = 11
 
-    # The generic here is for the hash type
-    def __init__(self, types):
-        super().__init__(types)
-        if len(types) != 1:
-            raise ValueError("HashInstruction must have exactly one type")
-        self.type = types[0]
-
     # shortcut here so check doesn't work
-    def __call__(self, *, operands: Vec[Operand | NoneType, 2], destination: Register, destination_type: LiteralType):
+    def __init__(self, *, operands: Vec[Operand | NoneType, 2], destination: Register, destination_type: LiteralType):
+        self.type = self.types[0]
         self.operands = operands
         self.destination = destination
         self.destination_type = destination_type
-        return self
 
-    def num_operands(self):
-        if self.type in [self.Type.HashManyPSD2, self.Type.HashManyPSD4, self.Type.HashManyPSD8]:
+    @classmethod
+    def num_operands(cls, type_: Type):
+        if type_ in [cls.Type.HashManyPSD2, cls.Type.HashManyPSD4, cls.Type.HashManyPSD8]:
             return 2
         return 1
 
     def dump(self) -> bytes:
         return self.operands.dump() + self.destination.dump() + self.destination_type.dump()
 
-    def load(self, data: BytesIO):
-        self.operands = Vec[Operand, self.num_operands()].load(data)
-        self.destination = Register.load(data)
-        self.destination_type = LiteralType.load(data)
-        return self(operands=self.operands, destination=self.destination, destination_type=self.destination_type)
+    @classmethod
+    def load(cls, data: BytesIO, *, types: Optional[tuple[E]] = None):
+        if types is None:
+            raise ValueError("expected types")
+        if not isinstance(types[0], cls.Type):
+            raise ValueError("expected types to be of type HashInstruction.Type")
+        operands = Vec[Operand, cls.num_operands(types[0])].load(data)
+        destination = Register.load(data)
+        destination_type = LiteralType.load(data)
+        return cls(operands=operands, destination=destination, destination_type=destination_type)
 
 
 class Instruction(Serializable): # enum
@@ -885,7 +861,7 @@ class Instruction(Serializable): # enum
     class Type(IntEnumu16):
 
         @staticmethod
-        def _generate_next_value_(name, start, count, last_values):
+        def _generate_next_value_(name: str, start: int, count: int, last_values: list[int]):
             return count
 
         Abs = auto()
@@ -1157,21 +1133,22 @@ class Instruction(Serializable): # enum
     def load(cls, data: BytesIO):
         type_ = cls.Type.load(data)
         instruction_type = cls.type_map[type_]
-        if isinstance(instruction_type, Generic):
-            literals = instruction_type.__class__[instruction_type.types].load(data)
-        else:
-            literals = instruction_type.load(data)
+        literals = instruction_type.load(data)
         return cls(type_=type_, literals=literals)
 
     @property
     def cost(self) -> int:
         if self.type in (self.Type.HashPSD2, self.Type.HashPSD4, self.Type.HashPSD8):
-            self: HashInstruction
-            if self.destination_type in (LiteralType.Address, LiteralType.Group):
-                return Instruction.fee_map[self.type]["high"]
+            if not isinstance(self, HashInstruction):
+                raise ValueError(f"expected HashInstruction, got {self}")
+            inst: HashInstruction = self
+            # need to redesign the fee map to go fully static
+            fee_dict: dict[str, int] = Instruction.fee_map[self.type] # type: ignore[reportGeneralTypeIssues]
+            if inst.destination_type in (LiteralType.Address, LiteralType.Group):
+                return fee_dict["high"]
             else:
-                return Instruction.fee_map[self.type]["low"]
+                return fee_dict["low"]
         cost = Instruction.fee_map[self.type]
         if cost == -1:
             raise ValueError(f"instruction {self.type} is not supported in finalize")
-        return cost
+        return cost # type: ignore[reportGeneralTypeIssues]

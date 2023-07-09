@@ -5,11 +5,7 @@ from .traits import *
 
 class Bech32m:
 
-    def __init__(self, data, prefix):
-        if not isinstance(data, bytes):
-            raise TypeError("can only initialize type with bytes")
-        if not isinstance(prefix, str):
-            raise TypeError("only str prefix is supported")
+    def __init__(self, data: bytes, prefix: str):
         self.data = data
         self.prefix = prefix
 
@@ -164,14 +160,11 @@ class i128(Int):
         return self
 
 
-class bool_(Int):
-    # Really don't want to make a proper bool, reusing Int is good enough for most usages
+class bool_(Sized, Serializable):
 
     size = 1
 
-    def __init__(self, value=False):
-        if not isinstance(value, bool):
-            raise TypeError("value must be bool")
+    def __init__(self, value: bool = False):
         self.value = value
 
     def dump(self) -> bytes:
@@ -191,10 +184,10 @@ class bool_(Int):
         return self
 
     @classmethod
-    def loads(cls, data: str):
-        if data.lower() == "true":
+    def loads(cls, value: str):
+        if value.lower() == "true":
             return cls(True)
-        if data.lower() == "false":
+        if value.lower() == "false":
             return cls()
         raise ValueError("invalid value for bool")
 
@@ -211,12 +204,12 @@ class bool_(Int):
     def __invert__(self):
         return bool_(not self)
 
-    def __and__(self, other):
+    def __and__(self, other: bool | Self):
         if isinstance(other, bool):
             return bool_(self.value and other)
         return bool_(self.value and other.value)
 
-    def __or__(self, other):
+    def __or__(self, other: bool | Self):
         if isinstance(other, bool):
             return bool_(self.value or other)
         return bool_(self.value or other.value)
@@ -225,10 +218,6 @@ class bool_(Int):
 
 class SocketAddr(Deserialize):
     def __init__(self, *, ip: int, port: int):
-        if not isinstance(ip, int):
-            raise TypeError("ip must be int")
-        if not isinstance(port, int):
-            raise TypeError("port must be int")
         if ip < 0 or ip > 4294967295:
             raise ValueError("ip must be between 0 and 4294967295")
         if port < 0 or port > 65535:
@@ -247,4 +236,4 @@ class SocketAddr(Deserialize):
         return ":".join(self.ip_port())
 
     def ip_port(self):
-        return socket.inet_ntoa(struct.pack('<L', self.ip)), self.port
+        return socket.inet_ntoa(struct.pack('<L', self.ip)), str(self.port)

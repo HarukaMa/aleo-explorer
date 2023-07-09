@@ -1,6 +1,6 @@
 from functools import partial, lru_cache
 from types import GenericAlias, MethodType
-from typing import Generic, TypeVar, get_args, Optional, Type, Callable, Any
+from typing import Generic, TypeVar, get_args, Optional, Callable
 
 from .basic import *
 
@@ -38,15 +38,15 @@ def access_generic_type(c: Any):
         if not (hasattr(super(cls, cls), "__class_getitem__") and callable(super(cls, cls).__class_getitem__)): # type: ignore
             raise TypeError
         __generic_alias = super(cls, cls).__class_getitem__(item) # type: ignore
-        if not isinstance(__generic_alias, GenericAlias):
+        args = get_args(__generic_alias)
+        if not args:
             raise TypeError
         return TypedGenericAlias(cls, get_args(__generic_alias))
 
     def inject_types(f: Callable[..., Any]):
         def wrapper(self: Any, *args: Any, **kwargs: Any):
             if f is object.__new__:
-                kwargs.pop("types")
-                return f(self, *args, **kwargs)
+                return f(self)
             if "types" in kwargs:
                 types = kwargs.pop("types")
                 self.types = types
@@ -79,7 +79,7 @@ class Tuple(tuple[T, ...], Serializable):
         if types is None:
             raise TypeError("expected types")
         value = tuple(t.load(data) for t in types)
-        return cls(value)
+        return cls[*types](value)
 
 
 @access_generic_type
@@ -114,7 +114,7 @@ class Vec(list[T], Serializable, Generic[T, L]):
             size = size_type
         else:
             size = size_type.load(data)
-        return cls(list(value_type.load(data) for _ in range(size)))
+        return cls[*types](list(value_type.load(data) for _ in range(size)))
 
 
 class Option(Generic[T], Serializable):
@@ -150,4 +150,4 @@ class Option(Generic[T], Serializable):
             value = types[0].load(data)
         else:
             value = None
-        return cls(value)
+        return cls[*types](value)
