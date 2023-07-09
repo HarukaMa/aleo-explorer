@@ -1,30 +1,35 @@
 import struct
-from abc import abstractmethod
 from decimal import Decimal
 from enum import IntEnum
+from typing import Protocol, runtime_checkable
 
 from .utils import *
 
 
-class Deserialize(metaclass=ABCMeta):
+@runtime_checkable
+class Deserialize(Protocol):
 
-    @abstractmethod
     def load(self, data: BytesIO):
-        raise NotImplementedError
+        ...
 
 
-class Serialize(metaclass=ABCMeta):
+@runtime_checkable
+class Serialize(Protocol):
 
-    @abstractmethod
     def dump(self) -> bytes:
-        raise NotImplementedError
+        ...
 
 
-class Sized(metaclass=ABCMeta):
+class SerDe(Serialize, Deserialize, Protocol):
+    pass
+
+
+@runtime_checkable
+class Sized(Protocol):
+
     @property
-    @abstractmethod
-    def size(self):
-        raise NotImplementedError
+    def size(self) -> int:
+        ...
 
 
 class Int(Sized, Serialize, Deserialize, int, metaclass=ABCMeta):

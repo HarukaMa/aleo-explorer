@@ -1,7 +1,7 @@
 import time
 from collections import OrderedDict
 
-from typing import TypeVar, Generic
+from typing import TypeVar, Generic, Callable
 
 KT = TypeVar('KT')
 VT = TypeVar('VT')
@@ -10,11 +10,11 @@ class FetchError(Exception):
     pass
 
 class Cache(Generic[KT, VT]):
-    def __init__(self, *, max_lifetime: int = 3600, max_size: int = 100, fetch_func: callable = None):
+    def __init__(self, *, max_lifetime: int = 3600, max_size: int = 100, fetch_func: Callable | None = None):
         self._content: dict[KT, VT] = {}
         self.max_lifetime = max_lifetime
         self.max_size = max_size
-        self.__lru: OrderedDict[int: KT] = OrderedDict()
+        self.__lru: OrderedDict[KT, float] = OrderedDict()
         self.__fetch_func = fetch_func
 
     def purge(self):

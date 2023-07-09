@@ -1,16 +1,16 @@
-import typing
-from types import UnionType, GenericAlias
-from typing import Generic, TypeVar
+from types import GenericAlias
+from typing import Generic, TypeVar, get_args, TypeVarTuple
 
 from .basic import *
 
-T = TypeVar('T')
-L = TypeVar('L', bound=type|int)
+T = TypeVar('T', bound=SerDe)
+TP = TypeVarTuple('TP')
+L = TypeVar('L', bound=type | int)
 
 
 class TypedGenericAlias(GenericAlias):
     def __call__(self, *args, **kwargs):
-        kwargs["types"] = typing.get_args(self)
+        kwargs["types"] = get_args(self)
         return super().__call__(*args, **kwargs)
 
 def access_generic_type(c):
@@ -20,7 +20,7 @@ def access_generic_type(c):
         __generic_alias = super(cls, cls).__class_getitem__(item)
         if not isinstance(__generic_alias, GenericAlias):
             raise TypeError
-        return TypedGenericAlias(cls, typing.get_args(__generic_alias))
+        return TypedGenericAlias(cls, get_args(__generic_alias))
 
     def inject_types(f):
         def wrapper(self, *args, **kwargs):
@@ -34,101 +34,58 @@ def access_generic_type(c):
     c.__init__ = inject_types(c.__init__)
     return c
 
+
+# noinspection PyTypeHints
 @access_generic_type
-class Tuple(Serialize, Deserialize, tuple[T]):
+class Tuple(Serialize, Deserialize, tuple[*TP], Generic[*TP]):
+    types: tuple[SerDe, ...]
 
-    def __init__(self, value: tuple[T]):
-        super().__init__(value)
+    def __new__(cls, value: tuple[*TP]):
+        return super().__new__(cls, value)
 
-    def dump(self) -> bytes:
-        if not all(isinstance(x, Serialize) for x in self):
-            raise TypeError("value must be serializable")
-        return b"".join(x.dump() for x in self)
-
-    # @type_check
-    def load(self, data: BytesIO):
-        types = self.__orig_class__.__args__
-        if not all(issubclass(x, Deserialize) for x in types):
-            raise TypeError("value must be deserializable")
-        self.value = tuple(t.load(data) for t in types)
-        return self
+    # def dump(self) -> bytes:
+    #     return b"".join(x.dump() for x in self)
+    #
+    # def load(self, data: BytesIO):
+    #     self.value = tuple(t.load(data) for t in self.types)
+    #     return self
 
 
+@access_generic_type
 class Vec(Serialize, Deserialize, list[T], Generic[T, L]):
+    types: tuple[T, L]
 
-    def __init__(self, types):
-        if len(types) != 2:
-            raise TypeError("expected 2 types for Vec")
-        self.type = types[0]
-        if isinstance(types[1], int):
-            self.size = types[1]
-        elif issubclass(types[1], Int):
-            self.size_type = types[1]
+    def __init__(self, value: list[T]):
+        list.__init__(self, value)
+        self.type = self.types[0]
+        print(self.types)
+        if isinstance(self.types[1], int):
+            self.size = self.types[1]
+        elif issubclass(self.types[1], Int):
+            self.size_type: Int = self.types[1]
+            self.size = len(value)
         else:
             raise TypeError("expected int or Int as size type")
-        super().__init__(types)
-
-    def __call__(self, value):
-        self._list = value
-        if hasattr(self, "size_type"):
-            self.size = len(value)
-        return self
-
-    def __len__(self):
-        return len(self._list)
-
-    def __getitem__(self, index):
-        if isinstance(index, int) or isinstance(index, slice):
-            return self._list[index]
-        else:
-            raise TypeError("index must be int or slice")
-
-    def __setitem__(self, index, value):
-        if isinstance(index, int):
-            if isinstance(self.type, type) or isinstance(self.type, UnionType):
-                if not isinstance(value, self.type):
-                    raise TypeError("value must be of type {}".format(self.type))
-            else:
-                if not isinstance(value, type(self.type)):
-                    raise TypeError("value must be of type {}".format(type(self.type)))
-            self._list[index] = value
-        else:
-            raise TypeError("index must be int")
 
     def dump(self) -> bytes:
         res = b""
         if hasattr(self, "size_type"):
-            res += self.size_type.dump(self.size)
-        for item in self._list:
+            res += self.size_type.dump()
+        for item in self:
             res += item.dump()
         return res
 
-    # @type_check
     def load(self, data: BytesIO):
-        if isinstance(self.type, type):
-            if not issubclass(self.type, Deserialize):
-                raise TypeError(f"{self.type.__name__} must be Deserialize")
-        else:
-            if not issubclass(type(self.type), Deserialize):
-                raise TypeError(f"{type(self.type).__name__} must be Deserialize")
         if hasattr(self, "size_type"):
             if data.tell() + self.size_type.size > data.getbuffer().nbytes:
                 raise ValueError("data is too short")
             self.size = self.size_type.load(data)
-        self._list = []
         for i in range(self.size):
-            if isinstance(self.type, type):
-                self._list.append(self.type.load(data))
-            elif isinstance(self.type, Generic):
-                # Python version 3.10 does not support starred expressions in subscriptions
-                self._list.append(self.type.__class__[*self.type.types].load(data))
+            if issubclass(self.type, Generic):
+                self.append(self.type().load(data))
             else:
-                # What else can be here?
-                raise TypeError(f"cannot handle type {self.type} in Generic.load")
+                self.append(self.type.load(data))
         return self
-
-    def __iter__(self):
-        return iter(self._list)
 
 
 class VarInt(Generic[T], Serialize, Deserialize):
