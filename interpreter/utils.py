@@ -1,6 +1,8 @@
 from node.types import *
 from .environment import Registers
 
+MappingCacheTuple = tuple[Field, Field, Plaintext, Value]
+
 class FinalizeState:
     def __init__(self, block: Block):
         self.block_height = block.height

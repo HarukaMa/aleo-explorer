@@ -1,6 +1,7 @@
 import os
 import time
 from collections import defaultdict
+from typing import Awaitable
 
 import psycopg
 from psycopg.rows import dict_row
@@ -14,14 +15,14 @@ from node.types import *
 class Database:
 
     def __init__(self, *, server: str, user: str, password: str, database: str, schema: str,
-                 message_callback: callable):
+                 message_callback: Callable[[ExplorerMessage], Awaitable[None]]):
         self.server = server
         self.user = user
         self.password = password
         self.database = database
         self.schema = schema
         self.message_callback = message_callback
-        self.pool: AsyncConnectionPool | None = None
+        self.pool: AsyncConnectionPool
 
     async def connect(self):
         try:
@@ -40,7 +41,7 @@ class Database:
         await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseConnected, None))
 
     @staticmethod
-    async def _insert_transition(conn: psycopg.AsyncConnection, exe_tx_db_id: int | None, fee_db_id: int | None,
+    async def _insert_transition(conn: psycopg.AsyncConnection[dict[str, Any]], exe_tx_db_id: Optional[int], fee_db_id: Optional[int],
                                  transition: Transition, ts_index: int):
         async with conn.cursor() as cur:
             await cur.execute(
@@ -50,7 +51,9 @@ class Database:
                 (str(transition.id), exe_tx_db_id, fee_db_id, str(transition.program_id),
                 str(transition.function_name), str(transition.tpk), str(transition.tcm), ts_index)
             )
-            transition_db_id = (await cur.fetchone())["id"]
+            if (res := await cur.fetchone()) is None:
+                raise Exception("???")
+            transition_db_id = res["id"]
 
             transition_input: TransitionInput
             for input_index, transition_input in enumerate(transition.inputs):
@@ -58,42 +61,39 @@ class Database:
                     "INSERT INTO transition_input (transition_id, type, index) VALUES (%s, %s, %s) RETURNING id",
                     (transition_db_id, transition_input.type.name, input_index)
                 )
-                transition_input_db_id = (await cur.fetchone())["id"]
-                match transition_input.type:
-                    case TransitionInput.Type.Public:
-                        transition_input: PublicTransitionInput
-                        await cur.execute(
-                            "INSERT INTO transition_input_public (transition_input_id, plaintext_hash, plaintext) "
-                            "VALUES (%s, %s, %s)",
-                            (transition_input_db_id, str(transition_input.plaintext_hash),
-                            transition_input.plaintext.dump_nullable())
-                        )
-                    case TransitionInput.Type.Private:
-                        transition_input: PrivateTransitionInput
-                        await cur.execute(
-                            "INSERT INTO transition_input_private (transition_input_id, ciphertext_hash, ciphertext) "
-                            "VALUES (%s, %s, %s)",
-                            (transition_input_db_id, str(transition_input.ciphertext_hash),
-                            transition_input.ciphertext.dumps())
-                        )
-                    case TransitionInput.Type.Record:
-                        transition_input: RecordTransitionInput
-                        await cur.execute(
-                            "INSERT INTO transition_input_record (transition_input_id, serial_number, tag) "
-                            "VALUES (%s, %s, %s)",
-                            (transition_input_db_id, str(transition_input.serial_number),
-                            str(transition_input.tag))
-                        )
-                    case TransitionInput.Type.ExternalRecord:
-                        transition_input: ExternalRecordTransitionInput
-                        await cur.execute(
-                            "INSERT INTO transition_input_external_record (transition_input_id, commitment) "
-                            "VALUES (%s, %s)",
-                            (transition_input_db_id, str(transition_input.input_commitment))
-                        )
+                if (res := await cur.fetchone()) is None:
+                    raise Exception("???")
+                transition_input_db_id = res["id"]
+                if isinstance(transition_input, PublicTransitionInput):
+                    await cur.execute(
+                        "INSERT INTO transition_input_public (transition_input_id, plaintext_hash, plaintext) "
+                        "VALUES (%s, %s, %s)",
+                        (transition_input_db_id, str(transition_input.plaintext_hash),
+                        transition_input.plaintext.dump_nullable())
+                    )
+                elif isinstance(transition_input, PrivateTransitionInput):
+                    await cur.execute(
+                        "INSERT INTO transition_input_private (transition_input_id, ciphertext_hash, ciphertext) "
+                        "VALUES (%s, %s, %s)",
+                        (transition_input_db_id, str(transition_input.ciphertext_hash),
+                        transition_input.ciphertext.dumps())
+                    )
+                elif isinstance(transition_input, RecordTransitionInput):
+                    await cur.execute(
+                        "INSERT INTO transition_input_record (transition_input_id, serial_number, tag) "
+                        "VALUES (%s, %s, %s)",
+                        (transition_input_db_id, str(transition_input.serial_number),
+                        str(transition_input.tag))
+                    )
+                elif isinstance(transition_input, ExternalRecordTransitionInput):
+                    await cur.execute(
+                        "INSERT INTO transition_input_external_record (transition_input_id, commitment) "
+                        "VALUES (%s, %s)",
+                        (transition_input_db_id, str(transition_input.input_commitment))
+                    )
 
-                    case _:
-                        raise NotImplementedError
+                else:
+                    raise NotImplementedError
 
             transition_output: TransitionOutput
             for output_index, transition_output in enumerate(transition.outputs):
@@ -101,41 +101,38 @@ class Database:
                     "INSERT INTO transition_output (transition_id, type, index) VALUES (%s, %s, %s) RETURNING id",
                     (transition_db_id, transition_output.type.name, output_index)
                 )
-                transition_output_db_id = (await cur.fetchone())["id"]
-                match transition_output.type:
-                    case TransitionOutput.Type.Public:
-                        transition_output: PublicTransitionOutput
-                        await cur.execute(
-                            "INSERT INTO transition_output_public (transition_output_id, plaintext_hash, plaintext) "
-                            "VALUES (%s, %s, %s)",
-                            (transition_output_db_id, str(transition_output.plaintext_hash),
-                            transition_output.plaintext.dump_nullable())
-                        )
-                    case TransitionOutput.Type.Private:
-                        transition_output: PrivateTransitionOutput
-                        await cur.execute(
-                            "INSERT INTO transition_output_private (transition_output_id, ciphertext_hash, ciphertext) "
-                            "VALUES (%s, %s, %s)",
-                            (transition_output_db_id, str(transition_output.ciphertext_hash),
-                            transition_output.ciphertext.dumps())
-                        )
-                    case TransitionOutput.Type.Record:
-                        transition_output: RecordTransitionOutput
-                        await cur.execute(
-                            "INSERT INTO transition_output_record (transition_output_id, commitment, checksum, record_ciphertext) "
-                            "VALUES (%s, %s, %s, %s)",
-                            (transition_output_db_id, str(transition_output.commitment),
-                            str(transition_output.checksum), transition_output.record_ciphertext.dumps())
-                        )
-                    case TransitionOutput.Type.ExternalRecord:
-                        transition_output: ExternalRecordTransitionOutput
-                        await cur.execute(
-                            "INSERT INTO transition_output_external_record (transition_output_id, commitment) "
-                            "VALUES (%s, %s)",
-                            (transition_output_db_id, str(transition_output.commitment))
-                        )
-                    case _:
-                        raise NotImplementedError
+                if (res := await cur.fetchone()) is None:
+                    raise Exception("???")
+                transition_output_db_id = res["id"]
+                if isinstance(transition_output, PublicTransitionOutput):
+                    await cur.execute(
+                        "INSERT INTO transition_output_public (transition_output_id, plaintext_hash, plaintext) "
+                        "VALUES (%s, %s, %s)",
+                        (transition_output_db_id, str(transition_output.plaintext_hash),
+                        transition_output.plaintext.dump_nullable())
+                    )
+                elif isinstance(transition_output, PrivateTransitionOutput):
+                    await cur.execute(
+                        "INSERT INTO transition_output_private (transition_output_id, ciphertext_hash, ciphertext) "
+                        "VALUES (%s, %s, %s)",
+                        (transition_output_db_id, str(transition_output.ciphertext_hash),
+                        transition_output.ciphertext.dumps())
+                    )
+                elif isinstance(transition_output, RecordTransitionOutput):
+                    await cur.execute(
+                        "INSERT INTO transition_output_record (transition_output_id, commitment, checksum, record_ciphertext) "
+                        "VALUES (%s, %s, %s, %s)",
+                        (transition_output_db_id, str(transition_output.commitment),
+                        str(transition_output.checksum), transition_output.record_ciphertext.dumps())
+                    )
+                elif isinstance(transition_output, ExternalRecordTransitionOutput):
+                    await cur.execute(
+                        "INSERT INTO transition_output_external_record (transition_output_id, commitment) "
+                        "VALUES (%s, %s)",
+                        (transition_output_db_id, str(transition_output.commitment))
+                    )
+                else:
+                    raise NotImplementedError
 
             if transition.finalize.value is not None:
                 for finalize_index, finalize in enumerate(transition.finalize.value):
@@ -144,27 +141,28 @@ class Database:
                        "RETURNING id",
                         (transition_db_id, finalize.type.name, finalize_index)
                     )
-                    transition_finalize_db_id = (await cur.fetchone())["id"]
-                    match finalize.type:
-                        case Value.Type.Plaintext:
-                            finalize: PlaintextValue
-                            await cur.execute(
-                                "INSERT INTO transition_finalize_plaintext (transition_finalize_id, plaintext) "
-                                "VALUES (%s, %s)",
-                                (transition_finalize_db_id, finalize.plaintext.dump())
-                            )
-                        case Value.Type.Record:
-                            finalize: RecordValue
-                            await cur.execute(
-                                "INSERT INTO transition_finalize_record (transition_finalize_id, record) "
-                                "VALUES (%s, %s)",
-                                (transition_finalize_db_id, str(finalize.record))
-                            )
+                    if (res := await cur.fetchone()) is None:
+                        raise Exception("???")
+                    transition_finalize_db_id = res["id"]
+                    if isinstance(finalize, PlaintextValue):
+                        await cur.execute(
+                            "INSERT INTO transition_finalize_plaintext (transition_finalize_id, plaintext) "
+                            "VALUES (%s, %s)",
+                            (transition_finalize_db_id, finalize.plaintext.dump())
+                        )
+                    elif isinstance(finalize, RecordValue):
+                        await cur.execute(
+                            "INSERT INTO transition_finalize_record (transition_finalize_id, record) "
+                            "VALUES (%s, %s)",
+                            (transition_finalize_db_id, str(finalize.record))
+                        )
 
             await cur.execute(
                 "SELECT id FROM program WHERE program_id = %s", (str(transition.program_id),)
             )
-            program_db_id = (await cur.fetchone())["id"]
+            if (res := await cur.fetchone()) is None:
+                raise Exception("???")
+            program_db_id = res["id"]
             await cur.execute(
                 "UPDATE program_function SET called = called + 1 WHERE program_id = %s AND name = %s",
                 (program_db_id, str(transition.function_name))
@@ -176,7 +174,8 @@ class Database:
                 await self._save_program(cur, program, None, None)
 
     # noinspection PyMethodMayBeStatic
-    async def _save_program(self, cur, program: Program, deploy_transaction_db_id, transaction) -> None:
+    async def _save_program(self, cur: psycopg.AsyncCursor[dict[str, Any]], program: Program,
+                            deploy_transaction_db_id: Optional[int], transaction: Optional[DeployTransaction]) -> None:
         imports = [str(x.program_id) for x in program.imports]
         mappings = list(map(str, program.mappings.keys()))
         interfaces = list(map(str, program.structs.keys()))
@@ -202,25 +201,24 @@ class Database:
                 (str(program.id), imports, mappings, interfaces, records,
                  closures, functions, program.dump(), program.is_helloworld(), program.feature_hash())
             )
-        program_db_id = (await cur.fetchone())["id"]
+        if (res := await cur.fetchone()) is None:
+            raise Exception("???")
+        program_db_id = res["id"]
         for function in program.functions.values():
-            inputs = []
-            input_modes = []
-            i: FunctionInput
+            inputs: list[str] = []
+            input_modes: list[str] = []
             for i in function.inputs:
                 mode, _type = value_type_to_mode_type_str(i.value_type)
                 inputs.append(_type)
                 input_modes.append(mode)
-            outputs = []
-            output_modes = []
-            o: FunctionOutput
+            outputs: list[str] = []
+            output_modes: list[str] = []
             for o in function.outputs:
                 mode, _type = value_type_to_mode_type_str(o.value_type)
                 outputs.append(_type)
                 output_modes.append(mode)
-            finalizes = []
+            finalizes: list[str] = []
             if function.finalize.value is not None:
-                f: FinalizeInput
                 for f in function.finalize.value[1].inputs:
                     finalizes.append(plaintext_type_to_str(f.plaintext_type))
             await cur.execute(
@@ -231,7 +229,6 @@ class Database:
 
     async def _save_block(self, block: Block):
         async with self.pool.connection() as conn:
-            conn: psycopg.AsyncConnection
             async with conn.transaction():
                 async with conn.cursor() as cur:
                     try:
@@ -254,7 +251,9 @@ class Database:
                              block.header.metadata.cumulative_weight, str(block.header.finalize_root),
                              block.header.metadata.cumulative_proof_target, str(block.header.ratifications_root))
                         )
-                        block_db_id = (await cur.fetchone())["id"]
+                        if (res := await cur.fetchone()) is None:
+                            raise RuntimeError("???")
+                        block_db_id = res["id"]
 
                         confirmed_transaction: ConfirmedTransaction
                         for ct_index, confirmed_transaction in enumerate(block.transactions):
@@ -263,7 +262,9 @@ class Database:
                                 "INSERT INTO confirmed_transaction (block_id, index, type) VALUES (%s, %s, %s) RETURNING id",
                                 (block_db_id, confirmed_transaction.index, confirmed_transaction.type.name)
                             )
-                            confirmed_transaction_db_id = (await cur.fetchone())["id"]
+                            if (res := await cur.fetchone()) is None:
+                                raise RuntimeError("???")
+                            confirmed_transaction_db_id = res["id"]
                             match confirmed_transaction.type:
                                 case ConfirmedTransaction.Type.AcceptedDeploy:
                                     if reject_reasons[ct_index] is not None:
@@ -374,75 +375,72 @@ class Database:
 
                             if confirmed_transaction.type in [ConfirmedTransaction.Type.AcceptedDeploy, ConfirmedTransaction.Type.AcceptedExecute]:
                                 for finalize_operation in confirmed_transaction.finalize:
-                                    finalize_operation: FinalizeOperation
                                     await cur.execute(
                                         "INSERT INTO finalize_operation (confirmed_transaction_id, type) "
                                         "VALUES (%s, %s) RETURNING id",
                                         (confirmed_transaction_db_id, finalize_operation.type.name)
                                     )
-                                    finalize_operation_db_id = (await cur.fetchone())["id"]
-                                    match finalize_operation.type:
-                                        case FinalizeOperation.Type.InitializeMapping:
-                                            finalize_operation: InitializeMapping
-                                            await cur.execute(
-                                                "INSERT INTO finalize_operation_initialize_mapping (finalize_operation_id, "
-                                                "mapping_id) VALUES (%s, %s)",
-                                                (finalize_operation_db_id, str(finalize_operation.mapping_id))
-                                            )
-                                        case FinalizeOperation.Type.InsertKeyValue:
-                                            finalize_operation: InsertKeyValue
-                                            await cur.execute(
-                                                "INSERT INTO finalize_operation_insert_kv (finalize_operation_id, "
-                                                "mapping_id, key_id, value_id) VALUES (%s, %s, %s, %s)",
-                                                (finalize_operation_db_id, str(finalize_operation.mapping_id),
-                                                str(finalize_operation.key_id), str(finalize_operation.value_id))
-                                            )
-                                        case FinalizeOperation.Type.UpdateKeyValue:
-                                            finalize_operation: UpdateKeyValue
-                                            await cur.execute(
-                                                "INSERT INTO finalize_operation_update_kv (finalize_operation_id, "
-                                                "mapping_id, index, key_id, value_id) VALUES (%s, %s, %s, %s, %s)",
-                                                (finalize_operation_db_id, str(finalize_operation.mapping_id),
-                                                finalize_operation.index, str(finalize_operation.key_id),
-                                                str(finalize_operation.value_id))
-                                            )
-                                        case FinalizeOperation.Type.RemoveKeyValue:
-                                            finalize_operation: RemoveKeyValue
-                                            await cur.execute(
-                                                "INSERT INTO finalize_operation_remove_kv (finalize_operation_id, "
-                                                "mapping_id, index) VALUES (%s, %s, %s)",
-                                                (finalize_operation_db_id, str(finalize_operation.mapping_id),
-                                                finalize_operation.index)
-                                            )
-                                        case FinalizeOperation.Type.RemoveMapping:
-                                            finalize_operation: RemoveMapping
-                                            await cur.execute(
-                                                "INSERT INTO finalize_operation_remove_mapping (finalize_operation_id, "
-                                                "mapping_id) VALUES (%s, %s)",
-                                                (finalize_operation_db_id, str(finalize_operation.mapping_id))
-                                            )
+                                    if (res := await cur.fetchone()) is None:
+                                        raise RuntimeError("???")
+                                    finalize_operation_db_id = res["id"]
+                                    if isinstance(finalize_operation, InitializeMapping):
+                                        await cur.execute(
+                                            "INSERT INTO finalize_operation_initialize_mapping (finalize_operation_id, "
+                                            "mapping_id) VALUES (%s, %s)",
+                                            (finalize_operation_db_id, str(finalize_operation.mapping_id))
+                                        )
+                                    elif isinstance(finalize_operation, InsertKeyValue):
+                                        await cur.execute(
+                                            "INSERT INTO finalize_operation_insert_kv (finalize_operation_id, "
+                                            "mapping_id, key_id, value_id) VALUES (%s, %s, %s, %s)",
+                                            (finalize_operation_db_id, str(finalize_operation.mapping_id),
+                                            str(finalize_operation.key_id), str(finalize_operation.value_id))
+                                        )
+                                    elif isinstance(finalize_operation, UpdateKeyValue):
+                                        await cur.execute(
+                                            "INSERT INTO finalize_operation_update_kv (finalize_operation_id, "
+                                            "mapping_id, index, key_id, value_id) VALUES (%s, %s, %s, %s, %s)",
+                                            (finalize_operation_db_id, str(finalize_operation.mapping_id),
+                                            finalize_operation.index, str(finalize_operation.key_id),
+                                            str(finalize_operation.value_id))
+                                        )
+                                    elif isinstance(finalize_operation, RemoveKeyValue):
+                                        await cur.execute(
+                                            "INSERT INTO finalize_operation_remove_kv (finalize_operation_id, "
+                                            "mapping_id, index) VALUES (%s, %s, %s)",
+                                            (finalize_operation_db_id, str(finalize_operation.mapping_id),
+                                            finalize_operation.index)
+                                        )
+                                    elif isinstance(finalize_operation, RemoveMapping):
+                                        await cur.execute(
+                                            "INSERT INTO finalize_operation_remove_mapping (finalize_operation_id, "
+                                            "mapping_id) VALUES (%s, %s)",
+                                            (finalize_operation_db_id, str(finalize_operation.mapping_id))
+                                        )
 
-                        ratification_map = defaultdict(lambda: defaultdict(list))
+                        ratification_map: defaultdict[str, defaultdict[int, list[int]]] = defaultdict(lambda: defaultdict(list))
 
-                        copy_data = []
+                        ratification_copy_data: list[tuple[int, str, str, int, int]] = []
                         if not os.environ.get("DEBUG_SKIP_COINBASE"):
                             for index, ratify in enumerate(block.ratifications):
-                                ratify: Ratify
                                 # noinspection PyUnresolvedReferences
-                                copy_data.append((block_db_id, ratify.type.name, str(ratify.address), ratify.amount, index))
-                            if copy_data:
+                                ratification_copy_data.append((block_db_id, ratify.type.name, str(ratify.address), ratify.amount, index))
+                            if ratification_copy_data:
                                 await cur.executemany(
                                     "INSERT INTO ratification (block_id, type, address, amount, index) "
                                     "VALUES (%s, %s, %s, %s, %s) RETURNING id",
-                                    copy_data,
+                                    ratification_copy_data,
                                     returning=True,
                                 )
-                                ratify_db_id = []
+                                ratify_db_id: list[int] = []
                                 while True:
-                                    ratify_db_id.append((await cur.fetchone())["id"])
+                                    res = await cur.fetchone()
+                                    if res is None:
+                                        raise RuntimeError("???")
+                                    ratify_db_id.append(res["id"])
                                     if not cur.nextset():
                                         break
-                                for index, data in enumerate(copy_data):
+                                for index, data in enumerate(ratification_copy_data):
                                     #                addr     amount
                                     ratification_map[data[2]][data[3]].append(ratify_db_id[index])
 
@@ -453,12 +451,11 @@ class Database:
                                 (coinbase_reward, block_db_id)
                             )
                             partial_solutions = list(block.coinbase.value.partial_solutions)
-                            solutions = []
-                            partial_solutions = list(zip(partial_solutions,
+                            solutions: list[tuple[PartialSolution, int, int]] = []
+                            partial_solutions_target = list(zip(partial_solutions,
                                                     [partial_solution.commitment.to_target() for partial_solution in
                                                      partial_solutions]))
-                            target_sum = sum(target for _, target in partial_solutions)
-                            partial_solution: PartialSolution
+                            target_sum = sum(target for _, target in partial_solutions_target)
                             for partial_solution, target in partial_solutions:
                                 solutions.append((partial_solution, target, coinbase_reward * target // (2 * target_sum)))
 
@@ -467,7 +464,9 @@ class Database:
                                 "VALUES (%s, %s, %s, %s) RETURNING id",
                                 (block_db_id, str(block.coinbase.value.proof.w.x), block.coinbase.value.proof.w.flags, target_sum)
                             )
-                            coinbase_solution_db_id = (await cur.fetchone())["id"]
+                            if (res := await cur.fetchone()) is None:
+                                raise RuntimeError("???")
+                            coinbase_solution_db_id = res["id"]
                             await cur.execute("SELECT total_credit FROM leaderboard_total")
                             current_total_credit = await cur.fetchone()
                             if current_total_credit is None:
@@ -475,8 +474,7 @@ class Database:
                                 current_total_credit = 0
                             else:
                                 current_total_credit = current_total_credit["total_credit"]
-                            partial_solution: PartialSolution
-                            copy_data = []
+                            copy_data: list[tuple[int, str, u64, str, int, int, int]] = []
                             for partial_solution, target, reward in solutions:
                                 try:
                                     ratify_id = ratification_map[str(partial_solution.address)][reward].pop()
@@ -515,7 +513,7 @@ class Database:
         await self._save_block(block)
 
     @staticmethod
-    def _get_block_header(block: dict):
+    def _get_block_header(block: dict[str, Any]):
         return BlockHeader(
             previous_state_root=Field.loads(block["previous_state_root"]),
             transactions_root=Field.loads(block["transactions_root"]),
@@ -538,14 +536,14 @@ class Database:
         )
 
     @staticmethod
-    async def _get_transition(transition: dict, conn: psycopg.AsyncConnection):
+    async def _get_transition(transition: dict[str, Any], conn: psycopg.AsyncConnection[dict[str, Any]]):
         async with conn.cursor() as cur:
             await cur.execute(
                 "SELECT * FROM transition_input WHERE transition_id = %s",
                 (transition["id"],)
             )
             transition_inputs = await cur.fetchall()
-            tis = []
+            tis: list[tuple[TransitionInput, int]] = []
             for transition_input in transition_inputs:
                 match transition_input["type"]:
                     case TransitionInput.Type.Public.name:
@@ -554,6 +552,8 @@ class Database:
                             (transition_input["id"],)
                         )
                         transition_input_public = await cur.fetchone()
+                        if transition_input_public is None:
+                            raise RuntimeError("database inconsistent")
                         if transition_input_public["plaintext"] is None:
                             plaintext = None
                         else:
@@ -569,6 +569,8 @@ class Database:
                             (transition_input["id"],)
                         )
                         transition_input_private = await cur.fetchone()
+                        if transition_input_private is None:
+                            raise RuntimeError("database inconsistent")
                         if transition_input_private["ciphertext"] is None:
                             ciphertext = None
                         else:
@@ -584,6 +586,8 @@ class Database:
                             (transition_input["id"],)
                         )
                         transition_input_record = await cur.fetchone()
+                        if transition_input_record is None:
+                            raise RuntimeError("database inconsistent")
                         tis.append((RecordTransitionInput(
                             serial_number=Field.loads(transition_input_record["serial_number"]),
                             tag=Field.loads(transition_input_record["tag"])
@@ -595,6 +599,8 @@ class Database:
                             (transition_input["id"],)
                         )
                         transition_input_external_record = await cur.fetchone()
+                        if transition_input_external_record is None:
+                            raise RuntimeError("database inconsistent")
                         tis.append((ExternalRecordTransitionInput(
                             input_commitment=Field.loads(transition_input_external_record["commitment"]),
                         ), transition_input["index"]))
@@ -602,14 +608,14 @@ class Database:
                     case _:
                         raise NotImplementedError
             tis.sort(key=lambda x: x[1])
-            tis = [x[0] for x in tis]
+            transition_inputs = [x[0] for x in tis]
 
             await cur.execute(
                 "SELECT * FROM transition_output WHERE transition_id = %s",
                 (transition["id"],)
             )
             transition_outputs = await cur.fetchall()
-            tos = []
+            tos: list[tuple[TransitionOutput, int]] = []
             for transition_output in transition_outputs:
                 match transition_output["type"]:
                     case TransitionOutput.Type.Public.name:
@@ -618,6 +624,8 @@ class Database:
                             (transition_output["id"],)
                         )
                         transition_output_public = await cur.fetchone()
+                        if transition_output_public is None:
+                            raise RuntimeError("database inconsistent")
                         if transition_output_public["plaintext"] is None:
                             plaintext = None
                         else:
@@ -632,6 +640,8 @@ class Database:
                             (transition_output["id"],)
                         )
                         transition_output_private = await cur.fetchone()
+                        if transition_output_private is None:
+                            raise RuntimeError("database inconsistent")
                         if transition_output_private["ciphertext"] is None:
                             ciphertext = None
                         else:
@@ -646,10 +656,11 @@ class Database:
                             (transition_output["id"],)
                         )
                         transition_output_record = await cur.fetchone()
+                        if transition_output_record is None:
+                            raise RuntimeError("database inconsistent")
                         if transition_output_record["record_ciphertext"] is None:
                             record_ciphertext = None
                         else:
-                            # noinspection PyArgumentList
                             record_ciphertext = Record[Ciphertext].loads(transition_output_record["record_ciphertext"])
                         tos.append((RecordTransitionOutput(
                             commitment=Field.loads(transition_output_record["commitment"]),
@@ -662,13 +673,15 @@ class Database:
                             (transition_output["id"],)
                         )
                         transition_output_external_record = await cur.fetchone()
+                        if transition_output_external_record is None:
+                            raise RuntimeError("database inconsistent")
                         tos.append((ExternalRecordTransitionOutput(
                             commitment=Field.loads(transition_output_external_record["commitment"]),
                         ), transition_output["index"]))
                     case _:
                         raise NotImplementedError
             tos.sort(key=lambda x: x[1])
-            tos = [x[0] for x in tos]
+            transition_outputs = [x[0] for x in tos]
 
             await cur.execute(
                 "SELECT * FROM transition_finalize WHERE transition_id = %s",
@@ -678,7 +691,7 @@ class Database:
             if len(transition_finalizes) == 0:
                 finalize = None
             else:
-                finalize = []
+                f: list[tuple[Value, int]] = []
                 for transition_finalize in transition_finalizes:
                     match transition_finalize["type"]:
                         case Value.Type.Plaintext.name:
@@ -687,7 +700,9 @@ class Database:
                                 (transition_finalize["id"],)
                             )
                             transition_finalize_plaintext = await cur.fetchone()
-                            finalize.append((PlaintextValue(
+                            if transition_finalize_plaintext is None:
+                                raise RuntimeError("database inconsistent")
+                            f.append((PlaintextValue(
                                 plaintext=Plaintext.load(BytesIO(transition_finalize_plaintext["plaintext"]))
                             ), transition_finalize["index"]))
                         case Value.Type.Record.name:
@@ -696,34 +711,37 @@ class Database:
                                 (transition_finalize["id"],)
                             )
                             transition_finalize_record = await cur.fetchone()
-                            # noinspection PyArgumentList
-                            finalize.append((RecordValue(
+                            if transition_finalize_record is None:
+                                raise RuntimeError("database inconsistent")
+                            f.append((RecordValue(
                                 record=Record[Plaintext].loads(transition_finalize_record["record"])
                             ), transition_finalize["index"]))
-                finalize.sort(key=lambda x: x[1])
-                finalize = Vec[Value, u8]([x[0] for x in finalize])
+                        case _:
+                            raise NotImplementedError
+                f.sort(key=lambda x: x[1])
+                finalize = Vec[Value, u8]([x[0] for x in f])
 
             return Transition(
                 id_=TransitionID.loads(transition["transition_id"]),
                 program_id=ProgramID.loads(transition["program_id"]),
                 function_name=Identifier.loads(transition["function_name"]),
-                inputs=Vec[TransitionInput, u8](tis),
-                outputs=Vec[TransitionOutput, u8](tos),
+                inputs=Vec[TransitionInput, u8](transition_inputs),
+                outputs=Vec[TransitionOutput, u8](transition_outputs),
                 finalize=Option[Vec[Value, u8]](finalize),
                 tpk=Group.loads(transition["tpk"]),
                 tcm=Field.loads(transition["tcm"]),
             )
 
     @staticmethod
-    async def _get_full_block(block: dict, conn: psycopg.AsyncConnection):
+    async def _get_full_block(block: dict[str, Any], conn: psycopg.AsyncConnection[dict[str, Any]]):
         async with conn.cursor() as cur:
             await cur.execute("SELECT * FROM confirmed_transaction WHERE block_id = %s", (block['id'],))
             confirmed_transactions = await cur.fetchall()
-            ctxs = []
+            ctxs: list[ConfirmedTransaction] = []
             for confirmed_transaction in confirmed_transactions:
                 await cur.execute("SELECT * FROM finalize_operation WHERE confirmed_transaction_id = %s", (confirmed_transaction["id"],))
                 finalize_operations = await cur.fetchall()
-                f = []
+                f: list[FinalizeOperation] = []
                 for finalize_operation in finalize_operations:
                     match finalize_operation["type"]:
                         case FinalizeOperation.Type.InitializeMapping.name:
@@ -732,6 +750,8 @@ class Database:
                                 (finalize_operation["id"],)
                             )
                             initialize_mapping = await cur.fetchone()
+                            if initialize_mapping is None:
+                                raise RuntimeError("database inconsistent")
                             f.append(InitializeMapping(mapping_id=Field.loads(initialize_mapping["mapping_id"])))
                         case FinalizeOperation.Type.InsertKeyValue.name:
                             await cur.execute(
@@ -739,6 +759,8 @@ class Database:
                                 (finalize_operation["id"],)
                             )
                             insert_kv = await cur.fetchone()
+                            if insert_kv is None:
+                                raise RuntimeError("database inconsistent")
                             f.append(InsertKeyValue(
                                 mapping_id=Field.loads(insert_kv["mapping_id"]),
                                 key_id=Field.loads(insert_kv["key_id"]),
@@ -750,6 +772,8 @@ class Database:
                                 (finalize_operation["id"],)
                             )
                             update_kv = await cur.fetchone()
+                            if update_kv is None:
+                                raise RuntimeError("database inconsistent")
                             f.append(UpdateKeyValue(
                                 mapping_id=Field.loads(update_kv["mapping_id"]),
                                 index=u64(update_kv["index"]),
@@ -762,6 +786,8 @@ class Database:
                                 (finalize_operation["id"],)
                             )
                             remove_kv = await cur.fetchone()
+                            if remove_kv is None:
+                                raise RuntimeError("database inconsistent")
                             f.append(RemoveKeyValue(
                                 mapping_id=Field.loads(remove_kv["mapping_id"]),
                                 index=u64(remove_kv["index"]),
@@ -772,10 +798,16 @@ class Database:
                                 (finalize_operation["id"],)
                             )
                             remove_mapping = await cur.fetchone()
+                            if remove_mapping is None:
+                                raise RuntimeError("database inconsistent")
                             f.append(RemoveMapping(mapping_id=Field.loads(remove_mapping["mapping_id"])))
+                        case _:
+                            raise NotImplementedError
 
                 await cur.execute("SELECT * FROM transaction WHERE confimed_transaction_id = %s", (confirmed_transaction["id"],))
                 transaction = await cur.fetchone()
+                if transaction is None:
+                    raise RuntimeError("database inconsistent")
                 match confirmed_transaction["type"]:
                     case ConfirmedTransaction.Type.AcceptedDeploy.name | ConfirmedTransaction.Type.RejectedDeploy.name:
                         if confirmed_transaction["type"] == ConfirmedTransaction.Type.RejectedDeploy.name:
@@ -785,13 +817,16 @@ class Database:
                             (transaction["id"],)
                         )
                         deploy_transaction = await cur.fetchone()
+                        if deploy_transaction is None:
+                            raise RuntimeError("database inconsistent")
                         await cur.execute(
                             "SELECT raw_data, owner, signature FROM program WHERE transaction_deploy_id = %s",
                             (deploy_transaction["id"],)
                         )
                         program_data = await cur.fetchone()
+                        if program_data is None:
+                            raise RuntimeError("database inconsistent")
                         program = program_data["raw_data"]
-                        # noinspection PyArgumentList
                         deployment = Deployment(
                             edition=u16(deploy_transaction["edition"]),
                             program=Program.load(BytesIO(program)),
@@ -801,20 +836,22 @@ class Database:
                             "SELECT * FROM fee WHERE transaction_id = %s",
                             (transaction["id"],)
                         )
-                        fee = await cur.fetchone()
+                        fee_dict = await cur.fetchone()
+                        if fee_dict is None:
+                            raise RuntimeError("database inconsistent")
                         await cur.execute(
                             "SELECT * FROM transition WHERE fee_id = %s",
-                            (fee["id"],)
+                            (fee_dict["id"],)
                         )
                         fee_transition = await cur.fetchone()
                         if fee_transition is None:
                             raise ValueError("fee transition not found")
                         proof = None
-                        if fee["proof"] is not None:
-                            proof = Proof.loads(fee["proof"])
+                        if fee_dict["proof"] is not None:
+                            proof = Proof.loads(fee_dict["proof"])
                         fee = Fee(
                             transition=await Database._get_transition(fee_transition, conn),
-                            global_state_root=StateRoot.loads(fee["global_state_root"]),
+                            global_state_root=StateRoot.loads(fee_dict["global_state_root"]),
                             proof=Option[Proof](proof),
                         )
                         tx = DeployTransaction(
@@ -837,12 +874,14 @@ class Database:
                             (transaction["id"],)
                         )
                         execute_transaction = await cur.fetchone()
+                        if execute_transaction is None:
+                            raise RuntimeError("database inconsistent")
                         await cur.execute(
                             "SELECT * FROM transition WHERE transaction_execute_id = %s",
                             (execute_transaction["id"],)
                         )
                         transitions = await cur.fetchall()
-                        tss = []
+                        tss: list[Transition] = []
                         for transition in transitions:
                             tss.append(await Database._get_transition(transition, conn))
                         await cur.execute(
@@ -887,6 +926,8 @@ class Database:
                                 finalize=Vec[FinalizeOperation, u16](f),
                             ))
                         else:
+                            if fee is None:
+                                raise ValueError("fee is None")
                             ctxs.append(RejectedExecute(
                                 index=u32(confirmed_transaction["index"]),
                                 transaction=FeeTransaction(
@@ -906,7 +947,7 @@ class Database:
 
             await cur.execute("SELECT * FROM ratification WHERE block_id = %s ORDER BY index", (block["id"],))
             ratifications = await cur.fetchall()
-            rs = []
+            rs: list[Ratify] = []
             for ratification in ratifications:
                 match ratification["type"]:
                     case Ratify.Type.ProvingReward.name:
@@ -919,6 +960,8 @@ class Database:
                             address=Address.loads(ratification["address"]),
                             amount=u64(ratification["amount"]),
                         ))
+                    case _:
+                        raise NotImplementedError
 
             await cur.execute("SELECT * FROM coinbase_solution WHERE block_id = %s", (block["id"],))
             coinbase_solution = await cur.fetchone()
@@ -928,9 +971,13 @@ class Database:
                     (coinbase_solution["id"],)
                 )
                 partial_solutions = await cur.fetchall()
-                pss = []
+                pss: list[PartialSolution] = []
                 for partial_solution in partial_solutions:
-                    pss.append(PartialSolution.load_json(dict(partial_solution)))
+                    pss.append(PartialSolution(
+                        address=Address.loads(partial_solution["address"]),
+                        nonce=u64(partial_solution["nonce"]),
+                        commitment=PuzzleCommitment.loads(partial_solution["commitment"]),
+                    ))
                 coinbase_solution = CoinbaseSolution(
                     partial_solutions=Vec[PartialSolution, u32](pss),
                     proof=KZGProof(
@@ -958,7 +1005,7 @@ class Database:
             )
 
     @staticmethod
-    async def _get_full_block_range(start: int, end: int, conn: psycopg.AsyncConnection):
+    async def _get_full_block_range(start: int, end: int, conn: psycopg.AsyncConnection[dict[str, Any]]):
         async with conn.cursor() as cur:
             await cur.execute(
                 "SELECT * FROM block WHERE height <= %s AND height > %s ORDER BY height DESC",
@@ -968,20 +1015,26 @@ class Database:
             return [await Database._get_full_block(block, conn) for block in blocks]
 
     @staticmethod
-    async def _get_fast_block(block: dict, conn: psycopg.AsyncConnection) -> dict:
+    async def _get_fast_block(block: dict[str, Any], conn: psycopg.AsyncConnection[dict[str, Any]]) -> dict[str, Any]:
         async with conn.cursor() as cur:
             await cur.execute(
                 "SELECT COUNT(*) FROM confirmed_transaction WHERE block_id = %s",
                 (block["id"],)
             )
-            transaction_count = (await cur.fetchone())["count"]
+            if (res := await cur.fetchone()) is None:
+                transaction_count = 0
+            else:
+                transaction_count = res["count"]
             await cur.execute(
                 "SELECT COUNT(*) FROM partial_solution ps "
                 "JOIN coinbase_solution cs on ps.coinbase_solution_id = cs.id "
                 "WHERE cs.block_id = %s",
                 (block["id"],)
             )
-            partial_solution_count = (await cur.fetchone())["count"]
+            if (res := await cur.fetchone()) is None:
+                partial_solution_count = 0
+            else:
+                partial_solution_count = res["count"]
             return {
                 **block,
                 "transaction_count": transaction_count,
@@ -989,7 +1042,7 @@ class Database:
             }
 
     @staticmethod
-    async def _get_fast_block_range(start: int, end: int, conn: psycopg.AsyncConnection):
+    async def _get_fast_block_range(start: int, end: int, conn: psycopg.AsyncConnection[dict[str, Any]]):
         async with conn.cursor() as cur:
             await cur.execute(
                 "SELECT * FROM block WHERE height <= %s AND height > %s ORDER BY height DESC",
@@ -998,14 +1051,14 @@ class Database:
             blocks = await cur.fetchall()
             return [await Database._get_fast_block(block, conn) for block in blocks]
 
-    async def get_latest_height(self):
+    async def get_latest_height(self) -> int:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute("SELECT height FROM block ORDER BY height DESC LIMIT 1")
                     result = await cur.fetchone()
                     if result is None:
-                        return None
+                        return 0
                     return result['height']
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
@@ -1026,34 +1079,32 @@ class Database:
 
 
     async def get_latest_block(self):
-        conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute("SELECT * FROM block ORDER BY height DESC LIMIT 1")
                     block = await cur.fetchone()
                     if block is None:
-                        return None
+                        raise RuntimeError("no blocks in database")
                     return await self._get_full_block(block, conn)
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
                 
-    async def get_latest_coinbase_timestamp(self):
+    async def get_latest_coinbase_timestamp(self) -> int:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute("SELECT last_coinbase_timestamp FROM block ORDER BY height DESC LIMIT 1")
                     result = await cur.fetchone()
                     if result is None:
-                        return None
+                        raise RuntimeError("no blocks in database")
                     return result['last_coinbase_timestamp']
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
     async def get_block_by_height(self, height: u32):
-        conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1067,7 +1118,6 @@ class Database:
                     raise
 
     async def get_block_hash_by_height(self, height: u32):
-        conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1081,7 +1131,6 @@ class Database:
                     raise
 
     async def get_block_header_by_height(self, height: u32):
-        conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1095,7 +1144,6 @@ class Database:
                     raise
 
     async def get_block_by_hash(self, block_hash: BlockHash | str) -> Block | None:
-        conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1109,7 +1157,6 @@ class Database:
                     raise
 
     async def get_block_header_by_hash(self, block_hash: BlockHash) -> BlockHeader | None:
-        conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1123,7 +1170,6 @@ class Database:
                     raise
 
     async def get_recent_blocks_fast(self):
-        conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             try:
                 latest_height = await self.get_latest_height()
@@ -1136,7 +1182,6 @@ class Database:
     async def get_validator_from_block_hash(self, block_hash: BlockHash) -> Address | None:
         raise NotImplementedError
         # noinspection PyUnreachableCode
-        conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             try:
                 # noinspection PyUnresolvedReferences,SqlResolve
@@ -1153,8 +1198,7 @@ class Database:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
-    async def get_transaction_reject_reason(self, transaction_id: TransactionID | str) -> str | None:
-        conn: psycopg.AsyncConnection
+    async def get_transaction_reject_reason(self, transaction_id: TransactionID | str) -> Optional[str]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1164,13 +1208,14 @@ class Database:
                         "WHERE t.transaction_id = %s",
                         (str(transaction_id),)
                     )
-                    return (await cur.fetchone())["reject_reason"]
+                    if (res := await cur.fetchone()) is None:
+                        return None
+                    return res["reject_reason"]
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
     async def get_block_from_transaction_id(self, transaction_id: TransactionID | str) -> Block | None:
-        conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1189,7 +1234,6 @@ class Database:
                     raise
 
     async def get_block_from_transition_id(self, transition_id: TransitionID | str) -> Block | None:
-        conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1217,8 +1261,7 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def search_block_hash(self, block_hash: str) -> [str]:
-        conn: psycopg.AsyncConnection
+    async def search_block_hash(self, block_hash: str) -> list[str]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1229,8 +1272,7 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def search_transaction_id(self, transaction_id: str) -> [str]:
-        conn: psycopg.AsyncConnection
+    async def search_transaction_id(self, transaction_id: str) -> list[str]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1241,8 +1283,7 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def search_transition_id(self, transition_id: str) -> [str]:
-        conn: psycopg.AsyncConnection
+    async def search_transition_id(self, transition_id: str) -> list[str]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1253,8 +1294,7 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_blocks_range(self, start, end):
-        conn: psycopg.AsyncConnection
+    async def get_blocks_range(self, start: int, end: int):
         async with self.pool.connection() as conn:
             try:
                 return await Database._get_full_block_range(start, end, conn)
@@ -1262,8 +1302,7 @@ class Database:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
-    async def get_blocks_range_fast(self, start, end):
-        conn: psycopg.AsyncConnection
+    async def get_blocks_range_fast(self, start: int, end: int):
         async with self.pool.connection() as conn:
             try:
                 return await Database._get_fast_block_range(start, end, conn)
@@ -1271,22 +1310,21 @@ class Database:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
-    async def get_block_coinbase_reward_by_height(self, height: int) -> int | None:
-        conn: psycopg.AsyncConnection
+    async def get_block_coinbase_reward_by_height(self, height: int) -> int:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
                         "SELECT coinbase_reward FROM block WHERE height = %s", (height,)
                     )
-                    # Copilot: use double quotes for strings
-                    return (await cur.fetchone())["coinbase_reward"]
+                    if (res := await cur.fetchone()) is None:
+                        return 0
+                    return res["coinbase_reward"]
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_block_target_sum_by_height(self, height: int) -> int | None:
-        conn: psycopg.AsyncConnection
+    async def get_block_target_sum_by_height(self, height: int) -> int:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1296,24 +1334,26 @@ class Database:
                         "WHERE height = %s ",
                         (height,)
                     )
-                    return (await cur.fetchone())["target_sum"]
+                    if (res := await cur.fetchone()) is None:
+                        return 0
+                    return res["target_sum"]
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
     async def get_leaderboard_size(self) -> int:
-        conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute("SELECT COUNT(*) FROM leaderboard")
-                    return (await cur.fetchone())["count"]
+                    if (res := await cur.fetchone()) is None:
+                        return 0
+                    return res["count"]
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_leaderboard(self, start: int, end: int) -> list:
-        conn: psycopg.AsyncConnection
+    async def get_leaderboard(self, start: int, end: int) -> list[dict[str, Any]]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1328,8 +1368,7 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_leaderboard_rewards_by_address(self, address: str) -> (int, int):
-        conn: psycopg.AsyncConnection
+    async def get_leaderboard_rewards_by_address(self, address: str) -> tuple[int, int]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1337,13 +1376,14 @@ class Database:
                         "SELECT total_reward, total_incentive FROM leaderboard WHERE address = %s", (address,)
                     )
                     row = await cur.fetchone()
+                    if row is None:
+                        return 0, 0
                     return row["total_reward"], row["total_incentive"]
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_recent_solutions_by_address(self, address: str) -> list:
-        conn: psycopg.AsyncConnection
+    async def get_recent_solutions_by_address(self, address: str) -> list[dict[str, Any]]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1363,20 +1403,20 @@ class Database:
                     raise
 
     async def get_solution_count_by_address(self, address: str) -> int:
-        conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
                         "SELECT COUNT(*) FROM partial_solution WHERE address = %s", (address,)
                     )
-                    return (await cur.fetchone())["count"]
+                    if (res := await cur.fetchone()) is None:
+                        return 0
+                    return res["count"]
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_solution_by_address(self, address: str, start: int, end: int) -> list:
-        conn: psycopg.AsyncConnection
+    async def get_solution_by_address(self, address: str, start: int, end: int) -> list[dict[str, Any]]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1395,8 +1435,7 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_solution_by_height(self, height: int, start: int, end: int) -> list:
-        conn: psycopg.AsyncConnection
+    async def get_solution_by_height(self, height: int, start: int, end: int) -> list[dict[str, Any]]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1415,8 +1454,7 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def search_address(self, address: str) -> [str]:
-        conn: psycopg.AsyncConnection
+    async def search_address(self, address: str) -> list[str]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1428,8 +1466,7 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_address_speed(self, address: str) -> (float, int): # (speed, interval)
-        conn: psycopg.AsyncConnection
+    async def get_address_speed(self, address: str) -> tuple[float, int]: # (speed, interval)
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 interval_list = [900, 1800, 3600, 14400, 43200, 86400]
@@ -1463,7 +1500,6 @@ class Database:
                     raise
 
     async def get_network_speed(self) -> float:
-        conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 now = int(time.time())
@@ -1493,7 +1529,6 @@ class Database:
                     raise
 
     async def get_leaderboard_total(self) -> int:
-        conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1501,14 +1536,13 @@ class Database:
                     total_credit = await cur.fetchone()
                     if total_credit is None:
                         await cur.execute("INSERT INTO leaderboard_total (total_credit) VALUES (0)")
-                        total_credit = 0
+                        return 0
                     return int(total_credit["total_credit"])
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_puzzle_commitment(self, commitment: str) -> dict | None:
-        conn: psycopg.AsyncConnection
+    async def get_puzzle_commitment(self, commitment: str) -> Optional[dict[str, Any]]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1530,8 +1564,7 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_function_definition(self, program_id: str, function_name: str) -> dict | None:
-        conn: psycopg.AsyncConnection
+    async def get_function_definition(self, program_id: str, function_name: str) -> Optional[dict[str, Any]]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1547,7 +1580,6 @@ class Database:
                     raise
 
     async def get_program_count(self, no_helloworld: bool = False) -> int:
-        conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1558,13 +1590,14 @@ class Database:
                         )
                     else:
                         await cur.execute("SELECT COUNT(*) FROM program")
-                    return (await cur.fetchone())['count']
+                    if (res := await cur.fetchone()) is None:
+                        return 0
+                    return res['count']
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_programs(self, start, end, no_helloworld: bool = False) -> list:
-        conn: psycopg.AsyncConnection
+    async def get_programs(self, start: int, end: int, no_helloworld: bool = False) -> list[dict[str, Any]]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1604,8 +1637,7 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_programs_with_feature_hash(self, feature_hash: bytes, start, end) -> list:
-        conn: psycopg.AsyncConnection
+    async def get_programs_with_feature_hash(self, feature_hash: bytes, start: int, end: int) -> list[dict[str, Any]]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1630,7 +1662,6 @@ class Database:
 
 
     async def get_block_by_program_id(self, program_id: str) -> Block | None:
-        conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1653,7 +1684,6 @@ class Database:
 
 
     async def get_program_called_times(self, program_id: str) -> int:
-        conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1663,14 +1693,15 @@ class Database:
                         "WHERE program.program_id = %s",
                         (program_id,)
                     )
-                    return (await cur.fetchone())['sum']
+                    if (res := await cur.fetchone()) is None:
+                        return 0
+                    return res['sum']
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
 
-    async def get_program_calls(self, program_id: str, start: int, end: int) -> list:
-        conn: psycopg.AsyncConnection
+    async def get_program_calls(self, program_id: str, start: int, end: int) -> list[dict[str, Any]]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1692,7 +1723,6 @@ class Database:
                     raise
 
     async def get_program_similar_count(self, program_id: str) -> int:
-        conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1701,13 +1731,14 @@ class Database:
                         "WHERE feature_hash = (SELECT feature_hash FROM program WHERE program_id = %s)",
                         (program_id,)
                     )
-                    return (await cur.fetchone())['count'] - 1
+                    if (res := await cur.fetchone()) is None:
+                        raise ValueError(f"Program {program_id} not found")
+                    return res['count'] - 1
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
     async def get_program_feature_hash(self, program_id: str) -> bytes:
-        conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1715,13 +1746,14 @@ class Database:
                         "SELECT feature_hash FROM program WHERE program_id = %s",
                         (program_id,)
                     )
-                    return (await cur.fetchone())['feature_hash']
+                    if (res := await cur.fetchone()) is None:
+                        raise ValueError(f"Program {program_id} not found")
+                    return res['feature_hash']
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def search_program(self, program_id: str) -> [str]:
-        conn: psycopg.AsyncConnection
+    async def search_program(self, program_id: str) -> list[str]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1734,8 +1766,7 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_recent_programs_by_address(self, address: str) -> list:
-        conn: psycopg.AsyncConnection
+    async def get_recent_programs_by_address(self, address: str) -> list[str]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1748,18 +1779,18 @@ class Database:
                     raise
 
     async def get_program_count_by_address(self, address: str) -> int:
-        conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute("SELECT COUNT(*) FROM program WHERE owner = %s", (address,))
-                    return (await cur.fetchone())['count']
+                    if (res := await cur.fetchone()) is None:
+                        return 0
+                    return res['count']
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_program(self, program_id: str) -> bytes | None:
-        conn: psycopg.AsyncConnection
+    async def get_program(self, program_id: str) -> Optional[bytes]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1772,8 +1803,7 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_mapping_cache(self, mapping_id: str) -> list:
-        conn: psycopg.AsyncConnection
+    async def get_mapping_cache(self, mapping_id: str) -> list[dict[str, Any]]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1790,7 +1820,6 @@ class Database:
                     raise
 
     async def get_mapping_value(self, program_id: str, mapping: str, key_id: str) -> bytes | None:
-        conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1808,7 +1837,7 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def initialize_mapping(self, cur, mapping_id: str, program_id: str, mapping: str):
+    async def initialize_mapping(self, cur: psycopg.AsyncCursor[dict[str, Any]], mapping_id: str, program_id: str, mapping: str):
         try:
             await cur.execute(
                 "INSERT INTO mapping (mapping_id, program_id, mapping) VALUES (%s, %s, %s)",
@@ -1819,7 +1848,6 @@ class Database:
             raise
 
     async def initialize_builtin_mapping(self, mapping_id: str, program_id: str, mapping: str):
-        conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1831,7 +1859,7 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def update_mapping_key_value(self, cur, mapping_id: str, index: int, key_id: str, value_id: str,
+    async def update_mapping_key_value(self, cur: psycopg.AsyncCursor[dict[str, Any]], mapping_id: str, index: int, key_id: str, value_id: str,
                                         key: bytes, value: bytes):
         try:
             await cur.execute("SELECT id FROM mapping WHERE mapping_id = %s", (mapping_id,))
@@ -1862,19 +1890,19 @@ class Database:
             raise
                 
                 
-    async def get_program_leo_source_code(self, program_id: str) -> str | None:
-        conn: psycopg.AsyncConnection
+    async def get_program_leo_source_code(self, program_id: str) -> Optional[str]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute("SELECT leo_source FROM program WHERE program_id = %s", (program_id,))
-                    return (await cur.fetchone())['leo_source']
+                    if (res := await cur.fetchone()) is None:
+                        return None
+                    return res['leo_source']
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
     async def store_program_leo_source_code(self, program_id: str, source_code: str):
-        conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1886,7 +1914,6 @@ class Database:
                     raise
 
     async def save_feedback(self, contact: str, content: str):
-        conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1901,16 +1928,15 @@ class Database:
         migrations = [
             (1, self.migrate_1_add_reject_reason_to_confirmed_transaction)
         ]
-        conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
                     for migrated_id, method in migrations:
                         await cur.execute("SELECT COUNT(*) FROM _migration WHERE migrated_id = %s", (migrated_id,))
-                        if (await cur.fetchone())['count'] == 0:
+                        res = await cur.fetchone()
+                        if res is None or res['count'] == 0:
                             print(f"DB migrating {migrated_id}")
                             async with conn.transaction():
-                                # noinspection PyArgumentList
                                 await method(conn)
                                 await cur.execute("INSERT INTO _migration (migrated_id) VALUES (%s)", (migrated_id,))
                 except Exception as e:
@@ -1918,7 +1944,7 @@ class Database:
                     raise
 
     # noinspection PyMethodMayBeStatic
-    async def migrate_1_add_reject_reason_to_confirmed_transaction(self, conn: psycopg.AsyncConnection):
+    async def migrate_1_add_reject_reason_to_confirmed_transaction(self, conn: psycopg.AsyncConnection[dict[str, Any]]):
         async with conn.cursor() as cur:
             await cur.execute(
                 "ALTER TABLE confirmed_transaction ADD COLUMN reject_reason TEXT"
@@ -1926,7 +1952,6 @@ class Database:
 
     # debug method
     async def clear_database(self):
-        conn: psycopg.AsyncConnection
         async with self.pool.connection() as conn:
             try:
                 await conn.execute("TRUNCATE TABLE block RESTART IDENTITY CASCADE")

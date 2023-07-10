@@ -554,6 +554,8 @@ class ValueType(EnumBaseSerialize, RustEnum, Serializable):
         Record = 3
         ExternalRecord = 4
 
+    type: Type
+
     @classmethod
     def load(cls, data: BytesIO):
         type_ = cls.Type.load(data)
@@ -1272,6 +1274,8 @@ class Plaintext(EnumBaseSerialize, RustEnum, Serializable):  # enum
         Literal = 0
         Struct = 1
 
+    type: Type
+
     @classmethod
     def load(cls, data: BytesIO):
         type_ = Plaintext.Type.load(data)
@@ -1721,6 +1725,8 @@ class TransitionInput(EnumBaseSerialize, RustEnum, Serializable):
         Record = 3
         ExternalRecord = 4
 
+    type: Type
+
     @classmethod
     def load(cls, data: BytesIO):
         type_ = TransitionInput.Type.load(data)
@@ -1828,6 +1834,8 @@ class TransitionOutput(EnumBaseSerialize, RustEnum, Serializable):
         Private = 2
         Record = 3
         ExternalRecord = 4
+
+    type: Type
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -2164,6 +2172,8 @@ class ConfirmedTransaction(EnumBaseSerialize, RustEnum, Serializable):
         RejectedDeploy = 2
         RejectedExecute = 3
 
+    type: Type
+
     @classmethod
     def load(cls, data: BytesIO):
         type_ = cls.Type.load(data)
@@ -2186,6 +2196,9 @@ class FinalizeOperation(EnumBaseSerialize, RustEnum, Serializable):
         UpdateKeyValue = 2
         RemoveKeyValue = 3
         RemoveMapping = 4
+
+    type: Type
+    mapping_id: Field
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -2638,11 +2651,15 @@ class Signature(Serializable):
 
 
 class Ratify(EnumBaseSerialize, RustEnum, Serializable):
-    version = 0
 
     class Type(IntEnumu8):
         ProvingReward = 0
         StakingReward = 1
+
+    version = 0
+    address: Address
+    amount: u64
+    type: Type
 
     @classmethod
     def load(cls, data: BytesIO):

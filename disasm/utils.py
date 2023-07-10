@@ -28,31 +28,26 @@ class disasm_str(StringIO):
 
 
 def plaintext_type_to_str(value: PlaintextType):
-    match value.type:
-        case PlaintextType.Type.Literal:
-            value: LiteralPlaintextType
-            return value.literal_type.name.lower()
-        case PlaintextType.Type.Struct:
-            value: StructPlaintextType
-            return str(value.struct)
+    if isinstance(value, LiteralPlaintextType):
+        return value.literal_type.name.lower()
+    elif isinstance(value, StructPlaintextType):
+        return str(value.struct)
+    else:
+        raise NotImplementedError
 
 
 def value_type_to_mode_type_str(value: ValueType):
     mode = value.type.name.lower()
     if "record" in mode:
         mode = "private"
-    match value.type:
-        case ValueType.Type.Constant | ValueType.Type.Public | ValueType.Type.Private:
-            # noinspection PyUnresolvedReferences
-            t = plaintext_type_to_str(value.plaintext_type)
-        case ValueType.Type.Record:
-            value: RecordValueType
-            t = str(value.identifier)
-        case ValueType.Type.ExternalRecord:
-            value: ExternalRecordValueType
-            t = str(value.locator)
-        case _:
-            raise NotImplementedError
+    if isinstance(value, ConstantValueType | PublicValueType | PrivateValueType):
+        t = plaintext_type_to_str(value.plaintext_type)
+    elif isinstance(value, RecordValueType):
+        t = str(value.identifier)
+    elif isinstance(value, ExternalRecordValueType):
+        t = str(value.locator)
+    else:
+        raise NotImplementedError
     return mode, t
 
 def public_or_private_to_str(value: PublicOrPrivate):

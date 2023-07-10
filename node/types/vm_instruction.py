@@ -213,22 +213,6 @@ class Import(Serializable):
         program_id = ProgramID.load(data)
         return cls(program_id=program_id)
 
-class Register(EnumBaseSerialize, Serialize, RustEnum):
-
-    class Type(IntEnumu8):
-        Locator = 0
-        Member = 1
-
-    @classmethod
-    def load(cls, data: BytesIO):
-        type_ = cls.Type.load(data)
-        if type_ == cls.Type.Locator:
-            return LocatorRegister.load(data)
-        elif type_ == cls.Type.Member:
-            return MemberRegister.load(data)
-        else:
-            raise ValueError(f"Invalid register type {type_}")
-
 
 class VarInt(int, Serializable):
 
@@ -272,6 +256,26 @@ class VarInt(int, Serializable):
         else:
             value = u8(value)
         return cls(value)
+
+
+class Register(EnumBaseSerialize, Serialize, RustEnum):
+
+    class Type(IntEnumu8):
+        Locator = 0
+        Member = 1
+
+    type: Type
+    locator: VarInt
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        type_ = cls.Type.load(data)
+        if type_ == cls.Type.Locator:
+            return LocatorRegister.load(data)
+        elif type_ == cls.Type.Member:
+            return MemberRegister.load(data)
+        else:
+            raise ValueError(f"Invalid register type {type_}")
 
 
 class LocatorRegister(Register):
@@ -594,6 +598,8 @@ class PlaintextType(EnumBaseSerialize, Serialize, RustEnum):
     class Type(IntEnumu8):
         Literal = 0
         Struct = 1
+
+    type: Type
 
     @classmethod
     def load(cls, data: BytesIO):
