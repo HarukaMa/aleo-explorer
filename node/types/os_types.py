@@ -14,7 +14,7 @@ class NodeType(IntEnumu32):
         return self.name
 
 
-class Message(Serializable, metaclass=ABCMeta):
+class Message(EnumBaseSerialize, RustEnum, Serializable):
     class Type(IntEnumu16):
         BeaconPropose = 0
         BeaconTimeout = 1
@@ -39,10 +39,44 @@ class Message(Serializable, metaclass=ABCMeta):
         def __repr__(self):
             return self.__class__.__name__ + "." + self.name
 
-    @property
-    @abstractmethod
-    def type(self):
-        raise NotImplementedError
+    @classmethod
+    def load(cls, data: BytesIO) -> Self:
+        type_ = Message.Type(struct.unpack("<H", data.read(2))[0])
+        match type_:
+            case Message.Type.BeaconPropose:
+                message = BeaconPropose.load(data)
+            case Message.Type.BeaconTimeout:
+                message = BeaconTimeout.load(data)
+            case Message.Type.BeaconVote:
+                message = BeaconVote.load(data)
+            case Message.Type.BlockRequest:
+                message = BlockRequest.load(data)
+            case Message.Type.BlockResponse:
+                message = BlockResponse.load(data)
+            case Message.Type.ChallengeRequest:
+                message = ChallengeRequest.load(data)
+            case Message.Type.ChallengeResponse:
+                message = ChallengeResponse.load(data)
+            case Message.Type.Disconnect:
+                message = Disconnect.load(data)
+            case Message.Type.PeerRequest:
+                message = PeerRequest.load(data)
+            case Message.Type.PeerResponse:
+                message = PeerResponse.load(data)
+            case Message.Type.Ping:
+                message = Ping.load(data)
+            case Message.Type.Pong:
+                message = Pong.load(data)
+            case Message.Type.PuzzleRequest:
+                message = PuzzleRequest.load(data)
+            case Message.Type.PuzzleResponse:
+                message = PuzzleResponse.load(data)
+            case Message.Type.UnconfirmedSolution:
+                message = UnconfirmedSolution.load(data)
+            case Message.Type.UnconfirmedTransaction:
+                message = UnconfirmedTransaction.load(data)
+        # noinspection PyUnboundLocalVariable
+        return message
 
 class BeaconPropose(Message):
     type = Message.Type.BeaconPropose
@@ -55,7 +89,7 @@ class BeaconPropose(Message):
         self.block = block
 
     def dump(self) -> bytes:
-        return self.version.dump() + self.round.dump() + self.block_height.dump() + self.block_hash.dump() + \
+        return self.type.dump() + self.version.dump() + self.round.dump() + self.block_height.dump() + self.block_hash.dump() + \
                self.block.dump()
 
     @classmethod
@@ -79,7 +113,7 @@ class BeaconTimeout(Message):
         self.signature = signature
 
     def dump(self) -> bytes:
-        return self.version.dump() + self.round.dump() + self.block_height.dump() + self.block_hash.dump() + \
+        return self.type.dump() + self.version.dump() + self.round.dump() + self.block_height.dump() + self.block_hash.dump() + \
                self.signature.dump()
 
     @classmethod
@@ -105,7 +139,7 @@ class BeaconVote(Message):
         self.signature = signature
 
     def dump(self) -> bytes:
-        return self.version.dump() + self.round.dump() + self.block_height.dump() + self.block_hash.dump() + \
+        return self.type.dump() + self.version.dump() + self.round.dump() + self.block_height.dump() + self.block_hash.dump() + \
                self.timestamp.dump() + self.signature.dump()
 
     @classmethod
@@ -127,7 +161,7 @@ class BlockRequest(Message):
         self.end_height = end_height
 
     def dump(self) -> bytes:
-        return self.start_height.dump() + self.end_height.dump()
+        return self.type.dump() + self.start_height.dump() + self.end_height.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -144,7 +178,7 @@ class BlockResponse(Message):
         self.blocks = blocks
 
     def dump(self) -> bytes:
-        return self.request.dump() + self.blocks.dump()
+        return self.type.dump() + self.request.dump() + self.blocks.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -166,6 +200,7 @@ class ChallengeRequest(Message):
 
     def dump(self) -> bytes:
         return b"".join([
+            self.type.dump(),
             self.version.dump(),
             self.listener_port.dump(),
             self.node_type.dump(),
@@ -199,32 +234,13 @@ class ChallengeResponse(Message):
         self.signature = signature
 
     def dump(self) -> bytes:
-        return self.genesis_header.dump() + self.signature.dump()
+        return self.type.dump() + self.genesis_header.dump() + self.signature.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
         genesis_header = BlockHeader.load(data)
         signature = Signature.load(data)
         return cls(genesis_header=genesis_header, signature=signature)
-
-
-class YourPortIsClosed(int):
-    def __new__(cls, **kwargs):
-        return int.__new__(cls, 14)
-
-    def __init__(self, *, port: u16):
-        self.port = port
-
-    @classmethod
-    def load(cls, data: BytesIO):
-        port = u16.load(data)
-        return cls(port=port)
-
-    def __str__(self):
-        return f"{str(DisconnectReason(self))}(port={self.port})"
-
-    def __repr__(self):
-        return f"{repr(DisconnectReason(self))} port={self.port}"
 
 
 class DisconnectReason(IntEnumu32):
@@ -242,15 +258,13 @@ class DisconnectReason(IntEnumu32):
     TooManyFailures = 11
     TooManyPeers = 12
     YouNeedToSyncFirst = 13
-    YourPortIsClosed = YourPortIsClosed(port=u16()),
+    YourPortIsClosed = 14,
 
     @classmethod
     def load(cls, data: BytesIO):
         if data.getbuffer().nbytes == 0:
             return cls(cls.NoReasonGiven)
         reason = u32.load(data)
-        if reason == 14:
-            return YourPortIsClosed.load(data)
         return cls(reason)
 
 
@@ -261,7 +275,7 @@ class Disconnect(Message):
         self.reason = reason
 
     def dump(self) -> bytes:
-        return self.reason.dump()
+        return self.type.dump() + self.reason.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -275,7 +289,7 @@ class PeerRequest(Message):
         pass
 
     def dump(self) -> bytes:
-        return b""
+        return self.type.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -298,7 +312,7 @@ class PeerResponse(Message):
 
 class BlockLocators(Serializable):
 
-    def __init__(self, *, recents, checkpoints):
+    def __init__(self, *, recents: dict[u32, BlockHash], checkpoints: dict[u32, BlockHash]):
         self.recents = recents
         self.checkpoints = checkpoints
 
@@ -336,7 +350,7 @@ class Ping(Message):
         self.block_locators = block_locators
 
     def dump(self) -> bytes:
-        return self.version.dump() + self.node_type.dump() + self.block_locators.dump()
+        return self.type.dump() + self.version.dump() + self.node_type.dump() + self.block_locators.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -359,9 +373,8 @@ class Pong(Message):
                 res = u8(1)
             case None:
                 res = u8(2)
-            case _:
-                raise ValueError("is_fork is not bool_ | None")
-        return res.dump()
+        # noinspection PyUnboundLocalVariable
+        return self.type.dump() + res.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -386,7 +399,7 @@ class PuzzleRequest(Message):
         pass
 
     def dump(self) -> bytes:
-        return b""
+        return self.type.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -401,7 +414,7 @@ class PuzzleResponse(Message):
         self.block_header = block_header
 
     def dump(self) -> bytes:
-        return self.epoch_challenge.dump() + self.block_header.dump()
+        return self.type.dump() + self.epoch_challenge.dump() + self.block_header.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -418,7 +431,7 @@ class UnconfirmedSolution(Message):
         self.solution = solution
 
     def dump(self) -> bytes:
-        return self.puzzle_commitment.dump() + self.solution.dump()
+        return self.type.dump() + self.puzzle_commitment.dump() + self.solution.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -435,7 +448,7 @@ class UnconfirmedTransaction(Message):
         self.transaction = transaction
 
     def dump(self) -> bytes:
-        return self.transaction_id.dump() + self.transaction.dump()
+        return self.type.dump() + self.transaction_id.dump() + self.transaction.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -446,58 +459,22 @@ class UnconfirmedTransaction(Message):
 
 class Frame(Serializable):
 
-    def __init__(self, *, type_: Message.Type, message: Message):
-        self.type = type_
+    def __init__(self, *, message: Message):
         self.message = message
 
     def dump(self) -> bytes:
-        return self.type.to_bytes(2, "little") + self.message.dump()
+        return self.message.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
         if data.tell() + 2 > data.getbuffer().nbytes:
             raise ValueError("missing message id")
-        type_ = Message.Type(struct.unpack("<H", data.read(2))[0])
-        match type_:
-            case Message.Type.BeaconPropose:
-                message = BeaconPropose.load(data)
-            case Message.Type.BeaconTimeout:
-                message = BeaconTimeout.load(data)
-            case Message.Type.BeaconVote:
-                message = BeaconVote.load(data)
-            case Message.Type.BlockRequest:
-                message = BlockRequest.load(data)
-            case Message.Type.BlockResponse:
-                message = BlockResponse.load(data)
-            case Message.Type.ChallengeRequest:
-                message = ChallengeRequest.load(data)
-            case Message.Type.ChallengeResponse:
-                message = ChallengeResponse.load(data)
-            case Message.Type.Disconnect:
-                message = Disconnect.load(data)
-            case Message.Type.PeerRequest:
-                message = PeerRequest.load(data)
-            case Message.Type.PeerResponse:
-                message = PeerResponse.load(data)
-            case Message.Type.Ping:
-                message = Ping.load(data)
-            case Message.Type.Pong:
-                message = Pong.load(data)
-            case Message.Type.PuzzleRequest:
-                message = PuzzleRequest.load(data)
-            case Message.Type.PuzzleResponse:
-                message = PuzzleResponse.load(data)
-            case Message.Type.UnconfirmedSolution:
-                message = UnconfirmedSolution.load(data)
-            case Message.Type.UnconfirmedTransaction:
-                message = UnconfirmedTransaction.load(data)
-            case _:
-                raise ValueError(f"unknown message type {type_}")
+        message = Message.load(data)
 
-        return cls(type_=type_, message=message)
+        return cls(message=message)
 
     def __str__(self):
-        return f"Frame(type={self.type}, message={self.message})"
+        return f"Frame(message={self.message})"
 
     def __repr__(self):
         return self.__str__()

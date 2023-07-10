@@ -1,7 +1,7 @@
 import struct
 from decimal import Decimal
 from enum import IntEnum
-from typing import Protocol, runtime_checkable, Self, Any, Type
+from typing import Protocol, runtime_checkable, Self, Type
 
 from .utils import *
 
@@ -199,7 +199,7 @@ class Int(int, Serializable, IntProtocol):
         raise TypeError("cannot deserialize Int base class")
 
     @classmethod
-    def load(cls, data: BytesIO):
+    def load(cls, data: BytesIO) -> Self:
         raise TypeError("cannot serialize Int base class")
 
 

@@ -1,7 +1,7 @@
 from enum import EnumMeta
 from io import BytesIO
 # noinspection PyUnresolvedReferences,PyProtectedMember
-from typing import get_type_hints, _ProtocolMeta
+from typing import get_type_hints, _ProtocolMeta, Any  # type: ignore[reportPrivateUsage]
 
 import aleo
 
@@ -10,7 +10,7 @@ import aleo
 
 class ProtocolEnumMeta(_ProtocolMeta, EnumMeta):
     # https://stackoverflow.com/questions/56131308/create-an-abstract-enum-class/56135108#56135108
-    def __new__(cls, *args, **kw):
+    def __new__(cls, *args: Any, **kw: Any):
         abstract_enum_cls = super().__new__(cls, *args, **kw)
         # Only check abstractions if members were defined.
         # noinspection PyProtectedMember
