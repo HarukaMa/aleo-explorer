@@ -39,6 +39,8 @@ class Message(EnumBaseSerialize, RustEnum, Serializable):
         def __repr__(self):
             return self.__class__.__name__ + "." + self.name
 
+    type: Type
+
     @classmethod
     def load(cls, data: BytesIO) -> Self:
         type_ = Message.Type(struct.unpack("<H", data.read(2))[0])

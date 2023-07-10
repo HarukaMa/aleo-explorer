@@ -7,7 +7,7 @@ from ..types import u16, Block, u32, Program
 
 
 def load_program(program_id: str) -> Program:
-    return Program.load(BytesIO(aleo.get_program_from_str(open(os.path.join(os.path.dirname(__file__), program_id)).read())))
+    return Program.load(BytesIO(aleo.parse_program(open(os.path.join(os.path.dirname(__file__), program_id)).read())))
 
 class Testnet3:
     edition = u16()

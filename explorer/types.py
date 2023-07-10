@@ -21,36 +21,37 @@ class Message:
 
 
 class Request:
-    class ProcessBlock:
+
+    class ProcessBlock("Request"):
         def __init__(self, block: Block):
             self.block = block
 
-    class GetLatestHeight:
+    class GetLatestHeight("Request"):
         pass
 
-    class GetLatestWeight:
+    class GetLatestWeight("Request"):
         pass
 
-    class GetLatestBlock:
+    class GetLatestBlock("Request"):
         pass
 
-    class GetBlockByHeight:
+    class GetBlockByHeight("Request"):
         def __init__(self, height: int):
             self.height = height
 
-    class GetBlockHashByHeight:
+    class GetBlockHashByHeight("Request"):
         def __init__(self, height: int):
             self.height = height
 
-    class GetBlockHeaderByHeight:
+    class GetBlockHeaderByHeight("Request"):
         def __init__(self, height: int):
             self.height = height
 
-    class RevertToBlock:
+    class RevertToBlock("Request"):
         def __init__(self, height: int):
             self.height = height
 
-    class GetDevMode:
+    class GetDevMode("Request"):
         pass
 
     # class
