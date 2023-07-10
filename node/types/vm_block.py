@@ -761,7 +761,7 @@ class Program(Serializable):
             raise ValueError("Invalid version")
         id_ = ProgramID.load(data)
         imports = Vec[Import, u8].load(data)
-        identifiers = []
+        identifiers: list[tuple[Identifier, ProgramDefinition]] = []
         mappings = {}
         structs = {}
         records = {}
@@ -1034,7 +1034,6 @@ class Deployment(Serializable):
     @property
     def cost(self) -> tuple[int, int]:
         from node.testnet3 import Testnet3
-        x = self.__class__.load(BytesIO(self.dump()))
         storage_cost = len(self.dump()) * Testnet3.deployment_fee_multiplier
         namespace_cost = 10 ** max(0, 10 - len(self.program.id.name.data)) * 1e6
         return storage_cost, namespace_cost
@@ -1088,17 +1087,20 @@ class Commitments(Serializable):
         res += self.h_2.dump()
         return res
 
-    # noinspection PyMethodOverriding
     @classmethod
-    def load(cls, data: BytesIO, batch_sizes: Vec[u64, u64]):
-        witness_commitments = []
+    def load(cls, data: BytesIO) -> Self:
+        raise NotImplementedError("use load_with_batch_sizes instead")
+
+    @classmethod
+    def load_with_batch_sizes(cls, data: BytesIO, batch_sizes: Vec[u64, u64]):
+        witness_commitments: list[WitnessCommitments] = []
         for _ in range(sum(batch_sizes)):
             witness_commitments.append(WitnessCommitments.load(data))
         witness_commitments = Vec[WitnessCommitments, u64](witness_commitments)
         mask_poly = Option[KZGCommitment].load(data)
         g_1 = KZGCommitment.load(data)
         h_1 = KZGCommitment.load(data)
-        commitments = []
+        commitments: list[KZGCommitment] = []
         for _ in range(len(batch_sizes)):
             commitments.append(KZGCommitment.load(data))
         g_a_commitments = Vec[KZGCommitment, u64](commitments)
@@ -1140,18 +1142,20 @@ class Evaluations(Serializable):
             res += g_c_eval.dump()
         return res
 
-    # noinspection PyMethodOverriding
     @classmethod
-    def load(cls, data: BytesIO, batch_sizes: Vec[u64, u64]):
-        z_b_evals = []
+    def load(cls, data: BytesIO) -> Self:
+        raise NotImplementedError("use load_with_batch_sizes instead")
+
+    @classmethod
+    def load_with_batch_sizes(cls, data: BytesIO, batch_sizes: Vec[u64, u64]):
+        z_b_evals: list[Vec[Field, u64]] = []
         for batch_size in batch_sizes:
-            batch = []
+            batch: list[Field] = []
             for _ in range(batch_size):
                 batch.append(Field.load(data))
             z_b_evals.append(Vec[Field, u64](batch))
-        z_b_evals = Vec[Vec[Field, u64], u64](z_b_evals)
         g_1_eval = Field.load(data)
-        evals = []
+        evals: list[Field] = []
         for _ in range(len(batch_sizes)):
             evals.append(Field.load(data))
         g_a_evals = Vec[Field, u64](evals)
@@ -1163,7 +1167,7 @@ class Evaluations(Serializable):
         for _ in range(len(batch_sizes)):
             evals.append(Field.load(data))
         g_c_evals = Vec[Field, u64](evals)
-        return cls(z_b_evals=z_b_evals, g_1_eval=g_1_eval, g_a_evals=g_a_evals, g_b_evals=g_b_evals, g_c_evals=g_c_evals)
+        return cls(z_b_evals=Vec[Vec[Field, u64], u64](z_b_evals), g_1_eval=g_1_eval, g_a_evals=g_a_evals, g_b_evals=g_b_evals, g_c_evals=g_c_evals)
 
 
 class MatrixSums(Serializable):
@@ -1226,8 +1230,8 @@ class Proof(Serializable):
         if version != cls.version:
             raise Exception("Invalid proof version")
         batch_sizes = Vec[u64, u64].load(data)
-        commitments = Commitments.load(data, batch_sizes=batch_sizes)
-        evaluations = Evaluations.load(data, batch_sizes=batch_sizes)
+        commitments = Commitments.load_with_batch_sizes(data, batch_sizes=batch_sizes)
+        evaluations = Evaluations.load_with_batch_sizes(data, batch_sizes=batch_sizes)
         msg = ThirdMessage.load(data)
         pc_proof = BatchLCProof.load(data)
         return cls(batch_sizes=batch_sizes, commitments=commitments, evaluations=evaluations, msg=msg, pc_proof=pc_proof)
@@ -1296,13 +1300,15 @@ class LiteralPlaintext(Plaintext):
     def __str__(self):
         return str(self.literal)
 
-    def __eq__(self, other):
+    def __eq__(self, other: object):
+        if not isinstance(other, LiteralPlaintext):
+            return False
         return self.literal == other.literal
 
-    def __gt__(self, other):
+    def __gt__(self, other: Self):
         return self.literal > other.literal
 
-    def __ge__(self, other):
+    def __ge__(self, other: Self):
         return self.literal >= other.literal
 
 
@@ -1324,7 +1330,7 @@ class StructPlaintext(Plaintext):
 
     @classmethod
     def load(cls, data: BytesIO):
-        members = []
+        members: list[Tuple[Identifier, Plaintext]] = []
         num_members = u8.load(data)
         for _ in range(num_members):
             identifier = Identifier.load(data)
@@ -1335,12 +1341,12 @@ class StructPlaintext(Plaintext):
 
     @classmethod
     def loads(cls, data: str, struct_type: Struct, struct_types: dict[Identifier, Struct]):
-        members = []
+        members: list[Tuple[Identifier, Plaintext]] = []
         identifier_regex = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*")
         has_begin_brace: bool = False
         has_end_brace: bool = False
         data = data.replace(" ", "")
-        def get_identifier(s):
+        def get_identifier(s: str):
             m = identifier_regex.search(s)
             if not m:
                 raise ValueError("invalid identifier")
@@ -1348,7 +1354,7 @@ class StructPlaintext(Plaintext):
             if s[len(i)] != ":":
                 raise ValueError("invalid identifier")
             return Identifier.loads(i), s[len(i):]
-        def get_literal_value(s):
+        def get_literal_value(s: str):
             is_comma = True
             comma = s.find(",")
             if comma == -1:
@@ -1358,7 +1364,7 @@ class StructPlaintext(Plaintext):
                 else:
                     is_comma = False
             return s[:comma], s[comma + int(is_comma):]
-        def get_struct_value(s):
+        def get_struct_value(s: str):
             if s[0] != "{":
                 raise ValueError("invalid struct literal")
             i = s.find("}")
@@ -1426,20 +1432,20 @@ class StructPlaintext(Plaintext):
             data[str(identifier)] = str(plaintext)
         return json.dumps(data).replace('"', '')
 
-    def get_member(self, identifier):
+    def get_member(self, identifier: Identifier):
         for member in self.members:
             if member[0] == identifier:
                 return member[1]
         raise ValueError("Identifier not found")
 
-    def set_member(self, identifier, plaintext):
+    def set_member(self, identifier: Identifier, plaintext: Plaintext):
         for i, member in enumerate(self.members):
             if member[0] == identifier:
                 self.members[i] = Tuple[Identifier, Plaintext]([identifier, plaintext])
                 return
         raise ValueError("Identifier not found")
 
-    def __eq__(self, other):
+    def __eq__(self, other: object):
         if not isinstance(other, StructPlaintext):
             return False
         for identifier, plaintext in self.members:
@@ -1498,8 +1504,8 @@ class PrivateOwner(Owner, Generic[T]):
     types: tuple[TType[T]]
     type = Owner.Type.Private
 
+    # noinspection PyMissingConstructor
     def __init__(self, *, owner: T):
-        super().__init__()
         self.owner = owner
 
     def dump(self) -> bytes:
@@ -1588,8 +1594,8 @@ class PrivateEntry(Entry, Generic[T]):
     types: tuple[TType[T]]
     type = Entry.Type.Private
 
+    # noinspection PyMissingConstructor
     def __init__(self, *, plaintext: T):
-        super().__init__()
         self.plaintext = plaintext
 
     def dump(self) -> bytes:
@@ -1634,7 +1640,7 @@ class Record(Serializable, Generic[T]):
         Private = types[0]
         owner = Owner[Private].load(data)
         data_len = u8.load(data)
-        d = []
+        d: list[Tuple[Identifier, Entry]] = []
         for _ in range(data_len):
             identifier = Identifier.load(data)
             entry_len = u16.load(data)
@@ -1731,17 +1737,6 @@ class TransitionInput(EnumBaseSerialize, RustEnum, Serializable):
         else:
             raise ValueError("unknown transition input type")
 
-    @classmethod
-    def load_json(cls, data: dict):
-        type_ = data["type"]
-        if type_ == "private":
-            return PrivateTransitionInput.load_json(data)
-        elif type_ == "record":
-            return RecordTransitionInput.load_json(data)
-        else:
-            raise ValueError("unsupported transition input type")
-
-
 class ConstantTransitionInput(TransitionInput):
     type = TransitionInput.Type.Constant
 
@@ -1792,15 +1787,6 @@ class PrivateTransitionInput(TransitionInput):
         ciphertext = Option[Ciphertext].load(data)
         return cls(ciphertext_hash=ciphertext_hash, ciphertext=ciphertext)
 
-    @classmethod
-    def load_json(cls, data: dict):
-        ciphertext_hash = Field.loads(data["id"])
-        if "value" in data:
-            ciphertext = Option[Ciphertext](Ciphertext.load(bech32_to_bytes(data["value"])))
-        else:
-            ciphertext = Option[Ciphertext](None)
-        return cls(ciphertext_hash=ciphertext_hash, ciphertext=ciphertext)
-
 
 class RecordTransitionInput(TransitionInput):
     type = TransitionInput.Type.Record
@@ -1816,12 +1802,6 @@ class RecordTransitionInput(TransitionInput):
     def load(cls, data: BytesIO):
         serial_number = Field.load(data)
         tag = Field.load(data)
-        return cls(serial_number=serial_number, tag=tag)
-
-    @classmethod
-    def load_json(cls, data: dict):
-        serial_number = Field.loads(data["id"])
-        tag = Field.loads(data["tag"])
         return cls(serial_number=serial_number, tag=tag)
 
 
@@ -1864,14 +1844,6 @@ class TransitionOutput(EnumBaseSerialize, RustEnum, Serializable):
             return ExternalRecordTransitionOutput.load(data)
         else:
             raise ValueError("unknown transition output type")
-
-    @classmethod
-    def load_json(cls, data: dict):
-        type_ = data["type"]
-        if type_ == "record":
-            return RecordTransitionOutput.load_json(data)
-        else:
-            raise ValueError("unsupported transition output type")
 
 
 class ConstantTransitionOutput(TransitionOutput):
@@ -1941,16 +1913,6 @@ class RecordTransitionOutput(TransitionOutput):
         commitment = Field.load(data)
         checksum = Field.load(data)
         record_ciphertext = Option[Record[Ciphertext]].load(data)
-        return cls(commitment=commitment, checksum=checksum, record_ciphertext=record_ciphertext)
-
-    @classmethod
-    def load_json(cls, data: dict):
-        commitment = Field.loads(data["id"])
-        checksum = Field.loads(data["checksum"])
-        if "value" in data:
-            record_ciphertext = Option[Record[Ciphertext]](Record[Ciphertext].load(bech32_to_bytes(data["value"])))
-        else:
-            record_ciphertext = Option[Record[Ciphertext]](None)
         return cls(commitment=commitment, checksum=checksum, record_ciphertext=record_ciphertext)
 
 
@@ -2075,7 +2037,7 @@ class Execution(Serializable):
         transition: Transition = self.transitions[0]
         if transition.program_id != "credits.aleo":
             return False
-        if transition.function_name in ["mint", "fee", "split"]:
+        if str(transition.function_name) in ["mint", "fee", "split"]:
             return True
         return False
 
@@ -2595,13 +2557,6 @@ class PartialSolution(Serializable):
         commitment = PuzzleCommitment.load(data)
         return cls(address=address, nonce=nonce, commitment=commitment)
 
-    @classmethod
-    def load_json(cls, data: dict):
-        address = Address.loads(data['address'])
-        nonce = u64(data['nonce'])
-        commitment = PuzzleCommitment.loads(data['commitment'])
-        return cls(address=address, nonce=nonce, commitment=commitment)
-
     def __hash__(self):
         return hash(self.nonce)
 
@@ -2735,7 +2690,7 @@ class StakingReward(Ratify):
         return cls(address=address, amount=amount)
 
 
-def retarget(prev_target, prev_block_timestamp, block_timestamp, half_life, inverse, anchor_time):
+def retarget(prev_target: int, prev_block_timestamp: int, block_timestamp: int, half_life: int, inverse: bool, anchor_time: int):
     drift = max(block_timestamp - prev_block_timestamp, 1) - anchor_time
     if drift == 0:
         return prev_target
@@ -2792,7 +2747,7 @@ class Block(Serializable):
     def __str__(self):
         return f"Block {self.header.metadata.height} ({str(self.block_hash)[:16]}...)"
 
-    def get_coinbase_reward(self, last_timestamp) -> int:
+    def get_coinbase_reward(self, last_timestamp: int) -> int:
         if self.coinbase.value is None:
             return 0
         anchor_reward = 18

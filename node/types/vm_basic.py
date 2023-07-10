@@ -173,9 +173,7 @@ class Field(Serializable):
 
 class Group(Serializable):
     # This is definitely wrong, but we are not using the internals
-    def __init__(self, data):
-        if not isinstance(data, int):
-            raise TypeError("data must be int")
+    def __init__(self, data: int):
         self.data = data
 
     def dump(self) -> bytes:
