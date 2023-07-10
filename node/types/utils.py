@@ -29,4 +29,4 @@ class ProtocolEnumMeta(_ProtocolMeta, EnumMeta):
 
 
 def bech32_to_bytes(s: str) -> BytesIO:
-    return BytesIO(bytes(aleo.bech32_decode(s)[1]))
+    return BytesIO(aleo.bech32_decode(s)[1])

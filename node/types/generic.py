@@ -75,7 +75,7 @@ class Tuple(tuple[T, ...], Serializable):
         return b"".join(t.dump() for t in self)
 
     @classmethod
-    def load(cls, data: BytesIO, *, types: Optional[tuple[Type[T]]] = None) -> Self:
+    def load(cls, data: BytesIO, *, types: Optional[tuple[Type[T], ...]] = None) -> Self:
         if types is None:
             raise TypeError("expected types")
         value = tuple(t.load(data) for t in types)

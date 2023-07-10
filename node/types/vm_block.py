@@ -1,13 +1,14 @@
 import json
 import re
 from hashlib import sha256, md5
+from typing import Type as TType
 
 from .vm_instruction import *
 
 
 # util functions
 
-def feature_string_from_instructions(instructions: [Instruction]) -> str:
+def feature_string_from_instructions(instructions: list[Instruction]) -> str:
     s = [Instruction.feature_map[inst.type] for inst in instructions]
     if len(s) == 0:
         return ""
@@ -272,7 +273,8 @@ class FinalizeCommand(Serializable):
         return cls(operands=operands)
 
 
-class Command(Serializable):  # enum
+class Command(EnumBaseSerialize, RustEnum, Serializable):
+    type: "Command.Type"
 
     class Type(IntEnumu8):
         Instruction = 0
@@ -298,11 +300,6 @@ class Command(Serializable):  # enum
         Type.BranchNeq: 5_000,
         Type.Position: 1_000,
     }
-
-    @property
-    @abstractmethod
-    def type(self):
-        raise NotImplementedError
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -332,8 +329,7 @@ class Command(Serializable):  # enum
 
     @property
     def cost(self) -> int:
-        if self.type == self.Type.Instruction:
-            self: InstructionCommand
+        if isinstance(self, InstructionCommand):
             return self.instruction.cost
         return self.fee_map[self.type]
 
@@ -549,7 +545,7 @@ class Finalize(Serializable):
         return sum(command.cost for command in self.commands)
 
 
-class ValueType(Serializable): # enum
+class ValueType(EnumBaseSerialize, RustEnum, Serializable):
 
     class Type(IntEnumu8):
         Constant = 0
@@ -557,11 +553,6 @@ class ValueType(Serializable): # enum
         Private = 2
         Record = 3
         ExternalRecord = 4
-
-    @property
-    @abstractmethod
-    def type(self):
-        raise NotImplementedError
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -733,7 +724,7 @@ class Program(Serializable):
     def __init__(self, *, id_: ProgramID, imports: Vec[Import, u8], mappings: dict[Identifier, Mapping],
                  structs: dict[Identifier, Struct], records: dict[Identifier, RecordType],
                  closures: dict[Identifier, Closure], functions: dict[Identifier, Function],
-                 identifiers: [(Identifier, ProgramDefinition)]):
+                 identifiers: list[tuple[Identifier, ProgramDefinition]]):
         self.id = id_
         self.imports = imports
         self.mappings = mappings
@@ -1041,7 +1032,7 @@ class Deployment(Serializable):
         return cls(edition=edition, program=program, verifying_keys=verifying_keys)
 
     @property
-    def cost(self) -> (int, int):
+    def cost(self) -> tuple[int, int]:
         from node.testnet3 import Testnet3
         x = self.__class__.load(BytesIO(self.dump()))
         storage_cost = len(self.dump()) * Testnet3.deployment_fee_multiplier
@@ -1271,16 +1262,11 @@ class Ciphertext(Serializable):
         return str(Bech32m(self.dump(), "ciphertext"))
 
 
-class Plaintext(Serializable):  # enum
+class Plaintext(EnumBaseSerialize, RustEnum, Serializable):  # enum
 
     class Type(IntEnumu8):
         Literal = 0
         Struct = 1
-
-    @property
-    @abstractmethod
-    def type(self):
-        raise NotImplementedError
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -1348,7 +1334,7 @@ class StructPlaintext(Plaintext):
         return cls(members=Vec[Tuple[Identifier, Plaintext], u8](members))
 
     @classmethod
-    def loads(cls, data: str, struct_type: Struct, struct_types: {Identifier: Struct}):
+    def loads(cls, data: str, struct_type: Struct, struct_types: dict[Identifier, Struct]):
         members = []
         identifier_regex = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*")
         has_begin_brace: bool = False
@@ -1403,9 +1389,8 @@ class StructPlaintext(Plaintext):
                 if data[0] != ":":
                     raise ValueError("colon not found")
                 data = data[1:]
-                member_type: PlaintextType = struct_type.get_member_type(identifier)
-                if member_type.type == PlaintextType.Type.Literal:
-                    member_type: LiteralPlaintextType
+                member_type = struct_type.get_member_type(identifier)
+                if isinstance(member_type, LiteralPlaintextType):
                     literal_value, data = get_literal_value(data)
                     primitive_type = member_type.literal_type.primitive_type
                     members.append(
@@ -1418,8 +1403,7 @@ class StructPlaintext(Plaintext):
                             ))
                         )
                     )
-                elif member_type.type == PlaintextType.Type.Struct:
-                    member_type: StructPlaintextType
+                elif isinstance(member_type, StructPlaintextType):
                     struct_type = struct_types[member_type.struct]
                     struct_value, data = get_struct_value(data)
                     members.append(
@@ -1464,30 +1448,26 @@ class StructPlaintext(Plaintext):
         return True
 
 
-class Owner(Generic[T], Serializable):  # enum
+@access_generic_type
+class Owner(EnumBaseSerialize, RustEnum, Serializable, Generic[T]):
+    types: tuple[TType[T]]
 
-    def __init__(self, types):
-        if len(types) != 1:
-            raise ValueError("Owner must have exactly one type parameter")
-        self.Private = types[0]
+    def __init__(self):
+        self.Private = self.types[0]
 
     class Type(IntEnumu8):
         Public = 0
         Private = 1
 
-    @property
-    def type(self):
-        raise NotImplementedError
-
-    def dump(self) -> bytes:
-        raise NotImplementedError
-
-    def load(self, data: BytesIO):
+    @classmethod
+    def load(cls, data: BytesIO, *, types: Optional[tuple[TType[T]]] = None):
+        if types is None:
+            raise ValueError("expected types")
         type_ = Owner.Type.load(data)
         if type_ == Owner.Type.Public:
             return PublicOwner.load(data)
         elif type_ == Owner.Type.Private:
-            return PrivateOwner[self.Private].load(data)
+            return PrivateOwner[*types].load(data)
         else:
             raise ValueError("invalid type")
 
@@ -1503,6 +1483,7 @@ class PublicOwner(Owner):
     def dump(self) -> bytes:
         return self.type.dump() + self.owner.dump()
 
+    # noinspection PyMethodOverriding
     @classmethod
     def load(cls, data: BytesIO):
         owner = Address.load(data)
@@ -1512,64 +1493,54 @@ class PublicOwner(Owner):
         return str(self.owner)
 
 
-class PrivateOwner(Owner):
+@access_generic_type
+class PrivateOwner(Owner, Generic[T]):
+    types: tuple[TType[T]]
     type = Owner.Type.Private
 
-    # noinspection PyMissingConstructor
-    def __init__(self, types):
-        if len(types) != 1:
-            raise ValueError("PrivateOwner must have exactly one type parameter")
-        self.Private = types[0]
-
-    def __call__(self, *, owner):
-        if not isinstance(owner, self.Private):
-            raise ValueError(f"owner must be of type {self.Private}")
+    def __init__(self, *, owner: T):
+        super().__init__()
         self.owner = owner
 
     def dump(self) -> bytes:
         return self.type.dump() + self.owner.dump()
 
-    def load(self, data: BytesIO):
-        self.owner = self.Private.load(data)
-        return self
+    @classmethod
+    def load(cls, data: BytesIO, *, types: Optional[tuple[TType[T]]] = None):
+        if types is None:
+            raise ValueError("expected types")
+        owner = types[0].load(data)
+        return cls[*types](owner=owner)
 
     def __str__(self):
         return str(self.owner)
 
 
-class Entry(Generic[T], Serializable):  # enum
+@access_generic_type
+class Entry(EnumBaseSerialize, RustEnum, Serializable, Generic[T]):
+    types: tuple[TType[T]]
 
-    def __init__(self, types):
-        if len(types) != 1:
-            raise ValueError("Entry must have exactly one type parameter")
-        self.Private = types[0]
+    def __init__(self):
+        self.Private = self.types[0]
 
     class Type(IntEnumu8):
         Constant = 0
         Public = 1
         Private = 2
 
-    # Entry is a generic type and needs to be directly instantiated,
-    # so we can't enforce abstract methods here
-    @property
-    # @abstractmethod
-    def type(self):
-        raise NotImplementedError
-
-    def load(self, data: BytesIO):
+    @classmethod
+    def load(cls, data: BytesIO, *, types: Optional[tuple[TType[T]]] = None):
+        if types is None:
+            raise ValueError("expected types")
         type_ = Entry.Type.load(data)
         if type_ == Entry.Type.Constant:
             return ConstantEntry.load(data)
         elif type_ == Entry.Type.Public:
             return PublicEntry.load(data)
         elif type_ == Entry.Type.Private:
-            return PrivateEntry[self.Private].load(data)
+            return PrivateEntry[*types].load(data)
         else:
             raise ValueError("invalid type")
-
-    # same as above
-    def dump(self) -> bytes:
-        raise NotImplementedError
 
 
 class ConstantEntry(Entry):
@@ -1582,6 +1553,7 @@ class ConstantEntry(Entry):
     def dump(self) -> bytes:
         return self.type.dump() + self.plaintext.dump()
 
+    # noinspection PyMethodOverriding
     @classmethod
     def load(cls, data: BytesIO):
         plaintext = Plaintext.load(data)
@@ -1601,6 +1573,7 @@ class PublicEntry(Entry):
     def dump(self) -> bytes:
         return self.type.dump() + self.plaintext.dump()
 
+    # noinspection PyMethodOverriding
     @classmethod
     def load(cls, data: BytesIO):
         plaintext = Plaintext.load(data)
@@ -1610,39 +1583,34 @@ class PublicEntry(Entry):
         return str(self.plaintext)
 
 
-class PrivateEntry(Entry):
+@access_generic_type
+class PrivateEntry(Entry, Generic[T]):
+    types: tuple[TType[T]]
     type = Entry.Type.Private
 
-    # noinspection PyMissingConstructor
-    def __init__(self, types):
-        if len(types) != 1:
-            raise ValueError("PrivateEntry must have exactly one type parameter")
-        self.Private = types[0]
-
-    def __call__(self, *, plaintext):
-        if not isinstance(plaintext, self.Private):
-            raise ValueError(f"plaintext must be of type {self.Private}")
+    def __init__(self, *, plaintext: T):
+        super().__init__()
         self.plaintext = plaintext
 
     def dump(self) -> bytes:
         return self.type.dump() + self.plaintext.dump()
 
-    def load(self, data: BytesIO):
-        self.plaintext = self.Private.load(data)
-        return self
+    @classmethod
+    def load(cls, data: BytesIO, *, types: Optional[tuple[TType[T]]] = None):
+        if types is None:
+            raise ValueError("expected types")
+        plaintext = types[0].load(data)
+        return cls[*types](plaintext=plaintext)
 
     def __str__(self):
         return str(self.plaintext)
 
 
-class Record(Generic[T], Serializable):
-    # Generic for the Private type parameter
-    def __init__(self, types):
-        if len(types) != 1:
-            raise ValueError("Record must have exactly one type parameter")
-        self.Private = types[0]
+@access_generic_type
+class Record(Serializable, Generic[T]):
+    types: tuple[TType[T]]
 
-    def __call__(self, *, owner: Owner, data: Vec[Tuple[Identifier, Entry], u8], nonce: Group):
+    def __init__(self, *, owner: Owner, data: Vec[Tuple[Identifier, Entry], u8], nonce: Group):
         self.owner = owner
         self.data = data
         self.nonce = nonce
@@ -1659,36 +1627,38 @@ class Record(Generic[T], Serializable):
         res += self.nonce.dump()
         return res
 
-    def load(self, data: BytesIO):
-        self.owner = Owner[self.Private].load(data)
+    @classmethod
+    def load(cls, data: BytesIO, *, types: Optional[tuple[TType[T]]] = None):
+        if types is None:
+            raise ValueError("expected types")
+        Private = types[0]
+        owner = Owner[Private].load(data)
         data_len = u8.load(data)
         d = []
         for _ in range(data_len):
             identifier = Identifier.load(data)
             entry_len = u16.load(data)
-            entry = Entry[self.Private].load(BytesIO(data.read(entry_len)))
+            entry = Entry[Private].load(BytesIO(data.read(entry_len)))
             d.append(Tuple[Identifier, Entry]([identifier, entry]))
-        self.data = Vec[Tuple[Identifier, Entry], u8](d)
-        self.nonce = Group.load(data)
-        return self
+        data_ = Vec[Tuple[Identifier, Entry], u8](d)
+        nonce = Group.load(data)
+        return cls[*types](owner=owner, data=data_, nonce=nonce)
 
-    def loads(self, data: str):
-        return self.load(bech32_to_bytes(data))
+    @classmethod
+    def loads(cls, data: str, *, types: Optional[tuple[TType[T]]] = None):
+        if types is None:
+            raise ValueError("expected types")
+        return cls[*types].load(bech32_to_bytes(data))
 
     def __str__(self):
         return str(Bech32m(self.dump(), "record"))
 
 
-class Value(Serializable):  # enum
+class Value(EnumBaseSerialize, RustEnum, Serializable):
 
     class Type(IntEnumu8):
         Plaintext = 0
         Record = 1
-
-    @property
-    @abstractmethod
-    def type(self):
-        raise NotImplementedError
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -1736,7 +1706,7 @@ class RecordValue(Value):
         return cls(record=record)
 
 
-class TransitionInput(Serializable): # enum
+class TransitionInput(EnumBaseSerialize, RustEnum, Serializable):
 
     class Type(IntEnumu8):
         Constant = 0
@@ -1744,11 +1714,6 @@ class TransitionInput(Serializable): # enum
         Private = 2
         Record = 3
         ExternalRecord = 4
-
-    @property
-    @abstractmethod
-    def type(self):
-        raise NotImplementedError
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -1875,7 +1840,7 @@ class ExternalRecordTransitionInput(TransitionInput):
         return cls(input_commitment=input_commitment)
 
 
-class TransitionOutput(Serializable): # enum
+class TransitionOutput(EnumBaseSerialize, RustEnum, Serializable):
 
     class Type(IntEnumu8):
         Constant = 0
@@ -1883,11 +1848,6 @@ class TransitionOutput(Serializable): # enum
         Private = 2
         Record = 3
         ExternalRecord = 4
-
-    @property
-    @abstractmethod
-    def type(self):
-        raise NotImplementedError
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -2120,7 +2080,7 @@ class Execution(Serializable):
         return False
 
     @property
-    def cost(self) -> (int, int):
+    def cost(self) -> tuple[int, int]:
         if self.is_free_execution:
             return 0, 0
         storage_cost = len(self.dump())
@@ -2129,18 +2089,13 @@ class Execution(Serializable):
         return storage_cost, -1
 
 
-class Transaction(Serializable):  # Enum
+class Transaction(EnumBaseSerialize, RustEnum, Serializable):
     version = u8()
 
     class Type(IntEnumu8):
         Deploy = 0
         Execute = 1
         Fee = 2
-
-    @property
-    @abstractmethod
-    def type(self):
-        raise NotImplementedError
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -2240,17 +2195,12 @@ class FeeTransaction(Transaction):
         fee = Fee.load(data)
         return cls(id_=id_, fee=fee)
 
-class ConfirmedTransaction(Serializable):
+class ConfirmedTransaction(EnumBaseSerialize, RustEnum, Serializable):
     class Type(IntEnumu8):
         AcceptedDeploy = 0
         AcceptedExecute = 1
         RejectedDeploy = 2
         RejectedExecute = 3
-
-    @property
-    @abstractmethod
-    def type(self):
-        raise NotImplementedError
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -2267,18 +2217,13 @@ class ConfirmedTransaction(Serializable):
             raise ValueError("incorrect type")
 
 
-class FinalizeOperation(Serializable):
+class FinalizeOperation(EnumBaseSerialize, RustEnum, Serializable):
     class Type(IntEnumu8):
         InitializeMapping = 0
         InsertKeyValue = 1
         UpdateKeyValue = 2
         RemoveKeyValue = 3
         RemoveMapping = 4
-
-    @property
-    @abstractmethod
-    def type(self):
-        raise NotImplementedError
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -2421,14 +2366,10 @@ class AcceptedExecute(ConfirmedTransaction):
         finalize = Vec[FinalizeOperation, u16].load(data)
         return cls(index=index, transaction=transaction, finalize=finalize)
 
-class Rejected(Serializable):
+class Rejected(EnumBaseSerialize, RustEnum, Serializable):
     class Type(IntEnumu8):
         Deployment = 0
         Execution = 1
-
-    @abstractmethod
-    def type(self):
-        raise NotImplementedError
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -2741,17 +2682,12 @@ class Signature(Serializable):
         return str(Bech32m(self.dump(), "sign"))
 
 
-class Ratify(Serializable):
+class Ratify(EnumBaseSerialize, RustEnum, Serializable):
     version = 0
 
     class Type(IntEnumu8):
         ProvingReward = 0
         StakingReward = 1
-
-    @property
-    @abstractmethod
-    def type(self):
-        raise NotImplementedError
 
     @classmethod
     def load(cls, data: BytesIO):

@@ -28,12 +28,12 @@ class AleoID(AleoIDProtocol):
 
     @classmethod
     def loads(cls, data: str):
-        hrp, data = aleo.bech32_decode(data)
+        hrp, raw = aleo.bech32_decode(data)
         if hrp != cls._prefix:
             raise ValueError("incorrect hrp")
-        if len(data) != cls.size:
+        if len(raw) != cls.size:
             raise ValueError("incorrect length")
-        return cls(bytes(data))
+        return cls(bytes(raw))
 
     def __str__(self):
         return str(self._bech32m)
@@ -69,12 +69,12 @@ class AleoObject(AleoIDProtocol):
 
     @classmethod
     def loads(cls, data: str):
-        hrp, data = aleo.bech32_decode(data)
+        hrp, raw = aleo.bech32_decode(data)
         if hrp != cls._prefix:
             raise ValueError("incorrect hrp")
-        if len(data) != cls.size:
+        if len(raw) != cls.size:
             raise ValueError("incorrect length")
-        return cls(bytes(data))
+        return cls(bytes(raw))
 
     def __str__(self):
         return str(self._bech32m)
@@ -156,19 +156,19 @@ class Field(Serializable):
         return hash(self.data)
 
     def __add__(self, other: Self):
-        return Field.load(BytesIO(bytes(aleo.field_ops(self.dump(), other.dump(), "add"))))
+        return Field.load(BytesIO(aleo.field_ops(self.dump(), other.dump(), "add")))
 
     def __gt__(self, other: Self):
-        return bool_.load(BytesIO(bytes(aleo.field_ops(self.dump(), other.dump(), "gt"))))
+        return bool_.load(BytesIO(aleo.field_ops(self.dump(), other.dump(), "gt")))
 
     def __lt__(self, other: Self):
-        return bool_.load(BytesIO(bytes(aleo.field_ops(self.dump(), other.dump(), "lt"))))
+        return bool_.load(BytesIO(aleo.field_ops(self.dump(), other.dump(), "lt")))
 
     def __ge__(self, other: Self):
-        return bool_.load(BytesIO(bytes(aleo.field_ops(self.dump(), other.dump(), "gte"))))
+        return bool_.load(BytesIO(aleo.field_ops(self.dump(), other.dump(), "gte")))
 
     def __le__(self, other: Self):
-        return bool_.load(BytesIO(bytes(aleo.field_ops(self.dump(), other.dump(), "lte"))))
+        return bool_.load(BytesIO(aleo.field_ops(self.dump(), other.dump(), "lte")))
 
 
 class Group(Serializable):

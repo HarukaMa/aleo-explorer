@@ -205,7 +205,7 @@ async def submit_source_route(request: Request):
     if source is None or source == "":
         return RedirectResponse(url=f"/upload_source?id={program_id}&message=Missing source code")
     try:
-        compiled = bytes(aleo.compile_program(source, program_id.split(".")[0]))
+        compiled = aleo.compile_program(source, program_id.split(".")[0])
     except RuntimeError as e:
         if len(str(e)) > 100:
             msg = str(e)[:100] + "[trimmed]"

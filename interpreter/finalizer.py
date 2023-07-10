@@ -151,7 +151,7 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
                 print(disasm_command(c))
                 c: RandChaChaCommand
                 additional_seeds = list(map(lambda x: PlaintextValue(plaintext=load_plaintext_from_operand(x, registers, finalize_state)), c.operands))
-                chacha_seed = bytes(aleo.chacha_random_seed(
+                chacha_seed = aleo.chacha_random_seed(
                     finalize_state.random_seed,
                     transition_id.dump(),
                     program.id.dump(),
@@ -159,9 +159,9 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
                     int(c.destination.locator),
                     c.destination_type.value,
                     additional_seeds,
-                ))
+                )
                 primitive_type = c.destination_type.primitive_type
-                value = primitive_type.load(BytesIO(bytes(aleo.chacha_random_value(chacha_seed, c.destination_type.dump()))))
+                value = primitive_type.load(BytesIO(aleo.chacha_random_value(chacha_seed, c.destination_type.dump())))
                 res = LiteralPlaintext(
                     literal=Literal(
                         type_=Literal.Type(c.destination_type.value),

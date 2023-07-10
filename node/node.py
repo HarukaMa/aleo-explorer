@@ -4,7 +4,6 @@ import random
 import time
 import traceback
 from collections import OrderedDict
-from typing import Callable
 
 import explorer
 # from .light_node import LightNodeState
@@ -116,7 +115,7 @@ class Node:
                 nonce = msg.nonce
                 response = ChallengeResponse(
                     genesis_header=Testnet3.genesis_block.header,
-                    signature=Signature.load(BytesIO(bytes(aleo.sign_nonce("APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH", nonce.dump())))),
+                    signature=Signature.load(BytesIO(aleo.sign_nonce("APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH", nonce.dump()))),
                 )
                 self.handshake_state = 1
                 await self.send_message(response)
