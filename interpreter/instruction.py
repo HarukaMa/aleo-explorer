@@ -150,6 +150,9 @@ def CastOp(operands: list[Operand], destination: Register, cast_type: CastType, 
     register_type: PlaintextRegisterType
     plaintext_type: PlaintextType = register_type.plaintext_type
     if plaintext_type.type != PlaintextType.Type.Struct:
+        plaintext_type: LiteralPlaintextType
+        if not plaintext_type.literal_type in [LiteralType.Address, LiteralType.Field, LiteralType.Group]:
+            raise AssertionError("snarkOS doesn't support casting from this type yet")
         raise NotImplementedError
     plaintext_type: StructPlaintextType
     struct_identifier = plaintext_type.struct

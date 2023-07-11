@@ -73,6 +73,7 @@ async def mapping_list_route(request: Request, program_cache):
     return JSONResponse(list(map(str, mappings.keys())))
 
 @async_check_sync
+@use_program_cache
 async def mapping_value_list_route(request: Request, program_cache):
     db: Database = request.app.state.db
     version = request.path_params["version"]
