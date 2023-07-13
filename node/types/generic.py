@@ -10,10 +10,13 @@ I_co = TypeVar('I_co', bound=Int, covariant=True)
 
 
 class TypedGenericAlias(GenericAlias):
-    def __getattribute__(self, item: str):
+    def __getattribute__(self, item: str) -> Any:
         attr = super().__getattribute__(item)
+        if item.startswith("_"):
+            return attr
         if isinstance(attr, MethodType):
-            return partial(attr, types=get_args(self))
+            attr = attr.__get__(self) # type: ignore
+            return partial(attr, types=get_args(self)) # type: ignore
         return attr
 
     def __call__(self, *args: Any, **kwargs: Any):
@@ -79,7 +82,7 @@ class Tuple(tuple[T, ...], Serializable):
         if types is None:
             raise TypeError("expected types")
         value = tuple(t.load(data) for t in types)
-        return cls[*types](value)
+        return cls(value)
 
 
 @access_generic_type
@@ -114,7 +117,7 @@ class Vec(list[T], Serializable, Generic[T, L]):
             size = size_type
         else:
             size = size_type.load(data)
-        return cls[*types](list(value_type.load(data) for _ in range(size)))
+        return cls(list(value_type.load(data) for _ in range(size)))
 
 
 class Option(Serializable, Generic[T]):
@@ -150,4 +153,4 @@ class Option(Serializable, Generic[T]):
             value = types[0].load(data)
         else:
             value = None
-        return cls[*types](value)
+        return cls(value)

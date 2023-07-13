@@ -432,7 +432,7 @@ class Literals(Serializable, Generic[N]):
         for _ in range(num_operands):
             operands.append(Operand.load(data))
         destination = Register.load(data)
-        return cls[*types](operands=Vec[Operand | NoneType, num_operands](operands), destination=destination)
+        return cls(operands=Vec[Operand | NoneType, num_operands](operands), destination=destination)
 
 
 @access_generic_type
@@ -447,7 +447,7 @@ class AssertInstruction(Serializable, Generic[N]):
 
     @classmethod
     def load(cls, data: BytesIO, *, types: Optional[tuple[N]] = None):
-        return cls[*types](operands=Vec[Operand, 2].load(data))
+        return cls(operands=Vec[Operand, 2].load(data))
 
 
 class Locator(Serializable):
@@ -813,7 +813,7 @@ class CommitInstruction(Serializable, Generic[E]):
         operands = Vec[Operand, 2].load(data)
         destination = Register.load(data)
         destination_type = LiteralType.load(data)
-        return cls[*types](operands=operands, destination=destination, destination_type=destination_type)
+        return cls(operands=operands, destination=destination, destination_type=destination_type)
 
 
 @access_generic_type

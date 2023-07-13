@@ -1520,7 +1520,7 @@ class PrivateOwner(Owner, Generic[T]):
         if types is None:
             raise ValueError("expected types")
         owner = types[0].load(data)
-        return cls[*types](owner=owner)
+        return cls(owner=owner)
 
     def __str__(self):
         return str(self.owner)
@@ -1610,7 +1610,7 @@ class PrivateEntry(Entry, Generic[T]):
         if types is None:
             raise ValueError("expected types")
         plaintext = types[0].load(data)
-        return cls[*types](plaintext=plaintext)
+        return cls(plaintext=plaintext)
 
     def __str__(self):
         return str(self.plaintext)
@@ -1652,13 +1652,13 @@ class Record(Serializable, Generic[T]):
             d.append(Tuple[Identifier, Entry]([identifier, entry]))
         data_ = Vec[Tuple[Identifier, Entry], u8](d)
         nonce = Group.load(data)
-        return cls[*types](owner=owner, data=data_, nonce=nonce)
+        return cls(owner=owner, data=data_, nonce=nonce)
 
     @classmethod
     def loads(cls, data: str, *, types: Optional[tuple[TType[T]]] = None):
         if types is None:
             raise ValueError("expected types")
-        return cls[*types].load(bech32_to_bytes(data))
+        return cls.load(bech32_to_bytes(data))
 
     def __str__(self):
         return str(Bech32m(self.dump(), "record"))
