@@ -1,7 +1,6 @@
 import json
 import re
 from hashlib import sha256, md5
-from typing import Type as TType
 
 from .vm_instruction import *
 
@@ -918,7 +917,7 @@ class VerifyingKey(Serializable):
     version = u8()
 
     # Skipping a layer of marlin::CircuitVerifyingKey
-    def __init__(self, *, circuit_info: CircuitInfo, circuit_commitments: Vec[KZGCommitment, u64], id_: Vec[u8, 32]):
+    def __init__(self, *, circuit_info: CircuitInfo, circuit_commitments: Vec[KZGCommitment, u64], id_: Vec[u8, TLiteral[32]]):
         self.circuit_info = circuit_info
         self.circuit_commitments = circuit_commitments
         self.id = id_
@@ -938,7 +937,7 @@ class VerifyingKey(Serializable):
             raise ValueError("Invalid version")
         circuit_info = CircuitInfo.load(data)
         circuit_commitments = Vec[KZGCommitment, u64].load(data)
-        id_ = Vec[u8, 32].load(data)
+        id_ = Vec[u8, TLiteral[32]].load(data)
         return cls(circuit_info=circuit_info, circuit_commitments=circuit_commitments, id_=id_)
 
 
@@ -1340,7 +1339,7 @@ class StructPlaintext(Plaintext):
             identifier = Identifier.load(data)
             num_bytes = u16.load(data)
             plaintext = Plaintext.load(BytesIO(data.read(num_bytes)))
-            members.append(Tuple[Identifier, Plaintext]([identifier, plaintext]))
+            members.append(Tuple[Identifier, Plaintext]((identifier, plaintext)))
         return cls(members=Vec[Tuple[Identifier, Plaintext], u8](members))
 
     @classmethod
@@ -1445,7 +1444,7 @@ class StructPlaintext(Plaintext):
     def set_member(self, identifier: Identifier, plaintext: Plaintext):
         for i, member in enumerate(self.members):
             if member[0] == identifier:
-                self.members[i] = Tuple[Identifier, Plaintext]([identifier, plaintext])
+                self.members[i] = Tuple[Identifier, Plaintext]((identifier, plaintext))
                 return
         raise ValueError("Identifier not found")
 
@@ -1475,14 +1474,15 @@ class Owner(EnumBaseSerialize, RustEnum, Serializable, Generic[T]):
             raise ValueError("expected types")
         type_ = Owner.Type.load(data)
         if type_ == Owner.Type.Public:
-            return PublicOwner.load(data)
+            return PublicOwner[T].load(data)
         elif type_ == Owner.Type.Private:
-            return PrivateOwner[*types].load(data)
+            t = types[0]
+            return PrivateOwner[t].load(data)
         else:
             raise ValueError("invalid type")
 
 
-class PublicOwner(Owner):
+class PublicOwner(Owner[T]):
     type = Owner.Type.Public
 
     # This subtype is not generic
@@ -1493,9 +1493,8 @@ class PublicOwner(Owner):
     def dump(self) -> bytes:
         return self.type.dump() + self.owner.dump()
 
-    # noinspection PyMethodOverriding
     @classmethod
-    def load(cls, data: BytesIO):
+    def load(cls, data: BytesIO, *, types: Optional[tuple[TType[T]]] = None):
         owner = Address.load(data)
         return cls(owner=owner)
 
@@ -1504,7 +1503,7 @@ class PublicOwner(Owner):
 
 
 @access_generic_type
-class PrivateOwner(Owner, Generic[T]):
+class PrivateOwner(Owner[T]):
     types: tuple[TType[T]]
     type = Owner.Type.Private
 
@@ -1544,16 +1543,17 @@ class Entry(EnumBaseSerialize, RustEnum, Serializable, Generic[T]):
             raise ValueError("expected types")
         type_ = Entry.Type.load(data)
         if type_ == Entry.Type.Constant:
-            return ConstantEntry.load(data)
+            return ConstantEntry[T].load(data)
         elif type_ == Entry.Type.Public:
-            return PublicEntry.load(data)
+            return PublicEntry[T].load(data)
         elif type_ == Entry.Type.Private:
-            return PrivateEntry[*types].load(data)
+            t = types[0]
+            return PrivateEntry[t].load(data)
         else:
             raise ValueError("invalid type")
 
 
-class ConstantEntry(Entry):
+class ConstantEntry(Entry[T]):
     type = Entry.Type.Constant
 
     # noinspection PyMissingConstructor
@@ -1563,9 +1563,8 @@ class ConstantEntry(Entry):
     def dump(self) -> bytes:
         return self.type.dump() + self.plaintext.dump()
 
-    # noinspection PyMethodOverriding
     @classmethod
-    def load(cls, data: BytesIO):
+    def load(cls, data: BytesIO, *, types: Optional[tuple[TType[T]]] = None):
         plaintext = Plaintext.load(data)
         return cls(plaintext=plaintext)
 
@@ -1573,7 +1572,7 @@ class ConstantEntry(Entry):
         return str(self.plaintext)
 
 
-class PublicEntry(Entry):
+class PublicEntry(Entry[T]):
     type = Entry.Type.Public
 
     # noinspection PyMissingConstructor
@@ -1583,9 +1582,8 @@ class PublicEntry(Entry):
     def dump(self) -> bytes:
         return self.type.dump() + self.plaintext.dump()
 
-    # noinspection PyMethodOverriding
     @classmethod
-    def load(cls, data: BytesIO):
+    def load(cls, data: BytesIO, *, types: Optional[tuple[TType[T]]] = None):
         plaintext = Plaintext.load(data)
         return cls(plaintext=plaintext)
 
@@ -1594,7 +1592,7 @@ class PublicEntry(Entry):
 
 
 @access_generic_type
-class PrivateEntry(Entry, Generic[T]):
+class PrivateEntry(Entry[T]):
     types: tuple[TType[T]]
     type = Entry.Type.Private
 
@@ -1619,11 +1617,13 @@ class PrivateEntry(Entry, Generic[T]):
 @access_generic_type
 class Record(Serializable, Generic[T]):
     types: tuple[TType[T]]
+    Private: Type[T]
 
-    def __init__(self, *, owner: Owner, data: Vec[Tuple[Identifier, Entry], u8], nonce: Group):
+    def __init__(self, *, owner: Owner[T], data: Vec[Tuple[Identifier, Entry[T]], u8], nonce: Group):
         self.owner = owner
         self.data = data
         self.nonce = nonce
+        self.Private = self.types[0]
 
     def dump(self) -> bytes:
         res = b""
@@ -1644,13 +1644,13 @@ class Record(Serializable, Generic[T]):
         Private = types[0]
         owner = Owner[Private].load(data)
         data_len = u8.load(data)
-        d: list[Tuple[Identifier, Entry]] = []
+        d: list[Tuple[Identifier, Entry[T]]] = []
         for _ in range(data_len):
             identifier = Identifier.load(data)
             entry_len = u16.load(data)
             entry = Entry[Private].load(BytesIO(data.read(entry_len)))
-            d.append(Tuple[Identifier, Entry]([identifier, entry]))
-        data_ = Vec[Tuple[Identifier, Entry], u8](d)
+            d.append(Tuple[Identifier, Entry[T]]((identifier, entry)))
+        data_ = Vec[Tuple[Identifier, Entry[T]], u8](d)
         nonce = Group.load(data)
         return cls(owner=owner, data=data_, nonce=nonce)
 

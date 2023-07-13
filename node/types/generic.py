@@ -1,10 +1,11 @@
 from functools import partial, lru_cache
 from types import GenericAlias, MethodType
-from typing import Generic, TypeVar, get_args, Optional, Callable
+from typing import Generic, TypeVar, get_args, Optional, Callable, TypeVarTuple
 
 from .basic import *
 
 T = TypeVar('T', bound=Serializable)
+TP = TypeVarTuple('TP')
 L = TypeVar('L', bound=Type[Int] | int)
 I_co = TypeVar('I_co', bound=Int, covariant=True)
 
@@ -23,8 +24,7 @@ class TypedGenericAlias(GenericAlias):
         kwargs["types"] = get_args(self)
         return super().__call__(*args, **kwargs)
 
-def access_generic_type(c: Any):
-
+def access_generic_type(c): # type: ignore
     def _tp_cache(func: Callable[..., Any], *, max_size: int | None = None):
         cache = lru_cache(max_size)(func)
 
@@ -56,33 +56,42 @@ def access_generic_type(c: Any):
             return f(self, *args, **kwargs)
         return wrapper
 
-    c.__class_getitem__ = _tp_cache(__class_getitem__.__get__(c), max_size=1024)
-    c.__new__ = inject_types(c.__new__)
-    c.__init__ = inject_types(c.__init__)
-    return c
+    c.__class_getitem__ = _tp_cache(__class_getitem__.__get__(c), max_size=1024) # type: ignore
+    c.__new__ = inject_types(c.__new__) # type: ignore
+    c.__init__ = inject_types(c.__init__) # type: ignore
+    return c # type: ignore
 
 
 # noinspection PyTypeHints
 @access_generic_type
-class Tuple(tuple[T, ...], Serializable):
-    types: tuple[Type[T], ...]
+class Tuple(tuple[*TP], Serializable):
+    types: tuple[Type[*Any]]
 
-    def __new__(cls, value: tuple[T, ...]) -> Self:
+    def __new__(cls, value: tuple[*TP]) -> Self:
         return tuple.__new__(cls, value)
 
     def __init__(self, _): # type: ignore[reportInconsistentConstructor]
-        pass
+        for t in self.types:
+            if not isinstance(t, Serializable):
+                raise TypeError(f"expected Serializable type, got {t}")
+
 
     def dump(self) -> bytes:
-        # noinspection PyTypeChecker
-        return b"".join(t.dump() for t in self)
+        res: list[bytes] = []
+        for t in self: # type: ignore
+            t: Serializable
+            res.append(t.dump())
+        return b"".join(res)
 
     @classmethod
-    def load(cls, data: BytesIO, *, types: Optional[tuple[Type[T], ...]] = None) -> Self:
+    def load(cls, data: BytesIO, *, types: Optional[tuple[Type[*Serializable]]] = None) -> Self:
         if types is None:
             raise TypeError("expected types")
-        value = tuple(t.load(data) for t in types)
-        return cls(value)
+        value: list[Serializable] = []
+        for t in types: # type: ignore
+            t: Serializable
+            value.append(t.load(data))
+        return cls(tuple(value)) # type: ignore
 
 
 @access_generic_type

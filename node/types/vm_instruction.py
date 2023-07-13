@@ -1,5 +1,6 @@
 from enum import auto, Enum
 from types import NoneType
+from typing import Literal as TLiteral
 
 from .vm_basic import *
 
@@ -411,7 +412,7 @@ N = TypeVar("N", bound=int)
 class Literals(Serializable, Generic[N]):
     types: tuple[N]
 
-    def __init__(self, *, operands: Vec[Operand | NoneType, N], destination: Register):
+    def __init__(self, *, operands: Vec[Operand, N], destination: Register):
         self.num_operands = self.types[0]
         self.operands = operands
         self.destination = destination
@@ -432,7 +433,7 @@ class Literals(Serializable, Generic[N]):
         for _ in range(num_operands):
             operands.append(Operand.load(data))
         destination = Register.load(data)
-        return cls(operands=Vec[Operand | NoneType, num_operands](operands), destination=destination)
+        return cls(operands=Vec[Operand, TLiteral[num_operands]](operands), destination=destination)
 
 
 @access_generic_type
@@ -862,7 +863,7 @@ class HashInstruction(Serializable, Generic[E]):
         return cls(operands=operands, destination=destination, destination_type=destination_type)
 
 
-class Instruction(Serializable): # enum
+class Instruction(Serializable):
 
     class Type(IntEnumu16):
 
@@ -929,6 +930,8 @@ class Instruction(Serializable): # enum
         SubWrapped = auto()
         Ternary = auto()
         Xor = auto()
+
+    type: Type
 
     # Some types are not implemented as Literals originally,
     # but binary wise they have the same behavior (operands, destination)
@@ -1128,8 +1131,12 @@ class Instruction(Serializable): # enum
         Type.Xor: 2_000,
     }
 
-    def __init__(self, *, type_: Type, literals: Literals | AssertInstruction | CallInstruction | CastInstruction | CommitInstruction | HashInstruction):
+    def a(self, b: Vec[u8, u8]):
+        reveal_type(b)
+
+    def __init__(self, *, type_: Type, literals: Literals):
         self.type = type_
+        reveal_type(literals)
         self.literals = literals
 
     def dump(self) -> bytes:
@@ -1139,7 +1146,8 @@ class Instruction(Serializable): # enum
     def load(cls, data: BytesIO):
         type_ = cls.Type.load(data)
         instruction_type = cls.type_map[type_]
-        literals = instruction_type.load(data)
+        literals: Literals | AssertInstruction | CallInstruction | CastInstruction | CommitInstruction | HashInstruction = instruction_type.load(data)
+        reveal_type(literals)
         return cls(type_=type_, literals=literals)
 
     @property

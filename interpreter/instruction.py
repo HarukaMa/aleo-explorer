@@ -3,26 +3,32 @@ from interpreter.utils import load_plaintext_from_operand, store_plaintext_to_re
 from node.types import *
 
 def execute_instruction(instruction: Instruction, program: Program, registers: Registers, finalize_state: FinalizeState):
-    literals = instruction.literals
+    literals: Literals | AssertInstruction | CallInstruction | CastInstruction | CommitInstruction | HashInstruction = instruction.literals
+    reveal_type(literals)
     if isinstance(literals, Literals):
+        reveal_type(literals)
         num_operands = literals.num_operands
         operands = literals.operands[:num_operands]
         destination = literals.destination
         instruction_ops[instruction.type.value](operands, destination, registers, finalize_state)
     elif isinstance(literals, CastInstruction):
+        reveal_type(literals)
         operands = literals.operands
         destination = literals.destination
         cast_type = literals.cast_type
         CastOp(operands, destination, cast_type, program, registers, finalize_state)
     elif isinstance(literals, CallInstruction):
+        reveal_type(literals)
         raise NotImplementedError
     elif isinstance(literals, AssertInstruction):
+        reveal_type(literals)
         variant = literals.variant
         if variant == 0:
             AssertEq(literals.operands, registers, finalize_state)
         elif variant == 1:
             AssertNeq(literals.operands, registers, finalize_state)
     elif isinstance(literals, HashInstruction):
+        reveal_type(literals)
         type_ = literals.type
         if type_ == HashInstruction.Type.HashBHP256:
             HashBHP256(literals.operands, literals.destination, literals.destination_type, registers, finalize_state)
