@@ -446,7 +446,7 @@ class AssertInstruction(Serializable, Generic[N]):
     variant: N
 
     def __init__(self, *, operands: tuple[Operand, Operand]):
-        self.variant = self.types[0]
+        self.variant = get_args(self.types[0])[0]
         self.operands = operands
 
     def dump(self) -> bytes:

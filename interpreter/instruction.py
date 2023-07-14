@@ -24,6 +24,8 @@ def execute_instruction(instruction: Instruction, program: Program, registers: R
             assert_eq(literals.operands, registers, finalize_state)
         elif variant == 1:
             assert_neq(literals.operands, registers, finalize_state)
+        else:
+            raise NotImplementedError
     elif isinstance(literals, HashInstruction):
         type_ = literals.type
         if type_ == HashInstruction.Type.HashBHP256:
