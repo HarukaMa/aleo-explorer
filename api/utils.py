@@ -1,7 +1,8 @@
 import time
+from typing import Callable, Coroutine, Any
 
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 
 from db import Database
 
@@ -13,8 +14,8 @@ async def out_of_sync_check(db: Database) -> bool:
         return True
     return False
 
-def async_check_sync(func):
-    async def wrapper(*args, **kwargs):
+def async_check_sync(func: Callable[..., Coroutine[Any, Any, Response]]):
+    async def wrapper(*args: Any, **kwargs: Any):
         if len(args) < 1 or not isinstance(args[0], Request):
             raise TypeError("this decorator cannot be used on this function")
         request: Request = args[0]
@@ -25,8 +26,8 @@ def async_check_sync(func):
         return await func(*args, **kwargs)
     return wrapper
 
-def use_program_cache(func):
-    async def wrapper(*args, **kwargs):
+def use_program_cache(func: Callable[..., Coroutine[Any, Any, Response]]):
+    async def wrapper(*args: Any, **kwargs: Any):
         if len(args) < 1 or not isinstance(args[0], Request):
             raise TypeError("this decorator cannot be used on this function")
         request: Request = args[0]

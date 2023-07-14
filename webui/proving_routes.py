@@ -1,10 +1,11 @@
 import time
+from typing import Any
 
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
 
 from db import Database
-from node.types import Transaction, ConfirmedTransaction
+from node.types import Transaction, AcceptedDeploy, DeployTransaction
 from .template import templates
 from .utils import out_of_sync_check
 
@@ -16,7 +17,7 @@ async def calc_route(request: Request):
         "request": request,
         "proof_target": proof_target,
     }
-    return templates.TemplateResponse('calc.jinja2', ctx, headers={'Cache-Control': 'public, max-age=60'})
+    return templates.TemplateResponse('calc.jinja2', ctx, headers={'Cache-Control': 'public, max-age=60'}) # type: ignore
 
 
 
@@ -36,7 +37,7 @@ async def leaderboard_route(request: Request):
         raise HTTPException(status_code=400, detail="Invalid page")
     start = 50 * (page - 1)
     leaderboard_data = await db.get_leaderboard(start, start + 50)
-    data = []
+    data: list[dict[str, Any]] = []
     for line in leaderboard_data:
         data.append({
             "address": line["address"],
@@ -59,7 +60,7 @@ async def leaderboard_route(request: Request):
         "now": now,
         "sync_info": sync_info,
     }
-    return templates.TemplateResponse('leaderboard.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
+    return templates.TemplateResponse('leaderboard.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
 
 
 async def address_route(request: Request):
@@ -91,7 +92,7 @@ async def address_route(request: Request):
         43200: "12 hours",
         86400: "1 day",
     }
-    recent_solutions = []
+    recent_solutions: list[dict[str, Any]] = []
     for solution in solutions:
         recent_solutions.append({
             "height": solution["height"],
@@ -101,14 +102,16 @@ async def address_route(request: Request):
             "target": solution["target"],
             "target_sum": solution["target_sum"],
         })
-    recent_programs = []
+    recent_programs: list[dict[str, Any]] = []
     for program in programs:
+        program_tx: DeployTransaction | None = None
         program_block = await db.get_block_by_program_id(program)
-        program_tx = None
+        if program_block is None:
+            raise HTTPException(status_code=550, detail="Program block not found")
         for ct in program_block.transactions.transactions:
-            if ct.type == ConfirmedTransaction.Type.AcceptedDeploy:
+            if isinstance(ct, AcceptedDeploy):
                 tx = ct.transaction
-                if tx.type == Transaction.Type.Deploy and str(tx.deployment.program.id) == program:
+                if isinstance(tx, DeployTransaction) and tx.type == Transaction.Type.Deploy and str(tx.deployment.program.id) == program:
                     program_tx = tx
                     break
         if program_tx is None:
@@ -134,7 +137,7 @@ async def address_route(request: Request):
         "timespan": interval_text[interval],
         "sync_info": sync_info,
     }
-    return templates.TemplateResponse('address.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
+    return templates.TemplateResponse('address.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
 
 
 async def address_solution_route(request: Request):
@@ -156,7 +159,7 @@ async def address_solution_route(request: Request):
         raise HTTPException(status_code=400, detail="Invalid page")
     start = 50 * (page - 1)
     solutions = await db.get_solution_by_address(address, start, start + 50)
-    data = []
+    data: list[dict[str, Any]] = []
     for solution in solutions:
         data.append({
             "height": solution["height"],
@@ -176,4 +179,4 @@ async def address_solution_route(request: Request):
         "total_pages": total_pages,
         "sync_info": sync_info,
     }
-    return templates.TemplateResponse('address_solution.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
+    return templates.TemplateResponse('address_solution.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore

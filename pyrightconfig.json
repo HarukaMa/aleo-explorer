@@ -1,3 +1,6 @@
 {
-  "typeCheckingMode": "strict"
+    "typeCheckingMode": "strict",
+    "exclude": [
+        "middleware/asgi_logger",
+    ],
 }

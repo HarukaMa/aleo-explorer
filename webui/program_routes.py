@@ -1,14 +1,16 @@
 from io import BytesIO
+from typing import Any
 
 import aleo
+from starlette.datastructures import UploadFile
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
 
 import disasm.aleo
 from db import Database
-from node.types import Transaction, DeployTransaction, Deployment, Program, \
-    ConfirmedTransaction, AcceptedDeploy, Import
+from node.types import DeployTransaction, Deployment, Program, \
+    AcceptedDeploy, Import
 from .template import templates
 from .utils import function_signature, out_of_sync_check
 
@@ -23,7 +25,7 @@ async def programs_route(request: Request):
             page = int(page)
     except:
         raise HTTPException(status_code=400, detail="Invalid page")
-    no_helloworld = request.query_params.get("no_helloworld")
+    no_helloworld = request.query_params.get("no_helloworld", False)
     try:
         no_helloworld = bool(int(no_helloworld))
     except:
@@ -45,7 +47,7 @@ async def programs_route(request: Request):
         "no_helloworld": no_helloworld,
         "sync_info": sync_info,
     }
-    return templates.TemplateResponse('programs.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
+    return templates.TemplateResponse('programs.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
 
 
 async def program_route(request: Request):
@@ -57,11 +59,9 @@ async def program_route(request: Request):
     if block:
         transaction: DeployTransaction | None = None
         for ct in block.transactions:
-            if ct.type == ConfirmedTransaction.Type.AcceptedDeploy:
-                ct: AcceptedDeploy
-                tx: Transaction = ct.transaction
-                tx: DeployTransaction
-                if str(tx.deployment.program.id) == program_id:
+            if isinstance(ct, AcceptedDeploy):
+                tx = ct.transaction
+                if isinstance(tx, DeployTransaction) and str(tx.deployment.program.id) == program_id:
                     transaction = tx
                     break
         if transaction is None:
@@ -74,7 +74,7 @@ async def program_route(request: Request):
             raise HTTPException(status_code=404, detail="Program not found")
         program = Program.load(BytesIO(program_bytes))
         transaction = None
-    functions = []
+    functions: list[str] = []
     for f in program.functions.keys():
         functions.append((await function_signature(db, str(program.id), str(f))).split("/", 1)[-1])
     leo_source = await db.get_program_leo_source_code(program_id)
@@ -84,14 +84,14 @@ async def program_route(request: Request):
     else:
         source = disasm.aleo.disassemble_program(program)
         has_leo_source = False
-    mappings = []
+    mappings: list[dict[str, str]] = []
     for name, mapping in program.mappings.items():
         mappings.append({
             "name": str(name),
             "key_type": str(mapping.key.plaintext_type),
             "value_type": str(mapping.value.plaintext_type)
         })
-    ctx = {
+    ctx: dict[str, Any] = {
         "request": request,
         "program_id": str(program.id),
         "times_called": await db.get_program_called_times(program_id),
@@ -118,7 +118,7 @@ async def program_route(request: Request):
             "owner": None,
             "signature": None,
         })
-    return templates.TemplateResponse('program.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
+    return templates.TemplateResponse('program.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
 
 
 async def similar_programs_route(request: Request):
@@ -153,7 +153,7 @@ async def similar_programs_route(request: Request):
         "total_pages": total_pages,
         "sync_info": sync_info,
     }
-    return templates.TemplateResponse('similar_programs.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
+    return templates.TemplateResponse('similar_programs.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
 
 
 async def upload_source_route(request: Request):
@@ -190,19 +190,19 @@ async def upload_source_route(request: Request):
         "message": message,
         "source": source,
     }
-    return templates.TemplateResponse('upload_source.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
+    return templates.TemplateResponse('upload_source.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
 
 async def submit_source_route(request: Request):
     db: Database = request.app.state.db
     form = await request.form()
     program_id = form.get("id")
-    if program_id is None:
+    if program_id is None or isinstance(program_id, UploadFile):
         return RedirectResponse(url=f"/upload_source?id={program_id}&message=Missing program id")
     program = await db.get_program(program_id)
     if program is None:
         return RedirectResponse(url=f"/upload_source?id={program_id}&message=Program not found")
     source = form.get("source")
-    if source is None or source == "":
+    if source is None or isinstance(source, UploadFile) or source == "":
         return RedirectResponse(url=f"/upload_source?id={program_id}&message=Missing source code")
     try:
         compiled = aleo.compile_program(source, program_id.split(".")[0])

@@ -1,19 +1,21 @@
 from io import BytesIO
+from typing import Any, cast
 
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
 
 from db import Database
-from node.types import u32, Transaction, Transition, ExecuteTransaction, TransitionInput, PrivateTransitionInput, \
-    RecordTransitionInput, TransitionOutput, RecordTransitionOutput, Record, DeployTransaction, Deployment, Program, \
+from node.types import u32, Transition, ExecuteTransaction, PrivateTransitionInput, \
+    RecordTransitionInput, TransitionOutput, RecordTransitionOutput, DeployTransaction, Program, \
     PublicTransitionInput, \
-    PublicTransitionOutput, PrivateTransitionOutput, Value, PlaintextValue, ExternalRecordTransitionInput, \
-    ExternalRecordTransitionOutput, ConfirmedTransaction, AcceptedDeploy, AcceptedExecute, RejectedExecute, \
-    FeeTransaction, RejectedDeploy, Rejected, RejectedExecution
+    PublicTransitionOutput, PrivateTransitionOutput, PlaintextValue, ExternalRecordTransitionInput, \
+    ExternalRecordTransitionOutput, AcceptedDeploy, AcceptedExecute, RejectedExecute, \
+    FeeTransaction, RejectedDeploy, RejectedExecution, RecordValue, Identifier, Entry
 from .template import templates
-from .utils import function_signature, out_of_sync_check, function_definition
+from .utils import function_signature, out_of_sync_check, function_definition, get_fee_amount_from_transition
 
+DictList = list[dict[str, Any]]
 
 async def block_route(request: Request):
     db: Database = request.app.state.db
@@ -26,15 +28,17 @@ async def block_route(request: Request):
         if block is None:
             raise HTTPException(status_code=404, detail="Block not found")
         block_hash = block.block_hash
-    else:
+    elif block_hash is not None:
         block = await db.get_block_by_hash(block_hash)
         if block is None:
             raise HTTPException(status_code=404, detail="Block not found")
         height = block.header.metadata.height
+    else:
+        raise RuntimeError("unreachable")
     height = int(height)
 
     coinbase_reward = await db.get_block_coinbase_reward_by_height(height)
-    css = []
+    css: DictList = []
     target_sum = 0
     if coinbase_reward is not None:
         solutions = await db.get_solution_by_height(height, 0, 100)
@@ -49,18 +53,15 @@ async def block_route(request: Request):
             })
             target_sum += solution["target"]
 
-    txs = []
+    txs: DictList = []
     total_fee = 0
     for ct in block.transactions:
-        ct: ConfirmedTransaction
-        match ct.type:
-            case ConfirmedTransaction.Type.AcceptedDeploy:
-                ct: AcceptedDeploy
-                tx: Transaction = ct.transaction
-                if tx.type != Transaction.Type.Deploy:
+        match ct:
+            case AcceptedDeploy():
+                tx = ct.transaction
+                if not isinstance(tx, DeployTransaction):
                     raise HTTPException(status_code=550, detail="Invalid transaction type")
-                tx: DeployTransaction
-                fee = int(tx.fee.transition.inputs[1].plaintext.value.literal.primitive)
+                fee = get_fee_amount_from_transition(tx.fee.transition)
                 t = {
                     "tx_id": tx.id,
                     "index": ct.index,
@@ -71,15 +72,13 @@ async def block_route(request: Request):
                 }
                 txs.append(t)
                 total_fee += fee
-            case ConfirmedTransaction.Type.AcceptedExecute:
-                ct: AcceptedExecute
-                tx: Transaction = ct.transaction
-                if tx.type != Transaction.Type.Execute:
+            case AcceptedExecute():
+                tx = ct.transaction
+                if not isinstance(tx, ExecuteTransaction):
                     raise HTTPException(status_code=550, detail="Invalid transaction type")
-                tx: ExecuteTransaction
                 fee_transition = tx.additional_fee.value
                 if fee_transition is not None:
-                    fee = int(fee_transition.transition.inputs[1].plaintext.value.literal.primitive)
+                    fee = get_fee_amount_from_transition(fee_transition.transition)
                 else:
                     fee = 0
                 t = {
@@ -92,13 +91,11 @@ async def block_route(request: Request):
                 }
                 txs.append(t)
                 total_fee += fee
-            case ConfirmedTransaction.Type.RejectedExecute:
-                ct: RejectedExecute
-                tx: Transaction = ct.transaction
-                if tx.type != Transaction.Type.Fee:
+            case RejectedExecute():
+                tx = ct.transaction
+                if not isinstance(tx, FeeTransaction):
                     raise HTTPException(status_code=550, detail="Invalid transaction type")
-                tx: FeeTransaction
-                fee = int(tx.fee.transition.inputs[1].plaintext.value.literal.primitive)
+                fee = get_fee_amount_from_transition(tx.fee.transition)
                 t = {
                     "tx_id": tx.id,
                     "index": ct.index,
@@ -122,14 +119,17 @@ async def block_route(request: Request):
         "target_sum": target_sum,
         "total_fee": total_fee,
     }
-    return templates.TemplateResponse('block.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'})
+    return templates.TemplateResponse('block.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
 
 
 async def get_transition_finalize_cost(db: Database, ts: Transition):
-    if ts.program_id == "credits.aleo" and ts.function_name in ["mint", "fee", "split"]:
+    if ts.program_id == "credits.aleo" and str(ts.function_name) in ["mint", "fee", "split"]:
         return 0
     else:
-        p = Program.load(BytesIO(await db.get_program(str(ts.program_id))))
+        pb = await db.get_program(str(ts.program_id))
+        if pb is None:
+            raise HTTPException(status_code=404, detail="Program not found")
+        p = Program.load(BytesIO(pb))
         f = p.functions[ts.function_name]
         if f.finalize.value is not None:
             return f.finalize.value[1].cost
@@ -145,45 +145,45 @@ async def transaction_route(request: Request):
     if block is None:
         raise HTTPException(status_code=404, detail="Transaction not found")
 
-    transaction: DeployTransaction | ExecuteTransaction | FeeTransaction | None = None
-    confirmed_transaction: AcceptedDeploy | AcceptedExecute | RejectedDeploy | RejectedExecute | None = None
+    transaction = None
+    confirmed_transaction = None
     transaction_type = ""
     transaction_state = ""
     index = -1
     for ct in block.transactions:
-        match ct.type:
-            case ConfirmedTransaction.Type.AcceptedDeploy:
-                ct: AcceptedDeploy
-                tx: Transaction = ct.transaction
-                tx: DeployTransaction
+        match ct:
+            case AcceptedDeploy():
+                tx = ct.transaction
+                if not isinstance(tx, DeployTransaction):
+                    raise HTTPException(status_code=550, detail="Database inconsistent")
                 transaction_type = "Deploy"
                 transaction_state = "Accepted"
                 if str(tx.id) == tx_id:
-                    confirmed_transaction: AcceptedDeploy = ct
+                    confirmed_transaction = ct
                     transaction = tx
                     index = ct.index
                     break
-            case ConfirmedTransaction.Type.AcceptedExecute:
-                ct: AcceptedExecute
-                tx: Transaction = ct.transaction
-                tx: ExecuteTransaction
+            case AcceptedExecute():
+                tx = ct.transaction
+                if not isinstance(tx, ExecuteTransaction):
+                    raise HTTPException(status_code=550, detail="Database inconsistent")
                 transaction_type = "Execute"
                 transaction_state = "Accepted"
                 if str(tx.id) == tx_id:
-                    confirmed_transaction: AcceptedExecute = ct
+                    confirmed_transaction = ct
                     transaction = tx
                     index = ct.index
                     break
-            case ConfirmedTransaction.Type.RejectedDeploy:
+            case RejectedDeploy():
                 raise HTTPException(status_code=550, detail="Unsupported transaction type")
-            case ConfirmedTransaction.Type.RejectedExecute:
-                ct: RejectedExecute
-                tx: Transaction = ct.transaction
-                tx: FeeTransaction
+            case RejectedExecute():
+                tx = ct.transaction
+                if not isinstance(tx, FeeTransaction):
+                    raise HTTPException(status_code=550, detail="Database inconsistent")
                 transaction_type = "Execute"
                 transaction_state = "Rejected"
                 if str(tx.id) == tx_id:
-                    confirmed_transaction: RejectedExecute = ct
+                    confirmed_transaction = ct
                     transaction = tx
                     index = ct.index
                     break
@@ -192,7 +192,7 @@ async def transaction_route(request: Request):
     if transaction is None:
         raise HTTPException(status_code=550, detail="Transaction not found in block")
 
-    ctx = {
+    ctx: dict[str, Any] = {
         "request": request,
         "tx_id": tx_id,
         "tx_id_trunc": str(tx_id)[:12] + "..." + str(tx_id)[-6:],
@@ -204,13 +204,12 @@ async def transaction_route(request: Request):
         "reject_reason": await db.get_transaction_reject_reason(tx_id) if transaction_state == "Rejected" else None,
     }
 
-    if transaction.type == Transaction.Type.Deploy:
-        transaction: DeployTransaction
-        deployment: Deployment = transaction.deployment
-        program: Program = deployment.program
+    if isinstance(transaction, DeployTransaction):
+        deployment = transaction.deployment
+        program = deployment.program
         fee_transition = transaction.fee.transition
         storage_cost, namespace_cost = deployment.cost
-        total_fee = int(fee_transition.inputs[1].plaintext.value.literal.primitive)
+        total_fee = get_fee_amount_from_transition(fee_transition)
         ctx.update({
             "edition": int(deployment.edition),
             "program_id": str(program.id),
@@ -223,17 +222,15 @@ async def transaction_route(request: Request):
                 "action": await function_signature(db, str(fee_transition.program_id), str(fee_transition.function_name)),
             }],
         })
-    elif transaction.type == Transaction.Type.Execute:
-        transaction: ExecuteTransaction
+    elif isinstance(transaction, ExecuteTransaction):
         global_state_root = transaction.execution.global_state_root
         proof = transaction.execution.proof.value
-        transitions = []
+        transitions: DictList = []
 
         storage_cost, _ = transaction.execution.cost
-        finalize_costs = []
+        finalize_costs: list[int] = []
 
         for transition in transaction.execution.transitions:
-            transition: Transition
             transitions.append({
                 "transition_id": transition.id,
                 "action": await function_signature(db, str(transition.program_id), str(transition.function_name)),
@@ -241,7 +238,7 @@ async def transaction_route(request: Request):
             finalize_costs.append(await get_transition_finalize_cost(db, transition))
         if transaction.additional_fee.value is not None:
             transition = transaction.additional_fee.value.transition
-            total_fee = int(transition.inputs[1].plaintext.value.literal.primitive)
+            total_fee = get_fee_amount_from_transition(transition)
             fee_transition = {
                 "transition_id": transition.id,
                 "action": await function_signature(db, str(transition.program_id), str(transition.function_name)),
@@ -260,21 +257,19 @@ async def transaction_route(request: Request):
             "transitions": transitions,
             "fee_transition": fee_transition,
         })
-    elif transaction.type == Transaction.Type.Fee:
-        transaction: FeeTransaction
+    else:
         global_state_root = transaction.fee.global_state_root
         proof = transaction.fee.proof.value
         transitions = []
-        rejected_transitions = []
+        rejected_transitions: DictList = []
         transition = transaction.fee.transition
-        total_fee = int(transition.inputs[1].plaintext.value.literal.primitive)
+        total_fee = get_fee_amount_from_transition(transition)
         transitions.append({
             "transition_id": transition.id,
             "action": await function_signature(db, str(transition.program_id), str(transition.function_name)),
         })
-        if confirmed_transaction.type == ConfirmedTransaction.Type.RejectedExecute:
-            confirmed_transaction: RejectedExecute
-            rejected: Rejected = confirmed_transaction.rejected
+        if isinstance(confirmed_transaction, RejectedExecute):
+            rejected = confirmed_transaction.rejected
             if not isinstance(rejected, RejectedExecution):
                 raise HTTPException(status_code=550, detail="invalid rejected transaction")
             storage_cost, _ = rejected.execution.cost
@@ -300,7 +295,7 @@ async def transaction_route(request: Request):
             "rejected_transitions": rejected_transitions,
         })
 
-    return templates.TemplateResponse('transaction.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'})
+    return templates.TemplateResponse('transaction.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
 
 
 async def transition_route(request: Request):
@@ -318,143 +313,153 @@ async def transition_route(request: Request):
     for ct in block.transactions:
         if transition is not None:
             break
-        if ct.type == ConfirmedTransaction.Type.AcceptedDeploy:
-            ct: AcceptedDeploy
-            tx: Transaction = ct.transaction
-            tx: DeployTransaction
-            state = "Accepted"
-            if str(tx.fee.transition.id) == ts_id:
-                transition = tx.fee.transition
-                transaction_id = tx.id
-                break
-        elif ct.type == ConfirmedTransaction.Type.AcceptedExecute:
-            ct: AcceptedExecute
-            tx: Transaction = ct.transaction
-            tx: ExecuteTransaction
-            state = "Accepted"
-            for ts in tx.execution.transitions:
-                ts: Transition
-                if str(ts.id) == ts_id:
-                    transition = ts
-                    transaction_id = tx.id
-                    break
-            if transaction_id is None and tx.additional_fee.value is not None:
-                ts: Transition = tx.additional_fee.value.transition
-                if str(ts.id) == ts_id:
-                    transition = ts
-                    transaction_id = tx.id
-                    break
-        elif ct.type == ConfirmedTransaction.Type.RejectedExecute:
-            ct: RejectedExecute
-            tx: Transaction = ct.transaction
-            tx: FeeTransaction
-            if str(tx.fee.transition.id) == ts_id:
-                transition = tx.fee.transition
-                transaction_id = tx.id
+        match ct:
+            case AcceptedDeploy():
+                tx = ct.transaction
+                if not isinstance(tx, DeployTransaction):
+                    raise HTTPException(status_code=550, detail="Database inconsistent")
                 state = "Accepted"
-            else:
-                # noinspection PyUnresolvedReferences
-                for ts in ct.rejected.execution.transitions:
-                    ts: Transition
+                if str(tx.fee.transition.id) == ts_id:
+                    transition = tx.fee.transition
+                    transaction_id = tx.id
+                    break
+            case AcceptedExecute():
+                tx = ct.transaction
+                if not isinstance(tx, ExecuteTransaction):
+                    raise HTTPException(status_code=550, detail="Database inconsistent")
+                state = "Accepted"
+                for ts in tx.execution.transitions:
                     if str(ts.id) == ts_id:
                         transition = ts
                         transaction_id = tx.id
-                        state = "Rejected"
                         break
+                if transaction_id is None and tx.additional_fee.value is not None:
+                    ts = tx.additional_fee.value.transition
+                    if str(ts.id) == ts_id:
+                        transition = ts
+                        transaction_id = tx.id
+                        break
+            case RejectedExecute():
+                tx = ct.transaction
+                if not isinstance(tx, FeeTransaction):
+                    raise HTTPException(status_code=550, detail="Database inconsistent")
+                if str(tx.fee.transition.id) == ts_id:
+                    transition = tx.fee.transition
+                    transaction_id = tx.id
+                    state = "Accepted"
+                else:
+                    rejected = ct.rejected
+                    if not isinstance(rejected, RejectedExecution):
+                        raise HTTPException(status_code=550, detail="Database inconsistent")
+                    for ts in rejected.execution.transitions:
+                        if str(ts.id) == ts_id:
+                            transition = ts
+                            transaction_id = tx.id
+                            state = "Rejected"
+                            break
+            case _:
+                raise HTTPException(status_code=550, detail="Not implemented")
     if transaction_id is None:
         raise HTTPException(status_code=550, detail="Transition not found in block")
+    transition = cast(Transition, transition)
 
     program_id = transition.program_id
     function_name = transition.function_name
     tpk = transition.tpk
     tcm = transition.tcm
 
-    inputs = []
+    inputs: DictList = []
     for input_ in transition.inputs:
-        input_: TransitionInput
-        match input_.type:
-            case TransitionInput.Type.Public:
-                input_: PublicTransitionInput
+        match input_:
+            # TODO: report pycharm bug
+            case PublicTransitionInput():
+                # noinspection PyUnresolvedReferences
                 inputs.append({
                     "type": "Public",
                     "plaintext_hash": input_.plaintext_hash,
                     "plaintext": input_.plaintext.value,
                 })
-            case TransitionInput.Type.Private:
-                input_: PrivateTransitionInput
+            case PrivateTransitionInput():
+                # noinspection PyUnresolvedReferences
                 inputs.append({
                     "type": "Private",
                     "ciphertext_hash": input_.ciphertext_hash,
                     "ciphertext": input_.ciphertext.value,
                 })
-            case TransitionInput.Type.Record:
-                input_: RecordTransitionInput
+            case RecordTransitionInput():
+                # noinspection PyUnresolvedReferences
                 inputs.append({
                     "type": "Record",
                     "serial_number": input_.serial_number,
                     "tag": input_.tag,
                 })
-            case TransitionInput.Type.ExternalRecord:
-                input_: ExternalRecordTransitionInput
+            case ExternalRecordTransitionInput():
+                # noinspection PyUnresolvedReferences
                 inputs.append({
                     "type": "External record",
                     "commitment": input_.input_commitment,
                 })
+            case _:
+                raise HTTPException(status_code=550, detail="Not implemented")
 
-    outputs = []
+    outputs: DictList = []
     for output in transition.outputs:
         output: TransitionOutput
-        match output.type:
-            case TransitionOutput.Type.Public:
-                output: PublicTransitionOutput
+        match output:
+            case PublicTransitionOutput():
+                # noinspection PyUnresolvedReferences
                 outputs.append({
                     "type": "Public",
                     "plaintext_hash": output.plaintext_hash,
                     "plaintext": output.plaintext.value,
                 })
-            case TransitionOutput.Type.Private:
-                output: PrivateTransitionOutput
+            case PrivateTransitionOutput():
+                # noinspection PyUnresolvedReferences
                 outputs.append({
                     "type": "Private",
                     "ciphertext_hash": output.ciphertext_hash,
                     "ciphertext": output.ciphertext.value,
                 })
-            case TransitionOutput.Type.Record:
-                output: RecordTransitionOutput
-                output_data = {
+            case RecordTransitionOutput():
+                # noinspection PyUnresolvedReferences
+                output_data: dict[str, Any] = {
                     "type": "Record",
                     "commitment": output.commitment,
                     "checksum": output.checksum,
                     "record": output.record_ciphertext.value,
                 }
-                record: Record = output.record_ciphertext.value
+                # noinspection PyUnresolvedReferences
+                record = output.record_ciphertext.value
                 if record is not None:
-                    record_data = {
+                    record_data: dict[str, Any] = {
                         "owner": record.owner,
                     }
-                    data = []
+                    data: list[tuple[Identifier, Entry[Any]]] = []
                     for identifier, entry in record.data:
                         data.append((identifier, entry))
                     record_data["data"] = data
                     output_data["record_data"] = record_data
                 outputs.append(output_data)
-            case TransitionOutput.Type.ExternalRecord:
-                output: ExternalRecordTransitionOutput
+            case ExternalRecordTransitionOutput():
+                # noinspection PyUnresolvedReferences
                 outputs.append({
                     "type": "External record",
                     "commitment": output.commitment,
                 })
+            case _:
+                raise HTTPException(status_code=550, detail="Not implemented")
 
-    finalizes = []
+    finalizes: list[str] = []
     if transition.finalize.value is not None:
         for finalize in transition.finalize.value:
-            finalize: Value
-            match finalize.type:
-                case Value.Type.Plaintext:
-                    finalize: PlaintextValue
+            match finalize:
+                case PlaintextValue():
+                    # noinspection PyUnresolvedReferences
                     finalizes.append(str(finalize.plaintext))
-                case Value.Type.Record:
+                case RecordValue():
                     raise NotImplementedError
+                case _:
+                    raise HTTPException(status_code=550, detail="Not implemented")
 
     ctx = {
         "request": request,
@@ -473,7 +478,7 @@ async def transition_route(request: Request):
         "outputs": outputs,
         "finalizes": finalizes,
     }
-    return templates.TemplateResponse('transition.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'})
+    return templates.TemplateResponse('transition.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
 
 
 async def search_route(request: Request):
@@ -507,7 +512,7 @@ async def search_route(request: Request):
             "blocks": blocks,
             "too_many": too_many,
         }
-        return templates.TemplateResponse('search_result.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
+        return templates.TemplateResponse('search_result.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
     elif query.startswith("at1"):
         # transaction id
         transactions = await db.search_transaction_id(query)
@@ -526,7 +531,7 @@ async def search_route(request: Request):
             "transactions": transactions,
             "too_many": too_many,
         }
-        return templates.TemplateResponse('search_result.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
+        return templates.TemplateResponse('search_result.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
     elif query.startswith("as1"):
         # transition id
         transitions = await db.search_transition_id(query)
@@ -545,7 +550,7 @@ async def search_route(request: Request):
             "transitions": transitions,
             "too_many": too_many,
         }
-        return templates.TemplateResponse('search_result.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
+        return templates.TemplateResponse('search_result.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
     elif query.startswith("aleo1"):
         # address
         addresses = await db.search_address(query)
@@ -564,7 +569,7 @@ async def search_route(request: Request):
             "addresses": addresses,
             "too_many": too_many,
         }
-        return templates.TemplateResponse('search_result.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
+        return templates.TemplateResponse('search_result.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
     else:
         # have to do this to support program name prefix search
         programs = await db.search_program(query)
@@ -582,7 +587,7 @@ async def search_route(request: Request):
                 "programs": programs,
                 "too_many": too_many,
             }
-            return templates.TemplateResponse('search_result.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
+            return templates.TemplateResponse('search_result.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
     raise HTTPException(status_code=404, detail="Unknown object type or searching is not supported")
 
 
@@ -597,6 +602,8 @@ async def blocks_route(request: Request):
     except:
         raise HTTPException(status_code=400, detail="Invalid page")
     total_blocks = await db.get_latest_height()
+    if not total_blocks:
+        raise HTTPException(status_code=550, detail="No blocks found")
     total_pages = (total_blocks // 50) + 1
     if page < 1 or page > total_pages:
         raise HTTPException(status_code=400, detail="Invalid page")
@@ -611,4 +618,4 @@ async def blocks_route(request: Request):
         "total_pages": total_pages,
         "sync_info": sync_info,
     }
-    return templates.TemplateResponse('blocks.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'})
+    return templates.TemplateResponse('blocks.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore

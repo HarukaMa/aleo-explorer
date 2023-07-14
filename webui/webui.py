@@ -11,6 +11,7 @@ from starlette.responses import FileResponse
 from starlette.routing import Route, Mount
 from starlette.staticfiles import StaticFiles
 
+from explorer import Message
 from middleware.asgi_logger import AccessLoggerMiddleware
 from middleware.minify import MinifyMiddleware
 from middleware.server_timing import ServerTimingMiddleware
@@ -33,7 +34,7 @@ class UvicornServer(multiprocessing.Process):
     def stop(self):
         self.terminate()
 
-    def run(self, *args, **kwargs):
+    def run(self, *args: Any, **kwargs: Any):
         self.server.run()
 
 async def index_route(request: Request):
@@ -48,19 +49,19 @@ async def index_route(request: Request):
         "network_speed": network_speed,
         "sync_info": sync_info,
     }
-    return templates.TemplateResponse('index.jinja2', ctx, headers={'Cache-Control': 'public, max-age=10'})
+    return templates.TemplateResponse('index.jinja2', ctx, headers={'Cache-Control': 'public, max-age=10'}) # type: ignore
 
 async def tools_route(request: Request):
     ctx = {
         "request": request,
     }
-    return templates.TemplateResponse('tools.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'})
+    return templates.TemplateResponse('tools.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
 
 async def faq_route(request: Request):
     ctx = {
         "request": request,
     }
-    return templates.TemplateResponse('faq.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'})
+    return templates.TemplateResponse('faq.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
 
 
 async def feedback_route(request: Request):
@@ -80,13 +81,17 @@ async def feedback_route(request: Request):
         "contact": contact,
         "content": content,
     }
-    return templates.TemplateResponse('feedback.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'})
+    return templates.TemplateResponse('feedback.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
 
 async def submit_feedback_route(request: Request):
     db: Database = request.app.state.db
     form = await request.form()
     contact = form.get("contact")
+    if not contact or isinstance(contact, UploadFile):
+        return RedirectResponse(url="/feedback?message=Invalid contact")
     content = form.get("content")
+    if not content or isinstance(content, UploadFile):
+        return RedirectResponse(url="/feedback?message=Invalid content")
     turnstile_response = form.get("cf-turnstile-response")
     async with aiohttp.ClientSession() as session:
         data = {
@@ -106,7 +111,7 @@ async def privacy_route(request: Request):
     ctx = {
         "request": request,
     }
-    return templates.TemplateResponse('privacy.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'})
+    return templates.TemplateResponse('privacy.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
 
 async def robots_route(_: Request):
     return FileResponse("webui/robots.txt", headers={'Cache-Control': 'public, max-age=3600'})
@@ -149,7 +154,7 @@ exc_handlers = {
 }
 
 async def startup():
-    async def noop(_): pass
+    async def noop(_: Message): pass
 
     # different thread so need to get a new database instance
     db = Database(server=os.environ["DB_HOST"], user=os.environ["DB_USER"], password=os.environ["DB_PASS"],

@@ -1,4 +1,5 @@
 from io import BytesIO
+from typing import cast, Any
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -7,14 +8,14 @@ from api.utils import use_program_cache
 from db import Database
 from interpreter.finalizer import ExecuteError
 from interpreter.interpreter import preview_finalize_execution
-from node.types import Program, Identifier, Function, Finalize, FinalizeInput, PlaintextType, LiteralPlaintextType, \
-    LiteralPlaintext, Literal, StructPlaintextType, StructPlaintext, FinalizeOperation
+from node.types import Program, Identifier, Finalize, LiteralPlaintextType, \
+    LiteralPlaintext, Literal, StructPlaintextType, StructPlaintext, FinalizeOperation, Plaintext
 
 
 @use_program_cache
-async def preview_finalize_route(request: Request, program_cache):
+async def preview_finalize_route(request: Request, program_cache: dict[str, Program]):
     db: Database = request.app.state.db
-    version = request.path_params["version"]
+    _ = request.path_params["version"]
     json = await request.json()
     program_id = json.get("program_id")
     transition_name = json.get("transition_name")
@@ -27,37 +28,38 @@ async def preview_finalize_route(request: Request, program_cache):
         return JSONResponse({"error": "Missing inputs (pass empty array for no input)"}, status_code=400)
     if not isinstance(inputs, list):
         return JSONResponse({"error": "Inputs must be an array"}, status_code=400)
+    inputs = cast(list[Any], inputs)
 
     try:
         try:
             program = program_cache[program_id]
         except KeyError:
-            program = Program.load(BytesIO(await db.get_program(program_id)))
+            program_bytes = await db.get_program(program_id)
+            if not program_bytes:
+                return JSONResponse({"error": "Program not found"}, status_code=404)
+            program = Program.load(BytesIO(program_bytes))
             program_cache[program_id] = program
     except:
         return JSONResponse({"error": "Program not found"}, status_code=404)
     function_name = Identifier.loads(transition_name)
     if function_name not in program.functions:
         return JSONResponse({"error": "Transition not found"}, status_code=404)
-    function: Function = program.functions[function_name]
+    function = program.functions[function_name]
     if function.finalize.value is None:
         return JSONResponse({"error": "Transition does not have a finalizer"}, status_code=400)
     finalize: Finalize = function.finalize.value[1]
     finalize_inputs = finalize.inputs
-    values = []
+    values: list[Plaintext] = []
     for index, finalize_input in enumerate(finalize_inputs):
-        finalize_input: FinalizeInput
-        plaintext_type: PlaintextType = finalize_input.plaintext_type
-        if plaintext_type.type == PlaintextType.Type.Literal:
-            plaintext_type: LiteralPlaintextType
+        plaintext_type = finalize_input.plaintext_type
+        if isinstance(plaintext_type, LiteralPlaintextType):
             primitive_type = plaintext_type.literal_type.primitive_type
             try:
                 value = primitive_type.loads(str(inputs[index]))
             except:
                 return JSONResponse({"error": f"Invalid input for index {index}"}, status_code=400)
             values.append(LiteralPlaintext(literal=Literal(type_=Literal.reverse_primitive_type_map[primitive_type], primitive=value)))
-        elif plaintext_type.type == PlaintextType.Type.Struct:
-            plaintext_type: StructPlaintextType
+        elif isinstance(plaintext_type, StructPlaintextType):
             structs = program.structs
             struct_type = structs[plaintext_type.struct]
             try:
@@ -71,7 +73,7 @@ async def preview_finalize_route(request: Request, program_cache):
         result = await preview_finalize_execution(db, program, function_name, values)
     except ExecuteError as e:
         return JSONResponse({"error": f"Execution error on instruction \"{e.instruction}\": {e}"}, status_code=400)
-    updates = []
+    updates: list[dict[str, str]] = []
     for operation in result:
         operation_type = operation["type"]
         upd = {"type": operation_type.name}

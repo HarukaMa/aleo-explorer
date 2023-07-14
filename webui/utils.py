@@ -3,11 +3,13 @@ import os
 import time
 
 import aiohttp
+from starlette.exceptions import HTTPException
 
 from db import Database
+from node.types import Transition, PublicTransitionInput, LiteralPlaintext
 
 
-def get_relative_time(timestamp):
+def get_relative_time(timestamp: int):
     now = time.time()
     delta = now - timestamp
     if delta < 60:
@@ -25,6 +27,8 @@ async def get_remote_height(rpc_root: str) -> str:
             async with session.get(f"{rpc_root}/testnet3/latest/height") as resp:
                 if resp.status == 200:
                     remote_height = await resp.text()
+                else:
+                    remote_height = "?"
     except:
         remote_height = "?"
     return remote_height
@@ -56,7 +60,7 @@ async def function_signature(db: Database, program_id: str, function_name: str):
     data = await function_definition(db, program_id, function_name)
     if isinstance(data, str):
         return data
-    inputs = []
+    inputs: list[str] = []
     for i in range(len(data["input"])):
         name = data["input"][i]
         mode = data["input_mode"][i]
@@ -64,7 +68,7 @@ async def function_signature(db: Database, program_id: str, function_name: str):
             inputs.append(name)
         else:
             inputs.append(f"{mode} {name}")
-    outputs = []
+    outputs: list[str] = []
     for i in range(len(data["output"])):
         name = data["output"][i]
         mode = data["output_mode"][i]
@@ -87,3 +91,17 @@ async def function_definition(db: Database, program_id: str, function_name: str)
     if data is None:
         return f"Unknown function {program_id}/{function_name}"
     return data
+
+
+
+def get_fee_amount_from_transition(ts: Transition):
+    fee_input = ts.inputs[1]
+    if not isinstance(fee_input, PublicTransitionInput):
+        raise HTTPException(status_code=550, detail="Database inconsistent")
+    fee_value = fee_input.plaintext.value
+    if not isinstance(fee_value, LiteralPlaintext):
+        raise HTTPException(status_code=550, detail="Database inconsistent")
+    primitive = fee_value.literal.primitive
+    if not isinstance(primitive, int):
+        raise HTTPException(status_code=550, detail="Database inconsistent")
+    return primitive

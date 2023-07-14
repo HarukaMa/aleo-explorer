@@ -1073,14 +1073,14 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_latest_block_timestamp(self):
+    async def get_latest_block_timestamp(self) -> int:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute("SELECT timestamp FROM block ORDER BY height DESC LIMIT 1")
                     result = await cur.fetchone()
                     if result is None:
-                        return None
+                        raise RuntimeError("no blocks in database")
                     return result['timestamp']
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
@@ -1321,7 +1321,7 @@ class Database:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
-    async def get_block_coinbase_reward_by_height(self, height: int) -> int:
+    async def get_block_coinbase_reward_by_height(self, height: int) -> Optional[int]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1329,7 +1329,7 @@ class Database:
                         "SELECT coinbase_reward FROM block WHERE height = %s", (height,)
                     )
                     if (res := await cur.fetchone()) is None:
-                        return 0
+                        return None
                     return res["coinbase_reward"]
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
@@ -1749,7 +1749,7 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_program_feature_hash(self, program_id: str) -> bytes:
+    async def get_program_feature_hash(self, program_id: str) -> Optional[bytes]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1758,7 +1758,7 @@ class Database:
                         (program_id,)
                     )
                     if (res := await cur.fetchone()) is None:
-                        raise ValueError(f"Program {program_id} not found")
+                        return None
                     return res['feature_hash']
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))

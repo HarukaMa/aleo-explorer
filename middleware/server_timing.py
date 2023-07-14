@@ -2,6 +2,8 @@ import functools
 import os
 import time
 from collections import defaultdict
+from types import TracebackType
+from typing import Optional
 
 from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Scope, Receive, Send
@@ -25,7 +27,7 @@ async def timing_send(message: Message, scope: Scope, timing: RequestTiming, sen
         await send(message)
     else:
         headers = MutableHeaders(scope=message)
-        res = []
+        res: list[str] = []
         for name, duration in scope["timings"].items():
             res.append(f"{name};dur={duration:.3f}")
         res.append(f"t;dur={((timing.end_ns - timing.start_ns) / 1e6):.3f}")
@@ -65,7 +67,7 @@ class TimingContext:
     def __enter__(self) -> None:
         self.start_ns = time.perf_counter_ns()
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(self, exc_type: Optional[type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]) -> None:
         self.end_ns = time.perf_counter_ns()
         if self.timing:
             self.scope["timings"][self.name] += (self.end_ns - self.start_ns) / 1e6

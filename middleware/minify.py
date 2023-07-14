@@ -15,6 +15,10 @@ class MinifyMiddleware:
 class MinifyWrapper:
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
+        self.start_message: Message
+        self.has_trailers: bool
+        self.body: bytes
+        self.non_html: bool
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":

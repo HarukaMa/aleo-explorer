@@ -16,16 +16,16 @@ COST_TIMEOUT = -1
 COST_UNKNOWN = -2
 
 class APIQuotaMiddleware:
-    def __init__(self, app: ASGIApp, *, max_call_time = 5.0, recover_rate = 0.1, max_concurrency = 10) -> None:
+    def __init__(self, app: ASGIApp, *, max_call_time: float = 5.0, recover_rate: float = 0.1, max_concurrency: int = 10) -> None:
         self.app = app
         self.max_call_time = max_call_time
         self.recover_rate = recover_rate
         self.max_concurrency = max_concurrency
         self.concurrency_penalty = max_call_time / max_concurrency
-        self.ip_remaining_time = defaultdict(lambda: (max_call_time, -1.0, 0))
+        self.ip_remaining_time: dict[str, tuple[float, float, int]] = defaultdict(lambda: (max_call_time, -1.0, 0))
         self.ip_remaining_time_lock = asyncio.Lock()
 
-    async def start_call(self, ip):
+    async def start_call(self, ip: str):
         async with self.ip_remaining_time_lock:
             remaining, last_call, outstanding_call = self.ip_remaining_time[ip]
             print(f"ip {ip} has quota {remaining}s, last call {last_call}, outstanding call {outstanding_call}")
@@ -40,11 +40,11 @@ class APIQuotaMiddleware:
             self.ip_remaining_time[ip] = (quota - self.concurrency_penalty, last_call, outstanding_call + 1)
         return quota
 
-    def get_quota_for_header(self, ip, cost):
+    def get_quota_for_header(self, ip: str, cost: float):
         remaining, _, outstanding_call = self.ip_remaining_time[ip]
         return remaining - cost + outstanding_call * self.concurrency_penalty
 
-    async def end_call(self, ip, cost):
+    async def end_call(self, ip: str, cost: float):
         async with self.ip_remaining_time_lock:
             remaining, _, outstanding_call = self.ip_remaining_time[ip]
             if cost == COST_TIMEOUT:

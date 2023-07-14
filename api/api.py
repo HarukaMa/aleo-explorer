@@ -3,6 +3,7 @@ import logging
 import multiprocessing
 import os
 import time
+from typing import Any
 
 import uvicorn
 from starlette.applications import Starlette
@@ -32,7 +33,7 @@ class UvicornServer(multiprocessing.Process):
     def stop(self):
         self.terminate()
 
-    def run(self, *args, **kwargs):
+    def run(self, *args: Any, **kwargs: Any):
         self.server.run()
 
 async def commitment_route(request: Request):
@@ -54,7 +55,7 @@ routes = [
 ]
 
 async def startup():
-    async def noop(_): pass
+    async def noop(_: Any): pass
 
     # different thread so need to get a new database instance
     db = Database(server=os.environ["DB_HOST"], user=os.environ["DB_USER"], password=os.environ["DB_PASS"],
