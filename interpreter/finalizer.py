@@ -68,7 +68,7 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
             print(disasm_instruction(instruction))
             try:
                 execute_instruction(instruction, program, registers, finalize_state)
-            except (AssertionError, OverflowError) as e:
+            except (AssertionError, OverflowError, ZeroDivisionError) as e:
                 raise ExecuteError(str(e), e, disasm_instruction(instruction))
             except Exception:
                 registers.dump()

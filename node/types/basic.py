@@ -113,6 +113,8 @@ class Int(int, Serializable, IntProtocol):
             return self.__class__(int(self / other))
         if type(other) is not type(self):
             raise TypeError("unsupported operand type(s) for //: '{}' and '{}'".format(type(self), type(other)))
+        if other == 0:
+            raise ZeroDivisionError("division by zero")
         return self.__class__(int(self / other))
 
     def div_wrapped(self, other: int | Self):
