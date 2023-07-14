@@ -1,6 +1,6 @@
 from functools import partial, lru_cache
 from types import GenericAlias, MethodType
-from typing import Generic, TypeVar, get_args, Optional, Callable, TypeVarTuple
+from typing import Generic, TypeVar, get_args, Optional, Callable, TypeVarTuple, TypeGuard
 
 from .basic import *
 
@@ -62,6 +62,9 @@ def access_generic_type(c): # type: ignore
     return c # type: ignore
 
 
+def is_serializable(t: Any) -> TypeGuard[Serializable]:
+    return isinstance(t, Serializable)
+
 # noinspection PyTypeHints
 @access_generic_type
 class Tuple(tuple[*TP], Serializable):
@@ -72,24 +75,21 @@ class Tuple(tuple[*TP], Serializable):
 
     def __init__(self, _): # type: ignore[reportInconsistentConstructor]
         for t in self.types:
-            if not isinstance(t, Serializable):
+            if not is_serializable(t):
                 raise TypeError(f"expected Serializable type, got {t}")
 
 
     def dump(self) -> bytes:
-        res: list[bytes] = []
-        for t in self: # type: ignore
-            t: Serializable
-            res.append(t.dump())
-        return b"".join(res)
+        return b"".join(t.dump() for t in self if is_serializable(t))
 
     @classmethod
     def load(cls, data: BytesIO, *, types: Optional[tuple[Type[*Serializable]]] = None) -> Self:
         if types is None:
             raise TypeError("expected types")
         value: list[Serializable] = []
-        for t in types: # type: ignore
-            t: Serializable
+        for t in types:
+            if not is_serializable(t):
+                raise TypeError(f"expected Serializable type, got {t}")
             value.append(t.load(data))
         return cls(tuple(value)) # type: ignore
 

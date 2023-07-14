@@ -1,6 +1,7 @@
 import json
 import re
 from hashlib import sha256, md5
+from typing import Type as TType
 
 from .vm_instruction import *
 
