@@ -1,7 +1,6 @@
 import json
 import re
 from hashlib import sha256, md5
-from typing import Type as TType
 
 from .vm_instruction import *
 
@@ -1095,10 +1094,10 @@ class Commitments(Serializable):
 
     @classmethod
     def load_with_batch_sizes(cls, data: BytesIO, batch_sizes: Vec[u64, u64]):
-        witness_commitments: list[WitnessCommitments] = []
+        w_commitments: list[WitnessCommitments] = []
         for _ in range(sum(batch_sizes)):
-            witness_commitments.append(WitnessCommitments.load(data))
-        witness_commitments = Vec[WitnessCommitments, u64](witness_commitments)
+            w_commitments.append(WitnessCommitments.load(data))
+        witness_commitments = Vec[WitnessCommitments, u64](w_commitments)
         mask_poly = Option[KZGCommitment].load(data)
         g_1 = KZGCommitment.load(data)
         h_1 = KZGCommitment.load(data)
@@ -1618,7 +1617,7 @@ class PrivateEntry(Entry[T]):
 @access_generic_type
 class Record(Serializable, Generic[T]):
     types: tuple[TType[T]]
-    Private: Type[T]
+    Private: TType[T]
 
     def __init__(self, *, owner: Owner[T], data: Vec[Tuple[Identifier, Entry[T]], u8], nonce: Group):
         self.owner = owner
@@ -1670,6 +1669,8 @@ class Value(EnumBaseSerialize, RustEnum, Serializable):
     class Type(IntEnumu8):
         Plaintext = 0
         Record = 1
+
+    type: Type
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -2174,6 +2175,8 @@ class ConfirmedTransaction(EnumBaseSerialize, RustEnum, Serializable):
         RejectedExecute = 3
 
     type: Type
+    index: u32
+    transaction: Transaction
 
     @classmethod
     def load(cls, data: BytesIO):

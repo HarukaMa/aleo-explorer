@@ -37,11 +37,11 @@ async def finalize_deploy(confirmed_transaction: ConfirmedTransaction) -> tuple[
 async def finalize_execute(db: Database, finalize_state: FinalizeState, confirmed_transaction: ConfirmedTransaction,
                            mapping_cache: dict[Field, list[MappingCacheTuple]]) -> tuple[list[FinalizeOperation], list[dict[str, Any]], Optional[str]]:
     if isinstance(confirmed_transaction, AcceptedExecute):
-        transaction: Transaction = confirmed_transaction.transaction
+        transaction = confirmed_transaction.transaction
         if not isinstance(transaction, ExecuteTransaction):
             raise TypeError("invalid execute transaction")
         execution = transaction.execution
-        expected_operations: Vec[FinalizeOperation, u16] = confirmed_transaction.finalize
+        expected_operations = list(confirmed_transaction.finalize)
     elif isinstance(confirmed_transaction, RejectedExecute):
         if not isinstance(confirmed_transaction.rejected, RejectedExecution):
             raise TypeError("invalid rejected execute transaction")
@@ -52,14 +52,18 @@ async def finalize_execute(db: Database, finalize_state: FinalizeState, confirme
     operations: list[dict[str, Any]] = []
     reject_reason: str | None = None
     for index, transition in enumerate(execution.transitions):
-        transition: Transition
-        finalize: Vec[Value, u8] = transition.finalize.value
+        finalize = transition.finalize.value
         if finalize is not None:
             program_bytes = await db.get_program(str(transition.program_id))
             if program_bytes is None:
                 raise RuntimeError("program not found")
             program = Program.load(BytesIO(program_bytes))
-            inputs = list(map(lambda x: x.plaintext, finalize))
+            inputs: list[Plaintext] = []
+            for value in finalize:
+                if isinstance(value, PlaintextValue):
+                    inputs.append(value.plaintext)
+                elif isinstance(value, RecordValue):
+                    raise NotImplementedError
             try:
                 operations.extend(
                     await execute_finalizer(db, finalize_state, transition.id, program, transition.function_name, inputs, mapping_cache)

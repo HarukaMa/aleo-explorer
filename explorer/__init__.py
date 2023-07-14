@@ -1,2 +1,2 @@
 from .explorer import Explorer
-from .types import Message, Request
+from .types import Message, Request, ExplorerRequest

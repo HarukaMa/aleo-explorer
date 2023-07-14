@@ -1,83 +1,72 @@
+from typing import cast
+
 from interpreter.environment import Registers
 from interpreter.utils import load_plaintext_from_operand, store_plaintext_to_register, FinalizeState
 from node.types import *
 
+IT = Instruction.Type
+
 def execute_instruction(instruction: Instruction, program: Program, registers: Registers, finalize_state: FinalizeState):
-    literals: Literals | AssertInstruction | CallInstruction | CastInstruction | CommitInstruction | HashInstruction = instruction.literals
-    reveal_type(literals)
+    literals = instruction.literals
     if isinstance(literals, Literals):
-        reveal_type(literals)
         num_operands = literals.num_operands
         operands = literals.operands[:num_operands]
         destination = literals.destination
-        instruction_ops[instruction.type.value](operands, destination, registers, finalize_state)
+        literal_ops[instruction.type](operands, destination, registers, finalize_state)
     elif isinstance(literals, CastInstruction):
-        reveal_type(literals)
         operands = literals.operands
         destination = literals.destination
         cast_type = literals.cast_type
-        CastOp(operands, destination, cast_type, program, registers, finalize_state)
+        cast_op(operands, destination, cast_type, program, registers, finalize_state)
     elif isinstance(literals, CallInstruction):
-        reveal_type(literals)
         raise NotImplementedError
     elif isinstance(literals, AssertInstruction):
-        reveal_type(literals)
         variant = literals.variant
         if variant == 0:
-            AssertEq(literals.operands, registers, finalize_state)
+            assert_eq(literals.operands, registers, finalize_state)
         elif variant == 1:
-            AssertNeq(literals.operands, registers, finalize_state)
+            assert_neq(literals.operands, registers, finalize_state)
     elif isinstance(literals, HashInstruction):
-        reveal_type(literals)
         type_ = literals.type
         if type_ == HashInstruction.Type.HashBHP256:
-            HashBHP256(literals.operands, literals.destination, literals.destination_type, registers, finalize_state)
+            hash_bhp256(literals.operands, literals.destination, literals.destination_type, registers, finalize_state)
         else:
             raise NotImplementedError
     else:
         raise NotImplementedError
 
-def Abs(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def abs_(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def AbsWrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def abs_wrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def Add(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    allowed_types = [
-        Field,
-        Group,
-        i8,
-        i16,
-        i32,
-        i64,
-        i128,
-        u8,
-        u16,
-        u32,
-        u64,
-        u128,
-        Scalar,
-    ]
+def add(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
     op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
     if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
         raise TypeError("operands must be literals")
-    op1_type = Literal.primitive_type_map[op1.literal.type]
-    op2_type = Literal.primitive_type_map[op2.literal.type]
-    if not (op1_type in allowed_types and op2_type == op1_type):
-        raise TypeError("invalid operand types")
+    op1_primitive = op1.literal.primitive
+    op2_primitive = op2.literal.primitive
+    if not isinstance(op1_primitive, Add):
+        raise TypeError("operands must be addable")
+    # noinspection PyTypeChecker
     res = LiteralPlaintext(
         literal=Literal(
-            type_=Literal.reverse_primitive_type_map[op1_type],
-            primitive=op1.literal.primitive + op2.literal.primitive
+            type_=op1.literal.type,
+            primitive=op1_primitive + op2_primitive,
         )
     )
     store_plaintext_to_register(res, destination, registers)
 
-def AddWrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def add_wrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
     op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+    if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
+        raise TypeError("operands must be literals")
+    if not isinstance(op1.literal.primitive, AddWrapped):
+        raise TypeError("operands must be addable")
+    # noinspection PyTypeChecker
     res = LiteralPlaintext(
         literal=Literal(
             type_=op1.literal.type,
@@ -86,118 +75,109 @@ def AddWrapped(operands: list[Operand], destination: Register, registers: Regist
     )
     store_plaintext_to_register(res, destination, registers)
 
-def And(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    allowed_types = [bool_, i8, i16, i32, i64, i128, u8, u16, u32, u64, u128]
+def and_(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
     op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
     if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
         raise TypeError("operands must be literals")
-    op1_type = Literal.primitive_type_map[op1.literal.type]
-    op2_type = Literal.primitive_type_map[op2.literal.type]
-    if not (op1_type in allowed_types and op2_type == op1_type):
-        raise TypeError("invalid operand types")
+    if not isinstance(op1.literal.primitive, And):
+        raise TypeError("operands must be andable")
+    # noinspection PyTypeChecker
     res = LiteralPlaintext(
         literal=Literal(
-            type_=Literal.reverse_primitive_type_map[op1_type],
-            primitive=op1.literal.primitive & op2.literal.primitive
+            type_=op1.literal.type,
+            primitive=op1.literal.primitive & op2.literal.primitive,
         )
     )
     store_plaintext_to_register(res, destination, registers)
 
-def AssertEq(operands: list[Operand], registers: Registers, finalize_state: FinalizeState):
-    if len(operands) != 2:
-        raise RuntimeError("invalid number of operands")
+def assert_eq(operands: tuple[Operand, Operand], registers: Registers, finalize_state: FinalizeState):
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
     op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
     if op1 != op2:
         raise AssertionError("assertion failed: {} != {}".format(op1, op2))
 
-def AssertNeq(operands: list[Operand], registers: Registers, finalize_state: FinalizeState):
-    if len(operands) != 2:
-        raise RuntimeError("invalid number of operands")
+def assert_neq(operands: tuple[Operand, Operand], registers: Registers, finalize_state: FinalizeState):
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
     op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
     if op1 == op2:
         raise AssertionError("assertion failed: {} == {}".format(op1, op2))
 
-def CallOp(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def call_op(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def CastOp(operands: list[Operand], destination: Register, cast_type: CastType, program: Program, registers: Registers, finalize_state: FinalizeState):
+def cast_op(operands: list[Operand], destination: Register, cast_type: CastType, program: Program, registers: Registers, finalize_state: FinalizeState):
 
     def verify_struct_type(struct_plaintext: StructPlaintext, verify_struct_definition: Struct):
         if len(struct_plaintext.members) != len(verify_struct_definition.members):
             raise RuntimeError("invalid number of members")
         for i, (identifier, member_type) in enumerate(verify_struct_definition.members):
-            identifier: Identifier
-            member_type: PlaintextType
             member_name, member_value = struct_plaintext.members[i]
-            member_name: Identifier
-            member_value: Plaintext
             if member_name != identifier:
                 raise RuntimeError("invalid member name")
             if member_value.type.value != member_type.type.value:
                 raise RuntimeError("invalid member type")
-            if member_value.type == Plaintext.Type.Literal:
-                member_value: LiteralPlaintext
-                member_type: LiteralPlaintextType
+            if isinstance(member_value, LiteralPlaintext):
+                member_type = cast(LiteralPlaintextType, member_type)
+                # noinspection PyUnresolvedReferences
                 if member_value.literal.type.value != member_type.literal_type.value:
                     raise RuntimeError("invalid member type")
-            elif member_value.type == Plaintext.Type.Struct:
-                member_value: StructPlaintext
-                member_type: StructPlaintextType
+            elif isinstance(member_value, StructPlaintext):
+                member_type = cast(StructPlaintextType, member_type)
                 sub_struct_definition = program.structs[member_type.struct]
                 verify_struct_type(member_value, sub_struct_definition)
+
     if not isinstance(cast_type, RegisterTypeCastType):
         raise NotImplementedError
-    register_type: RegisterType = cast_type.register_type
-    if register_type == RegisterType.Type.Plaintext:
+    register_type = cast_type.register_type
+    if not isinstance(register_type, PlaintextRegisterType):
         raise RuntimeError("invalid register type")
-    register_type: PlaintextRegisterType
-    plaintext_type: PlaintextType = register_type.plaintext_type
-    if plaintext_type.type != PlaintextType.Type.Struct:
-        plaintext_type: LiteralPlaintextType
+    plaintext_type = register_type.plaintext_type
+    if isinstance(plaintext_type, LiteralPlaintextType):
         if not plaintext_type.literal_type in [LiteralType.Address, LiteralType.Field, LiteralType.Group]:
             raise AssertionError("snarkOS doesn't support casting from this type yet")
         raise NotImplementedError
-    plaintext_type: StructPlaintextType
-    struct_identifier = plaintext_type.struct
-    struct_definition = program.structs[struct_identifier]
-    if len(struct_definition.members) != len(operands):
-        raise RuntimeError("invalid number of operands")
-    members = []
-    for i, (name, _) in enumerate(struct_definition.members):
-        name: Identifier
-        members.append(Tuple[Identifier, Plaintext]((name, load_plaintext_from_operand(operands[i], registers, finalize_state))))
-    struct_plaintext = StructPlaintext(members=Vec[Tuple[Identifier, Plaintext], u8](members))
-    verify_struct_type(struct_plaintext, struct_definition)
-    store_plaintext_to_register(struct_plaintext, destination, registers)
+    elif isinstance(plaintext_type, StructPlaintextType):
+        struct_identifier = plaintext_type.struct
+        struct_definition = program.structs[struct_identifier]
+        if len(struct_definition.members) != len(operands):
+            raise RuntimeError("invalid number of operands")
+        members: list[Tuple[Identifier, Plaintext]] = []
+        for i, (name, _) in enumerate(struct_definition.members):
+            name: Identifier
+            members.append(Tuple[Identifier, Plaintext]((name, load_plaintext_from_operand(operands[i], registers, finalize_state))))
+        struct_plaintext = StructPlaintext(members=Vec[Tuple[Identifier, Plaintext], u8](members))
+        verify_struct_type(struct_plaintext, struct_definition)
+        store_plaintext_to_register(struct_plaintext, destination, registers)
+    else:
+        raise NotImplementedError
 
-def CommitBHP256(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def commit_bhp256(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def CommitBHP512(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def commit_bhp512(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def CommitBHP768(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def commit_bhp768(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def CommitBHP1024(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def commit_bhp1024(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def CommitPED64(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def commit_ped64(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def CommitPED128(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def commit_ped128(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def Div(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def div(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
     op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
     if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
         raise TypeError("operands must be literals")
-    if op1.literal.type != op2.literal.type:
-        raise TypeError("invalid operand types")
+    if not isinstance(op1.literal.primitive, Div):
+        raise TypeError("operands must be divs")
+    # noinspection PyTypeChecker
     res = LiteralPlaintext(
         literal=Literal(
             type_=op1.literal.type,
@@ -206,9 +186,14 @@ def Div(operands: list[Operand], destination: Register, registers: Registers, fi
     )
     store_plaintext_to_register(res, destination, registers)
 
-def DivWrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def div_wrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
     op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+    if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
+        raise TypeError("operands must be literals")
+    if not isinstance(op1.literal.primitive, DivWrapped):
+        raise TypeError("operands must be dividable")
+    # noinspection PyTypeChecker
     res = LiteralPlaintext(
         literal=Literal(
             type_=op1.literal.type,
@@ -217,12 +202,14 @@ def DivWrapped(operands: list[Operand], destination: Register, registers: Regist
     )
     store_plaintext_to_register(res, destination, registers)
 
-def Double(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def double(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def GreaterThan(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def greater_than(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
     op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+    if not isinstance(op1, LiteralPlaintext) or not isinstance(op2, LiteralPlaintext):
+        raise TypeError("operands must be literals")
     if op1 > op2:
         res = LiteralPlaintext(
             literal=Literal(
@@ -234,14 +221,16 @@ def GreaterThan(operands: list[Operand], destination: Register, registers: Regis
         res = LiteralPlaintext(
             literal=Literal(
                 type_=Literal.Type.Boolean,
-                primitive=bool_(False),
+                primitive=bool_(),
             )
         )
     store_plaintext_to_register(res, destination, registers)
 
-def GreaterThanOrEqual(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def greater_than_or_equal(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
     op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+    if not isinstance(op1, LiteralPlaintext) or not isinstance(op2, LiteralPlaintext):
+        raise TypeError("operands must be literals")
     if op1 >= op2:
         res = LiteralPlaintext(
             literal=Literal(
@@ -253,12 +242,12 @@ def GreaterThanOrEqual(operands: list[Operand], destination: Register, registers
         res = LiteralPlaintext(
             literal=Literal(
                 type_=Literal.Type.Boolean,
-                primitive=bool_(False),
+                primitive=bool_(),
             )
         )
     store_plaintext_to_register(res, destination, registers)
 
-def HashBHP256(operands: list[Operand], destination: Register, destination_type: LiteralType, registers: Registers, finalize_state: FinalizeState):
+def hash_bhp256(operands: tuple[Operand, Optional[Operand]], destination: Register, destination_type: LiteralType, registers: Registers, finalize_state: FinalizeState):
     op = load_plaintext_from_operand(operands[0], registers, finalize_state)
     value_type = destination_type.primitive_type
     value = value_type.load(BytesIO(aleo.hash_ops(PlaintextValue(plaintext=op).dump(), "bhp256", destination_type.dump())))
@@ -270,61 +259,43 @@ def HashBHP256(operands: list[Operand], destination: Register, destination_type:
     )
     store_plaintext_to_register(res, destination, registers)
 
-def HashBHP512(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def hash_bhp512(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def HashBHP768(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def hash_bhp768(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def HashBHP1024(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def hash_bhp1024(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def HashPED64(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def hash_ped64(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def HashPED128(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def hash_ped128(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def HashPSD2(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def hash_psd2(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def HashPSD4(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def hash_psd4(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def HashPSD8(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def hash_psd8(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def HashManyPSD2(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def hash_many_psd2(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def HashManyPSD4(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def hash_many_psd4(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def HashManyPSD8(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def hash_many_psd8(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def Inv(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def inv(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def IsEq(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    allowed_types = [
-        Address,
-        bool_,
-        Field,
-        Group,
-        i8,
-        i16,
-        i32,
-        i64,
-        i128,
-        u8,
-        u16,
-        u32,
-        u64,
-        u128,
-        Scalar,
-        Struct,
-    ]
+def is_eq(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
     op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
     # loosely check the types, we don't really expect to run into bad types here
@@ -339,25 +310,7 @@ def IsEq(operands: list[Operand], destination: Register, registers: Registers, f
     store_plaintext_to_register(res, destination, registers)
 
 
-def IsNeq(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    allowed_types = [
-        Address,
-        bool_,
-        Field,
-        Group,
-        i8,
-        i16,
-        i32,
-        i64,
-        i128,
-        u8,
-        u16,
-        u32,
-        u64,
-        u128,
-        Scalar,
-        Struct,
-    ]
+def is_neq(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
     op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
     # loosely check the types, we don't really expect to run into bad types here
@@ -371,9 +324,11 @@ def IsNeq(operands: list[Operand], destination: Register, registers: Registers, 
     )
     store_plaintext_to_register(res, destination, registers)
 
-def LessThan(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def less_than(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
     op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+    if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
+        raise TypeError("operands must be literals")
     if op1 < op2:
         res = LiteralPlaintext(
             literal=Literal(
@@ -390,9 +345,11 @@ def LessThan(operands: list[Operand], destination: Register, registers: Register
         )
     store_plaintext_to_register(res, destination, registers)
 
-def LessThanOrEqual(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def less_than_or_equal(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
     op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+    if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
+        raise TypeError("operands must be literals")
     if op1 <= op2:
         res = LiteralPlaintext(
             literal=Literal(
@@ -408,16 +365,17 @@ def LessThanOrEqual(operands: list[Operand], destination: Register, registers: R
             )
         )
     store_plaintext_to_register(res, destination, registers)
-def Modulo(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def modulo(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def Mul(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def mul(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
     op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
     if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
         raise TypeError("operands must be literals")
-    if op1.literal.type != op2.literal.type:
-        raise TypeError("invalid operand types")
+    if not isinstance(op1.literal.primitive, Mul):
+        raise TypeError("operands must be multiplicative")
+    # noinspection PyTypeChecker
     res = LiteralPlaintext(
         literal=Literal(
             type_=op1.literal.type,
@@ -426,9 +384,14 @@ def Mul(operands: list[Operand], destination: Register, registers: Registers, fi
     )
     store_plaintext_to_register(res, destination, registers)
 
-def MulWrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def mul_wrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
     op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+    if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
+        raise TypeError("operands must be literals")
+    if not isinstance(op1.literal.primitive, MulWrapped):
+        raise TypeError("operands must be multiplicative")
+    # noinspection PyTypeChecker
     res = LiteralPlaintext(
         literal=Literal(
             type_=op1.literal.type,
@@ -437,17 +400,22 @@ def MulWrapped(operands: list[Operand], destination: Register, registers: Regist
     )
     store_plaintext_to_register(res, destination, registers)
 
-def Nand(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def nand(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def Neg(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def neg(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def Nor(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def nor(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def Not(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def not_(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     op = load_plaintext_from_operand(operands[0], registers, finalize_state)
+    if not isinstance(op, LiteralPlaintext):
+        raise TypeError("operand must be literal")
+    if not isinstance(op.literal.primitive, Not):
+        raise TypeError("operand must be invertable")
+    # noinspection PyTypeChecker
     res = LiteralPlaintext(
         literal=Literal(
             type_=Literal.Type.Boolean,
@@ -456,43 +424,42 @@ def Not(operands: list[Operand], destination: Register, registers: Registers, fi
     )
     store_plaintext_to_register(res, destination, registers)
 
-def Or(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def or_(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
     op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
-    op1_type = Literal.primitive_type_map[op1.literal.type]
+    if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
+        raise TypeError("operands must be literals")
+    if not isinstance(op1.literal.primitive, Or):
+        raise TypeError("operands must be bitwise or")
+    # noinspection PyTypeChecker
     res = LiteralPlaintext(
         literal=Literal(
-            type_=Literal.reverse_primitive_type_map[op1_type],
+            type_=op1.literal.type,
             primitive=op1.literal.primitive | op2.literal.primitive
         )
     )
     store_plaintext_to_register(res, destination, registers)
 
-def Pow(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def pow_(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def PowWrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def pow_wrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def Rem(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def rem(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def RemWrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def rem_wrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def Shl(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    allowed_value_types = [i8, i16, i32, i64, i128, u8, u16, u32, u64, u128]
-    allowed_magnitude_types = [u8, u16, u32]
+def shl(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
     op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
     if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
         raise TypeError("operands must be literals")
-    op1_type = Literal.primitive_type_map[op1.literal.type]
-    op2_type = Literal.primitive_type_map[op2.literal.type]
-    if op1_type not in allowed_value_types:
-        raise TypeError("invalid operand types")
-    if op2_type not in allowed_magnitude_types:
-        raise TypeError("invalid operand types")
+    if not isinstance(op1.literal.primitive, Shl):
+        raise TypeError("operands must be shift left")
+    # noinspection PyTypeChecker
     res = LiteralPlaintext(
         literal=Literal(
             type_=op1.literal.type,
@@ -501,20 +468,17 @@ def Shl(operands: list[Operand], destination: Register, registers: Registers, fi
     )
     store_plaintext_to_register(res, destination, registers)
 
-def ShlWrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def shl_wrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def Shr(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    allowed_value_types = [i8, i16, i32, i64, i128, u8, u16, u32, u64, u128]
-    allowed_magnitude_types = [u8, u16, u32]
+def shr(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
     op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
     if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
         raise TypeError("operands must be literals")
-    op1_type = Literal.primitive_type_map[op1.literal.type]
-    op2_type = Literal.primitive_type_map[op2.literal.type]
-    if op1_type not in allowed_value_types or op2_type not in allowed_magnitude_types:
-        raise TypeError("invalid operand types")
+    if not isinstance(op1.literal.primitive, Shr):
+        raise TypeError("operands must be shift right")
+    # noinspection PyTypeChecker
     res = LiteralPlaintext(
         literal=Literal(
             type_=op1.literal.type,
@@ -523,50 +487,39 @@ def Shr(operands: list[Operand], destination: Register, registers: Registers, fi
     )
     store_plaintext_to_register(res, destination, registers)
 
-def ShrWrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def shr_wrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def Square(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def square(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def SquareRoot(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def square_root(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
-def Sub(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    allowed_types = [
-        Field,
-        Group,
-        i8,
-        i16,
-        i32,
-        i64,
-        i128,
-        u8,
-        u16,
-        u32,
-        u64,
-        u128,
-        Scalar,
-    ]
+def sub(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
     op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
     if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
         raise TypeError("operands must be literals")
-    op1_type = Literal.primitive_type_map[op1.literal.type]
-    op2_type = Literal.primitive_type_map[op2.literal.type]
-    if not (op1_type in allowed_types and op2_type == op1_type):
-        raise TypeError("invalid operand types")
+    if not isinstance(op1.literal.primitive, Sub):
+        raise TypeError("operands must be subtractable")
+    # noinspection PyTypeChecker
     res = LiteralPlaintext(
         literal=Literal(
-            type_=Literal.reverse_primitive_type_map[op1_type],
+            type_=op1.literal.type,
             primitive=op1.literal.primitive - op2.literal.primitive
         )
     )
     store_plaintext_to_register(res, destination, registers)
 
-def SubWrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def sub_wrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
     op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+    if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
+        raise TypeError("operands must be literals")
+    if not isinstance(op1.literal.primitive, SubWrapped):
+        raise TypeError("operands must be subtractable")
+    # noinspection PyTypeChecker
     res = LiteralPlaintext(
         literal=Literal(
             type_=op1.literal.type,
@@ -575,7 +528,7 @@ def SubWrapped(operands: list[Operand], destination: Register, registers: Regist
     )
     store_plaintext_to_register(res, destination, registers)
 
-def Ternary(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def ternary(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
     op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
     op3 = load_plaintext_from_operand(operands[2], registers, finalize_state)
@@ -588,69 +541,46 @@ def Ternary(operands: list[Operand], destination: Register, registers: Registers
     else:
         store_plaintext_to_register(op3, destination, registers)
 
-def Xor(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+def xor(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
 
 
-
-instruction_ops = {
-    0: Abs,
-    1: AbsWrapped,
-    2: Add,
-    3: AddWrapped,
-    4: And,
-    5: AssertEq,
-    6: AssertNeq,
-    7: CallOp,
-    8: CastOp,
-    9: CommitBHP256,
-    10: CommitBHP512,
-    11: CommitBHP768,
-    12: CommitBHP1024,
-    13: CommitPED64,
-    14: CommitPED128,
-    15: Div,
-    16: DivWrapped,
-    17: Double,
-    18: GreaterThan,
-    19: GreaterThanOrEqual,
-    20: HashBHP256,
-    21: HashBHP512,
-    22: HashBHP768,
-    23: HashBHP1024,
-    24: HashPED64,
-    25: HashPED128,
-    26: HashPSD2,
-    27: HashPSD4,
-    28: HashPSD8,
-    29: HashManyPSD2,
-    30: HashManyPSD4,
-    31: HashManyPSD8,
-    32: Inv,
-    33: IsEq,
-    34: IsNeq,
-    35: LessThan,
-    36: LessThanOrEqual,
-    37: Modulo,
-    38: Mul,
-    39: MulWrapped,
-    40: Nand,
-    41: Neg,
-    42: Nor,
-    43: Not,
-    44: Or,
-    45: Pow,
-    46: PowWrapped,
-    47: Rem,
-    48: RemWrapped,
-    49: Shl,
-    50: ShlWrapped,
-    51: Shr,
-    52: ShrWrapped,
-    53: Square,
-    54: SquareRoot,
-    55: Sub,
-    56: SubWrapped,
-    57: Ternary,
-    58: Xor
+literal_ops = {
+    IT.Abs: abs_,
+    IT.AbsWrapped: abs_wrapped,
+    IT.Add: add,
+    IT.AddWrapped: add_wrapped,
+    IT.And: and_,
+    IT.Div: div,
+    IT.DivWrapped: div_wrapped,
+    IT.Double: double,
+    IT.GreaterThan: greater_than,
+    IT.GreaterThanOrEqual: greater_than_or_equal,
+    IT.Inv: inv,
+    IT.IsEq: is_eq,
+    IT.IsNeq: is_neq,
+    IT.LessThan: less_than,
+    IT.LessThanOrEqual: less_than_or_equal,
+    IT.Modulo: modulo,
+    IT.Mul: mul,
+    IT.MulWrapped: mul_wrapped,
+    IT.Nand: nand,
+    IT.Neg: neg,
+    IT.Nor: nor,
+    IT.Not: not_,
+    IT.Or: or_,
+    IT.Pow: pow_,
+    IT.PowWrapped: pow_wrapped,
+    IT.Rem: rem,
+    IT.RemWrapped: rem_wrapped,
+    IT.Shl: shl,
+    IT.ShlWrapped: shl_wrapped,
+    IT.Shr: shr,
+    IT.ShrWrapped: shr_wrapped,
+    IT.Square: square,
+    IT.SquareRoot: square_root,
+    IT.Sub: sub,
+    IT.SubWrapped: sub_wrapped,
+    IT.Ternary: ternary,
+    IT.Xor: xor,
 }

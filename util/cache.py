@@ -10,7 +10,7 @@ class FetchError(Exception):
     pass
 
 class Cache(Generic[KT, VT]):
-    def __init__(self, *, max_lifetime: int = 3600, max_size: int = 100, fetch_func: Callable | None = None):
+    def __init__(self, *, max_lifetime: int = 3600, max_size: int = 100, fetch_func: Callable[..., VT] | None = None):
         self._content: dict[KT, VT] = {}
         self.max_lifetime = max_lifetime
         self.max_size = max_size

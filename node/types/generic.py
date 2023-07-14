@@ -6,7 +6,7 @@ from .basic import *
 
 T = TypeVar('T', bound=Serializable)
 TP = TypeVarTuple('TP')
-L = TypeVar('L', bound=Type[Int] | int)
+L = TypeVar('L', bound=TType[Int] | int)
 I_co = TypeVar('I_co', bound=Int, covariant=True)
 
 
@@ -68,7 +68,7 @@ def is_serializable(t: Any) -> TypeGuard[Serializable]:
 # noinspection PyTypeHints
 @access_generic_type
 class Tuple(tuple[*TP], Serializable):
-    types: tuple[Type[*Any]]
+    types: tuple[TType[*Any]]
 
     def __new__(cls, value: tuple[*TP]) -> Self:
         return tuple.__new__(cls, value)
@@ -83,7 +83,7 @@ class Tuple(tuple[*TP], Serializable):
         return b"".join(t.dump() for t in self if is_serializable(t))
 
     @classmethod
-    def load(cls, data: BytesIO, *, types: Optional[tuple[Type[*Serializable]]] = None) -> Self:
+    def load(cls, data: BytesIO, *, types: Optional[tuple[TType[*Serializable]]] = None) -> Self:
         if types is None:
             raise TypeError("expected types")
         value: list[Serializable] = []
@@ -96,7 +96,7 @@ class Tuple(tuple[*TP], Serializable):
 
 @access_generic_type
 class Vec(list[T], Serializable, Generic[T, L]):
-    types: tuple[Type[T], L]
+    types: tuple[TType[T], L]
 
     # noinspection PyMissingConstructor
     def __init__(self, value: list[T]):
@@ -118,7 +118,7 @@ class Vec(list[T], Serializable, Generic[T, L]):
         return res
 
     @classmethod
-    def load(cls, data: BytesIO, *, types: Optional[tuple[type[T], L]] = None) -> Self:
+    def load(cls, data: BytesIO, *, types: Optional[tuple[TType[T], L]] = None) -> Self:
         if types is None:
             raise TypeError("expected types")
         value_type, size_type = types
@@ -130,7 +130,7 @@ class Vec(list[T], Serializable, Generic[T, L]):
 
 
 class Option(Serializable, Generic[T]):
-    types: tuple[Type[T]]
+    types: tuple[TType[T]]
 
     def __init__(self, value: Optional[T]):
         self.value = value
@@ -154,7 +154,7 @@ class Option(Serializable, Generic[T]):
             return self.value.dump()
 
     @classmethod
-    def load(cls, data: BytesIO, *, types: Optional[tuple[Type[T]]] = None) -> Self:
+    def load(cls, data: BytesIO, *, types: Optional[tuple[TType[T]]] = None) -> Self:
         if types is None:
             raise TypeError("expected types")
         is_some = bool_.load(data)

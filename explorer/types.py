@@ -1,4 +1,5 @@
 from enum import IntEnum
+from typing import Any
 
 from node.types import Block
 
@@ -15,43 +16,45 @@ class Message:
         DatabaseError = 103
         DatabaseBlockAdded = 104
 
-    def __init__(self, type_: Type, data: any):
+    def __init__(self, type_: Type, data: Any):
         self.type = type_
         self.data = data
 
+class ExplorerRequest:
+    pass
 
 class Request:
 
-    class ProcessBlock("Request"):
+    class ProcessBlock(ExplorerRequest):
         def __init__(self, block: Block):
             self.block = block
 
-    class GetLatestHeight("Request"):
+    class GetLatestHeight(ExplorerRequest):
         pass
 
-    class GetLatestWeight("Request"):
+    class GetLatestWeight(ExplorerRequest):
         pass
 
-    class GetLatestBlock("Request"):
+    class GetLatestBlock(ExplorerRequest):
         pass
 
-    class GetBlockByHeight("Request"):
+    class GetBlockByHeight(ExplorerRequest):
         def __init__(self, height: int):
             self.height = height
 
-    class GetBlockHashByHeight("Request"):
+    class GetBlockHashByHeight(ExplorerRequest):
         def __init__(self, height: int):
             self.height = height
 
-    class GetBlockHeaderByHeight("Request"):
+    class GetBlockHeaderByHeight(ExplorerRequest):
         def __init__(self, height: int):
             self.height = height
 
-    class RevertToBlock("Request"):
+    class RevertToBlock(ExplorerRequest):
         def __init__(self, height: int):
             self.height = height
 
-    class GetDevMode("Request"):
+    class GetDevMode(ExplorerRequest):
         pass
 
     # class

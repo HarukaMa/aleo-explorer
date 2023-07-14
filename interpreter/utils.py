@@ -17,51 +17,49 @@ class FinalizeState:
             raise RuntimeError("invalid random seed length")
 
 def load_plaintext_from_operand(operand: Operand, registers: Registers, finalize_state: FinalizeState) -> Plaintext:
-    match operand.type:
-        case Operand.Type.Literal:
-            operand: LiteralOperand
-            return LiteralPlaintext(literal=operand.literal)
-        case Operand.Type.Register:
-            operand: RegisterOperand
-            register: Register = operand.register
-            match register.type:
-                case Register.Type.Locator:
-                    register: LocatorRegister
-                    return registers[int(register.locator)]
-                case Register.Type.Member:
-                    register: MemberRegister
-                    struct_: StructPlaintext = registers[int(register.locator)]
-                    if not isinstance(struct_, StructPlaintext):
-                        raise TypeError("register is not struct")
-                    for i, identifier in enumerate(register.identifiers):
-                        if i == len(register.identifiers) - 1:
-                            return struct_.get_member(identifier)
-                        else:
-                            struct_ = struct_.get_member(identifier)
-        case Operand.Type.BlockHeight:
-            return LiteralPlaintext(
-                literal=Literal(
-                    type_=Literal.Type.U32,
-                    primitive=finalize_state.block_height
-                )
-            )
-        case _:
-            raise NotImplementedError
-
-def store_plaintext_to_register(plaintext: Plaintext, register: Register, registers: Registers):
-    match register.type:
-        case Register.Type.Locator:
-            register: LocatorRegister
-            registers[int(register.locator)] = plaintext
-        case Register.Type.Member:
-            register: MemberRegister
-            struct_: StructPlaintext = registers[int(register.locator)]
+    if isinstance(operand, LiteralOperand):
+        return LiteralPlaintext(literal=operand.literal)
+    elif isinstance(operand, RegisterOperand):
+        register = operand.register
+        if isinstance(register, LocatorRegister):
+            return registers[int(register.locator)]
+        elif isinstance(register, MemberRegister):
+            struct_ = registers[int(register.locator)]
             if not isinstance(struct_, StructPlaintext):
                 raise TypeError("register is not struct")
             for i, identifier in enumerate(register.identifiers):
                 if i == len(register.identifiers) - 1:
-                    struct_.set_member(identifier, plaintext)
+                    return struct_.get_member(identifier)
                 else:
                     struct_ = struct_.get_member(identifier)
-        case _:
+                    if not isinstance(struct_, StructPlaintext):
+                        raise TypeError("register is not struct")
+            raise ValueError("unreachable")
+        else:
             raise NotImplementedError
+    elif isinstance(operand, BlockHeightOperand):
+        return LiteralPlaintext(
+            literal=Literal(
+                type_=Literal.Type.U32,
+                primitive=finalize_state.block_height
+            )
+        )
+    else:
+        raise NotImplementedError
+
+def store_plaintext_to_register(plaintext: Plaintext, register: Register, registers: Registers):
+    if isinstance(register, LocatorRegister):
+        registers[int(register.locator)] = plaintext
+    elif isinstance(register, MemberRegister):
+        struct_ = registers[int(register.locator)]
+        if not isinstance(struct_, StructPlaintext):
+            raise TypeError("register is not struct")
+        for i, identifier in enumerate(register.identifiers):
+            if i == len(register.identifiers) - 1:
+                struct_.set_member(identifier, plaintext)
+            else:
+                struct_ = struct_.get_member(identifier)
+                if not isinstance(struct_, StructPlaintext):
+                    raise TypeError("register is not struct")
+    else:
+        raise NotImplementedError

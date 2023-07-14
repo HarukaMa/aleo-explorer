@@ -9,15 +9,15 @@ from db import Database
 from interpreter.interpreter import init_builtin_program
 from node import Node
 from node.testnet3 import Testnet3
-from node.types import Block
-from .types import Request, Message
+from node.types import Block, BlockHash
+from .types import Request, Message, ExplorerRequest
 
 
 class Explorer:
 
     def __init__(self):
         self.task = None
-        self.message_queue = asyncio.Queue()
+        self.message_queue: asyncio.Queue[Message] = asyncio.Queue()
         self.node = None
         self.db = Database(server=os.environ["DB_HOST"], user=os.environ["DB_USER"], password=os.environ["DB_PASS"],
                            database=os.environ["DB_DATABASE"], schema=os.environ["DB_SCHEMA"],
@@ -26,8 +26,7 @@ class Explorer:
         # states
         self.dev_mode = False
         self.latest_height = 0
-        self.latest_block_hash = Testnet3.genesis_block.block_hash
-        self.db_lock = asyncio.Lock()
+        self.latest_block_hash: BlockHash = Testnet3.genesis_block.block_hash
         #self.light_node_state = LightNodeState()
 
     def start(self):
@@ -36,30 +35,25 @@ class Explorer:
     async def message(self, msg: Message):
         await self.message_queue.put(msg)
 
-    async def node_request(self, request):
-        await self.db_lock.acquire()
-        try:
-            match type(request):
-                case Request.GetLatestHeight:
-                    return self.latest_height
-                case Request.ProcessBlock:
-                    await self.add_block(request.block)
-                case Request.GetBlockByHeight:
-                    return await self.db.get_block_by_height(request.height)
-                case Request.GetBlockHashByHeight:
-                    if request.height == self.latest_height:
-                        return self.latest_block_hash
-                    return await self.db.get_block_hash_by_height(request.height)
-                case Request.GetBlockHeaderByHeight:
-                    return await self.db.get_block_header_by_height(request.height)
-                case Request.RevertToBlock:
-                    await self.revert_to_block(request.height)
-                case Request.GetDevMode:
-                    return self.dev_mode
-                case _:
-                    print("unhandled explorer request")
-        finally:
-            self.db_lock.release()
+    async def node_request(self, request: ExplorerRequest):
+        if isinstance(request, Request.GetLatestHeight):
+            return self.latest_height
+        elif isinstance(request, Request.ProcessBlock):
+            await self.add_block(request.block)
+        elif isinstance(request, Request.GetBlockByHeight):
+            return await self.db.get_block_by_height(request.height)
+        elif isinstance(request, Request.GetBlockHashByHeight):
+            if request.height == self.latest_height:
+                return self.latest_block_hash
+            return await self.db.get_block_hash_by_height(request.height)
+        elif isinstance(request, Request.GetBlockHeaderByHeight):
+            return await self.db.get_block_header_by_height(request.height)
+        elif isinstance(request, Request.RevertToBlock):
+            raise NotImplementedError
+        elif isinstance(request, Request.GetDevMode):
+            return self.dev_mode
+        else:
+            print("unhandled explorer request")
 
     async def check_genesis(self):
         height = await self.db.get_latest_height()
@@ -71,13 +65,19 @@ class Explorer:
             await self.db.connect()
             await self.check_dev_mode()
             await self.check_genesis()
-            self.latest_height = await self.db.get_latest_height()
-            self.latest_block_hash = await self.db.get_block_hash_by_height(self.latest_height)
+            latest_height = await self.db.get_latest_height()
+            if latest_height is None:
+                raise ValueError("no block in database")
+            self.latest_height = latest_height
+            latest_block_hash = await self.db.get_block_hash_by_height(self.latest_height)
+            if latest_block_hash is None:
+                raise ValueError("no block in database")
+            self.latest_block_hash = latest_block_hash
             await self.db.migrate()
             print(f"latest height: {self.latest_height}")
             self.node = Node(explorer_message=self.message, explorer_request=self.node_request)
             await self.node.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4133")))
-            asyncio.create_task(webui.run(None))
+            asyncio.create_task(webui.run())
             asyncio.create_task(api.run())
             while True:
                 msg = await self.message_queue.get()
@@ -99,8 +99,6 @@ class Explorer:
                     case Message.Type.DatabaseBlockAdded:
                         # maybe do something later?
                         pass
-                    case _:
-                        raise ValueError("unhandled explorer message type")
         except Exception as e:
             print("explorer error:", e)
             traceback.print_exc()

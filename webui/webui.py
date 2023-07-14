@@ -156,6 +156,7 @@ async def startup():
                   database=os.environ["DB_DATABASE"], schema=os.environ["DB_SCHEMA"],
                   message_callback=noop)
     await db.connect()
+    # noinspection PyUnresolvedReferences
     app.state.db = db
 
 
@@ -174,7 +175,7 @@ app = Starlette(
 )
 
 
-async def run(_):
+async def run():
     config = uvicorn.Config("webui:app", reload=True, log_level="info", port=int(os.environ.get("PORT", 8000)))
     logging.getLogger("uvicorn.access").handlers = []
     server = UvicornServer(config=config)

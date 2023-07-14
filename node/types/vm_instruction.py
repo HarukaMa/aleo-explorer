@@ -1,5 +1,4 @@
 from enum import auto, Enum
-from types import NoneType
 from typing import Literal as TLiteral
 
 from .vm_basic import *
@@ -111,17 +110,17 @@ class Literal(Serializable): # enum
     def __eq__(self, other: object):
         if not isinstance(other, Literal):
             return False
-        if not isinstance(self.primitive, Comparable):
+        if not isinstance(self.primitive, Equal):
             return False
         return self.type == other.type and self.primitive == other.primitive
 
     def __gt__(self, other: Self):
-        if not isinstance(self.primitive, Comparable):
+        if not isinstance(self.primitive, Compare):
             return False
         return self.type == other.type and self.primitive > other.primitive
 
     def __ge__(self, other: Self):
-        if not isinstance(self.primitive, Comparable):
+        if not isinstance(self.primitive, Compare):
             return False
         return self.type == other.type and self.primitive >= other.primitive
 
@@ -412,8 +411,10 @@ N = TypeVar("N", bound=int)
 class Literals(Serializable, Generic[N]):
     types: tuple[N]
 
-    def __init__(self, *, operands: Vec[Operand, N], destination: Register):
+    def __init__(self, *, operands: list[Operand], destination: Register):
         self.num_operands = self.types[0]
+        if len(operands) != self.num_operands:
+            raise ValueError("incorrect number of operands")
         self.operands = operands
         self.destination = destination
 
@@ -433,22 +434,28 @@ class Literals(Serializable, Generic[N]):
         for _ in range(num_operands):
             operands.append(Operand.load(data))
         destination = Register.load(data)
-        return cls(operands=Vec[Operand, TLiteral[num_operands]](operands), destination=destination)
+        return cls(operands=operands, destination=destination)
 
 
 @access_generic_type
 class AssertInstruction(Serializable, Generic[N]):
     types: tuple[N]
+    variant: N
 
-    def __init__(self, *, operands: Vec[Operand, 2]):
+    def __init__(self, *, operands: tuple[Operand, Operand]):
+        self.variant = self.types[0]
         self.operands = operands
 
     def dump(self) -> bytes:
-        return self.operands.dump()
+        return b"".join(operand.dump() for operand in self.operands)
 
     @classmethod
     def load(cls, data: BytesIO, *, types: Optional[tuple[N]] = None):
-        return cls(operands=Vec[Operand, 2].load(data))
+        if types is None:
+            raise ValueError("expected types")
+        op1 = Operand.load(data)
+        op2 = Operand.load(data)
+        return cls(operands=(op1, op2))
 
 
 class Locator(Serializable):
@@ -798,23 +805,24 @@ class CommitInstruction(Serializable, Generic[E]):
         CommitPED64 = 4
         CommitPED128 = 5
 
-    def __init__(self, *, operands: Vec[Operand, 2], destination: Register, destination_type: LiteralType):
+    def __init__(self, *, operands: tuple[Operand, Operand], destination: Register, destination_type: LiteralType):
         self.type = self.types[0]
         self.operands = operands
         self.destination = destination
         self.destination_type = destination_type
 
     def dump(self) -> bytes:
-        return self.operands.dump() + self.destination.dump() + self.destination_type.dump()
+        return b"".join(o.dump() for o in self.operands) + self.destination.dump() + self.destination_type.dump()
 
     @classmethod
     def load(cls, data: BytesIO, *, types: Optional[tuple[E]] = None):
         if not types:
             raise ValueError("expected types")
-        operands = Vec[Operand, 2].load(data)
+        op1 = Operand.load(data)
+        op2 = Operand.load(data)
         destination = Register.load(data)
         destination_type = LiteralType.load(data)
-        return cls(operands=operands, destination=destination, destination_type=destination_type)
+        return cls(operands=(op1, op2), destination=destination, destination_type=destination_type)
 
 
 @access_generic_type
@@ -836,20 +844,20 @@ class HashInstruction(Serializable, Generic[E]):
         HashManyPSD8 = 11
 
     # shortcut here so check doesn't work
-    def __init__(self, *, operands: Vec[Operand | NoneType, 2], destination: Register, destination_type: LiteralType):
+    def __init__(self, *, operands: tuple[Operand, Optional[Operand]], destination: Register, destination_type: LiteralType):
         self.type = self.types[0]
         self.operands = operands
         self.destination = destination
         self.destination_type = destination_type
 
     @classmethod
-    def num_operands(cls, type_: Type):
+    def num_operands(cls, type_: Type) -> int:
         if type_ in [cls.Type.HashManyPSD2, cls.Type.HashManyPSD4, cls.Type.HashManyPSD8]:
             return 2
         return 1
 
     def dump(self) -> bytes:
-        return self.operands.dump() + self.destination.dump() + self.destination_type.dump()
+        return b"".join(op.dump() for op in self.operands if op) + self.destination.dump() + self.destination_type.dump()
 
     @classmethod
     def load(cls, data: BytesIO, *, types: Optional[tuple[E]] = None):
@@ -857,10 +865,15 @@ class HashInstruction(Serializable, Generic[E]):
             raise ValueError("expected types")
         if not isinstance(types[0], cls.Type):
             raise ValueError("expected types to be of type HashInstruction.Type")
-        operands = Vec[Operand, cls.num_operands(types[0])].load(data)
+        size = cls.num_operands(types[0])
+        op1 = Operand.load(data)
+        if size == 2:
+            op2 = Operand.load(data)
+        else:
+            op2 = None
         destination = Register.load(data)
         destination_type = LiteralType.load(data)
-        return cls(operands=operands, destination=destination, destination_type=destination_type)
+        return cls(operands=(op1, op2), destination=destination, destination_type=destination_type)
 
 
 class Instruction(Serializable):
@@ -936,65 +949,65 @@ class Instruction(Serializable):
     # Some types are not implemented as Literals originally,
     # but binary wise they have the same behavior (operands, destination)
     type_map = {
-        Type.Abs: Literals[1],
-        Type.AbsWrapped: Literals[1],
-        Type.Add: Literals[2],
-        Type.AddWrapped: Literals[2],
-        Type.And: Literals[2],
-        Type.AssertEq: AssertInstruction[0],
-        Type.AssertNeq: AssertInstruction[1],
+        Type.Abs: Literals[TLiteral[1]],
+        Type.AbsWrapped: Literals[TLiteral[1]],
+        Type.Add: Literals[TLiteral[2]],
+        Type.AddWrapped: Literals[TLiteral[2]],
+        Type.And: Literals[TLiteral[2]],
+        Type.AssertEq: AssertInstruction[TLiteral[0]],
+        Type.AssertNeq: AssertInstruction[TLiteral[1]],
         Type.Call: CallInstruction,
         Type.Cast: CastInstruction,
-        Type.CommitBHP256: CommitInstruction[CommitInstruction.Type.CommitBHP256],
-        Type.CommitBHP512: CommitInstruction[CommitInstruction.Type.CommitBHP512],
-        Type.CommitBHP768: CommitInstruction[CommitInstruction.Type.CommitBHP768],
-        Type.CommitBHP1024: CommitInstruction[CommitInstruction.Type.CommitBHP1024],
-        Type.CommitPED64: CommitInstruction[CommitInstruction.Type.CommitPED64],
-        Type.CommitPED128: CommitInstruction[CommitInstruction.Type.CommitPED128],
-        Type.Div: Literals[2],
-        Type.DivWrapped: Literals[2],
-        Type.Double: Literals[1],
-        Type.GreaterThan: Literals[2],
-        Type.GreaterThanOrEqual: Literals[2],
-        Type.HashBHP256: HashInstruction[HashInstruction.Type.HashBHP256],
-        Type.HashBHP512: HashInstruction[HashInstruction.Type.HashBHP512],
-        Type.HashBHP768: HashInstruction[HashInstruction.Type.HashBHP768],
-        Type.HashBHP1024: HashInstruction[HashInstruction.Type.HashBHP1024],
-        Type.HashPED64: HashInstruction[HashInstruction.Type.HashPED64],
-        Type.HashPED128: HashInstruction[HashInstruction.Type.HashPED128],
-        Type.HashPSD2: HashInstruction[HashInstruction.Type.HashPSD2],
-        Type.HashPSD4: HashInstruction[HashInstruction.Type.HashPSD4],
-        Type.HashPSD8: HashInstruction[HashInstruction.Type.HashPSD8],
-        Type.HashManyPSD2: HashInstruction[HashInstruction.Type.HashManyPSD2],
-        Type.HashManyPSD4: HashInstruction[HashInstruction.Type.HashManyPSD4],
-        Type.HashManyPSD8: HashInstruction[HashInstruction.Type.HashManyPSD8],
-        Type.Inv: Literals[1],
-        Type.IsEq: Literals[2],
-        Type.IsNeq: Literals[2],
-        Type.LessThan: Literals[2],
-        Type.LessThanOrEqual: Literals[2],
-        Type.Modulo: Literals[2],
-        Type.Mul: Literals[2],
-        Type.MulWrapped: Literals[2],
-        Type.Nand: Literals[2],
-        Type.Neg: Literals[1],
-        Type.Nor: Literals[2],
-        Type.Not: Literals[1],
-        Type.Or: Literals[2],
-        Type.Pow: Literals[2],
-        Type.PowWrapped: Literals[2],
-        Type.Rem: Literals[2],
-        Type.RemWrapped: Literals[2],
-        Type.Shl: Literals[2],
-        Type.ShlWrapped: Literals[2],
-        Type.Shr: Literals[2],
-        Type.ShrWrapped: Literals[2],
-        Type.Square: Literals[1],
-        Type.SquareRoot: Literals[1],
-        Type.Sub: Literals[2],
-        Type.SubWrapped: Literals[2],
-        Type.Ternary: Literals[3],
-        Type.Xor: Literals[2],
+        Type.CommitBHP256: CommitInstruction[TLiteral[CommitInstruction.Type.CommitBHP256]],
+        Type.CommitBHP512: CommitInstruction[TLiteral[CommitInstruction.Type.CommitBHP512]],
+        Type.CommitBHP768: CommitInstruction[TLiteral[CommitInstruction.Type.CommitBHP768]],
+        Type.CommitBHP1024: CommitInstruction[TLiteral[CommitInstruction.Type.CommitBHP1024]],
+        Type.CommitPED64: CommitInstruction[TLiteral[CommitInstruction.Type.CommitPED64]],
+        Type.CommitPED128: CommitInstruction[TLiteral[CommitInstruction.Type.CommitPED128]],
+        Type.Div: Literals[TLiteral[2]],
+        Type.DivWrapped: Literals[TLiteral[2]],
+        Type.Double: Literals[TLiteral[1]],
+        Type.GreaterThan: Literals[TLiteral[2]],
+        Type.GreaterThanOrEqual: Literals[TLiteral[2]],
+        Type.HashBHP256: HashInstruction[TLiteral[HashInstruction.Type.HashBHP256]],
+        Type.HashBHP512: HashInstruction[TLiteral[HashInstruction.Type.HashBHP512]],
+        Type.HashBHP768: HashInstruction[TLiteral[HashInstruction.Type.HashBHP768]],
+        Type.HashBHP1024: HashInstruction[TLiteral[HashInstruction.Type.HashBHP1024]],
+        Type.HashPED64: HashInstruction[TLiteral[HashInstruction.Type.HashPED64]],
+        Type.HashPED128: HashInstruction[TLiteral[HashInstruction.Type.HashPED128]],
+        Type.HashPSD2: HashInstruction[TLiteral[HashInstruction.Type.HashPSD2]],
+        Type.HashPSD4: HashInstruction[TLiteral[HashInstruction.Type.HashPSD4]],
+        Type.HashPSD8: HashInstruction[TLiteral[HashInstruction.Type.HashPSD8]],
+        Type.HashManyPSD2: HashInstruction[TLiteral[HashInstruction.Type.HashManyPSD2]],
+        Type.HashManyPSD4: HashInstruction[TLiteral[HashInstruction.Type.HashManyPSD4]],
+        Type.HashManyPSD8: HashInstruction[TLiteral[HashInstruction.Type.HashManyPSD8]],
+        Type.Inv: Literals[TLiteral[1]],
+        Type.IsEq: Literals[TLiteral[2]],
+        Type.IsNeq: Literals[TLiteral[2]],
+        Type.LessThan: Literals[TLiteral[2]],
+        Type.LessThanOrEqual: Literals[TLiteral[2]],
+        Type.Modulo: Literals[TLiteral[2]],
+        Type.Mul: Literals[TLiteral[2]],
+        Type.MulWrapped: Literals[TLiteral[2]],
+        Type.Nand: Literals[TLiteral[2]],
+        Type.Neg: Literals[TLiteral[1]],
+        Type.Nor: Literals[TLiteral[2]],
+        Type.Not: Literals[TLiteral[1]],
+        Type.Or: Literals[TLiteral[2]],
+        Type.Pow: Literals[TLiteral[2]],
+        Type.PowWrapped: Literals[TLiteral[2]],
+        Type.Rem: Literals[TLiteral[2]],
+        Type.RemWrapped: Literals[TLiteral[2]],
+        Type.Shl: Literals[TLiteral[2]],
+        Type.ShlWrapped: Literals[TLiteral[2]],
+        Type.Shr: Literals[TLiteral[2]],
+        Type.ShrWrapped: Literals[TLiteral[2]],
+        Type.Square: Literals[TLiteral[1]],
+        Type.SquareRoot: Literals[TLiteral[1]],
+        Type.Sub: Literals[TLiteral[2]],
+        Type.SubWrapped: Literals[TLiteral[2]],
+        Type.Ternary: Literals[TLiteral[3]],
+        Type.Xor: Literals[TLiteral[2]],
     }
 
     # used by feature hash
@@ -1131,12 +1144,8 @@ class Instruction(Serializable):
         Type.Xor: 2_000,
     }
 
-    def a(self, b: Vec[u8, u8]):
-        reveal_type(b)
-
-    def __init__(self, *, type_: Type, literals: Literals):
+    def __init__(self, *, type_: Type, literals: Literals[Any] | AssertInstruction[Any] | CallInstruction | CastInstruction | CommitInstruction[Any] | HashInstruction[Any]):
         self.type = type_
-        reveal_type(literals)
         self.literals = literals
 
     def dump(self) -> bytes:
@@ -1146,8 +1155,7 @@ class Instruction(Serializable):
     def load(cls, data: BytesIO):
         type_ = cls.Type.load(data)
         instruction_type = cls.type_map[type_]
-        literals: Literals | AssertInstruction | CallInstruction | CastInstruction | CommitInstruction | HashInstruction = instruction_type.load(data)
-        reveal_type(literals)
+        literals = instruction_type.load(data)
         return cls(type_=type_, literals=literals)
 
     @property
@@ -1155,7 +1163,7 @@ class Instruction(Serializable):
         if self.type in (self.Type.HashPSD2, self.Type.HashPSD4, self.Type.HashPSD8):
             if not isinstance(self, HashInstruction):
                 raise ValueError(f"expected HashInstruction, got {self}")
-            inst: HashInstruction = self
+            inst = self
             # need to redesign the fee map to go fully static
             fee_dict: dict[str, int] = Instruction.fee_map[self.type] # type: ignore[reportGeneralTypeIssues]
             if inst.destination_type in (LiteralType.Address, LiteralType.Group):
