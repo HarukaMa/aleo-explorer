@@ -1036,7 +1036,7 @@ class Deployment(Serializable):
     def cost(self) -> tuple[int, int]:
         from node.testnet3 import Testnet3
         storage_cost = len(self.dump()) * Testnet3.deployment_fee_multiplier
-        namespace_cost = 10 ** max(0, 10 - len(self.program.id.name.data)) * 1e6
+        namespace_cost = 10 ** max(0, 10 - len(self.program.id.name.data)) * 1000000
         return storage_cost, namespace_cost
 
 
