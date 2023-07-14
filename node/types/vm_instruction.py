@@ -159,6 +159,9 @@ class Identifier(Serializable):
     def __str__(self):
         return self.data
 
+    def __repr__(self):
+        return self.data
+
     def __eq__(self, other: object):
         if isinstance(other, str):
             return self.data == other
@@ -412,7 +415,7 @@ class Literals(Serializable, Generic[N]):
     types: tuple[N]
 
     def __init__(self, *, operands: list[Operand], destination: Register):
-        self.num_operands = self.types[0]
+        self.num_operands = get_args(self.types[0])[0]
         if len(operands) != self.num_operands:
             raise ValueError("incorrect number of operands")
         self.operands = operands
@@ -429,7 +432,7 @@ class Literals(Serializable, Generic[N]):
     def load(cls, data: BytesIO, *, types: Optional[tuple[N]] = None):
         if types is None:
             raise ValueError("types must be specified")
-        num_operands = types[0]
+        num_operands = get_args(types[0])[0]
         operands: list[Operand] = []
         for _ in range(num_operands):
             operands.append(Operand.load(data))
@@ -791,11 +794,11 @@ class CastInstruction(Serializable):
         cast_Type = CastType.load(data)
         return cls(operands=operands, destination=destination, cast_type=cast_Type)
 
-E = TypeVar('E', bound=Enum)
+A = TypeVar('A')
 
 @access_generic_type
-class CommitInstruction(Serializable, Generic[E]):
-    types: tuple[E]
+class CommitInstruction(Serializable, Generic[A]):
+    types: tuple[A]
 
     class Type(Enum):
         CommitBHP256 = 0
@@ -806,7 +809,7 @@ class CommitInstruction(Serializable, Generic[E]):
         CommitPED128 = 5
 
     def __init__(self, *, operands: tuple[Operand, Operand], destination: Register, destination_type: LiteralType):
-        self.type = self.types[0]
+        self.type = get_args(self.types[0])[0]
         self.operands = operands
         self.destination = destination
         self.destination_type = destination_type
@@ -815,7 +818,7 @@ class CommitInstruction(Serializable, Generic[E]):
         return b"".join(o.dump() for o in self.operands) + self.destination.dump() + self.destination_type.dump()
 
     @classmethod
-    def load(cls, data: BytesIO, *, types: Optional[tuple[E]] = None):
+    def load(cls, data: BytesIO, *, types: Optional[tuple[A]] = None):
         if not types:
             raise ValueError("expected types")
         op1 = Operand.load(data)
@@ -826,8 +829,8 @@ class CommitInstruction(Serializable, Generic[E]):
 
 
 @access_generic_type
-class HashInstruction(Serializable, Generic[E]):
-    types: tuple[E]
+class HashInstruction(Serializable, Generic[A]):
+    types: tuple[A]
 
     class Type(Enum):
         HashBHP256 = 0
@@ -845,13 +848,13 @@ class HashInstruction(Serializable, Generic[E]):
 
     # shortcut here so check doesn't work
     def __init__(self, *, operands: tuple[Operand, Optional[Operand]], destination: Register, destination_type: LiteralType):
-        self.type = self.types[0]
+        self.type = get_args(self.types[0])[0]
         self.operands = operands
         self.destination = destination
         self.destination_type = destination_type
 
     @classmethod
-    def num_operands(cls, type_: Type) -> int:
+    def num_operands(cls, type_: Type, **_: Any) -> int:
         if type_ in [cls.Type.HashManyPSD2, cls.Type.HashManyPSD4, cls.Type.HashManyPSD8]:
             return 2
         return 1
@@ -860,12 +863,10 @@ class HashInstruction(Serializable, Generic[E]):
         return b"".join(op.dump() for op in self.operands if op) + self.destination.dump() + self.destination_type.dump()
 
     @classmethod
-    def load(cls, data: BytesIO, *, types: Optional[tuple[E]] = None):
+    def load(cls, data: BytesIO, *, types: Optional[tuple[A]] = None):
         if types is None:
             raise ValueError("expected types")
-        if not isinstance(types[0], cls.Type):
-            raise ValueError("expected types to be of type HashInstruction.Type")
-        size = cls.num_operands(types[0])
+        size = cls.num_operands(get_args(types[0])[0])
         op1 = Operand.load(data)
         if size == 2:
             op2 = Operand.load(data)

@@ -6,7 +6,7 @@ import traceback
 from asyncio import StreamReader, StreamWriter
 from typing import Awaitable
 
-import explorer
+import explorer.types as explorer
 # from .light_node import LightNodeState
 from .testnet3.param import Testnet3
 from .types import *  # too many types

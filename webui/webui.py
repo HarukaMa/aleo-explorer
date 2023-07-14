@@ -11,7 +11,6 @@ from starlette.responses import FileResponse
 from starlette.routing import Route, Mount
 from starlette.staticfiles import StaticFiles
 
-from explorer import Message
 from middleware.asgi_logger import AccessLoggerMiddleware
 from middleware.minify import MinifyMiddleware
 from middleware.server_timing import ServerTimingMiddleware
@@ -154,7 +153,7 @@ exc_handlers = {
 }
 
 async def startup():
-    async def noop(_: Message): pass
+    async def noop(_: Any): pass
 
     # different thread so need to get a new database instance
     db = Database(server=os.environ["DB_HOST"], user=os.environ["DB_USER"], password=os.environ["DB_PASS"],

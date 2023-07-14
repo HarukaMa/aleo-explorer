@@ -1,6 +1,6 @@
 from functools import partial, lru_cache
 from types import GenericAlias, MethodType
-from typing import Generic, TypeVar, get_args, Optional, Callable, TypeVarTuple, TypeGuard
+from typing import Generic, TypeVar, get_args, Optional, Callable, TypeVarTuple, TypeGuard, cast
 
 from .basic import *
 
@@ -68,7 +68,7 @@ def is_serializable(t: Any) -> TypeGuard[Serializable]:
 # noinspection PyTypeHints
 @access_generic_type
 class Tuple(tuple[*TP], Serializable):
-    types: tuple[TType[*Any]]
+    types: tuple[TType[Any], ...]
 
     def __new__(cls, value: tuple[*TP]) -> Self:
         return tuple.__new__(cls, value)
@@ -83,7 +83,7 @@ class Tuple(tuple[*TP], Serializable):
         return b"".join(t.dump() for t in self if is_serializable(t))
 
     @classmethod
-    def load(cls, data: BytesIO, *, types: Optional[tuple[TType[*Serializable]]] = None) -> Self:
+    def load(cls, data: BytesIO, *, types: Optional[tuple[TType[Any], ...]] = None) -> Self:
         if types is None:
             raise TypeError("expected types")
         value: list[Serializable] = []
@@ -102,12 +102,12 @@ class Vec(list[T], Serializable, Generic[T, L]):
     def __init__(self, value: list[T]):
         list[T].__init__(self, value)
         self.type = self.types[0]
-        print(self.types)
-        if isinstance(self.types[1], int):
-            self.size = self.types[1]
+        if args := get_args(self.types[1]):
+            self.size = args[0]
         else:
-            self.size_type = self.types[1]
-            self.size = self.size_type(len(value))
+            size_type = cast(TType[Int], self.types[1])
+            self.size_type = size_type
+            self.size = size_type(len(value))
 
     def dump(self) -> bytes:
         res = b""
@@ -122,13 +122,15 @@ class Vec(list[T], Serializable, Generic[T, L]):
         if types is None:
             raise TypeError("expected types")
         value_type, size_type = types
-        if isinstance(size_type, int):
-            size = size_type
+        if args := get_args(size_type):
+            size = args[0]
         else:
+            size_type = cast(TType[Int], size_type)
             size = size_type.load(data)
         return cls(list(value_type.load(data) for _ in range(size)))
 
 
+@access_generic_type
 class Option(Serializable, Generic[T]):
     types: tuple[TType[T]]
 

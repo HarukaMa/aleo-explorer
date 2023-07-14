@@ -348,7 +348,7 @@ class bool_(Sized, Serializable):
         self.value = value
 
     def dump(self) -> bytes:
-        return struct.pack("<B", self)
+        return struct.pack("<B", 1 if self else 0)
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -393,6 +393,18 @@ class bool_(Sized, Serializable):
         if isinstance(other, bool):
             return bool_(self.value or other)
         return bool_(self.value or other.value)
+
+    def __bool__(self):
+        return self.value
+
+    def __eq__(self, other: object):
+        if isinstance(other, bool):
+            return self.value == other
+        if isinstance(other, bool_):
+            return self.value == other.value
+        return False
+
+    __match_args__ = ("value",)
 
 
 

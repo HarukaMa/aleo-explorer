@@ -1,5 +1,3 @@
-from typing import cast
-
 from interpreter.environment import Registers
 from interpreter.utils import load_plaintext_from_operand, store_plaintext_to_register, FinalizeState
 from node.types import *
@@ -536,7 +534,7 @@ def ternary(operands: list[Operand], destination: Register, registers: Registers
         raise TypeError("condition must be a literal")
     if op1.literal.type != Literal.Type.Boolean:
         raise TypeError("condition must be a boolean")
-    if op1.literal.primitive == bool_(True):
+    if op1.literal.primitive:
         store_plaintext_to_register(op2, destination, registers)
     else:
         store_plaintext_to_register(op3, destination, registers)

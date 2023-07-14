@@ -1303,6 +1303,9 @@ class LiteralPlaintext(Plaintext):
     def __str__(self):
         return str(self.literal)
 
+    def __repr__(self):
+        return str(self.literal)
+
     def __eq__(self, other: object):
         if not isinstance(other, LiteralPlaintext):
             return False
@@ -1434,6 +1437,9 @@ class StructPlaintext(Plaintext):
         for identifier, plaintext in self.members:
             data[str(identifier)] = str(plaintext)
         return json.dumps(data).replace('"', '')
+
+    def __repr__(self):
+        return str(self)
 
     def get_member(self, identifier: Identifier):
         for member in self.members:

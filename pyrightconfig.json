@@ -1,6 +1,8 @@
 {
     "typeCheckingMode": "strict",
     "exclude": [
-        "middleware/asgi_logger",
+        "middleware/asgi_logger"
     ],
+
+    "reportUnusedImport": false
 }
