@@ -1768,9 +1768,8 @@ class Database:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
-                    # TODO just use LIKE after we disallow uppercase program names
                     await cur.execute(
-                        "SELECT program_id FROM program WHERE program_id ILIKE %s", (f"{program_id}%",)
+                        "SELECT program_id FROM program WHERE program_id LIKE %s", (f"{program_id}%",)
                     )
                     return list(map(lambda x: x['program_id'], await cur.fetchall()))
                 except Exception as e:
