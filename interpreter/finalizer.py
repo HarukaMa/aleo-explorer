@@ -42,30 +42,26 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
                             mapping_cache: dict[Field, list[MappingCacheTuple]]) -> list[dict[str, Any]]:
     registers = Registers()
     operations: list[dict[str, Any]] = []
-    function: Function = program.functions[function_name]
+    function = program.functions[function_name]
     if function.finalize.value is None:
         raise ValueError("invalid finalize function")
-    # noinspection PyTypeChecker
-    finalize: Finalize = function.finalize.value[1]
+    finalize = function.finalize.value[1]
 
     if len(inputs) != len(finalize.inputs):
         raise TypeError("invalid number of inputs")
     for fi, i in zip(finalize.inputs, inputs):
-        fi: FinalizeInput
         if fi.plaintext_type.type.value != i.type.value:
             raise TypeError("invalid input type")
-        ir: Register = fi.register
+        ir = fi.register
         if not isinstance(ir, LocatorRegister):
             raise TypeError("invalid input register type")
         registers[int(ir.locator)] = i
 
-    print("loaded inputs")
-    registers.dump()
+    print(f"Executing finalize function {program.id}/{function_name}({', '.join(str(i) for i in registers)})")
 
     for c in finalize.commands:
         if isinstance(c, InstructionCommand):
             instruction = c.instruction
-            print(disasm_instruction(instruction))
             try:
                 execute_instruction(instruction, program, registers, finalize_state)
             except (AssertionError, OverflowError, ZeroDivisionError) as e:
@@ -75,7 +71,6 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
                 raise
 
         elif isinstance(c, ContainsCommand):
-            print(disasm_command(c))
             mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(c.mapping)))
             if mapping_id not in mapping_cache:
                 mapping_cache[mapping_id] = await mapping_cache_read(db, mapping_id)
@@ -91,11 +86,10 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
                     )
                 )
             )
-            destination: Register = c.destination
+            destination = c.destination
             store_plaintext_to_register(value.plaintext, destination, registers)
 
         elif isinstance(c, GetCommand | GetOrUseCommand):
-            print(disasm_command(c))
             mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(c.mapping)))
             if mapping_id not in mapping_cache:
                 mapping_cache[mapping_id] = await mapping_cache_read(db, mapping_id)
@@ -111,11 +105,10 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
                 value = mapping_cache[mapping_id][index][3]
                 if not isinstance(value, PlaintextValue):
                     raise TypeError("invalid value type")
-            destination: Register = c.destination
+            destination = c.destination
             store_plaintext_to_register(value.plaintext, destination, registers)
 
         elif isinstance(c, SetCommand):
-            print(disasm_command(c))
             mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(c.mapping)))
             if mapping_id not in mapping_cache:
                 mapping_cache[mapping_id] = await mapping_cache_read(db, mapping_id)
@@ -144,7 +137,6 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
             })
 
         elif isinstance(c, RandChaChaCommand):
-            print(disasm_command(c))
             additional_seeds = list(map(lambda x: PlaintextValue(plaintext=load_plaintext_from_operand(x, registers, finalize_state)).dump(), c.operands))
             chacha_seed = aleo.chacha_random_seed(
                 finalize_state.random_seed,
