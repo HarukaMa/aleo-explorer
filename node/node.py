@@ -16,8 +16,8 @@ PING_SLEEP_IN_SECS = 9
 
 class Node:
     def __init__(self, explorer_message: Callable[[explorer.Message], Awaitable[None]], explorer_request: Callable[[explorer.ExplorerRequest], Awaitable[Any]]):
-        self.reader: Optional[StreamReader]
-        self.writer: Optional[StreamWriter]
+        self.reader: Optional[StreamReader] = None
+        self.writer: Optional[StreamWriter] = None
         self.worker_task: asyncio.Task[None]
         self.explorer_message = explorer_message
         self.explorer_request = explorer_request
