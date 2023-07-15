@@ -917,7 +917,7 @@ class VerifyingKey(Serializable):
     version = u8()
 
     # Skipping a layer of marlin::CircuitVerifyingKey
-    def __init__(self, *, circuit_info: CircuitInfo, circuit_commitments: Vec[KZGCommitment, u64], id_: Vec[u8, TLiteral[32]]):
+    def __init__(self, *, circuit_info: CircuitInfo, circuit_commitments: Vec[KZGCommitment, u64], id_: Vec[u8, FixedSize[32]]):
         self.circuit_info = circuit_info
         self.circuit_commitments = circuit_commitments
         self.id = id_
@@ -937,7 +937,7 @@ class VerifyingKey(Serializable):
             raise ValueError("Invalid version")
         circuit_info = CircuitInfo.load(data)
         circuit_commitments = Vec[KZGCommitment, u64].load(data)
-        id_ = Vec[u8, TLiteral[32]].load(data)
+        id_ = Vec[u8, FixedSize[32]].load(data)
         return cls(circuit_info=circuit_info, circuit_commitments=circuit_commitments, id_=id_)
 
 

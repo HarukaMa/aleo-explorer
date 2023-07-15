@@ -1,12 +1,18 @@
 from functools import partial, lru_cache
 from types import GenericAlias, MethodType
-from typing import Generic, TypeVar, get_args, Optional, Callable, TypeVarTuple, TypeGuard, cast
+from typing import Generic, TypeVar, get_args, Optional, Callable, TypeVarTuple, TypeGuard
 
 from .basic import *
 
+
+class FixedSize(int):
+    def __class_getitem__(cls, item: int):
+        return FixedSize(item)
+
+
 T = TypeVar('T', bound=Serializable)
 TP = TypeVarTuple('TP')
-L = TypeVar('L', bound=TType[Int] | int)
+L = TypeVar('L', bound=Int | FixedSize)
 I_co = TypeVar('I_co', bound=Int, covariant=True)
 
 
@@ -93,18 +99,17 @@ class Tuple(tuple[*TP], Serializable):
 
 @access_generic_type
 class Vec(list[T], Serializable, Generic[T, L]):
-    types: tuple[TType[T], L]
+    types: tuple[TType[T], TType[L]]
 
     # noinspection PyMissingConstructor
     def __init__(self, value: list[T]):
         list[T].__init__(self, value)
         self.type = self.types[0]
-        if args := get_args(self.types[1]):
-            self.size = args[0]
+        if isinstance(self.types[1], FixedSize):
+            self.size = self.types[1]
         else:
-            size_type = cast(TType[Int], self.types[1])
-            self.size_type = size_type
-            self.size = size_type(len(value))
+            self.size_type = self.types[1]
+            self.size = self.size_type(len(value))
 
     def dump(self) -> bytes:
         res = b""
@@ -119,10 +124,9 @@ class Vec(list[T], Serializable, Generic[T, L]):
         if types is None:
             raise TypeError("expected types")
         value_type, size_type = types
-        if args := get_args(size_type):
-            size = args[0]
+        if isinstance(size_type, FixedSize):
+            size = size_type
         else:
-            size_type = cast(TType[Int], size_type)
             size = size_type.load(data)
         return cls(list(value_type.load(data) for _ in range(size)))
 
