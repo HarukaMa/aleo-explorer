@@ -1429,7 +1429,13 @@ class StructPlaintext(Plaintext):
             raise ValueError("opening brace not found")
         if not has_end_brace:
             raise ValueError("closing brace not found")
-        return cls(members=Vec[Tuple[Identifier, Plaintext], u8](members))
+        ordered_members: list[Tuple[Identifier, Plaintext]] = []
+        for key, _ in struct_type.members:
+            for member in members:
+                if member[0] == key:
+                    ordered_members.append(member)
+                    break
+        return cls(members=Vec[Tuple[Identifier, Plaintext], u8](ordered_members))
 
 
     def __str__(self):
