@@ -1,7 +1,9 @@
+import os
+
 import minify_html
 from starlette.datastructures import MutableHeaders
-
 from starlette.types import ASGIApp, Message, Scope, Receive, Send
+
 
 class MinifyMiddleware:
     def __init__(self, app: ASGIApp) -> None:
@@ -21,7 +23,7 @@ class MinifyWrapper:
         self.non_html: bool
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http":
+        if scope["type"] != "http" or os.environ.get("DEBUG"):
             return await self.app(scope, receive, send)
 
         async def minify_send(message: Message) -> None:

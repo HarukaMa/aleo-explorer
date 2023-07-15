@@ -60,7 +60,7 @@
         </div>
 
         <div class="data">
-            <a data-open="wallet-method" class="button primary" id="wallet-connect-button" style="display: none">Connect Wallet</a>
+            <button data-open="wallet-method" class="button primary" id="wallet-connect-button" style="display: none">Connect Wallet</button>
             <span id="wallet-connect-text"></span>
             <h4>Function call</h4>
             {% call data_line("Function signature") %}
@@ -168,70 +168,33 @@
         {% endfor %}
         </div>
 
-        <div class="reveal" id="wallet-method" data-reveal>
-            <h3>Choose connect method</h3>
-
-            <p>
-                As a temporary workaround, you can let the explorer acquire your address's view key in order to decrypt
-                inputs and outputs. This is inherently less secure as the key will leave the isolated environment of the
-                wallet. The explorer will not store the key nor send it to anywhere else; the view key will only be used
-                to decrypt the individual ciphertexts.
-            </p>
-            <p>
-                You can also connect the wallet in the normal and safe way, but currently you can only decrypt records.
-            </p>
-            <p>
-                <strong>NOTE:</strong> You will need to revoke the permission in Leo Wallet and connect again if you
-                want to change the method.
-            </p>
-
-            <div class="button-group">
-                <button class="button primary" data-close id="wallet-connect-normal">Safe method</button>
-                <button class="button secondary" data-close id="wallet-connect-unsafe">Unsafe method</button>
-            </div>
-
-            <button class="close-button" data-close aria-label="Close reveal" type="button">
-                <span aria-hidden="true">&times;</span>
-            </button>
-        </div>
-
     </div>
 
-    <script src="static/leo_wallet.js"></script>
-    <script type="module" async>
-        import init, {decrypt_ciphertext, decrypt_record} from '/static/decrypt.js'
-
-        await init()
+    <script async>
 
         const button = document.getElementById("wallet-connect-button")
         const safe_buffon = document.getElementById("wallet-connect-normal")
         const unsafe_buffon = document.getElementById("wallet-connect-unsafe")
         const text = document.getElementById("wallet-connect-text")
         let wallet = null
-        if (window.LeoWallet !== undefined) {
-            wallet = new window.LeoWallet.LeoWalletAdapter({appName: "Haruka's Aleo Explorer"})
-            if (wallet && wallet.readyState !== "NotDetected") {
-                button.style.display = ""
-            }
+        if (window.leoWallet !== undefined) {
+            button.style.display = ""
+            wallet = window.leoWallet
         }
 
-        safe_buffon.addEventListener("click", connect)
-        unsafe_buffon.addEventListener("click", connect_unsafe)
+        button.addEventListener("click", connect)
 
-        async function disconnect(e) {
-            if (wallet.connected) {
+        let connected = false
+
+        async function connect(e) {
+            e.preventDefault()
+            if (connected) {
                 e.stopPropagation()
                 await wallet.disconnect()
                 button.className = "button primary"
                 button.innerText = "Connect Wallet"
                 const records = document.getElementsByClassName("record-data")
                 for (const re of records) {
-                    for (const c of re.children) {
-                        re.removeChild(c)
-                    }
-                }
-                const record_fields = document.getElementsByClassName("record-field")
-                for (const re of record_fields) {
                     for (const c of re.children) {
                         re.removeChild(c)
                     }
@@ -243,38 +206,35 @@
                     }
                 }
                 text.innerText = ""
-                button.removeEventListener("click", disconnect)
+                connected = false
+                return
             }
-        }
-
-        async function connect_unsafe(e) {
-            e.preventDefault()
             try {
-                await wallet.connect(window.AleoWalletBase.DecryptPermission.ViewKeyAccess, window.AleoWalletBase.WalletAdapterNetwork.Testnet)
+                await wallet.connect("AUTO_DECRYPT", "testnet3")
             } catch (e) {
                 button.className = "button alert"
                 button.innerText = "Connect failed"
                 text.innerText = e
             }
-            if (wallet.connected) {
-                button.addEventListener("click", disconnect)
+            if (wallet.publicKey) {
+                connected = true
                 button.className = "button success"
+                button.disabled = true
                 const address = wallet.publicKey
                 button.innerHTML = `Connected to address <span class="mono">${address.substring(0, 9) + "..." + address.substring(address.length - 6)}</span>`
                 text.innerText = "Trying to decrypt all ciphertexts..."
                 const tpk = document.getElementById("tpk").innerText
-                const vk = wallet._wallet.permission.viewKey
-                const program_name = document.getElementById("program-id").innerText.split(".")[0]
+                const program_name = document.getElementById("program-id").innerText
                 const function_name = document.getElementById("function-name").innerText
                 const ciphertexts = document.getElementsByClassName("ciphertext")
                 let ciphertext_counter = 0
                 for (const c of ciphertexts) {
                     try {
                         const index = parseInt(c.dataset.index)
-                        const plaintext = decrypt_ciphertext(vk, tpk, program_name, function_name, index, c.innerText)
+                        const plaintext = await wallet.decrypt(c.innerText, tpk, program_name, function_name, index)
                         const element = document.createElement("span")
                         element.className = "decrypted"
-                        element.innerHTML = `<br>${plaintext}`
+                        element.innerHTML = `<br>${plaintext.text}`
                         c.appendChild(element)
                         ciphertext_counter += 1
                     } catch (e) {}
@@ -283,25 +243,15 @@
                 const records = document.getElementsByClassName("record")
                 let record_counter = 0
                 for (const re of records) {
+                    const r = re.getElementsByClassName("record-data")[0]
                     try {
-                        const rd = re.getElementsByClassName("record-data")[0]
-                        const record_data = decrypt_record(vk, rd.innerText)
+                        const plaintext = await wallet.decrypt(r.innerHTML)
                         const element = document.createElement("span")
                         element.className = "decrypted"
-                        element.innerHTML = `<br>${record_data.string.replaceAll("\n", "<br>").replaceAll(" ", "&nbsp;")}`
-                        rd.appendChild(element)
-                        const fields = re.getElementsByClassName("record-field")
-                        const values = record_data.plaintext
-                        values.forEach((value, index) => {
-                            const element = document.createElement("span")
-                            element.className = "decrypted"
-                            element.innerHTML = `<br>${value}`
-                            fields[index].appendChild(element)
-                        })
+                        element.innerHTML = `<br>${plaintext.text.replaceAll("\n", "<br>").replaceAll(" ", "&nbsp;")}`
+                        r.appendChild(element)
                         record_counter++
-                    } catch (e) {
-                        console.log(e)
-                    }
+                    } catch (e) {}
                 }
                 if (record_counter > 0 || ciphertext_counter > 0) {
                     let english
@@ -320,50 +270,7 @@
                 } else {
                     text.innerText = "No record or ciphertext could be decrypted."
                 }
-            } else {
-                button.className = "button alert"
-            }
-        }
-
-        async function connect(e) {
-            e.preventDefault()
-            try {
-                await wallet.connect(window.AleoWalletBase.DecryptPermission.AutoDecrypt, window.AleoWalletBase.WalletAdapterNetwork.Testnet)
-            } catch (e) {
-                button.className = "button alert"
-                button.innerText = "Connect failed"
-                text.innerText = e
-            }
-            if (wallet.connected) {
-                button.addEventListener("click", disconnect)
-                button.className = "button success"
-                const address = wallet.publicKey
-                button.innerHTML = `Connected to address <span class="mono">${address.substring(0, 9) + "..." + address.substring(address.length - 6)}</span>`
-                text.innerText = "Trying to decrypt all records..."
-                const records = document.getElementsByClassName("record")
-                let counter = 0
-                for (const re of records) {
-                    const r = re.getElementsByClassName("record-data")[0]
-                    try {
-                        const plaintext = await wallet.decrypt(r.innerHTML)
-                        const element = document.createElement("span")
-                        element.className = "decrypted"
-                        element.innerHTML = `<br>${plaintext.replaceAll("\n", "<br>").replaceAll(" ", "&nbsp;")}`
-                        r.appendChild(element)
-                        counter++
-                    } catch (e) {}
-                }
-                if (counter > 0) {
-                    let english
-                    if (counter === 1) {
-                        english = "record"
-                    } else {
-                        english = "records"
-                    }
-                    text.innerText = `Decrypted ${counter} ${english}.`
-                } else {
-                    text.innerText = "No record could be decrypted."
-                }
+                button.disabled = false
             } else {
                 button.className = "button alert"
             }
