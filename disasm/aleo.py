@@ -180,7 +180,7 @@ def disassemble_program(program: Program) -> str:
             res.insert_line(f"struct {s.name}:")
             res.indent()
             for m, t in s.members:
-                res.insert_line(f"{m} as {plaintext_type_to_str(t)};")
+                res.insert_line(f"{m} as {plaintext_type_to_str(t)}.public;")
             res.unindent()
             res.insert_line("")
         elif definition == ProgramDefinition.Record:
