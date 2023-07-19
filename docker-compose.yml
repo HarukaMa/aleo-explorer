@@ -1,0 +1,46 @@
+version: '2'
+
+services:
+  pg:
+    build:
+      context: .
+      dockerfile: pg.Dockerfile
+    volumes:
+      - './.pgdata:/var/lib/postgresql/data/pgdata'
+    environment:
+      POSTGRES_PASSWORD: password
+      POSTGRES_USER: username
+      POSTGRES_DB: aleo
+      PGDATA: /var/lib/postgresql/data/pgdata
+    restart: always
+    ports:
+      - '5432:5432'
+
+  web:
+    build: .
+    command: python main.py
+    depends_on:
+      - pg
+    environment:
+      DB_DATABASE: aleo
+      DB_HOST: pg
+      DB_PASS: password
+      DB_SCHEMA: explorer
+      DB_USER: username
+      P2P_NODE_HOST: host.docker.internal
+      P2P_NODE_PORT: 4130
+      P2P_BLOCK_BATCH_SIZE: 1
+      RPC_URL_ROOT: http://host.docker.internal:3033
+      DEBUG: 1
+      DEV_MODE: 1
+      TURNSTILE_SITE_KEY: 0x0
+      TURNSTILE_SECRET_KEY: 0x0
+      HOST: 0.0.0.0
+      PORT: 8800
+      API_HOST: 0.0.0.0
+      API_PORT: 8801
+    volumes:
+      - '.:/app'
+    ports:
+      - "8800:8800"
+      - "8801:8801"

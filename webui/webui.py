@@ -180,7 +180,9 @@ app = Starlette(
 
 
 async def run():
-    config = uvicorn.Config("webui:app", reload=True, log_level="info", port=int(os.environ.get("PORT", 8000)))
+    host = os.environ.get("HOST", "127.0.0.1")
+    port = int(os.environ.get("PORT", 8000))
+    config = uvicorn.Config("webui:app", reload=True, log_level="info", host=host, port=port)
     logging.getLogger("uvicorn.access").handlers = []
     server = UvicornServer(config=config)
 
