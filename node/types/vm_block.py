@@ -1362,14 +1362,13 @@ class StructPlaintext(Plaintext):
             return Identifier.loads(i), s[len(i):]
         def get_literal_value(s: str):
             is_comma = True
-            comma = s.find(",")
-            if comma == -1:
-                comma = s.find("}")
-                if comma == -1:
-                    raise ValueError("invalid literal")
-                else:
-                    is_comma = False
-            return s[:comma], s[comma + int(is_comma):]
+            match = re.search(r"[,}]", s)
+            if not match:
+                raise ValueError("invalid literal")
+            pos = match.start()
+            if s[pos] == "}":
+                is_comma = False
+            return s[:pos], s[pos + int(is_comma):]
         def get_struct_value(s: str):
             if s[0] != "{":
                 raise ValueError("invalid struct literal")
