@@ -115,6 +115,16 @@ class Shr(Protocol):
     def __rshift__(self, other: Any) -> Self:
         ...
 
+@runtime_checkable
+class Rem(Protocol):
+    def __mod__(self, other: Any) -> Self:
+        ...
+
+@runtime_checkable
+class RemWrapped(Rem, Protocol):
+    def rem_wrapped(self, other: Any) -> Self:
+        ...
+
 class RustEnum(Protocol):
     Type: TType[IntEnum]
 

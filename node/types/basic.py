@@ -18,7 +18,7 @@ class Bech32m:
         return str(self)
 
 
-class IntProtocol(Sized, Compare, AddWrapped, SubWrapped, MulWrapped, DivWrapped, And, Or, Xor, Not, Shl, Shr, Protocol):
+class IntProtocol(Sized, Compare, AddWrapped, SubWrapped, MulWrapped, DivWrapped, And, Or, Xor, Not, Shl, Shr, RemWrapped, Protocol):
     min: int
     max: int
 
@@ -150,6 +150,16 @@ class Int(int, Serializable, IntProtocol):
         if not issubclass(type(other), Int):
             raise TypeError("unsupported operand type(s) for |: '{}' and '{}'".format(type(self), type(other)))
         return self.__class__(int.__or__(self, other))
+
+    def __mod__(self, other: int | Self):
+        if type(other) is int:
+            return self.__class__(int.__mod__(self, other))
+        if not issubclass(type(other), Int):
+            raise TypeError("unsupported operand type(s) for %: '{}' and '{}'".format(type(self), type(other)))
+        return self.__class__(int.__mod__(self, other))
+
+    def mod_wrapped(self, other: int | Self):
+        return self.__mod__(other)
 
     def dump(self) -> bytes:
         raise TypeError("cannot deserialize Int base class")
