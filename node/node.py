@@ -112,8 +112,12 @@ class Node:
             if msg.version < Testnet3.version:
                 raise ValueError("peer is outdated")
             nonce = msg.nonce
+            if await self.explorer_request(explorer.Request.GetDevMode()):
+                genesis = Testnet3.dev_genesis_block.header
+            else:
+                genesis = Testnet3.genesis_block.header
             response = ChallengeResponse(
-                genesis_header=Testnet3.genesis_block.header,
+                genesis_header=genesis,
                 signature=Signature.load(BytesIO(aleo.sign_nonce("APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH", nonce.dump()))),
             )
             self.handshake_state = 1
