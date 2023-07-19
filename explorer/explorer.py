@@ -58,7 +58,10 @@ class Explorer:
     async def check_genesis(self):
         height = await self.db.get_latest_height()
         if height is None:
-            await self.node_request(Request.ProcessBlock(Testnet3.genesis_block))
+            if self.dev_mode:
+                await self.add_block(Testnet3.dev_genesis_block)
+            else:
+                await self.add_block(Testnet3.genesis_block)
 
     async def main_loop(self):
         try:
@@ -105,7 +108,7 @@ class Explorer:
             raise
 
     async def add_block(self, block: Block):
-        if block is Testnet3.genesis_block:
+        if block in [Testnet3.genesis_block, Testnet3.dev_genesis_block]:
             for program in Testnet3.builtin_programs:
                 await init_builtin_program(self.db, program)
                 await self.db.save_builtin_program(program)
