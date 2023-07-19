@@ -114,7 +114,7 @@ class Explorer:
                 await self.db.save_builtin_program(program)
             await self.db.save_block(block)
             return
-        if not self.dev_mode and block.previous_hash != self.latest_block_hash:
+        if block.previous_hash != self.latest_block_hash:
             print(f"ignoring block {block} because previous block hash does not match")
         else:
             print(f"adding block {block}")
@@ -126,20 +126,28 @@ class Explorer:
         return await self.db.get_latest_block()
 
     async def check_dev_mode(self):
-        try:
-            with open("/tmp/explorer_dev_mode", "rb") as f:
-                from hashlib import md5
-                if md5(f.read()).hexdigest() == "1c28714e40263e4c4afa1aa7f7272a3f":
-                    self.dev_mode = True
-                    i = 1
-                    while i > 0:
-                        print(f"\x1b[G\x1b[2K!!! Clearing database in {i} seconds !!!", end="")
-                        stdout.flush()
-                        await asyncio.sleep(1)
-                        i -= 1
-                    print("\x1b[G\x1b[2K!!! Clearing database now !!!")
-                    stdout.flush()
-                    await self.db.clear_database()
-        except:
-            pass
+        dev_mode = os.environ.get("DEV_MODE", "")
+        if dev_mode == "1":
+            self.dev_mode = True
+
+        if await self.db.get_latest_height() is not None:
+            db_genesis = await self.db.get_block_by_height(0)
+            if self.dev_mode:
+                genesis_block = Testnet3.dev_genesis_block
+            else:
+                genesis_block = Testnet3.genesis_block
+            if db_genesis.header.transactions_root != genesis_block.header.transactions_root:
+                await self.clear_database()
+
+    async def clear_database(self):
+        print("The current database has a different genesis block!\nPress Ctrl+C to abort, or wait 10 seconds to clear the database.")
+        i = 10
+        while i > 0:
+            print(f"\x1b[G\x1b[2K!!! Clearing database in {i} seconds !!!", end="")
+            stdout.flush()
+            await asyncio.sleep(1)
+            i -= 1
+        print("\x1b[G\x1b[2K!!! Clearing database now !!!")
+        stdout.flush()
+        await self.db.clear_database()
 
