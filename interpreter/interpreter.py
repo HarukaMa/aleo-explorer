@@ -145,6 +145,6 @@ async def preview_finalize_execution(db: Database, program: Program, function_na
         program,
         function_name,
         inputs,
-        global_mapping_cache,
+        {},
         allow_state_change=False,
     )
