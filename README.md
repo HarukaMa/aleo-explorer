@@ -28,6 +28,12 @@ Further schema updates will be provided as database migrations.
 2. Configure through `.env` file. See `.env.example` for reference.
 3. Run `main.py`.
 
+### Use in docker
+
+```bash
+docker-compose up -d
+```
+
 ## A better frontend?
 
 Yeah, I'm not really a frontend developer. I know it's ugly, but I'm focusing on features here.
