@@ -5,6 +5,8 @@ from interpreter.finalizer import execute_finalizer, ExecuteError
 from interpreter.utils import FinalizeState, MappingCacheTuple
 from node.types import *
 
+global_mapping_cache: dict[Field, list[MappingCacheTuple]] = {}
+global_program_cache: dict[str, Program] = {}
 
 async def init_builtin_program(db: Database, program: Program):
     for mapping in program.mappings.keys():
@@ -41,11 +43,13 @@ async def finalize_execute(db: Database, finalize_state: FinalizeState, confirme
         if not isinstance(transaction, ExecuteTransaction):
             raise TypeError("invalid execute transaction")
         execution = transaction.execution
+        allow_state_change = True
         expected_operations = list(confirmed_transaction.finalize)
     elif isinstance(confirmed_transaction, RejectedExecute):
         if not isinstance(confirmed_transaction.rejected, RejectedExecution):
             raise TypeError("invalid rejected execute transaction")
         execution = confirmed_transaction.rejected.execution
+        allow_state_change = False
         expected_operations = []
     else:
         raise NotImplementedError
@@ -54,10 +58,14 @@ async def finalize_execute(db: Database, finalize_state: FinalizeState, confirme
     for index, transition in enumerate(execution.transitions):
         finalize = transition.finalize.value
         if finalize is not None:
-            program_bytes = await db.get_program(str(transition.program_id))
-            if program_bytes is None:
-                raise RuntimeError("program not found")
-            program = Program.load(BytesIO(program_bytes))
+            if str(transition.program_id) in global_program_cache:
+                program = global_program_cache[str(transition.program_id)]
+            else:
+                program_bytes = await db.get_program(str(transition.program_id))
+                if program_bytes is None:
+                    raise RuntimeError("program not found")
+                program = Program.load(BytesIO(program_bytes))
+                global_program_cache[str(transition.program_id)] = program
             inputs: list[Plaintext] = []
             for value in finalize:
                 if isinstance(value, PlaintextValue):
@@ -66,19 +74,19 @@ async def finalize_execute(db: Database, finalize_state: FinalizeState, confirme
                     raise NotImplementedError
             try:
                 operations.extend(
-                    await execute_finalizer(db, finalize_state, transition.id, program, transition.function_name, inputs, mapping_cache)
+                    await execute_finalizer(db, finalize_state, transition.id, program, transition.function_name, inputs, mapping_cache, allow_state_change)
                 )
             except ExecuteError as e:
                 reject_reason = f"execute error: {e}, at transition #{index}, instruction \"{e.instruction}\""
                 operations = []
                 break
-    if isinstance(confirmed_transaction, RejectedExecute) and reject_reason is None:
-        raise RuntimeError("rejected execute transaction should not finalize without ExecuteError")
+    if isinstance(confirmed_transaction, RejectedExecute):
+        if reject_reason is None:
+            raise RuntimeError("rejected execute transaction should not finalize without ExecuteError")
     return expected_operations, operations, reject_reason
 
 async def finalize_block(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]], block: Block) -> list[Optional[str]]:
     finalize_state = FinalizeState(block)
-    mapping_cache = {}
     reject_reasons: list[Optional[str]] = []
     for confirmed_transaction in block.transactions.transactions:
         confirmed_transaction: ConfirmedTransaction
@@ -86,7 +94,7 @@ async def finalize_block(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]],
         if confirmed_transaction.type in [CTType.AcceptedDeploy, CTType.RejectedDeploy]:
             expected_operations, operations, reject_reason = await finalize_deploy(confirmed_transaction)
         elif confirmed_transaction.type in [CTType.AcceptedExecute, CTType.RejectedExecute]:
-            expected_operations, operations, reject_reason = await finalize_execute(db, finalize_state, confirmed_transaction, mapping_cache)
+            expected_operations, operations, reject_reason = await finalize_execute(db, finalize_state, confirmed_transaction, global_mapping_cache)
         else:
             raise NotImplementedError
 
@@ -130,4 +138,13 @@ async def execute_operations(db: Database, cur: psycopg.AsyncCursor[dict[str, An
 async def preview_finalize_execution(db: Database, program: Program, function_name: Identifier, inputs: list[Plaintext]) -> list[dict[str, Any]]:
     block = await db.get_latest_block()
     finalize_state = FinalizeState(block)
-    return await execute_finalizer(db, finalize_state, TransitionID.load(BytesIO(b"\x00" * 32)), program, function_name, inputs, {})
+    return await execute_finalizer(
+        db,
+        finalize_state,
+        TransitionID.load(BytesIO(b"\x00" * 32)),
+        program,
+        function_name,
+        inputs,
+        global_mapping_cache,
+        allow_state_change=False,
+    )

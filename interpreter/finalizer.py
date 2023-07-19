@@ -7,6 +7,7 @@ from .utils import load_plaintext_from_operand, store_plaintext_to_register, Fin
 
 
 async def mapping_cache_read(db: Database, mapping_id: Field) -> list[MappingCacheTuple]:
+    print(f"Reading mapping cache {mapping_id}")
     mapping = await db.get_mapping_cache(str(mapping_id))
     if not mapping:
         return []
@@ -39,7 +40,8 @@ class ExecuteError(Exception):
 
 async def execute_finalizer(db: Database, finalize_state: FinalizeState, transition_id: TransitionID, program: Program,
                             function_name: Identifier, inputs: list[Plaintext],
-                            mapping_cache: dict[Field, list[MappingCacheTuple]]) -> list[dict[str, Any]]:
+                            mapping_cache: dict[Field, list[MappingCacheTuple]],
+                            allow_state_change: bool) -> list[dict[str, Any]]:
     registers = Registers()
     operations: list[dict[str, Any]] = []
     function = program.functions[function_name]
@@ -103,6 +105,7 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
                 value = PlaintextValue(plaintext=default)
             else:
                 value = mapping_cache[mapping_id][index][3]
+                print(f"Found key {key} in mapping {c.mapping} at index {index} with value {value}")
                 if not isinstance(value, PlaintextValue):
                     raise TypeError("invalid value type")
             destination = c.destination
@@ -117,13 +120,18 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
             key_id = Field.loads(aleo.get_key_id(str(mapping_id), key.dump()))
             value_id = Field.loads(aleo.get_value_id(str(key_id), value.dump()))
             index = mapping_find_index(mapping_cache[mapping_id], key_id)
-            if index == -1:
-                index = len(mapping_cache[mapping_id])
-                mapping_cache[mapping_id].append((key_id, value_id, key, value))
+            if allow_state_change:
+                if index == -1:
+                    index = len(mapping_cache[mapping_id])
+                    mapping_cache[mapping_id].append((key_id, value_id, key, value))
+                    print(f"Added key {key} to mapping {c.mapping} at index {index} with value {value}")
+                else:
+                    if mapping_cache[mapping_id][index][0] != key_id:
+                        raise RuntimeError("find_index returned invalid index")
+                    mapping_cache[mapping_id][index] = (key_id, value_id, key, value)
+                    print(f"Updated key {key} in mapping {c.mapping} at index {index} with value {value}")
             else:
-                if mapping_cache[mapping_id][index][0] != key_id:
-                    raise RuntimeError("find_index returned invalid index")
-                mapping_cache[mapping_id][index] = (key_id, value_id, key, value)
+                print("Not updating mapping cache because allow_state_change is False")
 
             operations.append({
                 "type": FinalizeOperation.Type.UpdateKeyValue,

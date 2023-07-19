@@ -1,6 +1,7 @@
 from node.types import *
 from .environment import Registers
 
+#                         kid    vid    k          v
 MappingCacheTuple = tuple[Field, Field, Plaintext, Value]
 
 class FinalizeState:
