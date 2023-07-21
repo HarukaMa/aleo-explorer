@@ -1,3 +1,5 @@
+import os
+
 from db import Database
 from disasm.aleo import disasm_instruction, disasm_command
 from node.types import *
@@ -59,9 +61,17 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
             raise TypeError("invalid input register type")
         registers[int(ir.locator)] = i
 
+    debug = os.environ.get("DEBUG", False)
+
     print(f"Executing finalize function {program.id}/{function_name}({', '.join(str(i) for i in registers)})")
 
     for c in finalize.commands:
+        if debug:
+            if isinstance(c, InstructionCommand):
+                print(disasm_instruction(c.instruction))
+            else:
+                print(disasm_command(c))
+
         if isinstance(c, InstructionCommand):
             instruction = c.instruction
             try:
@@ -167,6 +177,9 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
 
         else:
             raise NotImplementedError
+
+        if debug:
+            registers.dump()
 
     return operations
 
