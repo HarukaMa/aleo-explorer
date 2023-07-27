@@ -1898,6 +1898,28 @@ class Database:
         except Exception as e:
             await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
             raise
+
+    async def remove_mapping_key_value(self, cur: psycopg.AsyncCursor[dict[str, Any]], mapping_id: str, index: int):
+        try:
+            await cur.execute("SELECT id FROM mapping WHERE mapping_id = %s", (mapping_id,))
+            mapping = await cur.fetchone()
+            if mapping is None:
+                raise ValueError(f"Mapping {mapping_id} not found")
+            mapping_id = mapping['id']
+            await cur.execute(
+                "DELETE FROM mapping_value WHERE mapping_id = %s AND index = %s",
+                (mapping_id, index)
+            )
+            await cur.execute(
+                "SELECT id FROM mapping_value WHERE mapping_id = %s ORDER BY index DESC LIMIT 1",
+                (mapping_id,)
+            )
+            if (res := await cur.fetchone()) is not None:
+                await cur.execute("UPDATE mapping_value SET index = %s WHERE id = %s", (index, res["id"]))
+
+        except Exception as e:
+            await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+            raise
                 
                 
     async def get_program_leo_source_code(self, program_id: str) -> Optional[str]:

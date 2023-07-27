@@ -175,6 +175,36 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
             )
             store_plaintext_to_register(res, c.destination, registers)
 
+        elif isinstance(c, RemoveCommand):
+            mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(c.mapping)))
+            if mapping_id not in mapping_cache:
+                mapping_cache[mapping_id] = await mapping_cache_read(db, mapping_id)
+            key = load_plaintext_from_operand(c.key, registers, finalize_state)
+            key_id = Field.loads(aleo.get_key_id(str(mapping_id), key.dump()))
+            index = mapping_find_index(mapping_cache[mapping_id], key_id)
+            if index == -1:
+                raise ExecuteError(f"key {key} not found in mapping {c.mapping}", None, disasm_command(c))
+            if allow_state_change:
+                kv_list = mapping_cache[mapping_id]
+                if len(kv_list) > 1:
+                    kv_list[len(kv_list) - 1], kv_list[index] = kv_list[index], kv_list[len(kv_list) - 1]
+                    if kv_list[len(kv_list) - 1][0] != key_id:
+                        kv_list[len(kv_list) - 1], kv_list[index] = kv_list[index], kv_list[len(kv_list) - 1]
+                        raise RuntimeError("remove logic failed to swap key/value")
+                popped = kv_list.pop()
+                if popped[0] != key_id:
+                    kv_list.append(popped)
+                    raise RuntimeError("remove logic popped invalid key/value")
+                print(f"Removed key {key} from mapping {c.mapping} at index {index}")
+            else:
+                print("Not updating mapping cache because allow_state_change is False")
+            operations.append({
+                "type": FinalizeOperation.Type.RemoveKeyValue,
+                "mapping_id": mapping_id,
+                "index": index,
+                "mapping": c.mapping,
+            })
+
         else:
             raise NotImplementedError
 
