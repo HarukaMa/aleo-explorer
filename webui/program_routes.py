@@ -207,8 +207,8 @@ async def submit_source_route(request: Request):
     try:
         compiled = aleo.compile_program(source, program_id.split(".")[0])
     except RuntimeError as e:
-        if len(str(e)) > 100:
-            msg = str(e)[:100] + "[trimmed]"
+        if len(str(e)) > 200:
+            msg = str(e)[:200] + "[trimmed]"
         else:
             msg = str(e)
         return RedirectResponse(url=f"/upload_source?id={program_id}&message=Failed to compile source code: {msg}")
