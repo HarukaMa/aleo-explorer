@@ -48,8 +48,16 @@
             <input type="hidden" name="id" value="{{ program_id }}">
             {% for import in imports %}
                 <input type="hidden" name="imports[]" value="{{ import }}">
-                {# expand this to textareas in the future #}
-                <input type="hidden" name="import_programs[]" value="">
+                {% if import == "credits" %}
+                    <input type="hidden" name="import_programs[]" value="">
+                {% else %}
+                    <label>Imported program <span class="mono-only">{{ import }}.leo</span>:
+                    {% if import_programs[loop.index0] %}
+                        <textarea name="import_programs[]" readonly>{{ import_programs[loop.index0] }}</textarea>
+                    {% else %}
+                        <textarea name="import_programs[]"></textarea>
+                    {% endif %}
+                {% endif %}
             {% endfor %}
             <button type="submit" class="button">Submit</button>
         </form>

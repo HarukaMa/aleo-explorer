@@ -1,5 +1,5 @@
 from io import BytesIO
-from typing import Any
+from typing import Any, Optional
 
 import aleo
 from starlette.datastructures import UploadFile
@@ -170,7 +170,7 @@ async def upload_source_route(request: Request):
     else:
         source = ""
     imports: list[str] = []
-    unsupported_import = False
+    import_programs: list[Optional[str]] = []
     if (await db.get_program_leo_source_code(program_id)) is not None:
         has_leo_source = True
     else:
@@ -179,13 +179,16 @@ async def upload_source_route(request: Request):
         for i in program.imports:
             imports.append(str(i.program_id.name))
             if i.program_id != "credits.aleo":
-                unsupported_import = True
+                src = await db.get_program_leo_source_code(str(i.program_id))
+                import_programs.append(src)
+            else:
+                import_programs.append(None)
     message = request.query_params.get("message")
     ctx = {
         "request": request,
         "program_id": program_id,
         "imports": imports,
-        "unsupported_import": unsupported_import,
+        "import_programs": import_programs,
         "has_leo_source": has_leo_source,
         "message": message,
         "source": source,
