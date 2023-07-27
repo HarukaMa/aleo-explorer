@@ -10,7 +10,7 @@ from starlette.responses import RedirectResponse
 import disasm.aleo
 from db import Database
 from node.types import DeployTransaction, Deployment, Program, \
-    AcceptedDeploy, Import
+    AcceptedDeploy
 from .template import templates
 from .utils import function_signature, out_of_sync_check
 
@@ -169,23 +169,23 @@ async def upload_source_route(request: Request):
         source = form.get("source")
     else:
         source = ""
+    imports: list[str] = []
+    unsupported_import = False
     if (await db.get_program_leo_source_code(program_id)) is not None:
         has_leo_source = True
-        has_imports = None
     else:
         has_leo_source = False
         program = Program.load(BytesIO(program))
-        has_imports = False
         for i in program.imports:
-            i: Import
-            if str(i.program_id) != "credits.aleo":
-                has_imports = True
-                break
+            imports.append(str(i.program_id.name))
+            if i.program_id != "credits.aleo":
+                unsupported_import = True
     message = request.query_params.get("message")
     ctx = {
         "request": request,
         "program_id": program_id,
-        "has_imports": has_imports,
+        "imports": imports,
+        "unsupported_import": unsupported_import,
         "has_leo_source": has_leo_source,
         "message": message,
         "source": source,
@@ -204,8 +204,17 @@ async def submit_source_route(request: Request):
     source = form.get("source")
     if source is None or isinstance(source, UploadFile) or source == "":
         return RedirectResponse(url=f"/upload_source?id={program_id}&message=Missing source code")
+    imports = form.getlist("imports[]")
+    import_programs = form.getlist("import_programs[]")
+    if len(imports) != len(import_programs):
+        return RedirectResponse(url=f"/upload_source?id={program_id}&message=Invalid form data")
+    import_data: list[tuple[str, str]] = []
+    for i, p in zip(imports, import_programs):
+        if isinstance(i, UploadFile) or isinstance(p, UploadFile):
+            return RedirectResponse(url=f"/upload_source?id={program_id}&message=Invalid form data")
+        import_data.append((i, p))
     try:
-        compiled = aleo.compile_program(source, program_id.split(".")[0])
+        compiled = aleo.compile_program(source, program_id.split(".")[0], import_data)
     except RuntimeError as e:
         if len(str(e)) > 200:
             msg = str(e)[:200] + "[trimmed]"
