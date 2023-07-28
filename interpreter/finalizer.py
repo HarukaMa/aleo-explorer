@@ -183,7 +183,8 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
             key_id = Field.loads(aleo.get_key_id(str(mapping_id), key.dump()))
             index = mapping_find_index(mapping_cache[mapping_id], key_id)
             if index == -1:
-                raise ExecuteError(f"key {key} not found in mapping {c.mapping}", None, disasm_command(c))
+                print(f"Key {key} not found in mapping {c.mapping}")
+                continue
             if allow_state_change:
                 kv_list = mapping_cache[mapping_id]
                 if len(kv_list) > 1:
