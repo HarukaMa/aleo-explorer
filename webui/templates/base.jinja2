@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+f<!DOCTYPE html>
 <html class="no-js" lang="en">
 <head>
     <meta charset="UTF-8">
@@ -82,7 +82,7 @@
     <div class="content">
     <div class="callout alert global-banner">
         {% if sync_info.maintenance_info %}
-            The explorer is resyncing with the network: {{ sync_info.maintenance_info }}
+            The explorer is out of sync: {{ sync_info.maintenance_info }}
         {% else %}
             The explorer is out of sync. The last synced block is {{ sync_info.relative_time }}.
         {% endif %}
