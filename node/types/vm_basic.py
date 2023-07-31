@@ -123,7 +123,7 @@ class Address(AleoObject):
     size = 32
 
 
-class Field(Serializable):
+class Field(Serializable, Add, Compare, Pow):
     # Fr, Fp256
     # Just store as a large integer now
     # Hopefully this will not be used later...
@@ -169,6 +169,9 @@ class Field(Serializable):
 
     def __le__(self, other: Self):
         return bool_.load(BytesIO(aleo.field_ops(self.dump(), other.dump(), "lte")))
+
+    def __pow__(self, power: Self, modulus: None):
+        return Field.load(BytesIO(aleo.field_ops(self.dump(), power.dump(), "pow")))
 
 
 class Group(Serializable):

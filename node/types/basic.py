@@ -18,7 +18,7 @@ class Bech32m:
         return str(self)
 
 
-class IntProtocol(Sized, Compare, AddWrapped, SubWrapped, MulWrapped, DivWrapped, And, Or, Xor, Not, Shl, Shr, RemWrapped, Protocol):
+class IntProtocol(Sized, Compare, AddWrapped, SubWrapped, MulWrapped, DivWrapped, And, Or, Xor, Not, Shl, Shr, RemWrapped, PowWrapped, Protocol):
     min: int
     max: int
 
@@ -160,6 +160,21 @@ class Int(int, Serializable, IntProtocol):
 
     def mod_wrapped(self, other: int | Self):
         return self.__mod__(other)
+
+    def __pow__(self, power, modulo=None):
+        if modulo is not None:
+            raise TypeError("")
+        if type(power) is int:
+            return self.__class__(int.__pow__(self, power, modulo))
+        if not isinstance(power, (u8, u16, u32)):
+            raise TypeError("unsupported operand type(s) for %: '{}' and '{}'".format(type(self), type(power)))
+        return self.__class__(int.__pow__(self, power, modulo))
+
+    def pow_wrapped(self, other: int | Self):
+        if isinstance(other, Int):
+            other = int(other)
+        value = int(self) ** other
+        return self.__class__(self.wrap_value(value))
 
     def dump(self) -> bytes:
         raise TypeError("cannot deserialize Int base class")

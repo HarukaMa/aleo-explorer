@@ -125,6 +125,16 @@ class RemWrapped(Rem, Protocol):
     def rem_wrapped(self, other: Any) -> Self:
         ...
 
+@runtime_checkable
+class Pow(Protocol):
+    def __pow__(self, other: Any, modulo: Any) -> Self:
+        ...
+
+@runtime_checkable
+class PowWrapped(Pow, Protocol):
+    def pow_wrapped(self, other: Any) -> Self:
+        ...
+
 class RustEnum(Protocol):
     Type: TType[IntEnum]
 
