@@ -159,18 +159,18 @@ class Field(Serializable, Add, Compare, Pow):
         return Field.load(BytesIO(aleo.field_ops(self.dump(), other.dump(), "add")))
 
     def __gt__(self, other: Self):
-        return bool_.load(BytesIO(aleo.field_ops(self.dump(), other.dump(), "gt")))
+        return bool_.load(BytesIO(aleo.field_ops(self.dump(), other.dump(), "gt"))).value
 
     def __lt__(self, other: Self):
-        return bool_.load(BytesIO(aleo.field_ops(self.dump(), other.dump(), "lt")))
+        return bool_.load(BytesIO(aleo.field_ops(self.dump(), other.dump(), "lt"))).value
 
     def __ge__(self, other: Self):
-        return bool_.load(BytesIO(aleo.field_ops(self.dump(), other.dump(), "gte")))
+        return bool_.load(BytesIO(aleo.field_ops(self.dump(), other.dump(), "gte"))).value
 
     def __le__(self, other: Self):
-        return bool_.load(BytesIO(aleo.field_ops(self.dump(), other.dump(), "lte")))
+        return bool_.load(BytesIO(aleo.field_ops(self.dump(), other.dump(), "lte"))).value
 
-    def __pow__(self, power: Self, modulus: None):
+    def __pow__(self, power: Self):
         return Field.load(BytesIO(aleo.field_ops(self.dump(), power.dump(), "pow")))
 
 

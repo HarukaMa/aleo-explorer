@@ -132,6 +132,8 @@ class Explorer:
 
         if await self.db.get_latest_height() is not None:
             db_genesis = await self.db.get_block_by_height(0)
+            if db_genesis is None:
+                return
             if self.dev_mode:
                 genesis_block = Testnet3.dev_genesis_block
             else:

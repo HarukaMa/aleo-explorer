@@ -504,6 +504,7 @@ def rem_wrapped(operands: list[Operand], destination: Register, registers: Regis
             primitive=op1.literal.primitive.rem_wrapped(op2.literal.primitive),
         )
     )
+    store_plaintext_to_register(res, destination, registers)
 
 def shl(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)

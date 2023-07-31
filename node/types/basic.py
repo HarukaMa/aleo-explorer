@@ -158,17 +158,15 @@ class Int(int, Serializable, IntProtocol):
             raise TypeError("unsupported operand type(s) for %: '{}' and '{}'".format(type(self), type(other)))
         return self.__class__(int.__mod__(self, other))
 
-    def mod_wrapped(self, other: int | Self):
+    def rem_wrapped(self, other: int | Self):
         return self.__mod__(other)
 
-    def __pow__(self, power, modulo=None):
-        if modulo is not None:
-            raise TypeError("")
+    def __pow__(self, power: int | Self):
         if type(power) is int:
-            return self.__class__(int.__pow__(self, power, modulo))
+            return self.__class__(int.__pow__(self, power))
         if not isinstance(power, (u8, u16, u32)):
             raise TypeError("unsupported operand type(s) for %: '{}' and '{}'".format(type(self), type(power)))
-        return self.__class__(int.__pow__(self, power, modulo))
+        return self.__class__(int.__pow__(self, power))
 
     def pow_wrapped(self, other: int | Self):
         if isinstance(other, Int):

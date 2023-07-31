@@ -127,7 +127,7 @@ class RemWrapped(Rem, Protocol):
 
 @runtime_checkable
 class Pow(Protocol):
-    def __pow__(self, other: Any, modulo: Any) -> Self:
+    def __pow__(self, other: Any) -> Self:
         ...
 
 @runtime_checkable
