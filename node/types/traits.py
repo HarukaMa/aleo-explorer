@@ -135,6 +135,11 @@ class PowWrapped(Pow, Protocol):
     def pow_wrapped(self, other: Any) -> Self:
         ...
 
+@runtime_checkable
+class Cast(Protocol):
+    def cast(self, destination_type: Any, *, lossy: bool) -> Any:
+        ...
+
 class RustEnum(Protocol):
     Type: TType[IntEnum]
 

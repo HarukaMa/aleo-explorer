@@ -123,7 +123,7 @@ class Address(AleoObject):
     size = 32
 
 
-class Field(Serializable, Add, Compare, Pow):
+class Field(Serializable, Add, Compare, Pow, Cast):
     # Fr, Fp256
     # Just store as a large integer now
     # Hopefully this will not be used later...
@@ -172,6 +172,12 @@ class Field(Serializable, Add, Compare, Pow):
 
     def __pow__(self, power: Self):
         return Field.load(BytesIO(aleo.field_ops(self.dump(), power.dump(), "pow")))
+
+    def cast(self, destination_type: Any, *, lossy: bool) -> Any:
+        from .vm_instruction import LiteralType
+        if not isinstance(destination_type, LiteralType):
+            raise ValueError("invalid type")
+        return destination_type.primitive_type.load(BytesIO(aleo.field_cast(self.dump(), destination_type.dump(), lossy)))
 
 
 class Group(Serializable):

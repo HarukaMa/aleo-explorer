@@ -136,9 +136,22 @@ def cast_op(operands: list[Operand], destination: Register, cast_type: CastType,
         raise RuntimeError("invalid register type")
     plaintext_type = register_type.plaintext_type
     if isinstance(plaintext_type, LiteralPlaintextType):
-        if not plaintext_type.literal_type in [LiteralType.Address, LiteralType.Field, LiteralType.Group]:
+        plaintext = load_plaintext_from_operand(operands[0], registers, finalize_state)
+        if not isinstance(plaintext, LiteralPlaintext):
+            raise TypeError("operand must be a literal")
+        if not plaintext.literal.type in [Literal.Type.Address, Literal.Type.Field, Literal.Type.Group]:
             raise AssertionError("snarkOS doesn't support casting from this type yet")
-        raise NotImplementedError
+        primitive = plaintext.literal.primitive
+        if not isinstance(primitive, Cast):
+            raise TypeError("operand must be castable")
+        literal_type = plaintext_type.literal_type
+        res = LiteralPlaintext(
+            literal=Literal(
+                type_=Literal.Type(literal_type.value),
+                primitive=primitive.cast(literal_type, lossy=False),
+            )
+        )
+        store_plaintext_to_register(res, destination, registers)
     elif isinstance(plaintext_type, StructPlaintextType):
         struct_identifier = plaintext_type.struct
         struct_definition = program.structs[struct_identifier]
