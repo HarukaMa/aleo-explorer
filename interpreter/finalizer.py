@@ -1,4 +1,5 @@
 import os
+import time
 
 from db import Database
 from disasm.aleo import disasm_instruction, disasm_command
@@ -62,8 +63,9 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
         registers[int(ir.locator)] = i
 
     debug = os.environ.get("DEBUG", False)
+    timer = time.perf_counter_ns()
 
-    print(f"Executing finalize function {program.id}/{function_name}({', '.join(str(i) for i in registers)})")
+    print(f"finalize {program.id}/{function_name}({', '.join(str(i) for i in registers)})")
 
     for c in finalize.commands:
         if debug:
@@ -115,7 +117,7 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
                 value = PlaintextValue(plaintext=default)
             else:
                 value = mapping_cache[mapping_id][index][3]
-                print(f"Found key {key} in mapping {c.mapping} at index {index} with value {value}")
+                print(f"get {c.mapping}[{key}, {index}] = {value}")
                 if not isinstance(value, PlaintextValue):
                     raise TypeError("invalid value type")
             destination = c.destination
@@ -134,12 +136,12 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
                 if index == -1:
                     index = len(mapping_cache[mapping_id])
                     mapping_cache[mapping_id].append((key_id, value_id, key, value))
-                    print(f"Added key {key} to mapping {c.mapping} at index {index} with value {value}")
+                    print(f"new {c.mapping}[{key}, {index}] = {value}")
                 else:
                     if mapping_cache[mapping_id][index][0] != key_id:
                         raise RuntimeError("find_index returned invalid index")
                     mapping_cache[mapping_id][index] = (key_id, value_id, key, value)
-                    print(f"Updated key {key} in mapping {c.mapping} at index {index} with value {value}")
+                    print(f"set {c.mapping}[{key}, {index}] = {value}")
             else:
                 print("Not updating mapping cache because allow_state_change is False")
 
@@ -196,7 +198,7 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
                 if popped[0] != key_id:
                     kv_list.append(popped)
                     raise RuntimeError("remove logic popped invalid key/value")
-                print(f"Removed key {key} from mapping {c.mapping} at index {index}")
+                print(f"del {c.mapping}[{key}, {index}]")
             else:
                 print("Not updating mapping cache because allow_state_change is False")
             operations.append({
@@ -211,7 +213,7 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
 
         if debug:
             registers.dump()
-
+    print(f"execution took {time.perf_counter_ns() - timer} ns")
     return operations
 
 
