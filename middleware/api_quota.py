@@ -15,6 +15,9 @@ class RequestTiming:
 COST_TIMEOUT = -1
 COST_UNKNOWN = -2
 
+class QuotaExceeded(Exception):
+    pass
+
 class APIQuotaMiddleware:
     def __init__(self, app: ASGIApp, *, max_call_time: float = 5.0, recover_rate: float = 0.1, max_concurrency: int = 10) -> None:
         self.app = app
@@ -29,6 +32,8 @@ class APIQuotaMiddleware:
         async with self.ip_remaining_time_lock:
             remaining, last_call, outstanding_call = self.ip_remaining_time[ip]
             print(f"ip {ip} has quota {remaining}s, last call {last_call}, outstanding call {outstanding_call}")
+            if outstanding_call >= self.max_concurrency or remaining - self.concurrency_penalty < 0:
+                raise QuotaExceeded()
             if outstanding_call == 0 and last_call != -1:
                 quota = remaining + (time.monotonic() - last_call) * self.recover_rate
                 if quota > self.max_call_time:
@@ -66,7 +71,15 @@ class APIQuotaMiddleware:
             return await self.app(scope, receive, send)
 
         ip = scope["client"][0]
-        remaining = await self.start_call(ip)
+        try:
+            remaining = await self.start_call(ip)
+        except QuotaExceeded:
+            headers = {
+                "Retry-After": str(int(1 / self.recover_rate)),
+            }
+            response = JSONResponse({"error": "API quota exceeded"}, status_code=429, headers=headers)
+            await response(scope, receive, send)
+            return
         timing = RequestTiming()
         cost = COST_UNKNOWN # final catch if try except borked
         try:
