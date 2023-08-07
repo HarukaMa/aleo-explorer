@@ -43,7 +43,7 @@ class ExecuteError(Exception):
 
 async def execute_finalizer(db: Database, finalize_state: FinalizeState, transition_id: TransitionID, program: Program,
                             function_name: Identifier, inputs: list[Plaintext],
-                            mapping_cache: dict[Field, list[MappingCacheTuple]],
+                            mapping_cache: Optional[dict[Field, list[MappingCacheTuple]]],
                             allow_state_change: bool) -> list[dict[str, Any]]:
     registers = Registers()
     operations: list[dict[str, Any]] = []
@@ -86,12 +86,16 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
 
         elif isinstance(c, ContainsCommand):
             mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(c.mapping)))
-            if mapping_id not in mapping_cache:
+            if mapping_cache is not None and mapping_id not in mapping_cache:
                 mapping_cache[mapping_id] = await mapping_cache_read(db, mapping_id)
             key = load_plaintext_from_operand(c.key, registers, finalize_state)
             key_id = Field.loads(aleo.get_key_id(str(mapping_id), key.dump()))
-            index = mapping_find_index(mapping_cache[mapping_id], key_id)
-            contains = index != -1
+            if mapping_cache:
+                index = mapping_find_index(mapping_cache[mapping_id], key_id)
+                contains = index != -1
+            else:
+                index = await db.get_mapping_value(str(program.id), str(mapping_id), str(key_id))
+                contains = index is not None
             value = PlaintextValue(
                 plaintext=LiteralPlaintext(
                     literal=Literal(
@@ -105,45 +109,67 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
 
         elif isinstance(c, GetCommand | GetOrUseCommand):
             mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(c.mapping)))
-            if mapping_id not in mapping_cache:
+            if mapping_cache is not None and mapping_id not in mapping_cache:
                 mapping_cache[mapping_id] = await mapping_cache_read(db, mapping_id)
             key = load_plaintext_from_operand(c.key, registers, finalize_state)
             key_id = Field.loads(aleo.get_key_id(str(mapping_id), key.dump()))
-            index = mapping_find_index(mapping_cache[mapping_id], key_id)
-            if index == -1:
-                if isinstance(c, GetCommand):
-                    raise ExecuteError(f"key {key} not found in mapping {c.mapping}", None, disasm_command(c))
-                default = load_plaintext_from_operand(c.default, registers, finalize_state)
-                value = PlaintextValue(plaintext=default)
+            if mapping_cache:
+                index = mapping_find_index(mapping_cache[mapping_id], key_id)
+                if index == -1:
+                    if isinstance(c, GetCommand):
+                        raise ExecuteError(f"key {key} not found in mapping {c.mapping}", None, disasm_command(c))
+                    default = load_plaintext_from_operand(c.default, registers, finalize_state)
+                    value = PlaintextValue(plaintext=default)
+                else:
+                    value = mapping_cache[mapping_id][index][3]
+                    print(f"get {c.mapping}[{key}, {index}] = {value}")
+                    if not isinstance(value, PlaintextValue):
+                        raise TypeError("invalid value type")
             else:
-                value = mapping_cache[mapping_id][index][3]
-                print(f"get {c.mapping}[{key}, {index}] = {value}")
-                if not isinstance(value, PlaintextValue):
-                    raise TypeError("invalid value type")
+                value = await db.get_mapping_value(str(program.id), str(mapping_id), str(key_id))
+                if value is None:
+                    if isinstance(c, GetCommand):
+                        raise ExecuteError(f"key {key} not found in mapping {c.mapping}", None, disasm_command(c))
+                    default = load_plaintext_from_operand(c.default, registers, finalize_state)
+                    value = PlaintextValue(plaintext=default)
+                else:
+                    value = Value.load(BytesIO(value))
+                    if not isinstance(value, PlaintextValue):
+                        raise TypeError("invalid value type")
             destination = c.destination
             store_plaintext_to_register(value.plaintext, destination, registers)
 
         elif isinstance(c, SetCommand):
             mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(c.mapping)))
-            if mapping_id not in mapping_cache:
+            if mapping_cache is not None and mapping_id not in mapping_cache:
                 mapping_cache[mapping_id] = await mapping_cache_read(db, mapping_id)
             key = load_plaintext_from_operand(c.key, registers, finalize_state)
             value = PlaintextValue(plaintext=load_plaintext_from_operand(c.value, registers, finalize_state))
             key_id = Field.loads(aleo.get_key_id(str(mapping_id), key.dump()))
             value_id = Field.loads(aleo.get_value_id(str(key_id), value.dump()))
-            index = mapping_find_index(mapping_cache[mapping_id], key_id)
-            if allow_state_change:
+            if mapping_cache:
+                index = mapping_find_index(mapping_cache[mapping_id], key_id)
                 if index == -1:
                     index = len(mapping_cache[mapping_id])
-                    mapping_cache[mapping_id].append((key_id, value_id, key, value))
-                    print(f"new {c.mapping}[{key}, {index}] = {value}")
+                if allow_state_change:
+                    if index == len(mapping_cache[mapping_id]):
+                        mapping_cache[mapping_id].append((key_id, value_id, key, value))
+                        print(f"new {c.mapping}[{key}, {index}] = {value}")
+                    else:
+                        if mapping_cache[mapping_id][index][0] != key_id:
+                            raise RuntimeError("find_index returned invalid index")
+                        mapping_cache[mapping_id][index] = (key_id, value_id, key, value)
+                        print(f"set {c.mapping}[{key}, {index}] = {value}")
                 else:
-                    if mapping_cache[mapping_id][index][0] != key_id:
-                        raise RuntimeError("find_index returned invalid index")
-                    mapping_cache[mapping_id][index] = (key_id, value_id, key, value)
-                    print(f"set {c.mapping}[{key}, {index}] = {value}")
+                    print("Not updating mapping cache because allow_state_change is False")
             else:
-                print("Not updating mapping cache because allow_state_change is False")
+                index = await db.get_mapping_index_by_key(str(program.id), str(mapping_id), str(key_id))
+                if index is None:
+                    index = await db.get_mapping_size(str(program.id), str(mapping_id))
+                if allow_state_change:
+                    raise RuntimeError("unsupported execution configuration")
+                else:
+                    print("Not updating database because allow_state_change is False")
 
             operations.append({
                 "type": FinalizeOperation.Type.UpdateKeyValue,
@@ -179,28 +205,38 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
 
         elif isinstance(c, RemoveCommand):
             mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(c.mapping)))
-            if mapping_id not in mapping_cache:
+            if mapping_cache is not None and mapping_id not in mapping_cache:
                 mapping_cache[mapping_id] = await mapping_cache_read(db, mapping_id)
             key = load_plaintext_from_operand(c.key, registers, finalize_state)
             key_id = Field.loads(aleo.get_key_id(str(mapping_id), key.dump()))
-            index = mapping_find_index(mapping_cache[mapping_id], key_id)
-            if index == -1:
-                print(f"Key {key} not found in mapping {c.mapping}")
-                continue
-            if allow_state_change:
-                kv_list = mapping_cache[mapping_id]
-                if len(kv_list) > 1:
-                    kv_list[len(kv_list) - 1], kv_list[index] = kv_list[index], kv_list[len(kv_list) - 1]
-                    if kv_list[len(kv_list) - 1][0] != key_id:
+            if mapping_cache:
+                index = mapping_find_index(mapping_cache[mapping_id], key_id)
+                if index == -1:
+                    print(f"Key {key} not found in mapping {c.mapping}")
+                    continue
+                if allow_state_change:
+                    kv_list = mapping_cache[mapping_id]
+                    if len(kv_list) > 1:
                         kv_list[len(kv_list) - 1], kv_list[index] = kv_list[index], kv_list[len(kv_list) - 1]
-                        raise RuntimeError("remove logic failed to swap key/value")
-                popped = kv_list.pop()
-                if popped[0] != key_id:
-                    kv_list.append(popped)
-                    raise RuntimeError("remove logic popped invalid key/value")
-                print(f"del {c.mapping}[{key}, {index}]")
+                        if kv_list[len(kv_list) - 1][0] != key_id:
+                            kv_list[len(kv_list) - 1], kv_list[index] = kv_list[index], kv_list[len(kv_list) - 1]
+                            raise RuntimeError("remove logic failed to swap key/value")
+                    popped = kv_list.pop()
+                    if popped[0] != key_id:
+                        kv_list.append(popped)
+                        raise RuntimeError("remove logic popped invalid key/value")
+                    print(f"del {c.mapping}[{key}, {index}]")
+                else:
+                    print("Not updating mapping cache because allow_state_change is False")
             else:
-                print("Not updating mapping cache because allow_state_change is False")
+                index = await db.get_mapping_index_by_key(str(program.id), str(mapping_id), str(key_id))
+                if index is None:
+                    print(f"Key {key} not found in mapping {c.mapping}")
+                    continue
+                if allow_state_change:
+                    raise RuntimeError("unsupported execution configuration")
+                else:
+                    print("Not updating database because allow_state_change is False")
             operations.append({
                 "type": FinalizeOperation.Type.RemoveKeyValue,
                 "mapping_id": mapping_id,

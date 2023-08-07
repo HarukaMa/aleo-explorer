@@ -152,6 +152,6 @@ async def preview_finalize_execution(db: Database, program: Program, function_na
         program,
         function_name,
         inputs,
-        {},
+        mapping_cache=None,
         allow_state_change=False,
     )

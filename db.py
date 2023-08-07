@@ -1829,7 +1829,7 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_mapping_value(self, program_id: str, mapping: str, key_id: str) -> bytes | None:
+    async def get_mapping_value(self, program_id: str, mapping: str, key_id: str) -> Optional[bytes]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1843,6 +1843,41 @@ class Database:
                     if res is None:
                         return None
                     return res['value']
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def get_mapping_index_by_key(self, program_id: str, mapping: str, key_id: str) -> Optional[bytes]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT index FROM mapping_value mv "
+                        "JOIN mapping m on mv.mapping_id = m.id "
+                        "WHERE m.program_id = %s AND m.mapping = %s AND mv.key_id = %s",
+                        (program_id, mapping, key_id)
+                    )
+                    res = await cur.fetchone()
+                    if res is None:
+                        return None
+                    return res['index']
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def get_mapping_size(self, program_id: str, mapping: str) -> int:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT COUNT(*) FROM mapping_value mv "
+                        "JOIN mapping m on mv.mapping_id = m.id "
+                        "WHERE m.program_id = %s AND m.mapping = %s",
+                        (program_id, mapping)
+                    )
+                    if (res := await cur.fetchone()) is None:
+                        return 0
+                    return res['count']
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
