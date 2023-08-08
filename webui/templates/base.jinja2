@@ -89,6 +89,9 @@
         Current block height: {{ sync_info.local_height }} / {{ sync_info.remote_height }}
     </div>
     </div>
+{% else %}
+    <!-- indicator for health check -->
+    <span style="display: none">in_sync</span>
 {% endif %}
 <div class="container">
 {% block content %}{% endblock %}
