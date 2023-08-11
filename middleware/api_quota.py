@@ -32,8 +32,6 @@ class APIQuotaMiddleware:
         async with self.ip_remaining_time_lock:
             remaining, last_call, outstanding_call = self.ip_remaining_time[ip]
             print(f"ip {ip} has quota {remaining}s, last call {last_call}, outstanding call {outstanding_call}")
-            if outstanding_call >= self.max_concurrency or remaining - self.concurrency_penalty < 0:
-                raise QuotaExceeded()
             if outstanding_call == 0 and last_call != -1:
                 quota = remaining + (time.monotonic() - last_call) * self.recover_rate
                 if quota > self.max_call_time:
@@ -41,6 +39,8 @@ class APIQuotaMiddleware:
                 print(f"ip {ip} quota recovered to {quota}")
             else:
                 quota = remaining
+            if outstanding_call >= self.max_concurrency or quota - self.concurrency_penalty < 0:
+                raise QuotaExceeded()
             # save current quota subtract 1 second right now to avoid flood attack
             self.ip_remaining_time[ip] = (quota - self.concurrency_penalty, last_call, outstanding_call + 1)
         return quota
