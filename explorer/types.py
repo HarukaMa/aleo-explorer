@@ -1,7 +1,7 @@
 from enum import IntEnum
 from typing import Any
 
-from node.types import Block
+from aleo_types import Block
 
 
 class Message:

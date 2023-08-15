@@ -5,11 +5,11 @@ from sys import stdout
 
 import api
 import webui
+from aleo_types import Block, BlockHash
 from db import Database
 from interpreter.interpreter import init_builtin_program
 from node import Node
 from node.testnet3 import Testnet3
-from node.types import Block, BlockHash
 from .types import Request, Message, ExplorerRequest
 
 

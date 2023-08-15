@@ -5,13 +5,13 @@ from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
 
-from db import Database
-from node.types import u32, Transition, ExecuteTransaction, PrivateTransitionInput, \
+from aleo_types import u32, Transition, ExecuteTransaction, PrivateTransitionInput, \
     RecordTransitionInput, TransitionOutput, RecordTransitionOutput, DeployTransaction, Program, \
     PublicTransitionInput, \
     PublicTransitionOutput, PrivateTransitionOutput, PlaintextValue, ExternalRecordTransitionInput, \
     ExternalRecordTransitionOutput, AcceptedDeploy, AcceptedExecute, RejectedExecute, \
     FeeTransaction, RejectedDeploy, RejectedExecution, RecordValue, Identifier, Entry
+from db import Database
 from .template import templates
 from .utils import function_signature, out_of_sync_check, function_definition, get_fee_amount_from_transition
 

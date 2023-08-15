@@ -4,12 +4,12 @@ from typing import cast, Any
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from aleo_types import Program, Identifier, Finalize, LiteralPlaintextType, \
+    LiteralPlaintext, Literal, StructPlaintextType, StructPlaintext, FinalizeOperation, Plaintext
 from api.utils import use_program_cache
 from db import Database
 from interpreter.finalizer import ExecuteError
 from interpreter.interpreter import preview_finalize_execution
-from node.types import Program, Identifier, Finalize, LiteralPlaintextType, \
-    LiteralPlaintext, Literal, StructPlaintextType, StructPlaintext, FinalizeOperation, Plaintext
 
 
 @use_program_cache

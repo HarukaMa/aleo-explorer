@@ -3,7 +3,7 @@ from io import BytesIO
 
 import aleo
 
-from ..types import u16, Block, u32, Program
+from aleo_types import u16, Block, u32, Program
 
 
 def load_program(program_id: str) -> Program:

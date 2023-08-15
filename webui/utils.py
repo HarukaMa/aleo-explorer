@@ -5,8 +5,8 @@ import time
 import aiohttp
 from starlette.exceptions import HTTPException
 
+from aleo_types import Transition, PublicTransitionInput, LiteralPlaintext
 from db import Database
-from node.types import Transition, PublicTransitionInput, LiteralPlaintext
 
 
 def get_relative_time(timestamp: int):

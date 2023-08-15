@@ -1,6 +1,6 @@
 from io import StringIO
 
-from node.types import *
+from aleo_types import *
 
 
 class disasm_str(StringIO):

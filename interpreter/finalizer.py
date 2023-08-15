@@ -1,9 +1,9 @@
 import os
 import time
 
+from aleo_types import *
 from db import Database
 from disasm.aleo import disasm_instruction, disasm_command
-from node.types import *
 from .environment import Registers
 from .instruction import execute_instruction
 from .utils import load_plaintext_from_operand, store_plaintext_to_register, FinalizeState, MappingCacheTuple

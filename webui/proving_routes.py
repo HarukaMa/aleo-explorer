@@ -4,8 +4,8 @@ from typing import Any
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
 
+from aleo_types import Transaction, AcceptedDeploy, DeployTransaction
 from db import Database
-from node.types import Transaction, AcceptedDeploy, DeployTransaction
 from .template import templates
 from .utils import out_of_sync_check
 

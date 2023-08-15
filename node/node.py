@@ -7,9 +7,9 @@ from asyncio import StreamReader, StreamWriter
 from typing import Awaitable
 
 import explorer.types as explorer
+from aleo_types import *  # too many types
 # from .light_node import LightNodeState
 from .testnet3.param import Testnet3
-from .types import *  # too many types
 
 PING_SLEEP_IN_SECS = 9
 

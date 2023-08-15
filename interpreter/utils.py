@@ -1,4 +1,4 @@
-from node.types import *
+from aleo_types import *
 from .environment import Registers
 
 #                         kid    vid    k          v

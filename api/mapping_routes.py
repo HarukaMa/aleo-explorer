@@ -5,10 +5,10 @@ import aleo
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from aleo_types import Program, Plaintext, Value, LiteralPlaintextType, LiteralPlaintext, \
+    Literal, StructPlaintextType, StructPlaintext
 from api.utils import async_check_sync, use_program_cache
 from db import Database
-from node.types import Program, Plaintext, Value, LiteralPlaintextType, LiteralPlaintext, \
-    Literal, StructPlaintextType, StructPlaintext
 
 
 @async_check_sync

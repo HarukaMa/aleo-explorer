@@ -1,9 +1,9 @@
 import psycopg
 
+from aleo_types import *
 from db import Database
 from interpreter.finalizer import execute_finalizer, ExecuteError
 from interpreter.utils import FinalizeState, MappingCacheTuple
-from node.types import *
 
 global_mapping_cache: dict[Field, list[MappingCacheTuple]] = {}
 global_program_cache: dict[str, Program] = {}

@@ -1,4 +1,4 @@
-from node.types import Plaintext
+from aleo_types import Plaintext
 
 
 class Registers:

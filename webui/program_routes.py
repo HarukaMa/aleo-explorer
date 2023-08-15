@@ -8,9 +8,9 @@ from starlette.requests import Request
 from starlette.responses import RedirectResponse
 
 import disasm.aleo
-from db import Database
-from node.types import DeployTransaction, Deployment, Program, \
+from aleo_types import DeployTransaction, Deployment, Program, \
     AcceptedDeploy
+from db import Database
 from .template import templates
 from .utils import function_signature, out_of_sync_check
 

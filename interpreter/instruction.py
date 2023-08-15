@@ -1,8 +1,8 @@
 from typing import cast
 
+from aleo_types import *
 from interpreter.environment import Registers
 from interpreter.utils import load_plaintext_from_operand, store_plaintext_to_register, FinalizeState
-from node.types import *
 
 IT = Instruction.Type
 

@@ -7,9 +7,9 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 
+from aleo_types import *
 from disasm.utils import value_type_to_mode_type_str, plaintext_type_to_str
 from explorer.types import Message as ExplorerMessage
-from node.types import *
 
 
 class Database:
