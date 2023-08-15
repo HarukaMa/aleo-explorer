@@ -123,7 +123,7 @@ class Address(AleoObject):
     size = 32
 
 
-class Field(Serializable, Add, Compare, Pow, Cast):
+class Field(Serializable, Add, Sub, Mul, Div, Compare, Pow, Cast):
     # Fr, Fp256
     # Just store as a large integer now
     # Hopefully this will not be used later...
@@ -157,6 +157,15 @@ class Field(Serializable, Add, Compare, Pow, Cast):
 
     def __add__(self, other: Self):
         return Field.load(BytesIO(aleo.field_ops(self.dump(), other.dump(), "add")))
+
+    def __sub__(self, other: Self):
+        return Field.load(BytesIO(aleo.field_ops(self.dump(), other.dump(), "sub")))
+
+    def __mul__(self, other: Self):
+        return Field.load(BytesIO(aleo.field_ops(self.dump(), other.dump(), "mul")))
+
+    def __floordiv__(self, other: Self):
+        return Field.load(BytesIO(aleo.field_ops(self.dump(), other.dump(), "div")))
 
     def __gt__(self, other: Self):
         return bool_.load(BytesIO(aleo.field_ops(self.dump(), other.dump(), "gt"))).value
