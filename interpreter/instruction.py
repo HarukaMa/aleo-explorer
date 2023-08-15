@@ -609,7 +609,21 @@ def ternary(operands: list[Operand], destination: Register, registers: Registers
         store_plaintext_to_register(op3, destination, registers)
 
 def xor(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
+    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
+    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+    if not isinstance(op1, LiteralPlaintext) or not isinstance(op2, LiteralPlaintext):
+        raise TypeError("operands must be literals")
+    if not isinstance(op1.literal.primitive, Xor):
+        raise TypeError("operands must be bitwise xor")
+    # noinspection PyTypeChecker
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=op1.literal.type,
+            primitive=op1.literal.primitive ^ op2.literal.primitive,
+        )
+    )
+    store_plaintext_to_register(res, destination, registers)
+
 
 
 literal_ops = {

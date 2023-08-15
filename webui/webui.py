@@ -88,7 +88,7 @@ async def submit_feedback_route(request: Request):
     contact = form.get("contact")
     if isinstance(contact, UploadFile):
         return RedirectResponse(url="/feedback?message=Invalid contact")
-    if contact == "":
+    if contact == "" or contact is None:
         contact = "Anonymous"
     content = form.get("content")
     if not content or isinstance(content, UploadFile):

@@ -151,6 +151,13 @@ class Int(int, Serializable, IntProtocol):
             raise TypeError("unsupported operand type(s) for |: '{}' and '{}'".format(type(self), type(other)))
         return self.__class__(int.__or__(self, other))
 
+    def __xor__(self, other: int | Self):
+        if type(other) is int:
+            return self.__class__(int.__xor__(self, other))
+        if not issubclass(type(other), Int):
+            raise TypeError("unsupported operand type(s) for ^: '{}' and '{}'".format(type(self), type(other)))
+        return self.__class__(int.__xor__(self, other))
+
     def __mod__(self, other: int | Self):
         if type(other) is int:
             return self.__class__(int.__mod__(self, other))
