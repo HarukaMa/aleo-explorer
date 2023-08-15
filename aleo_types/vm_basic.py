@@ -148,7 +148,7 @@ class Field(Serializable, Add, Sub, Mul, Div, Compare, Pow, Cast):
         return str(self.data) + "field"
 
     def __repr__(self):
-        return self.__class__.__name__ + "(" + str(self) + ")"
+        return f"{self.__class__.__name__}({self.data})"
 
     def __eq__(self, other: object):
         if not isinstance(other, Field):
@@ -215,7 +215,7 @@ class Group(Serializable):
         return str(self.data) + "group"
 
     def __repr__(self):
-        return self.__class__.__name__ + "(" + str(self) + ")"
+        return f"{self.__class__.__name__}({self.data})"
 
 
 class Scalar(Serializable):
@@ -241,7 +241,7 @@ class Scalar(Serializable):
         return str(self.data) + "scalar"
 
     def __repr__(self):
-        return self.__class__.__name__ + "(" + str(self) + ")"
+        return f"{self.__class__.__name__}({self.data})"
 
 
 class Fq(Serializable):
