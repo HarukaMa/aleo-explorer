@@ -46,6 +46,16 @@ class Compare(Equal, Protocol):
 
 
 @runtime_checkable
+class Abs(Protocol):
+    def __abs__(self) -> Self:
+        ...
+
+@runtime_checkable
+class AbsWrapped(Abs, Protocol):
+    def abs_wrapped(self) -> Self:
+        ...
+
+@runtime_checkable
 class Add(Protocol):
     def __add__(self, other: Any) -> Self:
         ...
@@ -106,13 +116,33 @@ class Not(Protocol):
         ...
 
 @runtime_checkable
+class Nand(Protocol):
+    def nand(self, other: Any) -> Self:
+        ...
+
+@runtime_checkable
+class Nor(Protocol):
+    def nor(self, other: Any) -> Self:
+        ...
+
+@runtime_checkable
 class Shl(Protocol):
     def __lshift__(self, other: Any) -> Self:
         ...
 
 @runtime_checkable
+class ShlWrapped(Shl, Protocol):
+    def shl_wrapped(self, other: Any) -> Self:
+        ...
+
+@runtime_checkable
 class Shr(Protocol):
     def __rshift__(self, other: Any) -> Self:
+        ...
+
+@runtime_checkable
+class ShrWrapped(Shr, Protocol):
+    def shr_wrapped(self, other: Any) -> Self:
         ...
 
 @runtime_checkable
@@ -133,6 +163,36 @@ class Pow(Protocol):
 @runtime_checkable
 class PowWrapped(Pow, Protocol):
     def pow_wrapped(self, other: Any) -> Self:
+        ...
+
+@runtime_checkable
+class Double(Add, Protocol):
+    def double(self) -> Self:
+        ...
+
+@runtime_checkable
+class Square(Mul, Protocol):
+    def square(self) -> Self:
+        ...
+
+@runtime_checkable
+class Sqrt(Protocol):
+    def sqrt(self) -> Self:
+        ...
+
+@runtime_checkable
+class Inv(Protocol):
+    def inv(self) -> Self:
+        ...
+
+@runtime_checkable
+class Mod(Protocol):
+    def __mod__(self, other: Any) -> Self:
+        ...
+
+@runtime_checkable
+class Neg(Protocol):
+    def __neg__(self) -> Self:
         ...
 
 @runtime_checkable

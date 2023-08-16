@@ -123,7 +123,7 @@ class Address(AleoObject):
     size = 32
 
 
-class Field(Serializable, Add, Sub, Mul, Div, Compare, Pow, Cast):
+class Field(Serializable, Double, Sub, Square, Div, Sqrt, Compare, Pow, Inv, Neg, Cast):
     # Fr, Fp256
     # Just store as a large integer now
     # Hopefully this will not be used later...
@@ -159,40 +159,55 @@ class Field(Serializable, Add, Sub, Mul, Div, Compare, Pow, Cast):
         return hash(self.data)
 
     def __add__(self, other: Self):
-        return Field.load(BytesIO(aleo.field_ops(self.dump(), other.dump(), "add")))
+        return Field.load(BytesIO(aleo.field_ops(self, other, "add")))
+
+    def double(self) -> Self:
+        return Field.load(BytesIO(aleo.field_ops(self, self, "double")))
 
     def __sub__(self, other: Self):
-        return Field.load(BytesIO(aleo.field_ops(self.dump(), other.dump(), "sub")))
+        return Field.load(BytesIO(aleo.field_ops(self, other, "sub")))
 
     def __mul__(self, other: Self):
-        return Field.load(BytesIO(aleo.field_ops(self.dump(), other.dump(), "mul")))
+        return Field.load(BytesIO(aleo.field_ops(self, other, "mul")))
+
+    def square(self) -> Self:
+        return Field.load(BytesIO(aleo.field_ops(self, self, "square")))
+
+    def sqrt(self) -> Self:
+        return Field.load(BytesIO(aleo.field_ops(self, self, "sqrt")))
 
     def __floordiv__(self, other: Self):
-        return Field.load(BytesIO(aleo.field_ops(self.dump(), other.dump(), "div")))
+        return Field.load(BytesIO(aleo.field_ops(self, other, "div")))
 
     def __gt__(self, other: Self):
-        return bool_.load(BytesIO(aleo.field_ops(self.dump(), other.dump(), "gt"))).value
+        return bool_.load(BytesIO(aleo.field_ops(self, other, "gt"))).value
 
     def __lt__(self, other: Self):
-        return bool_.load(BytesIO(aleo.field_ops(self.dump(), other.dump(), "lt"))).value
+        return bool_.load(BytesIO(aleo.field_ops(self, other, "lt"))).value
 
     def __ge__(self, other: Self):
-        return bool_.load(BytesIO(aleo.field_ops(self.dump(), other.dump(), "gte"))).value
+        return bool_.load(BytesIO(aleo.field_ops(self, other, "gte"))).value
 
     def __le__(self, other: Self):
-        return bool_.load(BytesIO(aleo.field_ops(self.dump(), other.dump(), "lte"))).value
+        return bool_.load(BytesIO(aleo.field_ops(self, other, "lte"))).value
 
     def __pow__(self, power: Self):
-        return Field.load(BytesIO(aleo.field_ops(self.dump(), power.dump(), "pow")))
+        return Field.load(BytesIO(aleo.field_ops(self, power, "pow")))
+
+    def inv(self) -> Self:
+        return Field.load(BytesIO(aleo.field_ops(self, self, "inv")))
+
+    def __neg__(self) -> Self:
+        return Field.load(BytesIO(aleo.field_ops(self, self, "neg")))
 
     def cast(self, destination_type: Any, *, lossy: bool) -> Any:
         from .vm_instruction import LiteralType
         if not isinstance(destination_type, LiteralType):
             raise ValueError("invalid type")
-        return destination_type.primitive_type.load(BytesIO(aleo.field_cast(self.dump(), destination_type.dump(), lossy)))
+        return destination_type.primitive_type.load(BytesIO(aleo.field_cast(self, destination_type, lossy)))
 
 
-class Group(Serializable):
+class Group(Serializable, Add, Sub, Mul, Neg, Cast):
     # This is definitely wrong, but we are not using the internals
     def __init__(self, data: int):
         self.data = data
@@ -217,8 +232,30 @@ class Group(Serializable):
     def __repr__(self):
         return f"{self.__class__.__name__}({self.data})"
 
+    def __add__(self, other: Self):
+        return Group.load(BytesIO(aleo.group_ops(self, other, "add")))
 
-class Scalar(Serializable):
+    def double(self) -> Self:
+        return Group.load(BytesIO(aleo.group_ops(self, self, "double")))
+
+    def __sub__(self, other: Self):
+        return Group.load(BytesIO(aleo.group_ops(self, other, "sub")))
+
+    def __mul__(self, other: "Scalar"):
+        return Group.load(BytesIO(aleo.group_ops(self, other, "mul")))
+
+    def __neg__(self) -> Self:
+        return Group.load(BytesIO(aleo.group_ops(self, self, "neg")))
+
+    def cast(self, destination_type: Any, *, lossy: bool) -> Any:
+        from .vm_instruction import LiteralType
+        if not isinstance(destination_type, LiteralType):
+            raise ValueError("invalid type")
+        return destination_type.primitive_type.load(BytesIO(aleo.group_cast(self, destination_type, lossy)))
+
+
+
+class Scalar(Serializable, Add, Sub, Mul, Compare, Cast):
     # Could be wrong as well
     def __init__(self, data: int):
         self.data = data
@@ -242,6 +279,34 @@ class Scalar(Serializable):
 
     def __repr__(self):
         return f"{self.__class__.__name__}({self.data})"
+
+    def __add__(self, other: Self):
+        return Scalar.load(BytesIO(aleo.scalar_ops(self, other, "add")))
+
+    def __sub__(self, other: Self):
+        return Scalar.load(BytesIO(aleo.scalar_ops(self, other, "sub")))
+
+    def __mul__(self, other: Group):
+        return Group.load(BytesIO(aleo.scalar_ops(self, other, "mul")))
+
+    def __gt__(self, other: Self):
+        return bool_.load(BytesIO(aleo.scalar_ops(self, other, "gt"))).value
+
+    def __lt__(self, other: Self):
+        return bool_.load(BytesIO(aleo.scalar_ops(self, other, "lt"))).value
+
+    def __ge__(self, other: Self):
+        return bool_.load(BytesIO(aleo.scalar_ops(self, other, "gte"))).value
+
+    def __le__(self, other: Self):
+        return bool_.load(BytesIO(aleo.scalar_ops(self, other, "lte"))).value
+
+    def cast(self, destination_type: Any, *, lossy: bool) -> Any:
+        from .vm_instruction import LiteralType
+        if not isinstance(destination_type, LiteralType):
+            raise ValueError("invalid type")
+        return destination_type.primitive_type.load(BytesIO(aleo.scalar_cast(self, destination_type, lossy)))
+
 
 
 class Fq(Serializable):

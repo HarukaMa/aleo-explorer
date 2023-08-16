@@ -1172,9 +1172,9 @@ class Instruction(Serializable):
     @property
     def cost(self) -> int:
         if self.type in (self.Type.HashPSD2, self.Type.HashPSD4, self.Type.HashPSD8):
-            if not isinstance(self, HashInstruction):
+            if not isinstance(self.literals, HashInstruction):
                 raise ValueError(f"expected HashInstruction, got {self}")
-            inst = self
+            inst = self.literals
             # need to redesign the fee map to go fully static
             fee_dict: dict[str, int] = Instruction.fee_map[self.type] # type: ignore[reportGeneralTypeIssues]
             if inst.destination_type in (LiteralType.Address, LiteralType.Group):

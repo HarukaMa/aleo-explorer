@@ -5,6 +5,8 @@ from interpreter.environment import Registers
 from interpreter.utils import load_plaintext_from_operand, store_plaintext_to_register, FinalizeState
 
 IT = Instruction.Type
+HT = HashInstruction.Type
+CT = CommitInstruction.Type
 
 def execute_instruction(instruction: Instruction, program: Program, registers: Registers, finalize_state: FinalizeState):
     literals = instruction.literals
@@ -30,18 +32,41 @@ def execute_instruction(instruction: Instruction, program: Program, registers: R
             raise NotImplementedError
     elif isinstance(literals, HashInstruction):
         type_ = literals.type
-        if type_ == HashInstruction.Type.HashBHP256:
-            hash_bhp256(literals.operands, literals.destination, literals.destination_type, registers, finalize_state)
-        else:
-            raise NotImplementedError
+        hash_op(literals.operands, literals.destination, literals.destination_type, registers, finalize_state, type_)
     else:
-        raise NotImplementedError
+        type_ = literals.type
+        commit_op(literals.operands, literals.destination, literals.destination_type, registers, finalize_state, type_)
+
 
 def abs_(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
+    op = load_plaintext_from_operand(operands[0], registers, finalize_state)
+    if not isinstance(op, LiteralPlaintext):
+        raise TypeError("operand must be literal")
+    if not isinstance(op.literal.primitive, Abs):
+        raise TypeError("operand must be absolute")
+    # noinspection PyTypeChecker
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=op.literal.type,
+            primitive=abs(op.literal.primitive),
+        )
+    )
+    store_plaintext_to_register(res, destination, registers)
 
 def abs_wrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
+    op = load_plaintext_from_operand(operands[0], registers, finalize_state)
+    if not isinstance(op, LiteralPlaintext):
+        raise TypeError("operand must be literal")
+    if not isinstance(op.literal.primitive, AbsWrapped):
+        raise TypeError("operand must be absolute")
+    # noinspection PyTypeChecker
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=op.literal.type,
+            primitive=op.literal.primitive.abs_wrapped(),
+        )
+    )
+    store_plaintext_to_register(res, destination, registers)
 
 def add(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
@@ -167,23 +192,23 @@ def cast_op(operands: list[Operand], destination: Register, cast_type: CastType,
     else:
         raise NotImplementedError
 
-def commit_bhp256(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
+def commit_op(operands: tuple[Operand, Operand], destination: Register, destination_type: LiteralType, registers: Registers, finalize_state: FinalizeState, commit_type: CT):
+    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
+    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+    if not isinstance(op2, LiteralPlaintext):
+        raise TypeError("operand must be literal")
+    if op2.literal.type != Literal.Type.Scalar:
+        raise TypeError("invalid operand types")
+    value_type = destination_type.primitive_type
+    value = value_type.load(BytesIO(aleo.commit_ops(PlaintextValue(plaintext=op1).dump(), op2.literal.primitive, commit_ops[commit_type], destination_type)))
 
-def commit_bhp512(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
-
-def commit_bhp768(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
-
-def commit_bhp1024(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
-
-def commit_ped64(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
-
-def commit_ped128(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=Literal.Type(destination_type.value),
+            primitive=value,
+        )
+    )
+    store_plaintext_to_register(res, destination, registers)
 
 def div(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
@@ -218,7 +243,19 @@ def div_wrapped(operands: list[Operand], destination: Register, registers: Regis
     store_plaintext_to_register(res, destination, registers)
 
 def double(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
+    op = load_plaintext_from_operand(operands[0], registers, finalize_state)
+    if not isinstance(op, LiteralPlaintext):
+        raise TypeError("operand must be literal")
+    if not isinstance(op.literal.primitive, Double):
+        raise TypeError("operand must be doubleable")
+    # noinspection PyTypeChecker
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=op.literal.type,
+            primitive=op.literal.primitive.double(),
+        )
+    )
+    store_plaintext_to_register(res, destination, registers)
 
 def greater_than(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
@@ -262,10 +299,10 @@ def greater_than_or_equal(operands: list[Operand], destination: Register, regist
         )
     store_plaintext_to_register(res, destination, registers)
 
-def hash_bhp256(operands: tuple[Operand, Optional[Operand]], destination: Register, destination_type: LiteralType, registers: Registers, finalize_state: FinalizeState):
+def hash_op(operands: tuple[Operand, Optional[Operand]], destination: Register, destination_type: LiteralType, registers: Registers, finalize_state: FinalizeState, hash_type: HT):
     op = load_plaintext_from_operand(operands[0], registers, finalize_state)
     value_type = destination_type.primitive_type
-    value = value_type.load(BytesIO(aleo.hash_ops(PlaintextValue(plaintext=op).dump(), "bhp256", destination_type.dump())))
+    value = value_type.load(BytesIO(aleo.hash_ops(PlaintextValue(plaintext=op).dump(), hash_ops[hash_type], destination_type)))
     res = LiteralPlaintext(
         literal=Literal(
             type_=Literal.Type(destination_type.value),
@@ -273,30 +310,6 @@ def hash_bhp256(operands: tuple[Operand, Optional[Operand]], destination: Regist
         )
     )
     store_plaintext_to_register(res, destination, registers)
-
-def hash_bhp512(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
-
-def hash_bhp768(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
-
-def hash_bhp1024(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
-
-def hash_ped64(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
-
-def hash_ped128(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
-
-def hash_psd2(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
-
-def hash_psd4(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
-
-def hash_psd8(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
 
 def hash_many_psd2(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     raise NotImplementedError
@@ -308,7 +321,19 @@ def hash_many_psd8(operands: list[Operand], destination: Register, registers: Re
     raise NotImplementedError
 
 def inv(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
+    op = load_plaintext_from_operand(operands[0], registers, finalize_state)
+    if not isinstance(op, LiteralPlaintext):
+        raise TypeError("operand must be literal")
+    if not isinstance(op.literal.primitive, Inv):
+        raise TypeError("operand must be invertible")
+    # noinspection PyTypeChecker
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=op.literal.type,
+            primitive=op.literal.primitive.inv(),
+        )
+    )
+    store_plaintext_to_register(res, destination, registers)
 
 def is_eq(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
@@ -381,7 +406,20 @@ def less_than_or_equal(operands: list[Operand], destination: Register, registers
         )
     store_plaintext_to_register(res, destination, registers)
 def modulo(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
+    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
+    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+    if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
+        raise TypeError("operands must be literals")
+    if not (isinstance(op1.literal.primitive, Mod) and isinstance(op2.literal.primitive, Mod)):
+        raise TypeError("operands must be modulos")
+    # noinspection PyTypeChecker
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=op1.literal.type,
+            primitive=op1.literal.primitive % op2.literal.primitive,
+        )
+    )
+    store_plaintext_to_register(res, destination, registers)
 
 def mul(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
@@ -390,6 +428,8 @@ def mul(operands: list[Operand], destination: Register, registers: Registers, fi
         raise TypeError("operands must be literals")
     if not isinstance(op1.literal.primitive, Mul):
         raise TypeError("operands must be multiplicative")
+    if (op1.literal.type == Literal.Type.Group and op2.literal.type != Literal.Type.Scalar) or (op1.literal.type == Literal.Type.Scalar and op2.literal.type != Literal.Type.Group):
+        raise TypeError("invalid operand types")
     # noinspection PyTypeChecker
     res = LiteralPlaintext(
         literal=Literal(
@@ -416,13 +456,51 @@ def mul_wrapped(operands: list[Operand], destination: Register, registers: Regis
     store_plaintext_to_register(res, destination, registers)
 
 def nand(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
+    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
+    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+    if not isinstance(op1, LiteralPlaintext) or not isinstance(op2, LiteralPlaintext):
+        raise TypeError("operands must be literals")
+    if not isinstance(op1.literal.primitive, Nand):
+        raise TypeError("operands must be nandable")
+    # noinspection PyTypeChecker
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=Literal.Type.Boolean,
+            primitive=op1.literal.primitive.nand(op2.literal.primitive),
+        )
+    )
+    store_plaintext_to_register(res, destination, registers)
 
 def neg(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
+    op = load_plaintext_from_operand(operands[0], registers, finalize_state)
+    if not isinstance(op, LiteralPlaintext):
+        raise TypeError("operand must be literal")
+    if not isinstance(op.literal.primitive, Neg):
+        raise TypeError("operand must be negatable")
+    # noinspection PyTypeChecker
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=op.literal.type,
+            primitive=-op.literal.primitive,
+        )
+    )
+    store_plaintext_to_register(res, destination, registers)
 
 def nor(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
+    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
+    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+    if not isinstance(op1, LiteralPlaintext) or not isinstance(op2, LiteralPlaintext):
+        raise TypeError("operands must be literals")
+    if not isinstance(op1.literal.primitive, Nor):
+        raise TypeError("operands must be norable")
+    # noinspection PyTypeChecker
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=op1.literal.type,
+            primitive=op1.literal.primitive.nor(op2.literal.primitive),
+        )
+    )
+    store_plaintext_to_register(res, destination, registers)
 
 def not_(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     op = load_plaintext_from_operand(operands[0], registers, finalize_state)
@@ -433,7 +511,7 @@ def not_(operands: list[Operand], destination: Register, registers: Registers, f
     # noinspection PyTypeChecker
     res = LiteralPlaintext(
         literal=Literal(
-            type_=Literal.Type.Boolean,
+            type_=op.literal.type,
             primitive=~op.literal.primitive,
         )
     )
@@ -536,7 +614,20 @@ def shl(operands: list[Operand], destination: Register, registers: Registers, fi
     store_plaintext_to_register(res, destination, registers)
 
 def shl_wrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
+    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
+    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+    if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
+        raise TypeError("operands must be literals")
+    if not isinstance(op1.literal.primitive, ShlWrapped):
+        raise TypeError("operands must be shift left")
+    # noinspection PyTypeChecker
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=op1.literal.type,
+            primitive=op1.literal.primitive.shl_wrapped(op2.literal.primitive),
+        )
+    )
+    store_plaintext_to_register(res, destination, registers)
 
 def shr(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
@@ -555,13 +646,51 @@ def shr(operands: list[Operand], destination: Register, registers: Registers, fi
     store_plaintext_to_register(res, destination, registers)
 
 def shr_wrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
+    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
+    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+    if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
+        raise TypeError("operands must be literals")
+    if not isinstance(op1.literal.primitive, ShrWrapped):
+        raise TypeError("operands must be shift right")
+    # noinspection PyTypeChecker
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=op1.literal.type,
+            primitive=op1.literal.primitive.shr_wrapped(op2.literal.primitive),
+        )
+    )
+    store_plaintext_to_register(res, destination, registers)
+
 
 def square(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
+    op = load_plaintext_from_operand(operands[0], registers, finalize_state)
+    if not isinstance(op, LiteralPlaintext):
+        raise TypeError("operand must be literal")
+    if not isinstance(op.literal.primitive, Square):
+        raise TypeError("operand must be squareable")
+    # noinspection PyTypeChecker
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=op.literal.type,
+            primitive=op.literal.primitive.square(),
+        )
+    )
+    store_plaintext_to_register(res, destination, registers)
 
 def square_root(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    raise NotImplementedError
+    op = load_plaintext_from_operand(operands[0], registers, finalize_state)
+    if not isinstance(op, LiteralPlaintext):
+        raise TypeError("operand must be literal")
+    if not isinstance(op.literal.primitive, Sqrt):
+        raise TypeError("operand must be square rootable")
+    # noinspection PyTypeChecker
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=op.literal.type,
+            primitive=op.literal.primitive.sqrt(),
+        )
+    )
+    store_plaintext_to_register(res, destination, registers)
 
 def sub(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
@@ -664,4 +793,25 @@ literal_ops = {
     IT.SubWrapped: sub_wrapped,
     IT.Ternary: ternary,
     IT.Xor: xor,
+}
+
+hash_ops = {
+    HT.HashBHP256: "bhp256",
+    HT.HashBHP512: "bhp512",
+    HT.HashBHP768: "bhp768",
+    HT.HashBHP1024: "bhp1024",
+    HT.HashPED64: "ped64",
+    HT.HashPED128: "ped128",
+    HT.HashPSD2: "psd2",
+    HT.HashPSD4: "psd4",
+    HT.HashPSD8: "psd8",
+}
+
+commit_ops = {
+    CT.CommitBHP256: "bhp256",
+    CT.CommitBHP512: "bhp512",
+    CT.CommitBHP768: "bhp768",
+    CT.CommitBHP1024: "bhp1024",
+    CT.CommitPED64: "ped64",
+    CT.CommitPED128: "ped128",
 }

@@ -1,3 +1,4 @@
+import math
 import socket
 import struct
 from decimal import Decimal
@@ -18,7 +19,7 @@ class Bech32m:
         return str(self)
 
 
-class IntProtocol(Sized, Compare, AddWrapped, SubWrapped, MulWrapped, DivWrapped, And, Or, Xor, Not, Shl, Shr, RemWrapped, PowWrapped, Protocol):
+class IntProtocol(Sized, Compare, AddWrapped, SubWrapped, MulWrapped, DivWrapped, And, Or, Xor, Not, ShlWrapped, ShrWrapped, RemWrapped, PowWrapped, Protocol):
     min: int
     max: int
 
@@ -48,7 +49,7 @@ class Int(int, Serializable, IntProtocol):
 
     @classmethod
     def wrap_value(cls, value: int):
-        if value < 0:
+        if value < cls.min:
             value &= cls.max
         elif value > cls.max:
             if cls.min == 0:
@@ -130,12 +131,22 @@ class Int(int, Serializable, IntProtocol):
             raise TypeError("unsupported operand type(s) for <<: '{}' and '{}'".format(type(self), type(other)))
         return self.__class__(int.__lshift__(self, other))
 
+    def shl_wrapped(self, other: int | Self):
+        if isinstance(other, Int):
+            other = int(other)
+        return self.__class__(self.wrap_value(int.__lshift__(self, other)))
+
     def __rshift__(self, other: int | Self):
         if type(other) is int:
             return self.__class__(int.__rshift__(self, other))
         if not issubclass(type(other), Int):
             raise TypeError("unsupported operand type(s) for >>: '{}' and '{}'".format(type(self), type(other)))
         return self.__class__(int.__rshift__(self, other))
+
+    def shr_wrapped(self, other: int | Self):
+        if isinstance(other, Int):
+            other = int(other)
+        return self.__class__(self.wrap_value(int.__rshift__(self, other)))
 
     def __and__(self, other: int | Self):
         if type(other) is int:
@@ -169,17 +180,24 @@ class Int(int, Serializable, IntProtocol):
         return self.__mod__(other)
 
     def __pow__(self, power: int | Self):
-        if type(power) is int:
-            return self.__class__(int.__pow__(self, power))
-        if not isinstance(power, (u8, u16, u32)):
-            raise TypeError("unsupported operand type(s) for %: '{}' and '{}'".format(type(self), type(power)))
+        if isinstance(power, Int) and not isinstance(power, (u8, u16, u32)):
+            raise TypeError(f"unsupported operand type(s) for **: '{type(self)}' and '{type(power)}'")
+        power = int(power)
+        max_digits = math.ceil(math.log10(self.max))
+        res_digits = math.log10(abs(self)) * power
+        if res_digits > max_digits:
+            raise OverflowError(f"value *too large* is out of range for {self.__class__.__name__}")
         return self.__class__(int.__pow__(self, power))
 
     def pow_wrapped(self, other: int | Self):
         if isinstance(other, Int):
             other = int(other)
-        value = int(self) ** other
-        return self.__class__(self.wrap_value(value))
+        if self.min == 0:
+            return self.__class__(int.__pow__(self, other, self.max + 1))
+        else:
+            if self < 0 and other % 2 == 0:
+                return self.__class__(int.__pow__(self, other, self.max + 1))
+            return self.__class__(int.__pow__(self, other, (self.max + 1) * 2) + (self.min * 2))
 
     def dump(self) -> bytes:
         raise TypeError("cannot deserialize Int base class")
@@ -228,7 +246,7 @@ class IntEnumu32(Serializable, IntEnum, metaclass=ProtocolEnumMeta):
         return self
 
 
-class u8(Int):
+class u8(Int, Mod):
     size = 1
     min = 0
     max = 255
@@ -242,7 +260,7 @@ class u8(Int):
         return self
 
 
-class u16(Int):
+class u16(Int, Mod):
     size = 2
     min = 0
     max = 65535
@@ -256,7 +274,7 @@ class u16(Int):
         return self
 
 
-class u32(Int):
+class u32(Int, Mod):
     size = 4
     min = 0
     max = 4294967295
@@ -270,7 +288,7 @@ class u32(Int):
         return self
 
 
-class u64(Int):
+class u64(Int, Mod):
     size = 8
     min = 0
     max = 18446744073709551615
@@ -286,7 +304,7 @@ class u64(Int):
 # Obviously we only support 64bit
 usize = u64
 
-class u128(Int):
+class u128(Int, Mod):
     size = 16
     min = 0
     max = 340282366920938463463374607431768211455
@@ -301,7 +319,7 @@ class u128(Int):
         return self
 
 
-class i8(Int):
+class i8(Int, AbsWrapped, Neg):
     size = 1
     min = -128
     max = 127
@@ -311,11 +329,19 @@ class i8(Int):
 
     @classmethod
     def load(cls, data: BytesIO):
-        self = cls(struct.unpack("<b", data.read(1))[0])
-        return self
+        return cls(struct.unpack("<b", data.read(1))[0])
+
+    def __abs__(self):
+        return i8(abs(int(self)))
+
+    def abs_wrapped(self):
+        return self.__class__(self.wrap_value(abs(int(self))))
+
+    def __neg__(self):
+        return i8(-int(self))
 
 
-class i16(Int):
+class i16(Int, AbsWrapped, Neg):
     size = 2
     min = -32768
     max = 32767
@@ -325,11 +351,19 @@ class i16(Int):
 
     @classmethod
     def load(cls, data: BytesIO):
-        self = cls(struct.unpack("<h", data.read(2))[0])
-        return self
+        return cls(struct.unpack("<h", data.read(2))[0])
+
+    def __abs__(self):
+        return i16(abs(int(self)))
+
+    def abs_wrapped(self):
+        return self.__class__(self.wrap_value(abs(int(self))))
+
+    def __neg__(self):
+        return i16(-int(self))
 
 
-class i32(Int):
+class i32(Int, AbsWrapped, Neg):
     size = 4
     min = -2147483648
     max = 2147483647
@@ -339,11 +373,19 @@ class i32(Int):
 
     @classmethod
     def load(cls, data: BytesIO):
-        self = cls(struct.unpack("<i", data.read(4))[0])
-        return self
+        return cls(struct.unpack("<i", data.read(4))[0])
+
+    def __abs__(self):
+        return i32(abs(int(self)))
+
+    def abs_wrapped(self):
+        return self.__class__(self.wrap_value(abs(int(self))))
+
+    def __neg__(self):
+        return i32(-int(self))
 
 
-class i64(Int):
+class i64(Int, AbsWrapped, Neg):
     size = 8
     min = -9223372036854775808
     max = 9223372036854775807
@@ -353,26 +395,41 @@ class i64(Int):
 
     @classmethod
     def load(cls, data: BytesIO):
-        self = cls(struct.unpack("<q", data.read(8))[0])
-        return self
+        return cls(struct.unpack("<q", data.read(8))[0])
+
+    def __abs__(self):
+        return i64(abs(int(self)))
+
+    def abs_wrapped(self):
+        return self.__class__(self.wrap_value(abs(int(self))))
+
+    def __neg__(self):
+        return i64(-int(self))
 
 
-class i128(Int):
+class i128(Int, AbsWrapped, Neg):
     size = 16
     min = -170141183460469231731687303715884105728
     max = 170141183460469231731687303715884105727
 
     def dump(self) -> bytes:
-        return struct.pack("<qq", self & 0xFFFF_FFFF_FFFF_FFFF | -1, self >> 64)
+        return self.to_bytes(16, "little", signed=True)
 
     @classmethod
     def load(cls, data: BytesIO):
-        lo, hi = struct.unpack("<qq", data.read(16))
-        self = cls((hi << 64) | lo)
-        return self
+        return cls(int.from_bytes(data.read(16), "little", signed=True))
+
+    def __abs__(self):
+        return i128(abs(int(self)))
+
+    def abs_wrapped(self):
+        return self.__class__(self.wrap_value(abs(int(self))))
+
+    def __neg__(self):
+        return i128(-int(self))
 
 
-class bool_(Sized, Serializable):
+class bool_(Sized, Serializable, And, Or, Not, Xor, Nand, Nor):
 
     size = 1
 
@@ -425,6 +482,21 @@ class bool_(Sized, Serializable):
         if isinstance(other, bool):
             return bool_(self.value or other)
         return bool_(self.value or other.value)
+
+    def __xor__(self, other: bool | Self):
+        if isinstance(other, bool):
+            return bool_(self.value ^ other)
+        return bool_(self.value ^ other.value)
+
+    def nand(self, other: bool | Self) -> Self:
+        if isinstance(other, bool):
+            return bool_(not (self.value and other))
+        return bool_(not (self.value and other.value))
+
+    def nor(self, other: bool | Self) -> Self:
+        if isinstance(other, bool):
+            return bool_(not (self.value or other))
+        return bool_(not (self.value or other.value))
 
     def __bool__(self):
         return self.value

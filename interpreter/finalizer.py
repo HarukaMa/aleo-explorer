@@ -194,7 +194,7 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
                 additional_seeds,
             )
             primitive_type = c.destination_type.primitive_type
-            value = primitive_type.load(BytesIO(aleo.chacha_random_value(chacha_seed, c.destination_type.dump())))
+            value = primitive_type.load(BytesIO(aleo.chacha_random_value(chacha_seed, c.destination_type)))
             res = LiteralPlaintext(
                 literal=Literal(
                     type_=Literal.Type(c.destination_type.value),

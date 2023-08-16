@@ -332,6 +332,13 @@ class Command(EnumBaseSerialize, RustEnum, Serializable):
             return self.instruction.cost
         return self.fee_map[self.type]
 
+    def __str__(self):
+        from disasm.aleo import disasm_command
+        return disasm_command(self)
+
+    def __repr__(self):
+        return str(self)
+
 class InstructionCommand(Command):
     type = Command.Type.Instruction
 
