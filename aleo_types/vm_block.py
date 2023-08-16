@@ -1564,6 +1564,7 @@ class Entry(EnumBaseSerialize, RustEnum, Serializable, Generic[T]):
             raise ValueError("invalid type")
 
 
+@access_generic_type
 class ConstantEntry(Entry[T]):
     type = Entry.Type.Constant
 
@@ -1583,6 +1584,7 @@ class ConstantEntry(Entry[T]):
         return str(self.plaintext)
 
 
+@access_generic_type
 class PublicEntry(Entry[T]):
     type = Entry.Type.Public
 

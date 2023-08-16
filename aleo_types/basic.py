@@ -363,7 +363,7 @@ class i128(Int):
     max = 170141183460469231731687303715884105727
 
     def dump(self) -> bytes:
-        return struct.pack("<qq", self & 0xFFFF_FFFF_FFFF_FFFF, self >> 64)
+        return struct.pack("<qq", self & 0xFFFF_FFFF_FFFF_FFFF | -1, self >> 64)
 
     @classmethod
     def load(cls, data: BytesIO):
