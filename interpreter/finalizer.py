@@ -15,17 +15,13 @@ async def mapping_cache_read(db: Database, mapping_id: Field) -> list[MappingCac
     if not mapping:
         return []
     res: list[MappingCacheTuple] = []
-    index = 0
     for m in mapping:
-        if m["index"] != index:
-            raise RuntimeError("invalid mapping index")
         res.append((
             Field.loads(m["key_id"]),
             Field.loads(m["value_id"]),
             Plaintext.load(BytesIO(m["key"])),
             Value.load(BytesIO(m["value"])),
         ))
-        index += 1
     return res
 
 def mapping_find_index(mapping: list[MappingCacheTuple], key_id: Field) -> int:
