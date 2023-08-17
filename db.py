@@ -1913,7 +1913,7 @@ class Database:
                 raise ValueError(f"Mapping {mapping_id} not found")
             mapping_id = mapping['id']
             await cur.execute(
-                "SELECT key_id FROM mapping_value WHERE mapping_id = %s AND index = %s",
+                "SELECT key_id, key FROM mapping_value WHERE mapping_id = %s AND index = %s",
                 (mapping_id, index)
             )
             if (res := await cur.fetchone()) is None:
@@ -1942,14 +1942,15 @@ class Database:
                 raise ValueError(f"Mapping {mapping_id} not found")
             mapping_id = mapping['id']
             await cur.execute(
+                "SELECT id, index FROM mapping_value WHERE mapping_id = %s ORDER BY index DESC LIMIT 1",
+                (mapping_id,)
+            )
+            res = await cur.fetchone()
+            await cur.execute(
                 "DELETE FROM mapping_value WHERE mapping_id = %s AND index = %s",
                 (mapping_id, index)
             )
-            await cur.execute(
-                "SELECT id FROM mapping_value WHERE mapping_id = %s ORDER BY index DESC LIMIT 1",
-                (mapping_id,)
-            )
-            if (res := await cur.fetchone()) is not None:
+            if res is not None and res["index"] != index:
                 await cur.execute("UPDATE mapping_value SET index = %s WHERE id = %s", (index, res["id"]))
 
         except Exception as e:
