@@ -116,11 +116,17 @@ class TransitionID(AleoID):
 #         return aleo.get_record_ciphertext_commitment(self.data)
 
 
-class Address(AleoObject):
+class Address(AleoObject, Cast):
     # Should work like this...
 
     _prefix = "aleo"
     size = 32
+
+    def cast(self, destination_type: Any, *, lossy: bool) -> Any:
+        from .vm_instruction import LiteralType
+        if not isinstance(destination_type, LiteralType):
+            raise ValueError("invalid type")
+        return destination_type.primitive_type.load(BytesIO(aleo.address_cast(str(self), destination_type, lossy)))
 
 
 class Field(Serializable, Double, Sub, Square, Div, Sqrt, Compare, Pow, Inv, Neg, Cast):
