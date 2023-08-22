@@ -2,47 +2,6 @@
 
 {% block title %}Program {{ program_id }} - Haruka's Aleo Explorer{% endblock %}
 
-{% block head %}
-
-    <style>
-
-        #data {
-            margin: 20px 4px;
-        }
-
-        .text-alert {
-            color: #cc4b37;
-        }
-
-        pre {
-            background-color: #f8f8f8;
-            padding: 10px;
-            overflow-y: scroll;
-            max-height: 800px;
-        }
-
-        .tabs {
-            margin-top: 20px;
-        }
-
-        .tabs-title > a {
-            font-size: 0.9em;
-            padding: 0.75rem;
-        }
-
-        #read input[type="submit"] {
-            padding: 8px;
-        }
-
-        #read input:not([type]), #read input[type="text"] {
-            font-size: 0.9rem !important;
-            font-family: monospace !important;
-        }
-
-    </style>
-
-{% endblock %}
-
 {% from "macros.jinja2" import data_line, data_line_safe, state_label %}
 
 {% block content %}

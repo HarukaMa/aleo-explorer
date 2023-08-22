@@ -2,25 +2,6 @@
 
 {% block title %}Address {{ address_trunc }} - Haruka's Aleo Explorer{% endblock %}
 
-{% block head %}
-    <style>
-
-        #data {
-            margin: 20px 4px;
-        }
-        
-        .note {
-            font-size: 0.75rem;
-            color: #999;
-        }
-
-        .tooltip {
-            max-width: 250px;
-        }
-
-    </style>
-{% endblock %}
-
 {% from "macros.jinja2" import data_line, data_line_safe %}
 
 {% block content %}

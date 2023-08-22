@@ -2,34 +2,6 @@
 
 {% block title %}Block {{ block.header.metadata.height }} - Haruka's Aleo Explorer{% endblock %}
 
-{% block head %}
-    <style>
-
-        #data {
-            margin: 20px 4px;
-        }
-
-        .data-line {
-            padding: 10px 0;
-            border-bottom: 1px solid #ccc;
-        }
-
-        .data-line-value {
-            overflow-wrap: break-word;
-        }
-
-        .tooltip {
-            max-width: 250px;
-        }
-
-        .text-alert {
-            color: #cc4b37;
-        }
-
-
-    </style>
-{% endblock %}
-
 {% from "macros.jinja2" import data_line, state_label %}
 
 {% block content %}

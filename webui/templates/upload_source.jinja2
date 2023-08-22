@@ -2,23 +2,6 @@
 
 {% block title %}Upload source - Haruka's Aleo Explorer{% endblock %}
 
-{% block head %}
-
-    <style>
-
-        textarea {
-            font-family: monospace;
-            height: 400px;
-        }
-
-        .mono-only {
-            font-family: monospace;
-        }
-
-    </style>
-
-{% endblock %}
-
 {% block content %}
 
 <div class="content">
@@ -57,6 +40,7 @@
                     {% else %}
                         <textarea name="import_programs[]"></textarea>
                     {% endif %}
+                    </label>
                 {% endif %}
             {% endfor %}
             <button type="submit" class="button">Submit</button>

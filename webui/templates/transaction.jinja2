@@ -2,30 +2,6 @@
 
 {% block title %}Transaction {{ tx_id_trunc }} - Haruka's Aleo Explorer{% endblock %}
 
-{% block head %}
-
-    <style>
-
-        #data {
-            margin: 20px 4px;
-        }
-
-        #transitions, #rejected-transitions {
-            margin-top: 20px;
-        }
-
-        .text-alert {
-            color: #cc4b37;
-        }
-
-        .box-drawing {
-            font-family: "MS Gothic", "AppleGothic", "Hiragino Maru Gothic ProN", "SimSun", monospace;
-        }
-
-    </style>
-
-{% endblock %}
-
 {% from "macros.jinja2" import data_line, sub_data_line, state_label_with_reason %}
 
 {% block content %}

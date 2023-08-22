@@ -2,30 +2,6 @@
 
 {% block title %}Transition {{ ts_id_trunc }} - Haruka's Aleo Explorer{% endblock %}
 
-{% block head %}
-
-    <style>
-
-        .data {
-            margin: 20px 4px;
-        }
-
-        #wallet-connect-button {
-            margin-bottom: 0;
-        }
-
-        #wallet-connect-text {
-            margin-left: 8px;
-        }
-
-        .decrypted {
-            color: green;
-        }
-
-    </style>
-
-{% endblock %}
-
 {% from "macros.jinja2" import data_line, sub_data_line, sub_data_line_safe, state_label %}
 
 {% block content %}
