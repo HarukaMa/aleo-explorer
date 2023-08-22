@@ -10,4 +10,6 @@
         <pre>{{ exc.detail }}</pre>
     </div>
 
+    <script>document.addEventListener('DOMContentLoaded', function () { plausible('400', { props: { path: document.location.pathname } }); });</script>
+
 {% endblock %}
