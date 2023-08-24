@@ -511,6 +511,8 @@ async def search_route(request: Request):
     del remaining_query["q"]
     if remaining_query:
         remaining_query = "&" + "&".join([f"{k}={v}" for k, v in remaining_query.items()])
+    else:
+        remaining_query = ""
     try:
         height = int(query)
         return RedirectResponse(f"/block?h={height}{remaining_query}", status_code=302)
