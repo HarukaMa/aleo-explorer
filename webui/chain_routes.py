@@ -19,6 +19,11 @@ DictList = list[dict[str, Any]]
 
 async def block_route(request: Request):
     db: Database = request.app.state.db
+    is_htmx = request.scope["htmx"].is_htmx()
+    if is_htmx:
+        template = "htmx/block.jinja2"
+    else:
+        template = "block.jinja2"
     height = request.query_params.get("h")
     block_hash = request.query_params.get("bh")
     if height is None and block_hash is None:
@@ -119,7 +124,7 @@ async def block_route(request: Request):
         "target_sum": target_sum,
         "total_fee": total_fee,
     }
-    return templates.TemplateResponse('block.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
+    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
 
 
 async def get_transition_finalize_cost(db: Database, ts: Transition):
@@ -138,6 +143,11 @@ async def get_transition_finalize_cost(db: Database, ts: Transition):
 
 async def transaction_route(request: Request):
     db: Database = request.app.state.db
+    is_htmx = request.scope["htmx"].is_htmx()
+    if is_htmx:
+        template = "htmx/transaction.jinja2"
+    else:
+        template = "transaction.jinja2"
     tx_id = request.query_params.get("id")
     if tx_id is None:
         raise HTTPException(status_code=400, detail="Missing transaction id")
@@ -295,11 +305,16 @@ async def transaction_route(request: Request):
             "rejected_transitions": rejected_transitions,
         })
 
-    return templates.TemplateResponse('transaction.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
+    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
 
 
 async def transition_route(request: Request):
     db: Database = request.app.state.db
+    is_htmx = request.scope["htmx"].is_htmx()
+    if is_htmx:
+        template = "htmx/transition.jinja2"
+    else:
+        template = "transition.jinja2"
     ts_id = request.query_params.get("id")
     if ts_id is None:
         raise HTTPException(status_code=400, detail="Missing transition id")
@@ -478,11 +493,16 @@ async def transition_route(request: Request):
         "outputs": outputs,
         "finalizes": finalizes,
     }
-    return templates.TemplateResponse('transition.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
+    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
 
 
 async def search_route(request: Request):
     db: Database = request.app.state.db
+    is_htmx = request.scope["htmx"].is_htmx()
+    if is_htmx:
+        template = "htmx/search_result.jinja2"
+    else:
+        template = "search_result.jinja2"
     query = request.query_params.get("q")
     if query is None:
         raise HTTPException(status_code=400, detail="Missing query")
@@ -512,7 +532,7 @@ async def search_route(request: Request):
             "blocks": blocks,
             "too_many": too_many,
         }
-        return templates.TemplateResponse('search_result.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
+        return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
     elif query.startswith("at1"):
         # transaction id
         transactions = await db.search_transaction_id(query)
@@ -531,7 +551,7 @@ async def search_route(request: Request):
             "transactions": transactions,
             "too_many": too_many,
         }
-        return templates.TemplateResponse('search_result.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
+        return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
     elif query.startswith("as1"):
         # transition id
         transitions = await db.search_transition_id(query)
@@ -550,7 +570,7 @@ async def search_route(request: Request):
             "transitions": transitions,
             "too_many": too_many,
         }
-        return templates.TemplateResponse('search_result.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
+        return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
     elif query.startswith("aleo1"):
         # address
         addresses = await db.search_address(query)
@@ -569,7 +589,7 @@ async def search_route(request: Request):
             "addresses": addresses,
             "too_many": too_many,
         }
-        return templates.TemplateResponse('search_result.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
+        return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
     else:
         # have to do this to support program name prefix search
         programs = await db.search_program(query)
@@ -587,12 +607,17 @@ async def search_route(request: Request):
                 "programs": programs,
                 "too_many": too_many,
             }
-            return templates.TemplateResponse('search_result.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
+            return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
     raise HTTPException(status_code=404, detail="Unknown object type or searching is not supported")
 
 
 async def blocks_route(request: Request):
     db: Database = request.app.state.db
+    is_htmx = request.scope["htmx"].is_htmx()
+    if is_htmx:
+        template = "htmx/blocks.jinja2"
+    else:
+        template = "blocks.jinja2"
     try:
         page = request.query_params.get("p")
         if page is None:
@@ -618,4 +643,4 @@ async def blocks_route(request: Request):
         "total_pages": total_pages,
         "sync_info": sync_info,
     }
-    return templates.TemplateResponse('blocks.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
+    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore

@@ -12,6 +12,7 @@ from starlette.routing import Route, Mount
 from starlette.staticfiles import StaticFiles
 
 from middleware.asgi_logger import AccessLoggerMiddleware
+from middleware.htmx import HtmxMiddleware
 from middleware.minify import MinifyMiddleware
 from middleware.server_timing import ServerTimingMiddleware
 # from node.light_node import LightNodeState
@@ -38,6 +39,11 @@ class UvicornServer(multiprocessing.Process):
 
 async def index_route(request: Request):
     db: Database = request.app.state.db
+    is_htmx = request.scope["htmx"].is_htmx()
+    if is_htmx:
+        template = "htmx/index.jinja2"
+    else:
+        template = "index.jinja2"
     recent_blocks = await db.get_recent_blocks_fast()
     network_speed = await db.get_network_speed()
     sync_info = await out_of_sync_check(db)
@@ -48,7 +54,7 @@ async def index_route(request: Request):
         "network_speed": network_speed,
         "sync_info": sync_info,
     }
-    return templates.TemplateResponse('index.jinja2', ctx, headers={'Cache-Control': 'public, max-age=10'}) # type: ignore
+    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=10'}) # type: ignore
 
 async def tools_route(request: Request):
     ctx = {
@@ -57,13 +63,23 @@ async def tools_route(request: Request):
     return templates.TemplateResponse('tools.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
 
 async def faq_route(request: Request):
+    is_htmx = request.scope["htmx"].is_htmx()
+    if is_htmx:
+        template = "htmx/faq.jinja2"
+    else:
+        template = "faq.jinja2"
     ctx = {
         "request": request,
     }
-    return templates.TemplateResponse('faq.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
+    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
 
 
 async def feedback_route(request: Request):
+    is_htmx = request.scope["htmx"].is_htmx()
+    if is_htmx:
+        template = "htmx/feedback.jinja2"
+    else:
+        template = "feedback.jinja2"
     if request.method == "POST":
         form = await request.form()
         contact = form.get("contact")
@@ -80,7 +96,7 @@ async def feedback_route(request: Request):
         "contact": contact,
         "content": content,
     }
-    return templates.TemplateResponse('feedback.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
+    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
 
 async def submit_feedback_route(request: Request):
     db: Database = request.app.state.db
@@ -109,10 +125,15 @@ async def submit_feedback_route(request: Request):
     return RedirectResponse(url="/feedback?success=1", status_code=303)
 
 async def privacy_route(request: Request):
+    is_htmx = request.scope["htmx"].is_htmx()
+    if is_htmx:
+        template = "htmx/privacy.jinja2"
+    else:
+        template = "privacy.jinja2"
     ctx = {
         "request": request,
     }
-    return templates.TemplateResponse('privacy.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
+    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
 
 async def robots_route(_: Request):
     return FileResponse("webui/robots.txt", headers={'Cache-Control': 'public, max-age=3600'})
@@ -175,6 +196,7 @@ app = Starlette(
     exception_handlers=exc_handlers,
     middleware=[
         Middleware(AccessLoggerMiddleware, format=log_format),
+        Middleware(HtmxMiddleware),
         Middleware(MinifyMiddleware),
         Middleware(ServerTimingMiddleware),
     ]

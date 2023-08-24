@@ -63,7 +63,7 @@ body {
     margin-bottom: 0;
 }
 
-.mono, pre {
+.mono {
     font-family: monospace;
     font-size: 0.825rem;
 }
@@ -148,4 +148,116 @@ input:not([type]):focus {
     background-color: #fefefe;
     box-shadow: 0 0 5px #cacaca;
     transition: box-shadow 0.5s, border-color 0.25s ease-in-out;
+}
+
+#ticker {
+    margin-top: 20px;
+}
+
+#recent-blocks {
+    margin-top: 20px;
+}
+
+.ticker-cell-content {
+    height: 64px;
+    margin: 8px 0;
+}
+
+.ticker-cell-data {
+    font-size: 1.5rem;
+    display: flex;
+    align-items: center;
+}
+
+.ticker-cell-data-note {
+    font-size: 1rem;
+    color: #999;
+}
+
+.tooltip {
+    max-width: 250px;
+}
+
+.has-tip {
+    font-weight: normal;
+}
+
+.timestamp-font-size {
+    font-size: 1.3rem;
+}
+
+#data {
+    margin: 20px 4px;
+}
+
+.text-alert {
+    color: #cc4b37;
+}
+
+.sup {
+    font-size: 1rem;
+    vertical-align: super;
+}
+
+table {
+    margin-top: 10px;
+}
+
+pre {
+    font-size: 0.825rem;
+    background-color: #f8f8f8;
+    padding: 10px;
+    overflow-y: scroll;
+    max-height: 800px;
+}
+
+.tabs {
+    margin-top: 20px;
+}
+
+.tabs-title > a {
+    font-size: 0.9em;
+    padding: 0.75rem;
+}
+
+#read input[type="submit"] {
+    padding: 8px;
+}
+
+#read input:not([type]), #read input[type="text"] {
+    font-size: 0.9rem !important;
+    font-family: monospace !important;
+}
+
+#transitions, #rejected-transitions {
+    margin-top: 20px;
+}
+
+.box-drawing {
+    font-family: "MS Gothic", "AppleGothic", "Hiragino Maru Gothic ProN", "SimSun", monospace;
+}
+
+.data {
+    margin: 20px 4px;
+}
+
+#wallet-connect-button {
+    margin-bottom: 0;
+}
+
+#wallet-connect-text {
+    margin-left: 8px;
+}
+
+.decrypted {
+    color: green;
+}
+
+textarea {
+    font-family: monospace;
+    height: 400px;
+}
+
+.mono-only {
+    font-family: monospace;
 }

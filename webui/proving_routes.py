@@ -12,17 +12,27 @@ from .utils import out_of_sync_check
 
 async def calc_route(request: Request):
     db: Database = request.app.state.db
+    is_htmx = request.scope["htmx"].is_htmx()
+    if is_htmx:
+        template = "htmx/calc.jinja2"
+    else:
+        template = "calc.jinja2"
     proof_target = (await db.get_latest_block()).header.metadata.proof_target
     ctx = {
         "request": request,
         "proof_target": proof_target,
     }
-    return templates.TemplateResponse('calc.jinja2', ctx, headers={'Cache-Control': 'public, max-age=60'}) # type: ignore
+    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=60'}) # type: ignore
 
 
 
 async def leaderboard_route(request: Request):
     db: Database = request.app.state.db
+    is_htmx = request.scope["htmx"].is_htmx()
+    if is_htmx:
+        template = "htmx/leaderboard.jinja2"
+    else:
+        template = "leaderboard.jinja2"
     try:
         page = request.query_params.get("p")
         if page is None:
@@ -60,11 +70,16 @@ async def leaderboard_route(request: Request):
         "now": now,
         "sync_info": sync_info,
     }
-    return templates.TemplateResponse('leaderboard.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
+    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
 
 
 async def address_route(request: Request):
     db: Database = request.app.state.db
+    is_htmx = request.scope["htmx"].is_htmx()
+    if is_htmx:
+        template = "htmx/address.jinja2"
+    else:
+        template = "address.jinja2"
     address = request.query_params.get("a")
     if address is None:
         raise HTTPException(status_code=400, detail="Missing address")
@@ -137,7 +152,7 @@ async def address_route(request: Request):
         "timespan": interval_text[interval],
         "sync_info": sync_info,
     }
-    return templates.TemplateResponse('address.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
+    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
 
 
 async def address_solution_route(request: Request):

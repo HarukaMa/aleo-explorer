@@ -1,0 +1,49 @@
+{% from "macros.jinja2" import nav, htmx_title %}
+
+    <div class="content">
+
+        <div id="header">
+            <h3>Blocks</h3>
+        </div>
+
+        <div id="blocks">
+
+            {{ nav(page, total_pages, "/blocks?") }}
+
+            <table class="unstriped">
+                <thead>
+                <tr>
+                    <th>Height</th>
+                    <th>Epoch</th>
+                    <th>Timestamp</th>
+                    <th>Transactions</th>
+                    <th>Proof target</th>
+                    <th>Coinbase target</th>
+                    <th>Coinbase rewards</th>
+                    <th>Coinbase solutions</th>
+                    <th>Validator</th>
+                </tr>
+                </thead>
+                <tbody hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
+                {% for block in blocks %}
+                    <tr>
+                        <td><a href="/block?h={{ block.height }}">{{ block.height | format_number | safe }}</a></td>
+                        <td>{{ block.height // 256 }} <span class="note">{{ block.height % 256 }} / 256</span></td>
+                        <td>{{ block.timestamp | format_time | safe }}</td>
+                        <td>{{ block.transaction_count }}</td>
+                        <td>{{ block.proof_target | format_number | safe }}</td>
+                        <td>{{ block.coinbase_target | format_number | safe }}</td>
+                        <td>{% if block.coinbase_reward %}{{ ((block.coinbase_reward | int) // 2) | format_aleo_credit | safe }}{% else %}-{% endif %}</td>
+                        <td>{% if block.coinbase_reward %}{{ block.partial_solution_count }}{% else %}-{% endif %}</td>
+                        <td>-</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+
+            {{ nav(page, total_pages, "/blocks?") }}
+
+        </div>
+    </div>
+
+{{ htmx_title(request, "Blocks") }}

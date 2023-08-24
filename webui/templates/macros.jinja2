@@ -1,6 +1,6 @@
 {% macro nav(page, total_pages, link_template) %}
 <nav>
-    <ul class="pagination">
+    <ul class="pagination" hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
         <li class="pagination-previous{% if page == 1 %} disabled{% endif %}">{% if page != 1 %}<a href="{{ link_template }}p={{ page - 1 }}"></a>{% endif %}</li>
         {% for p in range(1, ([total_pages, 4] | min)) %}
             <li{% if p == page %} class="current"{% endif %}>{% if p != page %}<a href="{{ link_template }}p={{ p }}">{% endif %}{{ p }}{% if p != page %}</a>{% endif %}</li>
@@ -88,4 +88,12 @@
 
 {% macro state_label_with_reason(state, reason) %}
     {{ state_label(state) }}{% if state == "Rejected" %} {{ reason }}{% endif %}
+{% endmacro %}
+
+{% macro htmx_title(request, title) %}
+<script>
+    {% if request.htmx.is_htmx() %}
+        document.title = "{{ title | safe }} - Haruka's Aleo Explorer"
+    {% endif %}
+</script>
 {% endmacro %}
