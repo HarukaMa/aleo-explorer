@@ -507,9 +507,13 @@ async def search_route(request: Request):
     if query is None:
         raise HTTPException(status_code=400, detail="Missing query")
     query = query.lower().strip()
+    remaining_query = dict(request.query_params)
+    del remaining_query["q"]
+    if remaining_query:
+        remaining_query = "&" + "&".join([f"{k}={v}" for k, v in remaining_query.items()])
     try:
         height = int(query)
-        return RedirectResponse(f"/block?h={height}", status_code=302)
+        return RedirectResponse(f"/block?h={height}{remaining_query}", status_code=302)
     except ValueError:
         pass
     if query.startswith("aprivatekey1zkp"):
@@ -520,7 +524,7 @@ async def search_route(request: Request):
         if not blocks:
             raise HTTPException(status_code=404, detail="Block not found")
         if len(blocks) == 1:
-            return RedirectResponse(f"/block?bh={blocks[0]}", status_code=302)
+            return RedirectResponse(f"/block?bh={blocks[0]}{remaining_query}", status_code=302)
         too_many = False
         if len(blocks) > 50:
             blocks = blocks[:50]
@@ -539,7 +543,7 @@ async def search_route(request: Request):
         if not transactions:
             raise HTTPException(status_code=404, detail="Transaction not found")
         if len(transactions) == 1:
-            return RedirectResponse(f"/transaction?id={transactions[0]}", status_code=302)
+            return RedirectResponse(f"/transaction?id={transactions[0]}{remaining_query}", status_code=302)
         too_many = False
         if len(transactions) > 50:
             transactions = transactions[:50]
@@ -558,7 +562,7 @@ async def search_route(request: Request):
         if not transitions:
             raise HTTPException(status_code=404, detail="Transition not found")
         if len(transitions) == 1:
-            return RedirectResponse(f"/transition?id={transitions[0]}", status_code=302)
+            return RedirectResponse(f"/transition?id={transitions[0]}{remaining_query}", status_code=302)
         too_many = False
         if len(transitions) > 50:
             transitions = transitions[:50]
@@ -577,7 +581,7 @@ async def search_route(request: Request):
         if not addresses:
             raise HTTPException(status_code=404, detail="Address not found. See FAQ for more info.")
         if len(addresses) == 1:
-            return RedirectResponse(f"/address?a={addresses[0]}", status_code=302)
+            return RedirectResponse(f"/address?a={addresses[0]}{remaining_query}", status_code=302)
         too_many = False
         if len(addresses) > 50:
             addresses = addresses[:50]
@@ -595,7 +599,7 @@ async def search_route(request: Request):
         programs = await db.search_program(query)
         if programs:
             if len(programs) == 1:
-                return RedirectResponse(f"/program?id={programs[0]}", status_code=302)
+                return RedirectResponse(f"/program?id={programs[0]}{remaining_query}", status_code=302)
             too_many = False
             if len(programs) > 50:
                 programs = programs[:50]
