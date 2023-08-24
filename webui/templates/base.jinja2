@@ -132,6 +132,13 @@
         $(document).foundation()
     })
 
+    htmx.on("htmx:responseError", function(e) {
+        const container = document.getElementById("htmx-body")
+        error = e.detail.xhr.response
+        container.innerHTML = error
+        history.pushState(null, "", e.detail.xhr.responseURL.split("&")[0])
+    });
+
     {% if "PLAUSIBLE" | get_env %}
         const el = document.getElementById('plausible-optout');
         if (localStorage.getItem('plausible_ignore') === 'true') {
