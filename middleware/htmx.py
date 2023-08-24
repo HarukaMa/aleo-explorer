@@ -17,5 +17,4 @@ class HtmxData:
         self.scope = scope
 
     def is_htmx(self):
-        print(self.scope["headers"])
         return b"hx-request" in dict(self.scope["headers"])
