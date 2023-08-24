@@ -4,12 +4,6 @@
 
 {% block content %}
 
-    <div class="content">
-        <h1>500</h1>
-        <p>something went horribly wrong</p>
-        <pre>{{ exc.detail }}</pre>
-    </div>
-
-    <script>document.addEventListener('DOMContentLoaded', function () { plausible('500', { props: { path: document.location.pathname } }); });</script>
+    {% include "htmx/500.jinja2" %}
 
 {% endblock %}
