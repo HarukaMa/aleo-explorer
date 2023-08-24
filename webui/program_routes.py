@@ -17,6 +17,11 @@ from .utils import function_signature, out_of_sync_check
 
 async def programs_route(request: Request):
     db: Database = request.app.state.db
+    is_htmx = request.scope["htmx"].is_htmx()
+    if is_htmx:
+        template = "htmx/programs.jinja2"
+    else:
+        template = "programs.jinja2"
     try:
         page = request.query_params.get("p")
         if page is None:
@@ -47,11 +52,16 @@ async def programs_route(request: Request):
         "no_helloworld": no_helloworld,
         "sync_info": sync_info,
     }
-    return templates.TemplateResponse('programs.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
+    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
 
 
 async def program_route(request: Request):
     db: Database = request.app.state.db
+    is_htmx = request.scope["htmx"].is_htmx()
+    if is_htmx:
+        template = "htmx/program.jinja2"
+    else:
+        template = "program.jinja2"
     program_id = request.query_params.get("id")
     if program_id is None:
         raise HTTPException(status_code=400, detail="Missing program id")
@@ -118,7 +128,7 @@ async def program_route(request: Request):
             "owner": None,
             "signature": None,
         })
-    return templates.TemplateResponse('program.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
+    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
 
 
 async def similar_programs_route(request: Request):

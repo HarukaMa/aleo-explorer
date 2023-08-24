@@ -1,3 +1,5 @@
+{% from "macros.jinja2" import htmx_title %}
+
     <div class="content">
 
         {% if "BETA" | get_env %}
@@ -84,7 +86,7 @@
                     <th>Validator</th>
                 </tr>
                 </thead>
-                <tbody>
+                <tbody hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
                 {% for block in recent_blocks %}
                     <tr>
                         <td><a href="/block?h={{ block.height }}">{{ block.height | format_number | safe }}</a></td>
@@ -104,3 +106,5 @@
             </table>
         </div>
     </div>
+
+{{ htmx_title(request, "Home") }}

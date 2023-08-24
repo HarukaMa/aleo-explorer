@@ -2,72 +2,8 @@
 
 {% block title %}Leaderboard - Haruka's Aleo Explorer{% endblock %}
 
-{% block head %}
-    <style>
-
-    </style>
-{% endblock %}
-
-{% from "macros.jinja2" import nav %}
-
 {% block content %}
 
-    <div class="content">
-
-        <div id="header">
-            <h3>Leaderboard</h3>
-        </div>
-
-    {% if now < 1669939200 %}
-        <div class="callout primary">
-            The incentive period for phase 2 will start at 2022-12-02 00:00 UTC.
-        </div>
-    {% elif now >= 1675209600 or total_credit >= target_credit %}
-        <div class="callout success">
-            The incentive period for phase 2 has ended.
-        </div>
-    {% else %}
-        <div class="callout warning">
-            This leaderboard is unofficial. The data might be inaccurate.
-        </div>
-        Testnet Aleo credits rewarded: {{ total_credit | format_aleo_credit | safe }} / {{ target_credit | format_aleo_credit | safe }}
-        <div class="primary progress" role="progressbar">
-            <div class="progress-meter" style="width: {{ ratio }}%">
-            {% if ratio > 5 %}
-                <p class="progress-meter-text">{{ "%.2f" % ratio }}%</p>
-            {% endif %}
-            </div>
-        </div>
-    {% endif %}
-
-        <div id="blocks">
-
-            {{ nav(page, total_pages, "/leaderboard?") }}
-
-            <table class="unstriped">
-                <thead>
-                <tr>
-                    <th>Rank</th>
-                    <th>Address</th>
-                    <th>Total incentive reward</th>
-                    <th>Total coinbase reward</th>
-                </tr>
-                </thead>
-                <tbody>
-                {% for line in leaderboard %}
-                    <tr>
-                        <td>{{ loop.index + (page - 1) * 50 }}</td>
-                        <td class="mono"><a href="/address?a={{ line.address }}">{{ line.address }}</a></td>
-                        <td>{{ line.total_incentive | format_aleo_credit | safe }}</td>
-                        <td>{{ line.total_rewards | format_aleo_credit | safe }}</td>
-                    </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-
-            {{ nav(page, total_pages, "/leaderboard?") }}
-
-        </div>
-    </div>
+{% include "htmx/leaderboard.jinja2" %}
 
 {% endblock %}

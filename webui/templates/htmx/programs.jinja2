@@ -1,0 +1,56 @@
+{% from "macros.jinja2" import nav, htmx_title %}
+
+    <div class="content">
+
+        <div id="header" hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
+            <h3>Program Registry</h3>
+            {% if no_helloworld %}
+                <p>Showing deployed programs excluding "Hello World", workshop programs and similar programs <sup>[<a
+                        href="/faq#helloworld">?</a>]</sup>. <a href="/programs">Show all programs</a></p>
+            {% else %}
+                <p>Showing all deployed programs. <a href="/programs?no_helloworld=1">Hide common programs</a></p>
+            {% endif %}
+        </div>
+
+        <div id="blocks">
+
+            {% if no_helloworld %}
+                {% set nav_path = "/programs?no_helloworld=1&" %}
+            {% else %}
+                {% set nav_path = "/programs?" %}
+            {% endif %}
+
+            {{ nav(page, total_pages, nav_path) }}
+
+            <table class="unstriped">
+                <thead>
+                <tr>
+                    <th>Program ID</th>
+                    <th>Block Height</th>
+                    <th>Transaction ID</th>
+                    <th>Times called</th>
+                </tr>
+                </thead>
+                <tbody hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
+                {% for program in programs %}
+                    <tr>
+                        <td><span class="mono"><a href="/program?id={{ program.program_id }}">{{ program.program_id }}</a></span></td>
+                        {% if program.height %}
+                            <td><a href="/block?h={{ program.height }}">{{ program.height | format_number | safe }}</a></td>
+                            <td><span class="mono"><a href="/transaction?id={{ program.transaction_id }}">{{ program.transaction_id }}</a></span></td>
+                        {% else %}
+                            <td>-</td>
+                            <td>-</td>
+                        {% endif %}
+                        <td>{{ program.called }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+
+            {{ nav(page, total_pages, nav_path) }}
+
+        </div>
+    </div>
+
+{{ htmx_title(request, "Program Registry") }}

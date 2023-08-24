@@ -63,13 +63,23 @@ async def tools_route(request: Request):
     return templates.TemplateResponse('tools.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
 
 async def faq_route(request: Request):
+    is_htmx = request.scope["htmx"].is_htmx()
+    if is_htmx:
+        template = "htmx/faq.jinja2"
+    else:
+        template = "faq.jinja2"
     ctx = {
         "request": request,
     }
-    return templates.TemplateResponse('faq.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
+    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
 
 
 async def feedback_route(request: Request):
+    is_htmx = request.scope["htmx"].is_htmx()
+    if is_htmx:
+        template = "htmx/feedback.jinja2"
+    else:
+        template = "feedback.jinja2"
     if request.method == "POST":
         form = await request.form()
         contact = form.get("contact")
@@ -86,7 +96,7 @@ async def feedback_route(request: Request):
         "contact": contact,
         "content": content,
     }
-    return templates.TemplateResponse('feedback.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
+    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
 
 async def submit_feedback_route(request: Request):
     db: Database = request.app.state.db
@@ -115,10 +125,15 @@ async def submit_feedback_route(request: Request):
     return RedirectResponse(url="/feedback?success=1", status_code=303)
 
 async def privacy_route(request: Request):
+    is_htmx = request.scope["htmx"].is_htmx()
+    if is_htmx:
+        template = "htmx/privacy.jinja2"
+    else:
+        template = "privacy.jinja2"
     ctx = {
         "request": request,
     }
-    return templates.TemplateResponse('privacy.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
+    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
 
 async def robots_route(_: Request):
     return FileResponse("webui/robots.txt", headers={'Cache-Control': 'public, max-age=3600'})

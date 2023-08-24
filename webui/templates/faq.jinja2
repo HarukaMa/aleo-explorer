@@ -4,55 +4,6 @@
 
 {% block content %}
 
-    <div class="content" style="font-size: 1rem">
-
-        <div class="header">
-            <h3>FAQ</h3>
-        </div>
-
-        <h4>I can't find my address</h4>
-        <p>This usually means your address hasn't publicly appeared on the blockchain. Addresses would be logged when:</p>
-        <ul>
-            <li>A prover submits a valid coinbase puzzle solution with the address</li>
-            <li>A validator generates a new block (not tracked right now)</li>
-            <li>An address deploys a program</li>
-            <li>(more to come when the network has more features)</li>
-        </ul>
-        <p>
-            The explorer could only track what's included in the blocks, so if your address hasn't interacted with the
-            blockchain in the above situations, you won't find it in the explorer.</p>
-        <br>
-
-        <h4>What exactly is "c/s"?</h4>
-        <p>If the
-            <span data-tooltip title='commitments per second, also known as "p/s" or "s/s"'>tooltip</span> can't satisfy you:
-        </p>
-        <p>
-            When solving a coinbase puzzle, the prover is actually grinding KZG10 commitments (you can read more about KZG10
-            <a href="https://taoa.io/posts/Understanding-KZG10-Polynomial-Commitments" target="_blank">here</a>). In the complete scheme
-            of KZG10 PCS, the prover would generate a commitment, then a proof of the evaluation. However, as the hashed
-            value of the commitment is used to check if a solution is valid, the prover will skip the proof generation
-            if the commitment doesn't satisfy the network requirement, and will continue to try the next nonce value.
-            This is why the explorer is using "c/s" to represent the computing power of the address.
-        </p>
-        <p>
-            "p/s" was "invented" during testnet2, as at that time the miners were grinding Marlin proofs instead. "s/s"
-            simply means "solutions per second" (which is also correct if you take "solutions" as "partial solutions").
-            Those units are also being used by different provers and websites, but they all should represent the same
-            thing.
-        </p>
-        <br>
-
-        <h4 id="helloworld">About the new program filtering</h4>
-        <p>
-            Some people are spamming the program list with workshop programs. For some obscure reason unbeknownst to
-            sane people, they are randomly modifying and even combining unrelated programs and spam with it.
-            The filtered list now filters all such programs.
-        </p>
-        <p>
-            Yes, this now works like a blacklist. No, this will not change in the foreseeable future.
-        </p>
-
-    </div>
+{% include "htmx/faq.jinja2" %}
 
 {% endblock %}

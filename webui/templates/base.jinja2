@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="format-detection" content="telephone=no">
+    <meta name="htmx-config" content='{"getCacheBusterParam":true}'>
     <title>{% block title %}{% endblock %}</title>
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/foundation/6.7.4/css/foundation.min.css"
@@ -24,18 +25,18 @@
     <link rel="stylesheet" href="/static/base_style_v3.css">
     {% block head %}{% endblock %}
 </head>
-<body>
+<body hx-ext="morph">
 
 <div class="top-bar">
     <div class="menubar">
         <div class="top-bar-left">
-            <ul class="dropdown menu" data-dropdown-menu>
+            <ul class="dropdown menu" data-dropdown-menu hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
                 {% if "BETA" | get_env %}
                     <li class="menu-text">Haruka's Explorer <sup>PREVIEW</sup></li>
                 {% else %}
                     <li class="menu-text">Haruka's Aleo Explorer</li>
                 {% endif %}
-                <li><a hx-get="/" hx-target="#htmx-body" hx-push-url="true">Home</a></li>
+                <li><a href="/">Home</a></li>
                 <li>
                     <a href="#">Blockchain</a>
                     <ul class="menu">
@@ -66,7 +67,7 @@
         <div class="top-bar-right">
             <ul class="menu">
                 <!--suppress HtmlUnknownTag -->
-                <form id="search" action="/search">
+                <form id="search" hx-get="/search" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
                     <div class="input-group">
                         <input class="input-group-field" type="search" name="q" value="{{ query }}" placeholder="Search (block height, object id, object id prefix)">
                         <div class="input-group-button">
@@ -120,9 +121,16 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/htmx/1.9.4/htmx.min.js"
         integrity="sha512-ZM2vxgVBxhBI5Etj/c/qcJV+upate3VzbVQOQRCx1YGuyEX9dYdMh8pRUot4xIwtAay6QwRQC/FdXRjSWIEHrg=="
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-{% block content_script %}{% endblock %}
+<script src="https://unpkg.com/idiomorph@0.0.8/dist/idiomorph-ext.min.js"
+        integrity="sha512-j+QoMRpO36QMBWcBvmktsy35CPVqxMOiLEp42+0T87V/sFWHGT/d0d+0unePWCqfCKXggIzhcTvIJeBiMUGofw=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script id="content-script"></script>
 <script>
     $(document).foundation()
+
+    htmx.on("htmx:afterSwap", () => {
+        $(document).foundation()
+    })
 
     {% if "PLAUSIBLE" | get_env %}
         const el = document.getElementById('plausible-optout');

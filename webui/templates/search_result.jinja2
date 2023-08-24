@@ -2,54 +2,8 @@
 
 {% block title %}Search Result - Haruka's Aleo Explorer{% endblock %}
 
-{% block head %}
-    <style>
-
-    </style>
-{% endblock %}
-
 {% block content %}
 
-    <div class="content">
-
-        <div class="header">
-            <h3>Search result</h3>
-        </div>
-
-        {% if too_many %}
-            <div class="callout warning">
-                Your search has returned too many results. Showing only 50 results below.
-            </div>
-        {% endif %}
-
-        Found multiple results for {{ type }} <span class="mono">{{ query }}</span>:
-        <ul>
-            {% for block in blocks %}
-                <li>
-                    <span class="mono"><a href="/block?bh={{ block }}">{{ block }}</a></span>
-                </li>
-            {% endfor %}
-            {% for transaction_id in transactions %}
-                <li>
-                    <span class="mono"><a href="/transaction?id={{ transaction_id }}">{{ transaction_id }}</a></span>
-                </li>
-            {% endfor %}
-            {% for transition_id in transitions %}
-                <li>
-                    <span class="mono"><a href="/transition?id={{ transition_id }}">{{ transition_id }}</a></span>
-                </li>
-            {% endfor %}
-            {% for address in addresses %}
-                <li>
-                    <span class="mono"><a href="/address?a={{ address }}">{{ address }}</a></span>
-                </li>
-            {% endfor %}
-            {% for program in programs %}
-                <li>
-                    <span class="mono"><a href="/program?id={{ program }}">{{ program }}</a></span>
-                </li>
-            {% endfor %}
-        </ul>
-    </div>
+{% include "htmx/search_result.jinja2" %}
 
 {% endblock %}

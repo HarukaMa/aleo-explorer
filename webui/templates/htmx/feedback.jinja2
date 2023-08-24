@@ -1,0 +1,47 @@
+{% from "macros.jinja2" import htmx_title %}
+
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=load_turnstile_widget" async defer></script>
+
+    <div class="content">
+
+        <div class="header">
+            <h3>Submit Feedback</h3>
+        </div>
+
+        {% if success == "1" %}
+            <div class="callout success">
+                <p>Feedback submitted successfully!</p>
+            </div>
+        {% endif %}
+
+        {% if message %}
+            <div class="callout alert">
+                <p>{{ message }}</p>
+            </div>
+        {% endif %}
+
+        <form action="/submit_feedback" method="post">
+            <label>Contact (optional):
+                <input type="text" name="contact" placeholder="Email, Discord, etc." value="{{ contact }}">
+            </label>
+            <p class="help-text">Your contact info might be used to provide answers to your feedback.</p>
+            <label>Feedback content:
+                <textarea name="content">{{ content }}</textarea>
+            </label>
+            <div id="cf-turnstile" data-sitekey="{{ "TURNSTILE_SITE_KEY" | get_env }}"></div>
+            <button type="submit" class="button">Submit</button>
+        </form>
+
+    </div>
+
+    <script>
+        load_turnstile_widget = function() {
+            turnstile.render('#cf-turnstile', {
+                sitekey: '{{ "TURNSTILE_SITE_KEY" | get_env }}',
+            })
+        }
+
+        window.load_turnstile_widget = load_turnstile_widget
+    </script>
+
+{{ htmx_title(request, "Feedback") }}
