@@ -1,7 +1,7 @@
 
 {% from "macros.jinja2" import data_line, data_line_safe, htmx_title %}
 
-    <div class="content">
+    <div class="content" hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
 
         <div id="header">
             <h3>Address {{ address_trunc }}</h3>
