@@ -1470,9 +1470,14 @@ class Database:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT address FROM leaderboard WHERE address LIKE %s", (f"{address}%",)
+                        "SELECT DISTINCT address FROM leaderboard WHERE address LIKE %s", (f"{address}%",)
                     )
-                    return list(map(lambda x: x['address'], await cur.fetchall()))
+                    res = set(map(lambda x: x['address'], await cur.fetchall()))
+                    await cur.execute(
+                        "SELECT DISTINCT owner FROM program WHERE owner LIKE %s", (f"{address}%",)
+                    )
+                    res.update(set(map(lambda x: x['owner'], await cur.fetchall())))
+                    return list(res)
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
