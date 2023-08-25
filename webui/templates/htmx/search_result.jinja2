@@ -1,6 +1,6 @@
 {% from "macros.jinja2" import htmx_title %}
 
-    <div class="content">
+    <div class="content" hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
 
         <div class="header">
             <h3>Search result</h3>

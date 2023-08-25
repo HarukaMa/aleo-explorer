@@ -2,48 +2,8 @@
 
 {% block title %}Solutions from {{ address_trunc }} - Haruka's Aleo Explorer{% endblock %}
 
-{% from "macros.jinja2" import nav %}
-
 {% block content %}
 
-    <div class="content">
-
-        <div id="header">
-            <h3>Solutions from {{ address_trunc }}</h3>
-        </div>
-
-        <div id="blocks">
-
-            {{ nav(page, total_pages, "/address_solution?a=" + address + "&") }}
-
-            <table class="unstriped">
-                <thead>
-                <tr>
-                    <th>Block</th>
-                    <th>Epoch</th>
-                    <th>Timestamp</th>
-                    <th>Nonce</th>
-                    <th>Target / Total</th>
-                    <th>Reward</th>
-                </tr>
-                </thead>
-                <tbody>
-                {% for solution in solutions %}
-                    <tr>
-                        <td><a href="/block?h={{ solution.height }}">{{ solution.height }}</a></td>
-                        <td>{{ solution.height // 256 }}</td>
-                        <td>{{ solution.timestamp | format_time | safe }}</td>
-                        <td>{{ solution.nonce }}</td>
-                        <td>{{ solution.target }}<span class="note"> / {{ solution.target_sum }}</span></td>
-                        <td>{{ solution.reward | format_aleo_credit | safe }}</td>
-                    </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-
-            {{ nav(page, total_pages, "/address_solution?a=" + address + "&") }}
-
-        </div>
-    </div>
+{% include "htmx/address_solution.jinja2" %}
 
 {% endblock %}

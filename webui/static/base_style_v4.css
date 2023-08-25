@@ -261,3 +261,12 @@ textarea {
 .mono-only {
     font-family: monospace;
 }
+
+.htmx-indicator {
+    display: block;
+    opacity: 1 !important;
+}
+
+.htmx-request.htmx-indicator {
+    opacity: 0.4 !important;
+}

@@ -41,7 +41,7 @@
                     <th>Total coinbase reward</th>
                 </tr>
                 </thead>
-                <tbody>
+                <tbody hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
                 {% for line in leaderboard %}
                     <tr>
                         <td>{{ loop.index + (page - 1) * 50 }}</td>

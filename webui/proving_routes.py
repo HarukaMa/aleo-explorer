@@ -157,6 +157,11 @@ async def address_route(request: Request):
 
 async def address_solution_route(request: Request):
     db: Database = request.app.state.db
+    is_htmx = request.scope["htmx"].is_htmx()
+    if is_htmx:
+        template = "htmx/address_solution.jinja2"
+    else:
+        template = "address_solution.jinja2"
     address = request.query_params.get("a")
     if address is None:
         raise HTTPException(status_code=400, detail="Missing address")
@@ -194,4 +199,4 @@ async def address_solution_route(request: Request):
         "total_pages": total_pages,
         "sync_info": sync_info,
     }
-    return templates.TemplateResponse('address_solution.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
+    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore

@@ -22,10 +22,10 @@
         {% endif %}
         }
     </style>
-    <link rel="stylesheet" href="/static/base_style_v3.css">
+    <link rel="stylesheet" href="/static/base_style_v4.css">
     {% block head %}{% endblock %}
 </head>
-<body hx-ext="morph">
+<body hx-ext="morph" hx-indicator="#htmx-body">
 
 <div class="top-bar">
     <div class="menubar">
@@ -95,7 +95,7 @@
     <span style="display: none">in_sync</span>
 {% endif %}
 <div class="container">
-<div id="htmx-body">
+<div id="htmx-body" class="htmx-indicator">
 {% block content %}{% endblock %}
 </div>
 <div class="footer-container">

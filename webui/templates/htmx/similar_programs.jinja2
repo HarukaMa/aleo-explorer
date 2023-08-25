@@ -1,0 +1,40 @@
+{% from "macros.jinja2" import nav, htmx_title %}
+
+    <div class="content">
+
+        <div id="header">
+            <h3>Similar programs</h3>
+            <p>Showing programs that are similar to {{ program_id }}.</p>
+        </div>
+
+        <div id="blocks">
+
+            {{ nav(page, total_pages, "/similar_programs?id=" + program_id + "&") }}
+
+            <table class="unstriped">
+                <thead>
+                <tr>
+                    <th>Program ID</th>
+                    <th>Block Height</th>
+                    <th>Transaction ID</th>
+                    <th>Times called</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for program in programs %}
+                    <tr>
+                        <td><span class="mono"><a href="/program?id={{ program.program_id }}">{{ program.program_id }}</a></span></td>
+                        <td><a href="/block?h={{ program.height }}">{{ program.height }}</a></td>
+                        <td><span class="mono"><a href="/transaction?id={{ program.transaction_id }}">{{ program.transaction_id }}</a></span></td>
+                        <td>{{ program.called }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+
+            {{ nav(page, total_pages, "/similar_programs?id=" + program_id + "&") }}
+
+        </div>
+    </div>
+
+{{ htmx_title(request, "Similar Programs") }}

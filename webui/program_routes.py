@@ -133,6 +133,11 @@ async def program_route(request: Request):
 
 async def similar_programs_route(request: Request):
     db: Database = request.app.state.db
+    is_htmx = request.scope["htmx"].is_htmx()
+    if is_htmx:
+        template = "htmx/similar_programs.jinja2"
+    else:
+        template = "similar_programs.jinja2"
     try:
         page = request.query_params.get("p")
         if page is None:
@@ -163,11 +168,16 @@ async def similar_programs_route(request: Request):
         "total_pages": total_pages,
         "sync_info": sync_info,
     }
-    return templates.TemplateResponse('similar_programs.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
+    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
 
 
 async def upload_source_route(request: Request):
     db: Database = request.app.state.db
+    is_htmx = request.scope["htmx"].is_htmx()
+    if is_htmx:
+        template = "htmx/upload_source.jinja2"
+    else:
+        template = "upload_source.jinja2"
     program_id = request.query_params.get("id")
     if program_id is None:
         raise HTTPException(status_code=400, detail="Missing program id")
@@ -203,7 +213,7 @@ async def upload_source_route(request: Request):
         "message": message,
         "source": source,
     }
-    return templates.TemplateResponse('upload_source.jinja2', ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
+    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
 
 async def submit_source_route(request: Request):
     db: Database = request.app.state.db
