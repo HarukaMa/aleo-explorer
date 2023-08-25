@@ -1500,6 +1500,7 @@ class Owner(EnumBaseSerialize, RustEnum, Serializable, Generic[T]):
             raise ValueError("invalid type")
 
 
+@access_generic_type
 class PublicOwner(Owner[T]):
     type = Owner.Type.Public
 
