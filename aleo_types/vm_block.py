@@ -1201,7 +1201,7 @@ class ThirdMessage(Serializable):
 
     @classmethod
     def load_with_batch_sizes(cls, data: BytesIO, batch_sizes: Vec[u64, u64]):
-        sums = []
+        sums: list[Vec[MatrixSums, u64]] = []
         for batch_size in batch_sizes:
             batch: list[MatrixSums] = []
             for _ in range(batch_size):
@@ -1221,12 +1221,12 @@ class FourthMessage(Serializable):
         return res
 
     @classmethod
-    def load(cls, data: BytesIO):
+    def load(cls, data: BytesIO) -> Self:
         raise NotImplementedError("use load_with_batch_sizes instead")
 
     @classmethod
     def load_with_batch_sizes(cls, data: BytesIO, batch_sizes: Vec[u64, u64]):
-        sums = []
+        sums: list[MatrixSums] = []
         for _ in range(len(batch_sizes)):
             sums.append(MatrixSums.load(data))
         return cls(sums=Vec[MatrixSums, u64](sums))
@@ -2873,7 +2873,7 @@ class RatificationTransmissionID(TransmissionID):
         return self.type.dump()
 
     @classmethod
-    def load(cls, _: BytesIO):
+    def load(cls, data: BytesIO):
         return cls()
 
 
@@ -2942,7 +2942,7 @@ class BatchHeader(Serializable):
 class BatchCertificate(Serializable):
     version = u8()
 
-    def __init__(self, *, certificate_id: Field, batch_header: BatchHeader, signatures: Vec[Tuple[Signature, i64]]):
+    def __init__(self, *, certificate_id: Field, batch_header: BatchHeader, signatures: Vec[Tuple[Signature, i64], u32]):
         self.certificate_id = certificate_id
         self.batch_header = batch_header
         self.signatures = signatures
@@ -2957,7 +2957,7 @@ class BatchCertificate(Serializable):
             raise ValueError("invalid batch certificate version")
         certificate_id = Field.load(data)
         batch_header = BatchHeader.load(data)
-        signatures = Vec[Tuple[Signature, i64]].load(data)
+        signatures = Vec[Tuple[Signature, i64], u32].load(data)
         return cls(certificate_id=certificate_id, batch_header=batch_header, signatures=signatures)
 
 
