@@ -979,18 +979,16 @@ class BatchProof(Serializable):
 
 class BatchLCProof(Serializable):
 
-    def __init__(self, *, proof: BatchProof, evaluations: Option[Vec[Field, u64]]):
+    def __init__(self, *, proof: BatchProof):
         self.proof = proof
-        self.evaluations = evaluations
 
     def dump(self) -> bytes:
-        return self.proof.dump() + self.evaluations.dump()
+        return self.proof.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
         proof = BatchProof.load(data)
-        evaluations = Option[Vec[Field, u64]].load(data)
-        return cls(proof=proof, evaluations=evaluations)
+        return cls(proof=proof)
 
 
 class Certificate(Serializable):
@@ -1049,29 +1047,27 @@ class Deployment(Serializable):
 
 class WitnessCommitments(Serializable):
 
-    def __init__(self, *, w: KZGCommitment, z_a: KZGCommitment, z_b: KZGCommitment):
+    def __init__(self, *, w: KZGCommitment):
         self.w = w
-        self.z_a = z_a
-        self.z_b = z_b
 
     def dump(self) -> bytes:
-        return self.w.dump() + self.z_a.dump() + self.z_b.dump()
+        return self.w.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
         w = KZGCommitment.load(data)
-        z_a = KZGCommitment.load(data)
-        z_b = KZGCommitment.load(data)
-        return cls(w=w, z_a=z_a, z_b=z_b)
+        return cls(w=w)
 
 
 class Commitments(Serializable):
 
     def __init__(self, *, witness_commitments: Vec[WitnessCommitments, u64], mask_poly: Option[KZGCommitment],
+                 h_0: KZGCommitment,
                  g_1: KZGCommitment, h_1: KZGCommitment, g_a_commitments: Vec[KZGCommitment, u64],
                  g_b_commitments: Vec[KZGCommitment, u64], g_c_commitments: Vec[KZGCommitment, u64], h_2: KZGCommitment):
         self.witness_commitments = witness_commitments
         self.mask_poly = mask_poly
+        self.h_0 = h_0
         self.g_1 = g_1
         self.h_1 = h_1
         self.g_a_commitments = g_a_commitments
@@ -1084,6 +1080,7 @@ class Commitments(Serializable):
         for witness_commitment in self.witness_commitments:
             res += witness_commitment.dump()
         res += self.mask_poly.dump()
+        res += self.h_0.dump()
         res += self.g_1.dump()
         res += self.h_1.dump()
         for g_a_commitment in self.g_a_commitments:
@@ -1106,6 +1103,7 @@ class Commitments(Serializable):
             w_commitments.append(WitnessCommitments.load(data))
         witness_commitments = Vec[WitnessCommitments, u64](w_commitments)
         mask_poly = Option[KZGCommitment].load(data)
+        h_0 = KZGCommitment.load(data)
         g_1 = KZGCommitment.load(data)
         h_1 = KZGCommitment.load(data)
         commitments: list[KZGCommitment] = []
@@ -1121,27 +1119,22 @@ class Commitments(Serializable):
             commitments.append(KZGCommitment.load(data))
         g_c_commitments = Vec[KZGCommitment, u64](commitments)
         h_2 = KZGCommitment.load(data)
-        return cls(witness_commitments=witness_commitments, mask_poly=mask_poly, g_1=g_1, h_1=h_1,
+        return cls(witness_commitments=witness_commitments, mask_poly=mask_poly, h_0=h_0, g_1=g_1, h_1=h_1,
                    g_a_commitments=g_a_commitments, g_b_commitments=g_b_commitments,
                    g_c_commitments=g_c_commitments, h_2=h_2)
 
 
 class Evaluations(Serializable):
 
-    def __init__(self, *, z_b_evals: Vec[Vec[Field, u64], u64], g_1_eval: Field, g_a_evals: Vec[Field, u64],
-                 g_b_evals: Vec[Field, u64], g_c_evals: Vec[Field, u64]):
-        self.z_b_evals = z_b_evals
+    def __init__(self, *, g_1_eval: Field, g_a_evals: Vec[Field, u64], g_b_evals: Vec[Field, u64],
+                 g_c_evals: Vec[Field, u64]):
         self.g_1_eval = g_1_eval
         self.g_a_evals = g_a_evals
         self.g_b_evals = g_b_evals
         self.g_c_evals = g_c_evals
 
     def dump(self) -> bytes:
-        res = b""
-        for z_b_eval in self.z_b_evals:
-            for e in z_b_eval:
-                res += e.dump()
-        res += self.g_1_eval.dump()
+        res = self.g_1_eval.dump()
         for g_a_eval in self.g_a_evals:
             res += g_a_eval.dump()
         for g_b_eval in self.g_b_evals:
@@ -1156,12 +1149,6 @@ class Evaluations(Serializable):
 
     @classmethod
     def load_with_batch_sizes(cls, data: BytesIO, batch_sizes: Vec[u64, u64]):
-        z_b_evals: list[Vec[Field, u64]] = []
-        for batch_size in batch_sizes:
-            batch: list[Field] = []
-            for _ in range(batch_size):
-                batch.append(Field.load(data))
-            z_b_evals.append(Vec[Field, u64](batch))
         g_1_eval = Field.load(data)
         evals: list[Field] = []
         for _ in range(len(batch_sizes)):
@@ -1175,7 +1162,7 @@ class Evaluations(Serializable):
         for _ in range(len(batch_sizes)):
             evals.append(Field.load(data))
         g_c_evals = Vec[Field, u64](evals)
-        return cls(z_b_evals=Vec[Vec[Field, u64], u64](z_b_evals), g_1_eval=g_1_eval, g_a_evals=g_a_evals, g_b_evals=g_b_evals, g_c_evals=g_c_evals)
+        return cls(g_1_eval=g_1_eval, g_a_evals=g_a_evals, g_b_evals=g_b_evals, g_c_evals=g_c_evals)
 
 
 class MatrixSums(Serializable):
@@ -1198,28 +1185,64 @@ class MatrixSums(Serializable):
 
 class ThirdMessage(Serializable):
 
+    def __init__(self, *, sums: Vec[Vec[MatrixSums, u64], u64]):
+        self.sums = sums
+
+    def dump(self) -> bytes:
+        res = b""
+        for sum_ in self.sums:
+            for s in sum_:
+                res += s.dump()
+        return res
+
+    @classmethod
+    def load(cls, data: BytesIO) -> Self:
+        raise NotImplementedError("use load_with_batch_sizes instead")
+
+    @classmethod
+    def load_with_batch_sizes(cls, data: BytesIO, batch_sizes: Vec[u64, u64]):
+        sums = []
+        for batch_size in batch_sizes:
+            batch: list[MatrixSums] = []
+            for _ in range(batch_size):
+                batch.append(MatrixSums.load(data))
+            sums.append(Vec[MatrixSums, u64](batch))
+        return cls(sums=Vec[Vec[MatrixSums, u64], u64](sums))
+
+class FourthMessage(Serializable):
+
     def __init__(self, *, sums: Vec[MatrixSums, u64]):
         self.sums = sums
 
     def dump(self) -> bytes:
-        return self.sums.dump()
+        res = b""
+        for sum_ in self.sums:
+            res += sum_.dump()
+        return res
 
     @classmethod
     def load(cls, data: BytesIO):
-        sums = Vec[MatrixSums, u64].load(data)
-        return cls(sums=sums)
+        raise NotImplementedError("use load_with_batch_sizes instead")
+
+    @classmethod
+    def load_with_batch_sizes(cls, data: BytesIO, batch_sizes: Vec[u64, u64]):
+        sums = []
+        for _ in range(len(batch_sizes)):
+            sums.append(MatrixSums.load(data))
+        return cls(sums=Vec[MatrixSums, u64](sums))
 
 
 class Proof(Serializable):
     version = u8()
 
-    # Skipping a layer of marlin::Proof
-    def __init__(self, *, batch_sizes: Vec[u64, u64], commitments: Commitments, evaluations: Evaluations, msg: ThirdMessage,
-                 pc_proof: BatchLCProof):
+    # Skipping a layer of varuna::Proof
+    def __init__(self, *, batch_sizes: Vec[u64, u64], commitments: Commitments, evaluations: Evaluations,
+                 third_msg: ThirdMessage, fourth_msg: FourthMessage, pc_proof: BatchLCProof):
         self.batch_sizes = batch_sizes
         self.commitments = commitments
         self.evaluations = evaluations
-        self.msg = msg
+        self.third_msg = third_msg
+        self.fourth_msg = fourth_msg
         self.pc_proof = pc_proof
 
     def dump(self) -> bytes:
@@ -1228,7 +1251,8 @@ class Proof(Serializable):
         res += self.batch_sizes.dump()
         res += self.commitments.dump()
         res += self.evaluations.dump()
-        res += self.msg.dump()
+        res += self.third_msg.dump()
+        res += self.fourth_msg.dump()
         res += self.pc_proof.dump()
         return res
 
@@ -1240,9 +1264,11 @@ class Proof(Serializable):
         batch_sizes = Vec[u64, u64].load(data)
         commitments = Commitments.load_with_batch_sizes(data, batch_sizes=batch_sizes)
         evaluations = Evaluations.load_with_batch_sizes(data, batch_sizes=batch_sizes)
-        msg = ThirdMessage.load(data)
+        third_msg = ThirdMessage.load_with_batch_sizes(data, batch_sizes=batch_sizes)
+        fourth_msg = FourthMessage.load_with_batch_sizes(data, batch_sizes=batch_sizes)
         pc_proof = BatchLCProof.load(data)
-        return cls(batch_sizes=batch_sizes, commitments=commitments, evaluations=evaluations, msg=msg, pc_proof=pc_proof)
+        return cls(batch_sizes=batch_sizes, commitments=commitments, evaluations=evaluations, third_msg=third_msg,
+                   fourth_msg=fourth_msg, pc_proof=pc_proof)
 
     @classmethod
     def loads(cls, data: str):
@@ -2474,13 +2500,12 @@ class Transactions(Serializable):
 class BlockHeaderMetadata(Serializable):
     version = u8()
 
-    def __init__(self, *, network: u16, round_: u64, height: u32, total_supply_in_microcredits: u64,
+    def __init__(self, *, network: u16, round_: u64, height: u32,
                  cumulative_weight: u128, cumulative_proof_target: u128, coinbase_target: u64, proof_target: u64,
                  last_coinbase_target: u64, last_coinbase_timestamp: i64, timestamp: i64):
         self.network = network
         self.round = round_
         self.height = height
-        self.total_supply_in_microcredits = total_supply_in_microcredits
         self.cumulative_weight = cumulative_weight
         self.cumulative_proof_target = cumulative_proof_target
         self.coinbase_target = coinbase_target
@@ -2491,7 +2516,7 @@ class BlockHeaderMetadata(Serializable):
 
     def dump(self) -> bytes:
         return self.version.dump() + self.network.dump() + self.round.dump() + self.height.dump() + \
-               self.total_supply_in_microcredits.dump() + self.cumulative_weight.dump() + \
+               self.cumulative_weight.dump() + \
                self.cumulative_proof_target.dump() + self.coinbase_target.dump() + self.proof_target.dump() + \
                self.last_coinbase_target.dump() + self.last_coinbase_timestamp.dump() + self.timestamp.dump()
 
@@ -2504,7 +2529,6 @@ class BlockHeaderMetadata(Serializable):
         network = u16.load(data)
         round_ = u64.load(data)
         height = u32.load(data)
-        total_supply_in_microcredits = u64.load(data)
         cumulative_weight = u128.load(data)
         cumulative_proof_target = u128.load(data)
         coinbase_target = u64.load(data)
@@ -2513,7 +2537,6 @@ class BlockHeaderMetadata(Serializable):
         last_coinbase_timestamp = i64.load(data)
         timestamp = i64.load(data)
         return cls(network=network, round_=round_, height=height,
-                   total_supply_in_microcredits=total_supply_in_microcredits,
                    cumulative_weight=cumulative_weight,
                    cumulative_proof_target=cumulative_proof_target,
                    coinbase_target=coinbase_target, proof_target=proof_target,
@@ -2524,34 +2547,34 @@ class BlockHeaderMetadata(Serializable):
 class BlockHeader(Serializable):
     version = u8()
 
-    def __init__(self, *, previous_state_root: Field, transactions_root: Field, coinbase_accumulator_point: Field,
-                 finalize_root: Field, ratifications_root: Field, metadata: BlockHeaderMetadata):
+    def __init__(self, *, previous_state_root: StateRoot, transactions_root: Field, finalize_root: Field,
+                 ratifications_root: Field, solutions_root: Field, metadata: BlockHeaderMetadata):
         self.previous_state_root = previous_state_root
         self.transactions_root = transactions_root
         self.finalize_root = finalize_root
         self.ratifications_root = ratifications_root
-        self.coinbase_accumulator_point = coinbase_accumulator_point
+        self.solutions_root = solutions_root
         self.metadata = metadata
 
     def dump(self) -> bytes:
         return self.version.dump() + self.previous_state_root.dump() + self.transactions_root.dump() \
-               + self.finalize_root.dump() + self.ratifications_root.dump() + self.coinbase_accumulator_point.dump() \
+               + self.finalize_root.dump() + self.ratifications_root.dump() + self.solutions_root.dump() \
                + self.metadata.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
         version = u8.load(data)
-        previous_state_root = Field.load(data)
+        previous_state_root = StateRoot.load(data)
         transactions_root = Field.load(data)
         finalize_root = Field.load(data)
         ratifications_root = Field.load(data)
-        coinbase_accumulator_point = Field.load(data)
+        solutions_root = Field.load(data)
         metadata = BlockHeaderMetadata.load(data)
         if version != cls.version:
             raise ValueError("invalid header version")
         return cls(previous_state_root=previous_state_root, transactions_root=transactions_root,
                    finalize_root=finalize_root, ratifications_root=ratifications_root,
-                   coinbase_accumulator_point=coinbase_accumulator_point, metadata=metadata)
+                   solutions_root=solutions_root, metadata=metadata)
 
 
 class PuzzleCommitment(Serializable):
@@ -2678,13 +2701,11 @@ class Signature(Serializable):
 class Ratify(EnumBaseSerialize, RustEnum, Serializable):
 
     class Type(IntEnumu8):
-        ProvingReward = 0
-        StakingReward = 1
+        Genesis = 0
+        BlockReward = 1
+        PuzzleReward = 2
 
     version = 0
-    address: Address
-    amount: u64
-    type: Type
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -2692,44 +2713,81 @@ class Ratify(EnumBaseSerialize, RustEnum, Serializable):
         if version != cls.version:
             raise ValueError(f"invalid version {version}")
         type_ = cls.Type.load(data)
-        if type_ == cls.Type.ProvingReward:
-            return ProvingReward.load(data)
-        elif type_ == cls.Type.StakingReward:
-            return StakingReward.load(data)
+        if type_ == cls.Type.Genesis:
+            return GenesisRatify.load(data)
+        elif type_ == cls.Type.BlockReward:
+            return BlockReward.load(data)
+        elif type_ == cls.Type.PuzzleReward:
+            return PuzzleReward.load(data)
         else:
             raise ValueError(f"invalid ratify type {type_}")
 
-class ProvingReward(Ratify):
-    type = Ratify.Type.ProvingReward
+class Committee(Serializable):
+    version = u8()
 
-    def __init__(self, *, address: Address, amount: u64):
-        self.address = address
-        self.amount = amount
+    def __init__(self, *, starting_round: u64, members: Vec[Tuple[Address, u64, bool_], u32], total_stake: u64):
+        self.starting_round = starting_round
+        self.members = members
+        self.total_stake = total_stake
 
     def dump(self) -> bytes:
-        return self.address.dump() + self.amount.dump()
+        return self.version.dump() + self.starting_round.dump() + self.members.dump() + self.total_stake.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
-        address = Address.load(data)
-        amount = u64.load(data)
-        return cls(address=address, amount=amount)
+        version = u8.load(data)
+        if version != cls.version:
+            raise ValueError(f"invalid committee version")
+        starting_round = u64.load(data)
+        members = Vec[Tuple[Address, u64, bool_], u32].load(data)
+        total_stake = u64.load(data)
+        return cls(starting_round=starting_round, members=members, total_stake=total_stake)
 
-class StakingReward(Ratify):
-    type = Ratify.Type.StakingReward
 
-    def __init__(self, *, address: Address, amount: u64):
-        self.address = address
-        self.amount = amount
+class GenesisRatify(Ratify):
+    type = Ratify.Type.Genesis
+
+    def __init__(self, *, committee: Committee, public_balances: Vec[Tuple[Address, u64], u16]):
+        self.committee = committee
+        self.public_balances = public_balances
 
     def dump(self) -> bytes:
-        return self.address.dump() + self.amount.dump()
+        return self.type.dump() + self.committee.dump() + self.public_balances.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
-        address = Address.load(data)
+        committee = Committee.load(data)
+        public_balances = Vec[Tuple[Address, u64], u16].load(data)
+        return cls(committee=committee, public_balances=public_balances)
+
+
+class BlockReward(Ratify):
+    type = Ratify.Type.BlockReward
+
+    def __init__(self, *, amount: u64):
+        self.amount = amount
+
+    def dump(self) -> bytes:
+        return self.amount.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
         amount = u64.load(data)
-        return cls(address=address, amount=amount)
+        return cls(amount=amount)
+
+class PuzzleReward(Ratify):
+    type = Ratify.Type.PuzzleReward
+
+    def __init__(self, *, amount: u64):
+        self.amount = amount
+
+    def dump(self) -> bytes:
+        return self.amount.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        amount = u64.load(data)
+        return cls(amount=amount)
 
 
 def retarget(prev_target: int, prev_block_timestamp: int, block_timestamp: int, half_life: int, inverse: bool, anchor_time: int):
@@ -2752,23 +2810,213 @@ def retarget(prev_target: int, prev_block_timestamp: int, block_timestamp: int, 
     return candidate_target
 
 
-class Block(Serializable):
-    version = u8()
+class Authority(EnumBaseSerialize, RustEnum, Serializable):
 
-    def __init__(self, *, block_hash: BlockHash, previous_hash: BlockHash, header: BlockHeader,
-                 transactions: Transactions, ratifications: Vec[Ratify, u32], coinbase: Option[CoinbaseSolution],
-                 signature: Signature):
-        self.block_hash = block_hash
-        self.previous_hash = previous_hash
-        self.header = header
-        self.transactions = transactions
-        self.ratifications = ratifications
-        self.coinbase = coinbase
+    class Type(IntEnumu8):
+        Beacon = 0
+        Quorum = 1
+
+    type: Type
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        type_ = cls.Type.load(data)
+        if type_ == cls.Type.Beacon:
+            return BeaconAuthority.load(data)
+        elif type_ == cls.Type.Quorum:
+            return QuorumAuthority.load(data)
+        else:
+            raise ValueError("incorrect type")
+
+
+class BeaconAuthority(Authority):
+    type = Authority.Type.Beacon
+
+    def __init__(self, *, signature: Signature):
         self.signature = signature
 
     def dump(self) -> bytes:
-        return self.version.dump() + self.block_hash.dump() + self.previous_hash.dump() + self.header.dump() \
-               + self.transactions.dump() + self.ratifications.dump() + self.coinbase.dump() + self.signature.dump()
+        return self.type.dump() + self.signature.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        signature = Signature.load(data)
+        return cls(signature=signature)
+
+
+class TransmissionID(EnumBaseSerialize, RustEnum, Serializable):
+
+    class Type(IntEnumu8):
+        Ratification = 0
+        Solution = 1
+        Transaction = 2
+
+    type: Type
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        type_ = cls.Type.load(data)
+        if type_ == cls.Type.Ratification:
+            return RatificationTransmissionID.load(data)
+        elif type_ == cls.Type.Solution:
+            return SolutionTransmissionID.load(data)
+        elif type_ == cls.Type.Transaction:
+            return TransactionTransmissionID.load(data)
+        else:
+            raise ValueError("incorrect type")
+
+
+class RatificationTransmissionID(TransmissionID):
+    type = TransmissionID.Type.Ratification
+
+    def dump(self) -> bytes:
+        return self.type.dump()
+
+    @classmethod
+    def load(cls, _: BytesIO):
+        return cls()
+
+
+class SolutionTransmissionID(TransmissionID):
+    type = TransmissionID.Type.Solution
+
+    def __init__(self, *, id_: PuzzleCommitment):
+        self.id = id_
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.id.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        id_ = PuzzleCommitment.load(data)
+        return cls(id_=id_)
+
+class TransactionTransmissionID(TransmissionID):
+    type = TransmissionID.Type.Transaction
+
+    def __init__(self, *, id_: TransactionID):
+        self.id = id_
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.id.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        id_ = TransactionID.load(data)
+        return cls(id_=id_)
+
+
+class BatchHeader(Serializable):
+    version = u8()
+
+    def __init__(self, *, batch_id: Field, author: Address, round_: u64, timestamp: i64, transmission_ids: Vec[TransmissionID, u32],
+                 previous_certificate_ids: Vec[Field, u32], signature: Signature):
+        self.batch_id = batch_id
+        self.author = author
+        self.round = round_
+        self.timestamp = timestamp
+        self.transmission_ids = transmission_ids
+        self.previous_certificate_ids = previous_certificate_ids
+        self.signature = signature
+
+    def dump(self) -> bytes:
+        return self.version.dump() + self.batch_id.dump() + self.author.dump() + self.round.dump() + self.timestamp.dump() \
+               + self.transmission_ids.dump() + self.previous_certificate_ids.dump() + self.signature.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        version = u8.load(data)
+        if version != cls.version:
+            raise ValueError("invalid batch header version")
+        batch_id = Field.load(data)
+        author = Address.load(data)
+        round_ = u64.load(data)
+        timestamp = i64.load(data)
+        transmission_ids = Vec[TransmissionID, u32].load(data)
+        previous_certificate_ids = Vec[Field, u32].load(data)
+        signature = Signature.load(data)
+        return cls(batch_id=batch_id, author=author, round_=round_, timestamp=timestamp,
+                   transmission_ids=transmission_ids, previous_certificate_ids=previous_certificate_ids,
+                   signature=signature)
+
+class BatchCertificate(Serializable):
+    version = u8()
+
+    def __init__(self, *, certificate_id: Field, batch_header: BatchHeader, signatures: Vec[Tuple[Signature, i64]]):
+        self.certificate_id = certificate_id
+        self.batch_header = batch_header
+        self.signatures = signatures
+
+    def dump(self) -> bytes:
+        return self.version.dump() + self.certificate_id.dump() + self.batch_header.dump() + self.signatures.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        version = u8.load(data)
+        if version != cls.version:
+            raise ValueError("invalid batch certificate version")
+        certificate_id = Field.load(data)
+        batch_header = BatchHeader.load(data)
+        signatures = Vec[Tuple[Signature, i64]].load(data)
+        return cls(certificate_id=certificate_id, batch_header=batch_header, signatures=signatures)
+
+
+class Subdag(Serializable):
+    version = u8()
+
+    def __init__(self, *, subdag: dict[u32, Vec[BatchCertificate, u32]]):
+        self.subdag = subdag
+
+    def dump(self) -> bytes:
+        res = self.version.dump()
+        res += u32(len(self.subdag)).dump()
+        for round_, certificates in self.subdag.items():
+            res += round_.dump() + certificates.dump()
+        return res
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        version = u8.load(data)
+        if version != cls.version:
+            raise ValueError("invalid subdag version")
+        subdag = {}
+        for _ in range(u32.load(data)):
+            round_ = u32.load(data)
+            certificates = Vec[BatchCertificate, u32].load(data)
+            subdag[round_] = certificates
+        return cls(subdag=subdag)
+
+class QuorumAuthority(Authority):
+    type = Authority.Type.Quorum
+
+    def __init__(self, *, signature: Signature):
+        self.signature = signature
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.signature.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        signature = Signature.load(data)
+        return cls(signature=signature)
+
+
+class Block(Serializable):
+    version = u8()
+
+    def __init__(self, *, block_hash: BlockHash, previous_hash: BlockHash, header: BlockHeader, authority: Authority,
+                 transactions: Transactions, ratifications: Vec[Ratify, u32], coinbase: Option[CoinbaseSolution]):
+        self.block_hash = block_hash
+        self.previous_hash = previous_hash
+        self.header = header
+        self.authority = authority
+        self.transactions = transactions
+        self.ratifications = ratifications
+        self.coinbase = coinbase
+
+    def dump(self) -> bytes:
+        return (self.version.dump() + self.block_hash.dump() + self.previous_hash.dump() + self.header.dump() +
+                self.authority.dump() + self.transactions.dump() + self.ratifications.dump() + self.coinbase.dump())
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -2776,14 +3024,14 @@ class Block(Serializable):
         block_hash = BlockHash.load(data)
         previous_hash = BlockHash.load(data)
         header = BlockHeader.load(data)
+        authority = Authority.load(data)
         transactions = Transactions.load(data)
         ratifications = Vec[Ratify, u32].load(data)
         coinbase = Option[CoinbaseSolution].load(data)
-        signature = Signature.load(data)
         if version != cls.version:
             raise ValueError("invalid block version")
-        return cls(block_hash=block_hash, previous_hash=previous_hash, header=header, transactions=transactions,
-                   ratifications=ratifications, coinbase=coinbase, signature=signature)
+        return cls(block_hash=block_hash, previous_hash=previous_hash, header=header, authority=authority,
+                   transactions=transactions, ratifications=ratifications, coinbase=coinbase)
 
 
     def __str__(self):
