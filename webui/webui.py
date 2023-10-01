@@ -137,7 +137,7 @@ async def robots_route(_: Request):
     return FileResponse("webui/robots.txt", headers={'Cache-Control': 'public, max-age=3600'})
 
 async def down_route(_: Request):
-    return FileResponse("templates/down.jinja2", headers={'Cache-Control': 'no-cache'})
+    return FileResponse("webui/templates/down.jinja2", headers={'Cache-Control': 'no-cache'})
 
 routes = [
     Route("/{path:path}", down_route),
