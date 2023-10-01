@@ -8,7 +8,8 @@ import uvicorn
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.responses import FileResponse
-from starlette.routing import Route
+from starlette.routing import Route, Mount
+from starlette.staticfiles import StaticFiles
 
 from middleware.asgi_logger import AccessLoggerMiddleware
 from middleware.htmx import HtmxMiddleware
@@ -140,7 +141,6 @@ async def down_route(request: Request):
     return templates.TemplateResponse("down.jinja2", {"request": request}, headers={'Cache-Control': 'no-cache'})
 
 routes = [
-    Route("/{path:path}", down_route),
     # Route("/", index_route),
     # Blockchain
     # Route("/block", block_route),
@@ -165,9 +165,10 @@ routes = [
     # Route("/feedback", feedback_route, methods=["GET", "POST"]),
     # Route("/submit_feedback", submit_feedback_route, methods=["POST"]),
     # Route("/privacy", privacy_route),
-    # Route("/robots.txt", robots_route),
-    # Route("/cf", cloudflare_error_page),
-    # Mount("/static", StaticFiles(directory="webui/static"), name="static"),
+    Route("/robots.txt", robots_route),
+    Route("/cf", cloudflare_error_page),
+    Mount("/static", StaticFiles(directory="webui/static"), name="static"),
+    Route("/{path:path}", down_route),
 ]
 
 exc_handlers = {
