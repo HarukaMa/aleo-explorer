@@ -137,7 +137,7 @@ async def robots_route(_: Request):
     return FileResponse("webui/robots.txt", headers={'Cache-Control': 'public, max-age=3600'})
 
 async def down_route(request: Request):
-    return templates.TemplateResponse("down.jinja2", ctx={"request": request}, headers={'Cache-Control': 'no-cache'})
+    return templates.TemplateResponse("down.jinja2", {"request": request}, headers={'Cache-Control': 'no-cache'})
 
 routes = [
     Route("/{path:path}", down_route),
