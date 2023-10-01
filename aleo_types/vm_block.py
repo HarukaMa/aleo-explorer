@@ -1716,6 +1716,7 @@ class Value(EnumBaseSerialize, RustEnum, Serializable):
     class Type(IntEnumu8):
         Plaintext = 0
         Record = 1
+        Future = 2
 
     type: Type
 
@@ -1726,6 +1727,8 @@ class Value(EnumBaseSerialize, RustEnum, Serializable):
             return PlaintextValue.load(data)
         elif type_ == Value.Type.Record:
             return RecordValue.load(data)
+        elif type_ == Value.Type.Future:
+            return FutureValue.load(data)
         else:
             raise ValueError("unknown value type")
 
@@ -1763,6 +1766,85 @@ class RecordValue(Value):
     def load(cls, data: BytesIO):
         record = Record[Plaintext].load(data)
         return cls(record=record)
+
+
+class Future(Serializable):
+
+    def __init__(self, *, program_id: ProgramID, function_name: Identifier, arguments: Vec["Argument", u8]):
+        self.program_id = program_id
+        self.function_name = function_name
+        self.arguments = arguments
+
+    def dump(self) -> bytes:
+        return self.program_id.dump() + self.function_name.dump() + self.arguments.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        program_id = ProgramID.load(data)
+        function_name = Identifier.load(data)
+        arguments = Vec[Argument, u8].load(data)
+        return cls(program_id=program_id, function_name=function_name, arguments=arguments)
+
+
+class Argument(EnumBaseSerialize, RustEnum, Serializable):
+
+    class Type(IntEnumu8):
+        Plaintext = 0
+        Future = 1
+
+    type: Type
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        type_ = Argument.Type.load(data)
+        if type_ == Argument.Type.Plaintext:
+            return PlaintextArgument.load(data)
+        elif type_ == Argument.Type.Future:
+            return FutureArgument.load(data)
+        else:
+            raise ValueError("unknown argument type")
+
+class PlaintextArgument(Argument):
+    type = Argument.Type.Plaintext
+
+    def __init__(self, *, plaintext: Plaintext):
+        self.plaintext = plaintext
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.plaintext.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        plaintext = Plaintext.load(data)
+        return cls(plaintext=plaintext)
+
+class FutureArgument(Argument):
+    type = Argument.Type.Future
+
+    def __init__(self, *, future: Future):
+        self.future = future
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.future.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        future = Future.load(data)
+        return cls(future=future)
+
+class FutureValue(Value):
+    type = Value.Type.Future
+
+    def __init__(self, *, future: Future):
+        self.future = future
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.future.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        future = Future.load(data)
+        return cls(future=future)
 
 
 class TransitionInput(EnumBaseSerialize, RustEnum, Serializable):
