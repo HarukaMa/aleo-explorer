@@ -2,8 +2,8 @@
 -- PostgreSQL database dump
 --
 
--- Dumped from database version 15.1
--- Dumped by pg_dump version 15.3
+-- Dumped from database version 15.4 (Debian 15.4-1)
+-- Dumped by pg_dump version 15.2
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -63,8 +63,9 @@ CREATE TYPE explorer.finalize_value_type AS ENUM (
 --
 
 CREATE TYPE explorer.ratification_type AS ENUM (
-    'ProvingReward',
-    'StakingReward'
+    'Genesis',
+    'BlockReward',
+    'PuzzleReward'
 );
 
 
@@ -201,6 +202,71 @@ ALTER SEQUENCE explorer.coinbase_solution_id_seq OWNED BY explorer.coinbase_solu
 
 
 --
+-- Name: committee_history; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.committee_history (
+    id integer NOT NULL,
+    height bigint,
+    starting_round numeric(20,0),
+    total_stake numeric(20,0)
+);
+
+
+--
+-- Name: committee_history_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.committee_history_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: committee_history_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.committee_history_id_seq OWNED BY explorer.committee_history.id;
+
+
+--
+-- Name: committee_history_member; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.committee_history_member (
+    id integer NOT NULL,
+    committee_id integer NOT NULL,
+    address text NOT NULL,
+    stake numeric(20,0) NOT NULL,
+    is_open boolean NOT NULL
+);
+
+
+--
+-- Name: committee_history_member_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.committee_history_member_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: committee_history_member_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.committee_history_member_id_seq OWNED BY explorer.committee_history_member.id;
+
+
+--
 -- Name: confirmed_transaction; Type: TABLE; Schema: explorer; Owner: -
 --
 
@@ -208,7 +274,8 @@ CREATE TABLE explorer.confirmed_transaction (
     id integer NOT NULL,
     block_id integer,
     index bigint,
-    type explorer.confirmed_transaction_type
+    type explorer.confirmed_transaction_type,
+    reject_reason text
 );
 
 
@@ -230,6 +297,101 @@ CREATE SEQUENCE explorer.confirmed_transaction_id_seq
 --
 
 ALTER SEQUENCE explorer.confirmed_transaction_id_seq OWNED BY explorer.confirmed_transaction.id;
+
+
+--
+-- Name: dag_vertex; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.dag_vertex (
+    id bigint NOT NULL,
+    round numeric(20,0) NOT NULL,
+    batch_certificate_id text NOT NULL,
+    batch_id text NOT NULL,
+    author text NOT NULL,
+    "timestamp" bigint NOT NULL,
+    author_signature text NOT NULL
+);
+
+
+--
+-- Name: dag_vertex_adjacency; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.dag_vertex_adjacency (
+    id bigint NOT NULL,
+    start_vertex bigint NOT NULL,
+    end_vertex bigint NOT NULL
+);
+
+
+--
+-- Name: dag_vertex_adjacency_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.dag_vertex_adjacency_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: dag_vertex_adjacency_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.dag_vertex_adjacency_id_seq OWNED BY explorer.dag_vertex_adjacency.id;
+
+
+--
+-- Name: dag_vertex_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.dag_vertex_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: dag_vertex_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.dag_vertex_id_seq OWNED BY explorer.dag_vertex.id;
+
+
+--
+-- Name: dag_vertex_signature; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.dag_vertex_signature (
+    id bigint NOT NULL,
+    vertex_id bigint NOT NULL,
+    signature text NOT NULL,
+    signature_address text NOT NULL
+);
+
+
+--
+-- Name: dag_vertex_signature_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.dag_vertex_signature_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: dag_vertex_signature_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.dag_vertex_signature_id_seq OWNED BY explorer.dag_vertex_signature.id;
 
 
 --
@@ -552,6 +714,39 @@ CREATE TABLE explorer.mapping (
 
 
 --
+-- Name: mapping_history; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.mapping_history (
+    id bigint NOT NULL,
+    mapping_id integer NOT NULL,
+    height integer NOT NULL,
+    key_id text NOT NULL,
+    value bytea NOT NULL,
+    index integer NOT NULL
+);
+
+
+--
+-- Name: mapping_history_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.mapping_history_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: mapping_history_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.mapping_history_id_seq OWNED BY explorer.mapping_history.id;
+
+
+--
 -- Name: mapping_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
 --
 
@@ -769,11 +964,41 @@ ALTER SEQUENCE explorer.program_id_seq OWNED BY explorer.program.id;
 CREATE TABLE explorer.ratification (
     id integer NOT NULL,
     block_id integer NOT NULL,
+    index integer NOT NULL,
     type explorer.ratification_type NOT NULL,
-    address text NOT NULL,
-    amount numeric(20,0) NOT NULL,
-    index integer NOT NULL
+    amount numeric(20,0)
 );
+
+
+--
+-- Name: ratification_genesis_balance; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.ratification_genesis_balance (
+    id integer NOT NULL,
+    address text NOT NULL,
+    amount numeric(20,0) NOT NULL
+);
+
+
+--
+-- Name: ratification_genesis_balance_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.ratification_genesis_balance_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: ratification_genesis_balance_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.ratification_genesis_balance_id_seq OWNED BY explorer.ratification_genesis_balance.id;
 
 
 --
@@ -1293,10 +1518,45 @@ ALTER TABLE ONLY explorer.coinbase_solution ALTER COLUMN id SET DEFAULT nextval(
 
 
 --
+-- Name: committee_history id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.committee_history ALTER COLUMN id SET DEFAULT nextval('explorer.committee_history_id_seq'::regclass);
+
+
+--
+-- Name: committee_history_member id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.committee_history_member ALTER COLUMN id SET DEFAULT nextval('explorer.committee_history_member_id_seq'::regclass);
+
+
+--
 -- Name: confirmed_transaction id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
 ALTER TABLE ONLY explorer.confirmed_transaction ALTER COLUMN id SET DEFAULT nextval('explorer.confirmed_transaction_id_seq'::regclass);
+
+
+--
+-- Name: dag_vertex id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.dag_vertex ALTER COLUMN id SET DEFAULT nextval('explorer.dag_vertex_id_seq'::regclass);
+
+
+--
+-- Name: dag_vertex_adjacency id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.dag_vertex_adjacency ALTER COLUMN id SET DEFAULT nextval('explorer.dag_vertex_adjacency_id_seq'::regclass);
+
+
+--
+-- Name: dag_vertex_signature id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.dag_vertex_signature ALTER COLUMN id SET DEFAULT nextval('explorer.dag_vertex_signature_id_seq'::regclass);
 
 
 --
@@ -1363,6 +1623,13 @@ ALTER TABLE ONLY explorer.mapping ALTER COLUMN id SET DEFAULT nextval('explorer.
 
 
 --
+-- Name: mapping_history id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping_history ALTER COLUMN id SET DEFAULT nextval('explorer.mapping_history_id_seq'::regclass);
+
+
+--
 -- Name: mapping_value id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -1395,6 +1662,13 @@ ALTER TABLE ONLY explorer.program_function ALTER COLUMN id SET DEFAULT nextval('
 --
 
 ALTER TABLE ONLY explorer.ratification ALTER COLUMN id SET DEFAULT nextval('explorer.ratification_id_seq'::regclass);
+
+
+--
+-- Name: ratification_genesis_balance id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.ratification_genesis_balance ALTER COLUMN id SET DEFAULT nextval('explorer.ratification_genesis_balance_id_seq'::regclass);
 
 
 --
@@ -1533,11 +1807,51 @@ ALTER TABLE ONLY explorer.coinbase_solution
 
 
 --
+-- Name: committee_history_member committee_history_member_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.committee_history_member
+    ADD CONSTRAINT committee_history_member_pk PRIMARY KEY (id);
+
+
+--
+-- Name: committee_history committee_history_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.committee_history
+    ADD CONSTRAINT committee_history_pk PRIMARY KEY (id);
+
+
+--
 -- Name: confirmed_transaction confirmed_transaction_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
 ALTER TABLE ONLY explorer.confirmed_transaction
     ADD CONSTRAINT confirmed_transaction_pk PRIMARY KEY (id);
+
+
+--
+-- Name: dag_vertex_adjacency dag_vertex_adjacency_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.dag_vertex_adjacency
+    ADD CONSTRAINT dag_vertex_adjacency_pk PRIMARY KEY (id);
+
+
+--
+-- Name: dag_vertex dag_vertex_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.dag_vertex
+    ADD CONSTRAINT dag_vertex_pk PRIMARY KEY (id);
+
+
+--
+-- Name: dag_vertex_signature dag_vertex_signature_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.dag_vertex_signature
+    ADD CONSTRAINT dag_vertex_signature_pk PRIMARY KEY (id);
 
 
 --
@@ -1610,6 +1924,14 @@ ALTER TABLE ONLY explorer.finalize_operation_update_kv
 
 ALTER TABLE ONLY explorer.leaderboard
     ADD CONSTRAINT leaderboard_pk PRIMARY KEY (address);
+
+
+--
+-- Name: mapping_history mapping_history_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping_history
+    ADD CONSTRAINT mapping_history_pk PRIMARY KEY (id);
 
 
 --
@@ -1849,6 +2171,27 @@ CREATE INDEX coinbase_solution_block_id_index ON explorer.coinbase_solution USIN
 
 
 --
+-- Name: committee_history_height_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX committee_history_height_index ON explorer.committee_history USING btree (height);
+
+
+--
+-- Name: committee_history_member_address_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX committee_history_member_address_index ON explorer.committee_history_member USING btree (address);
+
+
+--
+-- Name: committee_history_member_committee_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX committee_history_member_committee_id_index ON explorer.committee_history_member USING btree (committee_id);
+
+
+--
 -- Name: confirmed_transaction_block_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -1867,6 +2210,48 @@ CREATE INDEX confirmed_transaction_index_index ON explorer.confirmed_transaction
 --
 
 CREATE INDEX confirmed_transaction_type_index ON explorer.confirmed_transaction USING btree (type);
+
+
+--
+-- Name: dag_vertex_adjacency_end_vertex_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX dag_vertex_adjacency_end_vertex_index ON explorer.dag_vertex_adjacency USING btree (end_vertex);
+
+
+--
+-- Name: dag_vertex_adjacency_start_vertex_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX dag_vertex_adjacency_start_vertex_index ON explorer.dag_vertex_adjacency USING btree (start_vertex);
+
+
+--
+-- Name: dag_vertex_author_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX dag_vertex_author_index ON explorer.dag_vertex USING btree (author);
+
+
+--
+-- Name: dag_vertex_round_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX dag_vertex_round_index ON explorer.dag_vertex USING btree (round);
+
+
+--
+-- Name: dag_vertex_signature_signature_address_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX dag_vertex_signature_signature_address_index ON explorer.dag_vertex_signature USING btree (signature_address);
+
+
+--
+-- Name: dag_vertex_signature_vertex_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX dag_vertex_signature_vertex_id_index ON explorer.dag_vertex_signature USING btree (vertex_id);
 
 
 --
@@ -1982,6 +2367,27 @@ CREATE INDEX leaderboard_total_reward_index ON explorer.leaderboard USING btree 
 
 
 --
+-- Name: mapping_history_height_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX mapping_history_height_index ON explorer.mapping_history USING btree (height);
+
+
+--
+-- Name: mapping_history_key_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX mapping_history_key_id_index ON explorer.mapping_history USING btree (key_id);
+
+
+--
+-- Name: mapping_history_mapping_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX mapping_history_mapping_id_index ON explorer.mapping_history USING btree (mapping_id);
+
+
+--
 -- Name: mapping_value_key_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -2052,31 +2458,10 @@ CREATE INDEX program_transaction_deploy_id_index ON explorer.program USING btree
 
 
 --
--- Name: ratification_address_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX ratification_address_index ON explorer.ratification USING btree (address);
-
-
---
--- Name: ratification_address_type_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX ratification_address_type_index ON explorer.ratification USING btree (address, type);
-
-
---
 -- Name: ratification_block_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
 CREATE INDEX ratification_block_id_index ON explorer.ratification USING btree (block_id);
-
-
---
--- Name: ratification_index_block_id_uindex; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE UNIQUE INDEX ratification_index_block_id_uindex ON explorer.ratification USING btree (index, block_id);
 
 
 --
@@ -2277,11 +2662,43 @@ ALTER TABLE ONLY explorer.coinbase_solution
 
 
 --
+-- Name: committee_history_member committee_history_member_committee_history_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.committee_history_member
+    ADD CONSTRAINT committee_history_member_committee_history_id_fk FOREIGN KEY (committee_id) REFERENCES explorer.committee_history(id);
+
+
+--
 -- Name: confirmed_transaction confirmed_transaction_block_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
 ALTER TABLE ONLY explorer.confirmed_transaction
     ADD CONSTRAINT confirmed_transaction_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id);
+
+
+--
+-- Name: dag_vertex_adjacency dag_vertex_adjacency_dag_vertex_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.dag_vertex_adjacency
+    ADD CONSTRAINT dag_vertex_adjacency_dag_vertex_id_fk FOREIGN KEY (start_vertex) REFERENCES explorer.dag_vertex(id);
+
+
+--
+-- Name: dag_vertex_adjacency dag_vertex_adjacency_dag_vertex_id_fk2; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.dag_vertex_adjacency
+    ADD CONSTRAINT dag_vertex_adjacency_dag_vertex_id_fk2 FOREIGN KEY (end_vertex) REFERENCES explorer.dag_vertex(id);
+
+
+--
+-- Name: dag_vertex_signature dag_vertex_signature_dag_vertex_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.dag_vertex_signature
+    ADD CONSTRAINT dag_vertex_signature_dag_vertex_id_fk FOREIGN KEY (vertex_id) REFERENCES explorer.dag_vertex(id);
 
 
 --
@@ -2338,6 +2755,14 @@ ALTER TABLE ONLY explorer.finalize_operation_remove_mapping
 
 ALTER TABLE ONLY explorer.finalize_operation_update_kv
     ADD CONSTRAINT finalize_operation_update_kv_finalize_operation_id_fk FOREIGN KEY (finalize_operation_id) REFERENCES explorer.finalize_operation(id);
+
+
+--
+-- Name: mapping_history mapping_history_mapping_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping_history
+    ADD CONSTRAINT mapping_history_mapping_id_fk FOREIGN KEY (mapping_id) REFERENCES explorer.mapping(id);
 
 
 --
