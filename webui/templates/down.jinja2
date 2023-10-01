@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Haruka's Aleo Explorer</title>
+    <style>
+/*! CSS Used from: https://cdnjs.cloudflare.com/ajax/libs/foundation/6.7.4/css/foundation.min.css */
+h1{font-size:2em;margin:.67em 0;}
+h1{font-family:"Helvetica Neue",Helvetica,Roboto,Arial,sans-serif;font-style:normal;font-weight:400;color:inherit;text-rendering:optimizeLegibility;}
+body{margin:0;}
+a{background-color:transparent;}
+[type=submit],button{-webkit-appearance:button;}
+[type=search]{-webkit-appearance:textfield;outline-offset:-2px;}
+*,::after,::before{-webkit-box-sizing:inherit;box-sizing:inherit;}
+body{margin:0;padding:0;background:#fefefe;font-family:"Helvetica Neue",Helvetica,Roboto,Arial,sans-serif;font-weight:400;line-height:1.5;color:#0a0a0a;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
+button{padding:0;-webkit-appearance:none;-moz-appearance:none;appearance:none;border:0;border-radius:0;background:0 0;line-height:1;cursor:auto;}
+button,input{font-family:inherit;}
+[type=search]{display:block;-webkit-box-sizing:border-box;box-sizing:border-box;width:100%;height:2.4375rem;margin:0 0 1rem;padding:.5rem;border:1px solid #cacaca;border-radius:0;background-color:#fefefe;-webkit-box-shadow:inset 0 1px 2px rgba(10,10,10,.1);box-shadow:inset 0 1px 2px rgba(10,10,10,.1);font-family:inherit;font-size:1rem;font-weight:400;line-height:1.5;color:#0a0a0a;-webkit-transition:border-color .25s ease-in-out,-webkit-box-shadow .5s;transition:border-color .25s ease-in-out,-webkit-box-shadow .5s;transition:box-shadow .5s,border-color .25s ease-in-out;transition:box-shadow .5s,border-color .25s ease-in-out,-webkit-box-shadow .5s;-webkit-appearance:none;-moz-appearance:none;appearance:none;}
+input:disabled{background-color:#e6e6e6;cursor:not-allowed;}
+[type=submit]{-webkit-appearance:none;-moz-appearance:none;appearance:none;border-radius:0;}
+input[type=search]{-webkit-box-sizing:border-box;box-sizing:border-box;}
+.input-group{display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;width:100%;margin-bottom:1rem;-webkit-box-align:stretch;-webkit-align-items:stretch;-ms-flex-align:stretch;align-items:stretch;}
+.input-group>:first-child{border-radius:0;}
+.input-group>:last-child,.input-group>:last-child.input-group-button>*{border-radius:0;}
+.input-group-button,.input-group-button button,.input-group-field{margin:0;white-space:nowrap;}
+.input-group-field{border-radius:0;-webkit-box-flex:1;-webkit-flex:1 1 0px;-ms-flex:1 1 0px;flex:1 1 0px;min-width:0;}
+.input-group-button{padding-top:0;padding-bottom:0;text-align:center;display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-box-flex:0;-webkit-flex:0 0 auto;-ms-flex:0 0 auto;flex:0 0 auto;}
+.input-group-button button{-webkit-align-self:stretch;-ms-flex-item-align:stretch;align-self:stretch;height:auto;padding-top:0;padding-bottom:0;font-size:1rem;}
+div,form,li,ul{margin:0;padding:0;}
+a{line-height:inherit;color:#1779ba;text-decoration:none;cursor:pointer;}
+a:focus,a:hover{color:#1468a0;}
+ul{margin-bottom:1rem;list-style-position:outside;line-height:1.6;}
+li{font-size:inherit;}
+ul{margin-left:1.25rem;list-style-type:disc;}
+@media print{
+*{background:0 0!important;color:#000!important;-webkit-print-color-adjust:economy;color-adjust:economy;-webkit-box-shadow:none!important;box-shadow:none!important;text-shadow:none!important;}
+a,a:visited{text-decoration:underline;}
+a[href]:after{content:" (" attr(href) ")";}
+}
+.button{display:inline-block;vertical-align:middle;margin:0 0 1rem 0;padding:.85em 1em;border:1px solid transparent;border-radius:0;-webkit-transition:background-color .25s ease-out,color .25s ease-out;transition:background-color .25s ease-out,color .25s ease-out;font-family:inherit;font-size:.9rem;-webkit-appearance:none;line-height:1;text-align:center;cursor:pointer;}
+.button,.button[disabled],.button[disabled]:focus,.button[disabled]:hover{background-color:#1779ba;color:#fefefe;}
+.button[disabled]{opacity:.25;cursor:not-allowed;}
+.menu{padding:0;margin:0;list-style:none;position:relative;display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-flex-wrap:wrap;-ms-flex-wrap:wrap;flex-wrap:wrap;}
+.menu .button{line-height:1;text-decoration:none;display:block;padding:.7rem 1rem;}
+.menu{-webkit-flex-wrap:wrap;-ms-flex-wrap:wrap;flex-wrap:wrap;-webkit-box-orient:horizontal;-webkit-box-direction:normal;-webkit-flex-direction:row;-ms-flex-direction:row;flex-direction:row;}
+.menu .menu-text{padding:.7rem 1rem;font-weight:700;line-height:1;color:inherit;}
+.top-bar{display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-flex-wrap:nowrap;-ms-flex-wrap:nowrap;flex-wrap:nowrap;-webkit-box-pack:justify;-webkit-justify-content:space-between;-ms-flex-pack:justify;justify-content:space-between;-webkit-box-align:center;-webkit-align-items:center;-ms-flex-align:center;align-items:center;padding:.5rem;-webkit-flex-wrap:wrap;-ms-flex-wrap:wrap;flex-wrap:wrap;}
+.top-bar,.top-bar ul{background-color:#e6e6e6;}
+.top-bar input{max-width:200px;margin-right:1rem;}
+.top-bar .input-group-field{width:100%;margin-right:0;}
+.top-bar .top-bar-left,.top-bar .top-bar-right{-webkit-box-flex:0;-webkit-flex:0 0 100%;-ms-flex:0 0 100%;flex:0 0 100%;max-width:100%;}
+@media print,screen and (min-width:40em){
+.top-bar{-webkit-flex-wrap:nowrap;-ms-flex-wrap:nowrap;flex-wrap:nowrap;}
+.top-bar .top-bar-left{-webkit-box-flex:1;-webkit-flex:1 1 auto;-ms-flex:1 1 auto;flex:1 1 auto;margin-right:auto;}
+.top-bar .top-bar-right{-webkit-box-flex:0;-webkit-flex:0 1 auto;-ms-flex:0 1 auto;flex:0 1 auto;margin-left:auto;}
+}
+.top-bar-left,.top-bar-right{-webkit-box-flex:0;-webkit-flex:0 0 auto;-ms-flex:0 0 auto;flex:0 0 auto;}
+/*! CSS Used from: Embedded */
+.content{max-width:1280px;margin:auto;padding:8px;font-size:0.9rem;}
+.footer-container{padding:0 8px;}
+.footer{max-width:1280px;margin:auto;padding:8px;font-size:0.875rem;}
+#search{width:100%;}
+.menubar{max-width:1280px;flex:1 1 auto;margin:auto;display:flex;padding:0 8px;}
+.top-bar-right{width:35%;}
+.menu .menu-text{padding-left:0;}
+.top-bar input{max-width:100%;}
+.input-group{margin-bottom:0;}
+    </style>
+</head>
+<body>
+<div class="top-bar">
+    <div class="menubar">
+        <div class="top-bar-left">
+            <ul class="menu">
+                <li class="menu-text">Haruka's Aleo Explorer</li>
+            </ul>
+        </div>
+        <div class="top-bar-right">
+            <ul class="menu">
+                <!--suppress HtmlUnknownTag -->
+                <form id="search" action="/search">
+                    <div class="input-group">
+                        <input class="input-group-field" type="search" disabled>
+                        <div class="input-group-button">
+                            <button type="submit" class="button" disabled>Search</button>
+                        </div>
+                    </div>
+                </form>
+            </ul>
+        </div>
+    </div>
+</div>
+<div class="content">
+The explorer is being upgraded to support the new network features. It might take a few days or weeks.
+</div>
+<div class="footer-container">
+    <div class="footer">
+        This site is protected by <a href="https://www.cloudflare.com/" target="_blank">Cloudflare</a>.
+    </div>
+</div>
+</body>
+</html>

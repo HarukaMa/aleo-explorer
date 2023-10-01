@@ -14,8 +14,6 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
-from api.execute_routes import preview_finalize_route
-from api.mapping_routes import mapping_route, mapping_list_route, mapping_value_list_route
 from db import Database
 from middleware.api_quota import APIQuotaMiddleware
 from middleware.asgi_logger import AccessLoggerMiddleware
@@ -45,13 +43,16 @@ async def commitment_route(request: Request):
         return HTTPException(400, "Missing commitment")
     return JSONResponse(await db.get_puzzle_commitment(commitment))
 
+async def down_route(request: Request):
+    return JSONResponse({"error": "Explorer is down while being upgraded to support the new network features."}, status_code=503)
 
 routes = [
-    Route("/commitment", commitment_route),
-    Route("/v{version:int}/mapping/get_value/{program_id}/{mapping}/{key}", mapping_route),
-    Route("/v{version:int}/mapping/list_program_mappings/{program_id}", mapping_list_route),
-    Route("/v{version:int}/mapping/list_program_mapping_values/{program_id}/{mapping}", mapping_value_list_route),
-    Route("/v{version:int}/preview_finalize_execution", preview_finalize_route, methods=["POST"]),
+    Route("/{path:path}", down_route),
+    # Route("/commitment", commitment_route),
+    # Route("/v{version:int}/mapping/get_value/{program_id}/{mapping}/{key}", mapping_route),
+    # Route("/v{version:int}/mapping/list_program_mappings/{program_id}", mapping_list_route),
+    # Route("/v{version:int}/mapping/list_program_mapping_values/{program_id}/{mapping}", mapping_value_list_route),
+    # Route("/v{version:int}/preview_finalize_execution", preview_finalize_route, methods=["POST"]),
 ]
 
 async def startup():

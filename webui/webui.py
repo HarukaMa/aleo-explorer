@@ -8,15 +8,13 @@ import uvicorn
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.responses import FileResponse
-from starlette.routing import Route, Mount
-from starlette.staticfiles import StaticFiles
+from starlette.routing import Route
 
 from middleware.asgi_logger import AccessLoggerMiddleware
 from middleware.htmx import HtmxMiddleware
 from middleware.minify import MinifyMiddleware
 from middleware.server_timing import ServerTimingMiddleware
 # from node.light_node import LightNodeState
-from .chain_routes import *
 from .error_routes import *
 from .program_routes import *
 from .proving_routes import *
@@ -138,35 +136,38 @@ async def privacy_route(request: Request):
 async def robots_route(_: Request):
     return FileResponse("webui/robots.txt", headers={'Cache-Control': 'public, max-age=3600'})
 
+async def down_route(_: Request):
+    return FileResponse("templates/down.jinja2", headers={'Cache-Control': 'no-cache'})
 
 routes = [
-    Route("/", index_route),
+    Route("/{path:path}", down_route),
+    # Route("/", index_route),
     # Blockchain
-    Route("/block", block_route),
-    Route("/transaction", transaction_route),
-    Route("/transition", transition_route),
-    Route("/search", search_route),
-    Route("/blocks", blocks_route),
-    # Programs
-    Route("/programs", programs_route),
-    Route("/program", program_route),
-    Route("/similar_programs", similar_programs_route),
-    Route("/upload_source", upload_source_route, methods=["GET", "POST"]),
-    Route("/submit_source", submit_source_route, methods=["POST"]),
-    # Proving
-    Route("/calc", calc_route),
-    Route("/leaderboard", leaderboard_route),
-    Route("/address", address_route),
-    Route("/address_solution", address_solution_route),
-    # Other
-    Route("/tools", tools_route),
-    Route("/faq", faq_route),
-    Route("/feedback", feedback_route, methods=["GET", "POST"]),
-    Route("/submit_feedback", submit_feedback_route, methods=["POST"]),
-    Route("/privacy", privacy_route),
-    Route("/robots.txt", robots_route),
-    Route("/cf", cloudflare_error_page),
-    Mount("/static", StaticFiles(directory="webui/static"), name="static"),
+    # Route("/block", block_route),
+    # Route("/transaction", transaction_route),
+    # Route("/transition", transition_route),
+    # Route("/search", search_route),
+    # Route("/blocks", blocks_route),
+    # # Programs
+    # Route("/programs", programs_route),
+    # Route("/program", program_route),
+    # Route("/similar_programs", similar_programs_route),
+    # Route("/upload_source", upload_source_route, methods=["GET", "POST"]),
+    # Route("/submit_source", submit_source_route, methods=["POST"]),
+    # # Proving
+    # Route("/calc", calc_route),
+    # Route("/leaderboard", leaderboard_route),
+    # Route("/address", address_route),
+    # Route("/address_solution", address_solution_route),
+    # # Other
+    # Route("/tools", tools_route),
+    # Route("/faq", faq_route),
+    # Route("/feedback", feedback_route, methods=["GET", "POST"]),
+    # Route("/submit_feedback", submit_feedback_route, methods=["POST"]),
+    # Route("/privacy", privacy_route),
+    # Route("/robots.txt", robots_route),
+    # Route("/cf", cloudflare_error_page),
+    # Mount("/static", StaticFiles(directory="webui/static"), name="static"),
 ]
 
 exc_handlers = {

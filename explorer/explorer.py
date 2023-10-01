@@ -8,7 +8,6 @@ import webui
 from aleo_types import Block, BlockHash
 from db import Database
 from interpreter.interpreter import init_builtin_program
-from node import Node
 from node.testnet3 import Testnet3
 from .types import Request, Message, ExplorerRequest
 
@@ -65,43 +64,43 @@ class Explorer:
 
     async def main_loop(self):
         try:
-            await self.db.connect()
-            await self.check_dev_mode()
-            await self.check_genesis()
-            latest_height = await self.db.get_latest_height()
-            if latest_height is None:
-                raise ValueError("no block in database")
-            self.latest_height = latest_height
-            latest_block_hash = await self.db.get_block_hash_by_height(self.latest_height)
-            if latest_block_hash is None:
-                raise ValueError("no block in database")
-            self.latest_block_hash = latest_block_hash
-            await self.db.migrate()
-            print(f"latest height: {self.latest_height}")
-            self.node = Node(explorer_message=self.message, explorer_request=self.node_request)
-            await self.node.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4133")))
+            # await self.db.connect()
+            # await self.check_dev_mode()
+            # await self.check_genesis()
+            # latest_height = await self.db.get_latest_height()
+            # if latest_height is None:
+            #     raise ValueError("no block in database")
+            # self.latest_height = latest_height
+            # latest_block_hash = await self.db.get_block_hash_by_height(self.latest_height)
+            # if latest_block_hash is None:
+            #     raise ValueError("no block in database")
+            # self.latest_block_hash = latest_block_hash
+            # await self.db.migrate()
+            # print(f"latest height: {self.latest_height}")
+            # self.node = Node(explorer_message=self.message, explorer_request=self.node_request)
+            # await self.node.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4133")))
             asyncio.create_task(webui.run())
             asyncio.create_task(api.run())
             while True:
                 msg = await self.message_queue.get()
-                match msg.type:
-                    case Message.Type.NodeConnectError:
-                        print("node connect error:", msg.data)
-                    case Message.Type.NodeConnected:
-                        print("node connected")
-                    case Message.Type.NodeDisconnected:
-                        print("node disconnected")
-                    case Message.Type.DatabaseConnectError:
-                        print("database connect error:", msg.data)
-                    case Message.Type.DatabaseConnected:
-                        print("database connected")
-                    case Message.Type.DatabaseDisconnected:
-                        print("database disconnected")
-                    case Message.Type.DatabaseError:
-                        print("database error:", msg.data)
-                    case Message.Type.DatabaseBlockAdded:
-                        # maybe do something later?
-                        pass
+            #     match msg.type:
+            #         case Message.Type.NodeConnectError:
+            #             print("node connect error:", msg.data)
+            #         case Message.Type.NodeConnected:
+            #             print("node connected")
+            #         case Message.Type.NodeDisconnected:
+            #             print("node disconnected")
+            #         case Message.Type.DatabaseConnectError:
+            #             print("database connect error:", msg.data)
+            #         case Message.Type.DatabaseConnected:
+            #             print("database connected")
+            #         case Message.Type.DatabaseDisconnected:
+            #             print("database disconnected")
+            #         case Message.Type.DatabaseError:
+            #             print("database error:", msg.data)
+            #         case Message.Type.DatabaseBlockAdded:
+            #             # maybe do something later?
+            #             pass
         except Exception as e:
             print("explorer error:", e)
             traceback.print_exc()
