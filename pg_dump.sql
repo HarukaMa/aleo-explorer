@@ -73,8 +73,8 @@ CREATE TYPE explorer.finalize_value_type AS ENUM (
 --
 
 CREATE TYPE explorer.future_type AS ENUM (
-    'FutureValue',
-    'FutureArgument'
+    'Value',
+    'Argument'
 );
 
 
