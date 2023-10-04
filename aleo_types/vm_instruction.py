@@ -45,7 +45,8 @@ class Literal(Serializable): # enum
         U64 = 12
         U128 = 13
         Scalar = 14
-        String = 15
+        Signature = 15
+        String = 16
 
     primitive_type_map = {
         Type.Address: Address,
@@ -63,6 +64,7 @@ class Literal(Serializable): # enum
         Type.U64: u64,
         Type.U128: u128,
         Type.Scalar: Scalar,
+        Type.Signature: Signature,
         Type.String: StringType,
     }
 
@@ -82,6 +84,7 @@ class Literal(Serializable): # enum
         u64: Type.U64,
         u128: Type.U128,
         Scalar: Type.Scalar,
+        Signature: Type.Signature,
         StringType: Type.String,
     }
 
@@ -100,7 +103,7 @@ class Literal(Serializable): # enum
 
     @classmethod
     def loads(cls, type_: Type, data: str):
-        return cls.primitive_type_map[type_].loads(data)
+        return cls(type_=type_, primitive=cls.primitive_type_map[type_].loads(data))
 
     def __str__(self):
         import disasm.aleo
@@ -567,7 +570,8 @@ class LiteralType(IntEnumu8):
     U64 = 12
     U128 = 13
     Scalar = 14
-    String = 15
+    Signature = 15
+    String = 16
 
     @property
     def primitive_type(self):
@@ -587,6 +591,7 @@ class LiteralType(IntEnumu8):
             self.U64: u64,
             self.U128: u128,
             self.Scalar: Scalar,
+            self.Signature: Signature,
             self.String: StringType,
         }[self]
 
@@ -607,6 +612,7 @@ class LiteralType(IntEnumu8):
             self.U64: "u64",
             self.U128: "u128",
             self.Scalar: "scalar",
+            self.Signature: "signature",
             self.String: "string",
         }[self]
 
@@ -890,6 +896,8 @@ class HashInstruction(Serializable, Generic[V]):
 class Instruction(Serializable):
 
     class Type(IntEnumu16):
+
+        # TODO: add async / await
 
         @staticmethod
         def _generate_next_value_(name: str, start: int, count: int, last_values: list[int]):

@@ -88,34 +88,30 @@ class EpochChallenge(Serializable):
 
 class MapKey(Serializable):
 
-    def __init__(self, *, name: Identifier, plaintext_type: PlaintextType):
-        self.name = name
+    def __init__(self, *, plaintext_type: PlaintextType):
         self.plaintext_type = plaintext_type
 
     def dump(self) -> bytes:
-        return self.name.dump() + self.plaintext_type.dump()
+        return self.plaintext_type.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
-        name = Identifier.load(data)
         plaintext_type = PlaintextType.load(data)
-        return cls(name=name, plaintext_type=plaintext_type)
+        return cls(plaintext_type=plaintext_type)
 
 
 class MapValue(Serializable):
 
-    def __init__(self, *, name: Identifier, plaintext_type: PlaintextType):
-        self.name = name
+    def __init__(self, *, plaintext_type: PlaintextType):
         self.plaintext_type = plaintext_type
 
     def dump(self) -> bytes:
-        return self.name.dump() + self.plaintext_type.dump()
+        return self.plaintext_type.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
-        name = Identifier.load(data)
         plaintext_type = PlaintextType.load(data)
-        return cls(name=name, plaintext_type=plaintext_type)
+        return cls(plaintext_type=plaintext_type)
 
 
 class Mapping(Serializable):
@@ -2198,6 +2194,9 @@ class Transaction(EnumBaseSerialize, RustEnum, Serializable):
         Execute = 1
         Fee = 2
 
+    id: TransactionID
+    type: Type
+
     @classmethod
     def load(cls, data: BytesIO):
         if data.getbuffer().nbytes < 1:
@@ -2739,47 +2738,6 @@ class CoinbaseSolution(Serializable):
         return cls(partial_solutions=partial_solutions, proof=proof)
 
 
-class ComputeKey(Serializable):
-
-    def __init__(self, *, pk_sig: Group, pr_sig: Group):
-        self.pk_sig = pk_sig
-        self.pr_sig = pr_sig
-
-    def dump(self) -> bytes:
-        return self.pk_sig.dump() + self.pr_sig.dump()
-
-    @classmethod
-    def load(cls, data: BytesIO):
-        pk_sig = Group.load(data)
-        pr_sig = Group.load(data)
-        return cls(pk_sig=pk_sig, pr_sig=pr_sig)
-
-
-class Signature(Serializable):
-
-    def __init__(self, *, challange: Scalar, response: Scalar, compute_key: ComputeKey):
-        self.challange = challange
-        self.response = response
-        self.compute_key = compute_key
-
-    def dump(self) -> bytes:
-        return self.challange.dump() + self.response.dump() + self.compute_key.dump()
-
-    @classmethod
-    def load(cls, data: BytesIO):
-        challange = Scalar.load(data)
-        response = Scalar.load(data)
-        compute_key = ComputeKey.load(data)
-        return cls(challange=challange, response=response, compute_key=compute_key)
-
-    @classmethod
-    def loads(cls, data: str):
-        return cls.load(bech32_to_bytes(data))
-
-    def __str__(self):
-        return str(Bech32m(self.dump(), "sign"))
-
-
 class Ratify(EnumBaseSerialize, RustEnum, Serializable):
 
     class Type(IntEnumu8):
@@ -2798,9 +2756,9 @@ class Ratify(EnumBaseSerialize, RustEnum, Serializable):
         if type_ == cls.Type.Genesis:
             return GenesisRatify.load(data)
         elif type_ == cls.Type.BlockReward:
-            return BlockReward.load(data)
+            return BlockRewardRatify.load(data)
         elif type_ == cls.Type.PuzzleReward:
-            return PuzzleReward.load(data)
+            return PuzzleRewardRatify.load(data)
         else:
             raise ValueError(f"invalid ratify type {type_}")
 
@@ -2843,7 +2801,7 @@ class GenesisRatify(Ratify):
         return cls(committee=committee, public_balances=public_balances)
 
 
-class BlockReward(Ratify):
+class BlockRewardRatify(Ratify):
     type = Ratify.Type.BlockReward
 
     def __init__(self, *, amount: u64):
@@ -2857,7 +2815,7 @@ class BlockReward(Ratify):
         amount = u64.load(data)
         return cls(amount=amount)
 
-class PuzzleReward(Ratify):
+class PuzzleRewardRatify(Ratify):
     type = Ratify.Type.PuzzleReward
 
     def __init__(self, *, amount: u64):
@@ -3071,16 +3029,16 @@ class Subdag(Serializable):
 class QuorumAuthority(Authority):
     type = Authority.Type.Quorum
 
-    def __init__(self, *, signature: Signature):
-        self.signature = signature
+    def __init__(self, *, subdag: Subdag):
+        self.subdag = subdag
 
     def dump(self) -> bytes:
-        return self.type.dump() + self.signature.dump()
+        return self.type.dump() + self.subdag.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
-        signature = Signature.load(data)
-        return cls(signature=signature)
+        subdag = Subdag.load(data)
+        return cls(subdag=subdag)
 
 
 class Block(Serializable):
@@ -3119,15 +3077,26 @@ class Block(Serializable):
     def __str__(self):
         return f"Block {self.header.metadata.height} ({str(self.block_hash)[:16]}...)"
 
-    def get_coinbase_reward(self, last_timestamp: int) -> int:
-        if self.coinbase.value is None:
-            return 0
-        anchor_reward = 18
-        y10_anchor_height = 31536000 // 25 * 10
-        remaining_blocks = y10_anchor_height - self.header.metadata.height
-        if remaining_blocks <= 0:
-            return 0
-        return retarget(remaining_blocks * anchor_reward, last_timestamp, self.header.metadata.timestamp, 25, True, 25)
+    def compute_rewards(self, last_coinbase_target: int, last_cumulative_proof_target: int) -> tuple[int, int]:
+        starting_supply = 1_500_000_000_000_000
+        anchor_time = 25
+        block_time = 10
+        anchor_height = anchor_time // block_time
+        combined_proof_target = int(self.header.metadata.cumulative_proof_target)
+
+        remaining_coinbase_target = max(0, last_coinbase_target - last_cumulative_proof_target)
+        remaining_proof_target = min(combined_proof_target, remaining_coinbase_target)
+
+        block_height_at_year_10 = 31536000 // 25 * 10
+        remaining_blocks = max(0, block_height_at_year_10 - self.header.metadata.height)
+        anchor_block_reward = 2 * starting_supply * anchor_height * remaining_blocks // (block_height_at_year_10 * (block_height_at_year_10 + 1))
+        coinbase_reward = anchor_block_reward * remaining_proof_target // last_coinbase_target
+
+        block_height_at_year_1 = 31536000 // 25
+        annual_reward = starting_supply // 1000 * 50
+        block_reward = annual_reward // block_height_at_year_1 + coinbase_reward // 2
+
+        return block_reward, coinbase_reward
 
     def get_epoch_number(self) -> int:
         return self.header.metadata.height // 256

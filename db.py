@@ -41,6 +41,29 @@ class Database:
         await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseConnected, None))
 
     @staticmethod
+    async def _insert_finalize_future(conn: psycopg.AsyncConnection[dict[str, Any]], finalize_db_id: int,
+                                      value: Future):
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "INSERT INTO transition_finalize_future (type, transition_finalize_id, program_id, function_name) "
+                "VALUES ('Value', %s, %s, %s) RETURNING id",
+                (finalize_db_id, str(value.program_id), str(value.function_name))
+            )
+            if (res := await cur.fetchone()) is None:
+                raise Exception("failed to insert row into database")
+            future_db_id = res["id"]
+            for argument in value.arguments:
+                if isinstance(argument, PlaintextArgument):
+                    await cur.execute(
+                        "INSERT INTO transition_finalize_future_argument (future_id, type, plaintext) VALUES (%s, %s, %s)",
+                        (future_db_id, argument.type.name, argument.plaintext.dump())
+                    )
+                elif isinstance(argument, FutureArgument):
+                    await Database._insert_finalize_future(conn, future_db_id, argument.future)
+                else:
+                    raise NotImplementedError
+
+    @staticmethod
     async def _insert_transition(conn: psycopg.AsyncConnection[dict[str, Any]], exe_tx_db_id: Optional[int], fee_db_id: Optional[int],
                                  transition: Transition, ts_index: int):
         async with conn.cursor() as cur:
@@ -52,7 +75,7 @@ class Database:
                 str(transition.function_name), str(transition.tpk), str(transition.tcm), ts_index)
             )
             if (res := await cur.fetchone()) is None:
-                raise Exception("???")
+                raise Exception("failed to insert row into database")
             transition_db_id = res["id"]
 
             transition_input: TransitionInput
@@ -62,7 +85,7 @@ class Database:
                     (transition_db_id, transition_input.type.name, input_index)
                 )
                 if (res := await cur.fetchone()) is None:
-                    raise Exception("???")
+                    raise Exception("failed to insert row into database")
                 transition_input_db_id = res["id"]
                 if isinstance(transition_input, PublicTransitionInput):
                     await cur.execute(
@@ -102,7 +125,7 @@ class Database:
                     (transition_db_id, transition_output.type.name, output_index)
                 )
                 if (res := await cur.fetchone()) is None:
-                    raise Exception("???")
+                    raise Exception("failed to insert row into database")
                 transition_output_db_id = res["id"]
                 if isinstance(transition_output, PublicTransitionOutput):
                     await cur.execute(
@@ -142,7 +165,7 @@ class Database:
                         (transition_db_id, finalize.type.name, finalize_index)
                     )
                     if (res := await cur.fetchone()) is None:
-                        raise Exception("???")
+                        raise Exception("failed to insert row into database")
                     transition_finalize_db_id = res["id"]
                     if isinstance(finalize, PlaintextValue):
                         await cur.execute(
@@ -156,12 +179,17 @@ class Database:
                             "VALUES (%s, %s)",
                             (transition_finalize_db_id, str(finalize.record))
                         )
+                    elif isinstance(finalize, FutureValue):
+                        await Database._insert_finalize_future(conn, transition_finalize_db_id, finalize.future)
+                    else:
+                        raise NotImplementedError
+
 
             await cur.execute(
                 "SELECT id FROM program WHERE program_id = %s", (str(transition.program_id),)
             )
             if (res := await cur.fetchone()) is None:
-                raise Exception("???")
+                raise Exception("failed to insert row into database")
             program_db_id = res["id"]
             await cur.execute(
                 "UPDATE program_function SET called = called + 1 WHERE program_id = %s AND name = %s",
@@ -202,7 +230,7 @@ class Database:
                  closures, functions, program.dump(), program.is_helloworld(), program.feature_hash())
             )
         if (res := await cur.fetchone()) is None:
-            raise Exception("???")
+            raise Exception("failed to insert row into database")
         program_db_id = res["id"]
         for function in program.functions.values():
             inputs: list[str] = []
@@ -234,26 +262,100 @@ class Database:
                     try:
                         from interpreter.interpreter import finalize_block
                         reject_reasons = await finalize_block(self, cur, block)
+
+                        block_reward, coinbase_reward = block.compute_rewards(
+                            await self.get_latest_coinbase_target(),
+                            await self.get_latest_cumulative_proof_target()
+                        )
+                        puzzle_reward = coinbase_reward // 2
+                        for ratification in block.ratifications:
+                            if isinstance(ratification, BlockRewardRatify):
+                                if ratification.amount != block_reward:
+                                    raise RuntimeError("invalid block reward")
+                            elif isinstance(ratification, PuzzleRewardRatify):
+                                if ratification.amount != puzzle_reward:
+                                    raise RuntimeError("invalid puzzle reward")
+
                         await cur.execute(
                             "INSERT INTO block (height, block_hash, previous_hash, previous_state_root, transactions_root, "
-                            "coinbase_accumulator_point, round, coinbase_target, proof_target, last_coinbase_target, "
-                            "last_coinbase_timestamp, timestamp, signature, total_supply, cumulative_weight, "
-                            "finalize_root, cumulative_proof_target, ratifications_root) "
+                            "finalize_root, ratifications_root, solutions_root, round, cumulative_weight, "
+                            "cumulative_proof_target, coinbase_target, proof_target, last_coinbase_target, "
+                            "last_coinbase_timestamp, timestamp, block_reward, coinbase_reward) "
                             "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
                             "RETURNING id",
-                            (block.header.metadata.height, str(block.block_hash), str(block.previous_hash),
-                             str(block.header.previous_state_root), str(block.header.transactions_root),
-                             str(block.header.coinbase_accumulator_point), block.header.metadata.round,
-                             block.header.metadata.coinbase_target, block.header.metadata.proof_target,
-                             block.header.metadata.last_coinbase_target, block.header.metadata.last_coinbase_timestamp,
-                             block.header.metadata.timestamp, str(block.signature),
-                             block.header.metadata.total_supply_in_microcredits,
-                             block.header.metadata.cumulative_weight, str(block.header.finalize_root),
-                             block.header.metadata.cumulative_proof_target, str(block.header.ratifications_root))
+                            (block.height, block.block_hash, block.previous_hash, block.header.previous_state_root,
+                             block.header.transactions_root, block.header.finalize_root, block.header.ratifications_root,
+                             block.header.solutions_root, block.round, block.header.metadata.cumulative_weight,
+                             block.header.metadata.cumulative_proof_target, block.header.metadata.coinbase_target,
+                             block.header.metadata.proof_target, block.header.metadata.last_coinbase_target,
+                             block.header.metadata.last_coinbase_timestamp, block.header.metadata.timestamp,
+                             block_reward, coinbase_reward)
                         )
                         if (res := await cur.fetchone()) is None:
-                            raise RuntimeError("???")
+                            raise RuntimeError("failed to insert row into database")
                         block_db_id = res["id"]
+
+                        dag_transmission_ids: tuple[dict[str, int], dict[str, int]] = {}, {}
+
+                        if isinstance(block.authority, BeaconAuthority):
+                            await cur.execute(
+                                "INSERT INTO authority (block_id, type, signature) VALUES (%s, %s, %s)",
+                                (block_db_id, block.authority.type.name, str(block.authority.signature))
+                            )
+                        elif isinstance(block.authority, QuorumAuthority):
+                            await cur.execute(
+                                "INSERT INTO authority (block_id, type) VALUES (%s, %s) RETURNING id",
+                                (block_db_id, block.authority.type.name)
+                            )
+                            if (res := await cur.fetchone()) is None:
+                                raise RuntimeError("failed to insert row into database")
+                            authority_db_id = res["id"]
+                            subdag = block.authority.subdag
+                            for round_, certificates in subdag.subdag.items():
+                                for certificate in certificates:
+                                    if round_ != certificate.batch_header.round:
+                                        raise ValueError("invalid subdag round")
+                                    if certificate.batch_header.author != aleo.signature_to_address(str(certificate.batch_header.signature)):
+                                        raise ValueError("invalid subdag author signature")
+                                    await cur.execute(
+                                        "INSERT INTO dag_vertex (authority_id, round, batch_certificate_id, batch_id, "
+                                        "author, timestamp, author_signature) "
+                                        "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                                        (authority_db_id, round_, str(certificate.certificate_id), str(certificate.batch_header.batch_id),
+                                         str(certificate.batch_header.author), certificate.batch_header.timestamp,
+                                         str(certificate.batch_header.signature))
+                                    )
+                                    if (res := await cur.fetchone()) is None:
+                                        raise RuntimeError("failed to insert row into database")
+                                    vertex_db_id = res["id"]
+
+                                    for signature, timestamp in certificate.signatures:
+                                        await cur.execute(
+                                            "INSERT INTO dag_vertex_signature (vertex_id, signature, signature_address, timestamp) "
+                                            "VALUES (%s, %s, %s, %s)",
+                                            (vertex_db_id, str(signature), aleo.signature_to_address(str(signature)), timestamp)
+                                        )
+
+                                    prev_cert_ids = certificate.batch_header.previous_certificate_ids
+                                    await cur.execute(
+                                        "SELECT id, batch_certificate_id FROM dag_vertex WHERE batch_certificate_id = ANY(%s::text)", (str(prev_cert_ids),)
+                                    )
+                                    res = await cur.fetchall()
+                                    if len(res) != len(prev_cert_ids):
+                                        raise RuntimeError("dag referenced unknown previous certificate")
+                                    prev_vertex_db_ids = {x["batch_certificate_id"]: x["id"] for x in res}
+                                    for prev_cert_id in prev_cert_ids:
+                                        await cur.execute(
+                                            "INSERT INTO dag_vertex_adjacency (vertex_id, previous_vertex_id) VALUES (%s, %s)",
+                                            (vertex_db_id, prev_vertex_db_ids[str(prev_cert_id)])
+                                        )
+
+                                    for transmission_id in certificate.batch_header.transmission_ids:
+                                        if isinstance(transmission_id, SolutionTransmissionID):
+                                            dag_transmission_ids[0][str(transmission_id.id)] = vertex_db_id
+                                        elif isinstance(transmission_id, TransactionTransmissionID):
+                                            dag_transmission_ids[1][str(transmission_id.id)] = vertex_db_id
+
 
                         for ct_index, confirmed_transaction in enumerate(block.transactions):
                             await cur.execute(
@@ -261,29 +363,31 @@ class Database:
                                 (block_db_id, confirmed_transaction.index, confirmed_transaction.type.name)
                             )
                             if (res := await cur.fetchone()) is None:
-                                raise RuntimeError("???")
+                                raise RuntimeError("failed to insert row into database")
                             confirmed_transaction_db_id = res["id"]
+                            transaction = confirmed_transaction.transaction
+                            transaction_id = transaction.id
+                            dag_vertex_db_id = dag_transmission_ids[1][str(transaction_id)]
+                            await cur.execute(
+                                "INSERT INTO transaction (dag_vertex_id, confimed_transaction_id, transaction_id, type) "
+                                "VALUES (%s, %s, %s, %s) RETURNING id",
+                                (dag_vertex_db_id, confirmed_transaction_db_id, str(transaction_id), transaction.type.name)
+                            )
+                            if (res := await cur.fetchone()) is None:
+                                raise RuntimeError("failed to insert row into database")
+                            transaction_db_id = res["id"]
                             if isinstance(confirmed_transaction, AcceptedDeploy):
                                 if reject_reasons[ct_index] is not None:
                                     raise RuntimeError("expected no rejected reason for accepted deploy transaction")
-                                transaction = confirmed_transaction.transaction
                                 if not isinstance(transaction, DeployTransaction):
                                     raise ValueError("expected deploy transaction")
-                                transaction_id = transaction.id
-                                await cur.execute(
-                                    "INSERT INTO transaction (confimed_transaction_id, transaction_id, type) VALUES (%s, %s, %s) RETURNING id",
-                                    (confirmed_transaction_db_id, str(transaction_id), transaction.type.name)
-                                )
-                                if (res := await cur.fetchone()) is None:
-                                    raise RuntimeError("???")
-                                transaction_db_id = res["id"]
                                 await cur.execute(
                                     "INSERT INTO transaction_deploy (transaction_id, edition, verifying_keys) "
                                     "VALUES (%s, %s, %s) RETURNING id",
                                     (transaction_db_id, transaction.deployment.edition, transaction.deployment.verifying_keys.dump())
                                 )
                                 if (res := await cur.fetchone()) is None:
-                                    raise RuntimeError("???")
+                                    raise RuntimeError("failed to insert row into database")
                                 deploy_transaction_db_id = res["id"]
 
                                 await self._save_program(cur, transaction.deployment.program, deploy_transaction_db_id, transaction)
@@ -294,7 +398,7 @@ class Database:
                                     (transaction_db_id, str(transaction.fee.global_state_root), transaction.fee.proof.dumps())
                                 )
                                 if (res := await cur.fetchone()) is None:
-                                    raise RuntimeError("???")
+                                    raise RuntimeError("failed to insert row into database")
                                 fee_db_id = res["id"]
                                 await self._insert_transition(conn, None, fee_db_id, transaction.fee.transition, 0)
 
@@ -304,14 +408,6 @@ class Database:
                                 transaction = confirmed_transaction.transaction
                                 if not isinstance(transaction, ExecuteTransaction):
                                     raise ValueError("expected execute transaction")
-                                transaction_id = transaction.id
-                                await cur.execute(
-                                    "INSERT INTO transaction (confimed_transaction_id, transaction_id, type) VALUES (%s, %s, %s) RETURNING id",
-                                    (confirmed_transaction_db_id, str(transaction_id), transaction.type.name)
-                                )
-                                if (res := await cur.fetchone()) is None:
-                                    raise RuntimeError("???")
-                                transaction_db_id = res["id"]
                                 await cur.execute(
                                     "INSERT INTO transaction_execute (transaction_id, global_state_root, proof) "
                                     "VALUES (%s, %s, %s) RETURNING id",
@@ -319,7 +415,7 @@ class Database:
                                      transaction.execution.proof.dumps())
                                 )
                                 if (res := await cur.fetchone()) is None:
-                                    raise RuntimeError("???")
+                                    raise RuntimeError("failed to insert row into database")
                                 execute_transaction_db_id = res["id"]
 
                                 for ts_index, transition in enumerate(transaction.execution.transitions):
@@ -333,7 +429,7 @@ class Database:
                                         (transaction_db_id, str(fee.global_state_root), fee.proof.dumps())
                                     )
                                     if (res := await cur.fetchone()) is None:
-                                        raise RuntimeError("???")
+                                        raise RuntimeError("failed to insert row into database")
                                     fee_db_id = res["id"]
                                     await self._insert_transition(conn, None, fee_db_id, fee.transition, 0)
 
@@ -348,14 +444,6 @@ class Database:
                                 transaction = confirmed_transaction.transaction
                                 if not isinstance(transaction, FeeTransaction):
                                     raise ValueError("expected fee transaction")
-                                transaction_id = transaction.id
-                                await cur.execute(
-                                    "INSERT INTO transaction (confimed_transaction_id, transaction_id, type) VALUES (%s, %s, %s) RETURNING id",
-                                    (confirmed_transaction_db_id, str(transaction_id), transaction.type.name)
-                                )
-                                if (res := await cur.fetchone()) is None:
-                                    raise RuntimeError("???")
-                                transaction_db_id = res["id"]
                                 fee = transaction.fee
                                 await cur.execute(
                                     "INSERT INTO fee (transaction_id, global_state_root, proof) "
@@ -363,7 +451,7 @@ class Database:
                                     (transaction_db_id, str(fee.global_state_root), fee.proof.dumps())
                                 )
                                 if (res := await cur.fetchone()) is None:
-                                    raise RuntimeError("???")
+                                    raise RuntimeError("failed to insert row into database")
                                 fee_db_id = res["id"]
                                 await self._insert_transition(conn, None, fee_db_id, fee.transition, 0)
 
@@ -377,7 +465,7 @@ class Database:
                                      rejected.execution.proof.dumps())
                                 )
                                 if (res := await cur.fetchone()) is None:
-                                    raise RuntimeError("???")
+                                    raise RuntimeError("failed to insert row into database")
                                 execute_transaction_db_id = res["id"]
                                 for ts_index, transition in enumerate(rejected.execution.transitions):
                                     await self._insert_transition(conn, execute_transaction_db_id, None, transition, ts_index)
@@ -390,7 +478,7 @@ class Database:
                                         (confirmed_transaction_db_id, finalize_operation.type.name)
                                     )
                                     if (res := await cur.fetchone()) is None:
-                                        raise RuntimeError("???")
+                                        raise RuntimeError("failed to insert row into database")
                                     finalize_operation_db_id = res["id"]
                                     if isinstance(finalize_operation, InitializeMapping):
                                         await cur.execute(
@@ -427,38 +515,44 @@ class Database:
                                             (finalize_operation_db_id, str(finalize_operation.mapping_id))
                                         )
 
-                        ratification_map: defaultdict[str, defaultdict[int, list[int]]] = defaultdict(lambda: defaultdict(list))
-
-                        ratification_copy_data: list[tuple[int, str, str, int, int]] = []
-                        if not os.environ.get("DEBUG_SKIP_COINBASE"):
-                            for index, ratify in enumerate(block.ratifications):
-                                # noinspection PyUnresolvedReferences
-                                ratification_copy_data.append((block_db_id, ratify.type.name, str(ratify.address), ratify.amount, index))
-                            if ratification_copy_data:
-                                await cur.executemany(
-                                    "INSERT INTO ratification (block_id, type, address, amount, index) "
-                                    "VALUES (%s, %s, %s, %s, %s) RETURNING id",
-                                    ratification_copy_data,
-                                    returning=True,
+                        for index, ratify in enumerate(block.ratifications):
+                            if isinstance(ratify, GenesisRatify):
+                                await cur.execute(
+                                    "INSERT INTO ratification (block_id, index, type) VALUES (%s, %s, %s)",
+                                    (block_db_id, index, ratify.type.name)
                                 )
-                                ratify_db_id: list[int] = []
-                                while True:
-                                    res = await cur.fetchone()
-                                    if res is None:
-                                        raise RuntimeError("???")
-                                    ratify_db_id.append(res["id"])
-                                    if not cur.nextset():
-                                        break
-                                for index, data in enumerate(ratification_copy_data):
-                                    #                addr     amount
-                                    ratification_map[data[2]][data[3]].append(ratify_db_id[index])
+                                public_balances = ratify.public_balances
+                                for address, balance in public_balances:
+                                    await cur.execute(
+                                        "INSERT INTO ratification_genesis_balance (address, amount) VALUES (%s, %s)",
+                                        (str(address), balance)
+                                    )
+                                committee = ratify.committee
+                                await cur.execute(
+                                    "INSERT INTO committee_history (height, starting_round, total_stake) "
+                                    "VALUES (%s, %s, %s) RETURNING id",
+                                    (block.header.metadata.height, committee.starting_round, committee.total_stake)
+                                )
+                                if (res := await cur.fetchone()) is None:
+                                    raise RuntimeError("failed to insert row into database")
+                                committee_db_id = res["id"]
+                                for address, stake, is_open in committee.members:
+                                    await cur.execute(
+                                        "INSERT INTO committee_history_member (committee_id, address, stake, is_open) "
+                                        "VALUES (%s, %s, %s, %s)",
+                                        (committee_db_id, str(address), stake, is_open)
+                                    )
+                            elif isinstance(ratify, (BlockRewardRatify, PuzzleRewardRatify)):
+                                await cur.execute(
+                                    "INSERT INTO ratification (block_id, index, type, amount) VALUES (%s, %s, %s, %s)",
+                                    (block_db_id, index, ratify.type.name, ratify.amount)
+                                )
+                            else:
+                                raise NotImplementedError
 
-                        if block.coinbase.value is not None and not os.environ.get("DEBUG_SKIP_COINBASE"):
-                            coinbase_reward = block.get_coinbase_reward(await self.get_latest_coinbase_timestamp())
-                            await cur.execute(
-                                "UPDATE block SET coinbase_reward = %s WHERE id = %s",
-                                (coinbase_reward, block_db_id)
-                            )
+                        address_puzzle_rewards: dict[str, int] = defaultdict(int)
+
+                        if block.coinbase.value is not None:
                             partial_solutions = list(block.coinbase.value.partial_solutions)
                             solutions: list[tuple[PartialSolution, int, int]] = []
                             partial_solutions_target = list(zip(partial_solutions,
@@ -466,7 +560,7 @@ class Database:
                                                      partial_solutions]))
                             target_sum = sum(target for _, target in partial_solutions_target)
                             for partial_solution, target in partial_solutions_target:
-                                solutions.append((partial_solution, target, coinbase_reward * target // (2 * target_sum)))
+                                solutions.append((partial_solution, target, puzzle_reward * target // target_sum))
 
                             await cur.execute(
                                 "INSERT INTO coinbase_solution (block_id, proof_x, proof_y_positive, target_sum) "
@@ -474,7 +568,7 @@ class Database:
                                 (block_db_id, str(block.coinbase.value.proof.w.x), block.coinbase.value.proof.w.flags, target_sum)
                             )
                             if (res := await cur.fetchone()) is None:
-                                raise RuntimeError("???")
+                                raise RuntimeError("failed to insert row into database")
                             coinbase_solution_db_id = res["id"]
                             await cur.execute("SELECT total_credit FROM leaderboard_total")
                             current_total_credit = await cur.fetchone()
@@ -483,35 +577,41 @@ class Database:
                                 current_total_credit = 0
                             else:
                                 current_total_credit = current_total_credit["total_credit"]
-                            copy_data: list[tuple[int, str, u64, str, int, int, int]] = []
+                            copy_data: list[tuple[int, int, str, u64, str, int, int]] = []
                             for partial_solution, target, reward in solutions:
-                                try:
-                                    ratify_id = ratification_map[str(partial_solution.address)][reward].pop()
-                                except:
-                                    raise RuntimeError(f"could not find ratification for address {partial_solution.address} and reward {reward}")
+                                dag_vertex_db_id = dag_transmission_ids[0][str(partial_solution.commitment)]
                                 copy_data.append(
-                                    (coinbase_solution_db_id, str(partial_solution.address), partial_solution.nonce,
-                                     str(partial_solution.commitment), partial_solution.commitment.to_target(), reward, ratify_id)
+                                    (dag_vertex_db_id, coinbase_solution_db_id, str(partial_solution.address), partial_solution.nonce,
+                                     str(partial_solution.commitment), partial_solution.commitment.to_target(), reward)
                                 )
                                 if reward > 0:
-                                    await cur.execute(
-                                        "INSERT INTO leaderboard (address, total_reward) VALUES (%s, %s) "
-                                        "ON CONFLICT (address) DO UPDATE SET total_reward = leaderboard.total_reward + %s",
-                                        (str(partial_solution.address), reward, reward)
-                                    )
-                                    if block.header.metadata.height >= 130888 and block.header.metadata.timestamp < 1675209600 and current_total_credit < 37_500_000_000_000:
+                                    address_puzzle_rewards[str(partial_solution.address)] += reward
+                                    if not os.environ.get("DEBUG_SKIP_COINBASE"):
                                         await cur.execute(
-                                            "UPDATE leaderboard SET total_incentive = leaderboard.total_incentive + %s WHERE address = %s",
-                                            (reward, str(partial_solution.address))
+                                            "INSERT INTO leaderboard (address, total_reward) VALUES (%s, %s) "
+                                            "ON CONFLICT (address) DO UPDATE SET total_reward = leaderboard.total_reward + %s",
+                                            (str(partial_solution.address), reward, reward)
                                         )
-                            async with cur.copy("COPY partial_solution (coinbase_solution_id, address, nonce, commitment, target, reward, ratification_id) FROM STDIN") as copy:
-                                for row in copy_data:
-                                    await copy.write_row(row)
-                            if block.header.metadata.height >= 130888 and block.header.metadata.timestamp < 1675209600 and current_total_credit < 37_500_000_000_000:
-                                await cur.execute(
-                                    "UPDATE leaderboard_total SET total_credit = leaderboard_total.total_credit + %s",
-                                    (sum(reward for _, _, reward in solutions),)
-                                )
+                                        if block.header.metadata.height >= 130888 and block.header.metadata.timestamp < 1675209600 and current_total_credit < 37_500_000_000_000:
+                                            await cur.execute(
+                                                "UPDATE leaderboard SET total_incentive = leaderboard.total_incentive + %s WHERE address = %s",
+                                                (reward, str(partial_solution.address))
+                                            )
+                            if not os.environ.get("DEBUG_SKIP_COINBASE"):
+                                async with cur.copy("COPY partial_solution (dag_vertex_id, coinbase_solution_id, address, nonce, commitment, target, reward) FROM STDIN") as copy:
+                                    for row in copy_data:
+                                        await copy.write_row(row)
+                                if block.header.metadata.height >= 130888 and block.header.metadata.timestamp < 1675209600 and current_total_credit < 37_500_000_000_000:
+                                    await cur.execute(
+                                        "UPDATE leaderboard_total SET total_credit = leaderboard_total.total_credit + %s",
+                                        (sum(reward for _, _, reward in solutions),)
+                                    )
+
+                        # TODO committee tracking
+
+                        # TODO staking reward
+
+                        # TODO post ratify
 
                         await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseBlockAdded, block.header.metadata.height))
                     except Exception as e:
@@ -524,16 +624,15 @@ class Database:
     @staticmethod
     def _get_block_header(block: dict[str, Any]):
         return BlockHeader(
-            previous_state_root=Field.loads(block["previous_state_root"]),
+            previous_state_root=StateRoot.loads(block["previous_state_root"]),
             transactions_root=Field.loads(block["transactions_root"]),
             finalize_root=Field.loads(block["finalize_root"]),
             ratifications_root=Field.loads(block["ratifications_root"]),
-            coinbase_accumulator_point=Field.loads(block["coinbase_accumulator_point"]),
+            solutions_root=Field.loads(block["solutions_root"]),
             metadata=BlockHeaderMetadata(
                 network=u16(3),
                 round_=u64(block["round"]),
                 height=u32(block["height"]),
-                total_supply_in_microcredits=u64(block["total_supply"]),
                 cumulative_weight=u128(block["cumulative_weight"]),
                 cumulative_proof_target=u128(block["cumulative_proof_target"]),
                 coinbase_target=u64(block["coinbase_target"]),
@@ -959,14 +1058,40 @@ class Database:
             rs: list[Ratify] = []
             for ratification in ratifications:
                 match ratification["type"]:
-                    case Ratify.Type.ProvingReward.name:
-                        rs.append(ProvingReward(
-                            address=Address.loads(ratification["address"]),
+                    case Ratify.Type.Genesis.name:
+                        await cur.execute("SELECT * FROM committee_history WHERE height = %s", (0,))
+                        committee_history = await cur.fetchone()
+                        if committee_history is None:
+                            raise RuntimeError("database inconsistent")
+                        await cur.execute("SELECT * FROM committee_history_member WHERE committee_id = %s", (committee_history["id"],))
+                        committee_history_members = await cur.fetchall()
+                        members: list[Tuple[Address, u64, bool_]] = []
+                        for committee_history_member in committee_history_members:
+                            members.append(Tuple[Address, u64, bool_]((
+                                Address.loads(committee_history_member["address"]),
+                                u64(committee_history_member["stake"]),
+                                bool_(committee_history_member["is_open"]))
+                            ))
+                        committee = Committee(
+                            starting_round=u64(committee_history["starting_round"]),
+                            members=Vec[Tuple[Address, u64, bool_], u32](members),
+                            total_stake=u64(committee_history["total_stake"]),
+                        )
+                        await cur.execute("SELECT * FROM ratification_genesis_balance")
+                        public_balances = await cur.fetchall()
+                        balances: list[Tuple[Address, u64]] = []
+                        for public_balance in public_balances:
+                            balances.append(Tuple[Address, u64]((Address.loads(public_balance["address"]), u64(public_balance["amount"]))))
+                        rs.append(GenesisRatify(
+                            committee=committee,
+                            public_balances=Vec[Tuple[Address, u64], u16](balances),
+                        ))
+                    case Ratify.Type.BlockReward.name:
+                        rs.append(BlockRewardRatify(
                             amount=u64(ratification["amount"]),
                         ))
-                    case Ratify.Type.StakingReward.name:
-                        rs.append(StakingReward(
-                            address=Address.loads(ratification["address"]),
+                    case Ratify.Type.PuzzleReward.name:
+                        rs.append(PuzzleRewardRatify(
                             amount=u64(ratification["amount"]),
                         ))
                     case _:
@@ -1010,7 +1135,6 @@ class Database:
                 ),
                 ratifications=Vec[Ratify, u32](rs),
                 coinbase=Option[CoinbaseSolution](coinbase_solution),
-                signature=Signature.loads(block['signature']),
             )
 
     @staticmethod
@@ -1100,15 +1224,28 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
                 
-    async def get_latest_coinbase_timestamp(self) -> int:
+    async def get_latest_coinbase_target(self) -> int:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
-                    await cur.execute("SELECT last_coinbase_timestamp FROM block ORDER BY height DESC LIMIT 1")
+                    await cur.execute("SELECT last_coinbase_target FROM block ORDER BY height DESC LIMIT 1")
                     result = await cur.fetchone()
                     if result is None:
                         raise RuntimeError("no blocks in database")
                     return result['last_coinbase_timestamp']
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def get_latest_cumulative_proof_target(self) -> int:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute("SELECT cumulative_proof_target FROM block ORDER BY height DESC LIMIT 1")
+                    result = await cur.fetchone()
+                    if result is None:
+                        raise RuntimeError("no blocks in database")
+                    return result['cumulative_proof_target']
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise

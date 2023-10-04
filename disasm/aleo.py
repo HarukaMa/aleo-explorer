@@ -171,8 +171,8 @@ def disassemble_program(program: Program) -> str:
             m = program.mappings[identifier]
             res.insert_line(f"mapping {m.name}:")
             res.indent()
-            res.insert_line(f"key {m.key.name} as {plaintext_type_to_str(m.key.plaintext_type)};")
-            res.insert_line(f"value {m.value.name} as {plaintext_type_to_str(m.value.plaintext_type)};")
+            res.insert_line(f"key as {plaintext_type_to_str(m.key.plaintext_type)};")
+            res.insert_line(f"value as {plaintext_type_to_str(m.value.plaintext_type)};")
             res.unindent()
             res.insert_line("")
         elif definition == ProgramDefinition.Struct:

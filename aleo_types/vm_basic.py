@@ -399,3 +399,44 @@ class G2Prepared(Serializable):
         ell_coeffs = Vec[Tuple[Fq2, Fq2, Fq2], u64].load(data)
         infinity = bool_.load(data)
         return cls(ell_coeffs=ell_coeffs, infinity=infinity)
+
+
+class ComputeKey(Serializable):
+
+    def __init__(self, *, pk_sig: Group, pr_sig: Group):
+        self.pk_sig = pk_sig
+        self.pr_sig = pr_sig
+
+    def dump(self) -> bytes:
+        return self.pk_sig.dump() + self.pr_sig.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        pk_sig = Group.load(data)
+        pr_sig = Group.load(data)
+        return cls(pk_sig=pk_sig, pr_sig=pr_sig)
+
+
+class Signature(Serializable):
+
+    def __init__(self, *, challange: Scalar, response: Scalar, compute_key: ComputeKey):
+        self.challange = challange
+        self.response = response
+        self.compute_key = compute_key
+
+    def dump(self) -> bytes:
+        return self.challange.dump() + self.response.dump() + self.compute_key.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        challange = Scalar.load(data)
+        response = Scalar.load(data)
+        compute_key = ComputeKey.load(data)
+        return cls(challange=challange, response=response, compute_key=compute_key)
+
+    @classmethod
+    def loads(cls, data: str):
+        return cls.load(bech32_to_bytes(data))
+
+    def __str__(self):
+        return str(Bech32m(self.dump(), "sign"))

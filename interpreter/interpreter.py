@@ -2,7 +2,7 @@ import psycopg
 
 from aleo_types import *
 from db import Database
-from interpreter.finalizer import execute_finalizer, ExecuteError
+from interpreter.finalizer import execute_finalizer, ExecuteError, mapping_cache_read, mapping_find_index
 from interpreter.utils import FinalizeState, MappingCacheTuple
 
 global_mapping_cache: dict[Field, list[MappingCacheTuple]] = {}
@@ -141,6 +141,33 @@ async def execute_operations(db: Database, cur: psycopg.AsyncCursor[dict[str, An
                 await db.remove_mapping_key_value(cur, str(mapping_id), index)
             case _:
                 raise NotImplementedError
+
+async def get_mapping_value(db: Database, program_id: str, mapping_name: str, key: str) -> Value:
+    mapping_id = Field.loads(aleo.get_mapping_id(program_id, mapping_name))
+    if mapping_id not in global_mapping_cache:
+        global_mapping_cache[mapping_id] = await mapping_cache_read(db, mapping_id)
+    if str(program_id) in global_program_cache:
+        program = global_program_cache[str(program_id)]
+    else:
+        program_bytes = await db.get_program(str(program_id))
+        if program_bytes is None:
+            raise RuntimeError("program not found")
+        program = Program.load(BytesIO(program_bytes))
+        global_program_cache[str(program_id)] = program
+    mapping = program.mappings[Identifier(value=mapping_name)]
+    mapping_key_type = mapping.key.plaintext_type
+    if not isinstance(mapping_key_type, LiteralPlaintextType):
+        raise TypeError("unsupported key type")
+    key_plaintext = LiteralPlaintext(literal=Literal.loads(Literal.Type(mapping_key_type.literal_type.value), key))
+    key_id = Field.loads(aleo.get_key_id(str(mapping_id), key_plaintext.dump()))
+    index = mapping_find_index(global_mapping_cache[mapping_id], key_id)
+    if index == -1:
+        raise ExecuteError(f"key {key} not found in mapping {mapping_id}", None, "")
+    else:
+        value = global_mapping_cache[mapping_id][index][3]
+        if not isinstance(value, PlaintextValue):
+            raise TypeError("invalid value type")
+    return value
 
 async def preview_finalize_execution(db: Database, program: Program, function_name: Identifier, inputs: list[Plaintext]) -> list[dict[str, Any]]:
     block = await db.get_latest_block()
