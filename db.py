@@ -255,6 +255,16 @@ class Database:
                 (program_db_id, str(function.name), inputs, input_modes, outputs, output_modes, finalizes)
             )
 
+    @staticmethod
+    async def _pre_ratify(cur: psycopg.AsyncCursor[dict[str, Any]], ratification: GenesisRatify):
+
+
+    @staticmethod
+    async def _ratify_block(cur: psycopg.AsyncCursor[dict[str, Any]], ratifications: list[Ratify], block_reward: int,
+                            puzzle_reward: int, address_puzzle_rewards: dict[str, int]):
+        for
+
+
     async def _save_block(self, block: Block):
         async with self.pool.connection() as conn:
             async with conn.transaction():
@@ -607,11 +617,7 @@ class Database:
                                         (sum(reward for _, _, reward in solutions),)
                                     )
 
-                        # TODO committee tracking
-
-                        # TODO staking reward
-
-                        # TODO post ratify
+                        await self._ratify_block(cur, block.ratifications, block_reward, puzzle_reward, address_puzzle_rewards)
 
                         await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseBlockAdded, block.header.metadata.height))
                     except Exception as e:
