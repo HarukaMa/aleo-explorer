@@ -90,8 +90,8 @@ async def mapping_value_list_route(request: Request, program_cache: dict[str, Pr
     if mapping not in mappings:
         return JSONResponse({"error": "Mapping not found"}, status_code=404)
     mapping_id = aleo.get_mapping_id(program_id, mapping)
-    mapping_cache = await db.get_mapping_cache(mapping_id)
-    res: list[dict[str, Any]] = []
+    mapping_cache_db = await db.get_mapping_cache(mapping_id)
+    res: dict[str, Any] = []
     for item in mapping_cache:
         res.append({
             "index": item["index"],

@@ -4,7 +4,9 @@ from collections import defaultdict
 from typing import Awaitable
 
 import psycopg
+import psycopg.sql
 from psycopg.rows import dict_row
+from psycopg.types.json import Jsonb
 from psycopg_pool import AsyncConnectionPool
 
 from aleo_types import *
@@ -75,7 +77,7 @@ class Database:
                 str(transition.function_name), str(transition.tpk), str(transition.tcm), ts_index)
             )
             if (res := await cur.fetchone()) is None:
-                raise Exception("failed to insert row into database")
+                raise RuntimeError("failed to insert row into database")
             transition_db_id = res["id"]
 
             transition_input: TransitionInput
@@ -85,7 +87,7 @@ class Database:
                     (transition_db_id, transition_input.type.name, input_index)
                 )
                 if (res := await cur.fetchone()) is None:
-                    raise Exception("failed to insert row into database")
+                    raise RuntimeError("failed to insert row into database")
                 transition_input_db_id = res["id"]
                 if isinstance(transition_input, PublicTransitionInput):
                     await cur.execute(
@@ -125,7 +127,7 @@ class Database:
                     (transition_db_id, transition_output.type.name, output_index)
                 )
                 if (res := await cur.fetchone()) is None:
-                    raise Exception("failed to insert row into database")
+                    raise RuntimeError("failed to insert row into database")
                 transition_output_db_id = res["id"]
                 if isinstance(transition_output, PublicTransitionOutput):
                     await cur.execute(
@@ -165,7 +167,7 @@ class Database:
                         (transition_db_id, finalize.type.name, finalize_index)
                     )
                     if (res := await cur.fetchone()) is None:
-                        raise Exception("failed to insert row into database")
+                        raise RuntimeError("failed to insert row into database")
                     transition_finalize_db_id = res["id"]
                     if isinstance(finalize, PlaintextValue):
                         await cur.execute(
@@ -189,7 +191,7 @@ class Database:
                 "SELECT id FROM program WHERE program_id = %s", (str(transition.program_id),)
             )
             if (res := await cur.fetchone()) is None:
-                raise Exception("failed to insert row into database")
+                raise RuntimeError("failed to insert row into database")
             program_db_id = res["id"]
             await cur.execute(
                 "UPDATE program_function SET called = called + 1 WHERE program_id = %s AND name = %s",
@@ -256,22 +258,215 @@ class Database:
             )
 
     @staticmethod
-    async def _pre_ratify(cur: psycopg.AsyncCursor[dict[str, Any]], ratification: GenesisRatify):
+    async def _update_committee_bonded_map(cur: psycopg.AsyncCursor[dict[str, Any]],
+                                           committee_members: dict[Address, tuple[u64, bool_]],
+                                           stakers: dict[Address, tuple[Address, u64]]):
+        committee_mapping_id = Field.loads(aleo.get_mapping_id("credits.aleo", "committee"))
+        bonded_mapping_id = Field.loads(aleo.get_mapping_id("credits.aleo", "bonded"))
+
+        committee_mapping = {}
+        for index, (address, (amount, is_open)) in enumerate(committee_members.items()):
+            key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=address))
+            key_id = Field.loads(aleo.get_key_id(str(committee_mapping_id), key.dump()))
+            value = PlaintextValue(
+                plaintext=StructPlaintext(
+                    members=Vec[Tuple[Identifier, Plaintext], u8]([
+                        Tuple[Identifier, Plaintext]((
+                            Identifier.loads("microcredits"),
+                             LiteralPlaintext(literal=Literal(type_=Literal.Type.U64, primitive=amount))
+                        )),
+                        Tuple[Identifier, Plaintext]((
+                            Identifier.loads("is_open"),
+                            LiteralPlaintext(literal=Literal(type_=Literal.Type.Boolean, primitive=is_open))
+                        ))
+                    ])
+                )
+            )
+            value_id = Field.loads(aleo.get_value_id(str(key_id), value.dump()))
+            committee_mapping[str(key_id)] = {
+                "index": index,
+                "key": key.dump().hex(),
+                "value_id": str(value_id),
+                "value": value.dump().hex(),
+            }
+        await cur.execute(
+            "UPDATE mapping SET content = %s WHERE mapping_id = %s",
+            (Jsonb(committee_mapping), str(committee_mapping_id))
+        )
+
+        bonded_mapping = {}
+        for index, (address, (validator, amount)) in enumerate(stakers.items()):
+            key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=address))
+            key_id = Field.loads(aleo.get_key_id(str(bonded_mapping_id), key.dump()))
+            value = PlaintextValue(
+                plaintext=StructPlaintext(
+                    members=Vec[Tuple[Identifier, Plaintext], u8]([
+                        Tuple[Identifier, Plaintext]((
+                            Identifier.loads("validator"),
+                             LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=validator))
+                        )),
+                        Tuple[Identifier, Plaintext]((
+                            Identifier.loads("microcredits"),
+                            LiteralPlaintext(literal=Literal(type_=Literal.Type.U64, primitive=amount))
+                        ))
+                    ])
+                )
+            )
+            value_id = Field.loads(aleo.get_value_id(str(key_id), value.dump()))
+            bonded_mapping[str(key_id)] = {
+                "index": index,
+                "key": key.dump().hex(),
+                "value_id": str(value_id),
+                "value": value.dump().hex(),
+            }
+        await cur.execute(
+            "UPDATE mapping SET content = %s WHERE mapping_id = %s",
+            (Jsonb(bonded_mapping), str(bonded_mapping_id))
+        )
+
 
 
     @staticmethod
-    async def _ratify_block(cur: psycopg.AsyncCursor[dict[str, Any]], ratifications: list[Ratify], block_reward: int,
-                            puzzle_reward: int, address_puzzle_rewards: dict[str, int]):
-        for
+    async def _save_committee_history(cur: psycopg.AsyncCursor[dict[str, Any]], height: int, committee: Committee):
+        await cur.execute(
+            "INSERT INTO committee_history (height, starting_round, total_stake) "
+            "VALUES (%s, %s, %s) RETURNING id",
+            (height, committee.starting_round, committee.total_stake)
+        )
+        if (res := await cur.fetchone()) is None:
+            raise RuntimeError("failed to insert row into database")
+        committee_db_id = res["id"]
+        for address, stake, is_open in committee.members:
+            await cur.execute(
+                "INSERT INTO committee_history_member (committee_id, address, stake, is_open) "
+                "VALUES (%s, %s, %s, %s)",
+                (committee_db_id, str(address), stake, is_open)
+            )
 
+    @staticmethod
+    async def _pre_ratify(cur: psycopg.AsyncCursor[dict[str, Any]], ratification: GenesisRatify):
+        committee = ratification.committee
+        await Database._save_committee_history(cur, 0, committee)
+
+        stakers: dict[Address, tuple[Address, u64]] = {}
+        for validator, amount, _ in committee.members:
+            stakers[validator] = validator, amount
+        committee_members = {address: (amount, is_open) for address, amount, is_open in committee.members}
+        await Database._update_committee_bonded_map(cur, committee_members, stakers)
+
+    @staticmethod
+    async def _get_committee_mapping(cur: psycopg.AsyncCursor[dict[str, Any]]) -> dict[Address, tuple[u64, bool_]]:
+        committee_mapping_id = Field.loads(aleo.get_mapping_id("credits.aleo", "committee"))
+        await cur.execute(
+            "SELECT content FROM mapping m WHERE m.mapping_id = %s",
+            (committee_mapping_id,)
+        )
+        data = await cur.fetchone()
+        if data is None:
+            raise RuntimeError("missing current committee data")
+
+        committee_members: dict[Address, tuple[u64, bool_]] = {}
+        for d in data["content"].values():
+            key = Plaintext.load(BytesIO(bytes.fromhex(d["key"])))
+            if not isinstance(key, LiteralPlaintext):
+                raise RuntimeError("invalid committee key")
+            if not isinstance(key.literal.primitive, Address):
+                raise RuntimeError("invalid committee key")
+            value = Value.load(BytesIO(bytes.fromhex(d["value"])))
+            if not isinstance(value, PlaintextValue):
+                raise RuntimeError("invalid committee value")
+            plaintext = value.plaintext
+            if not isinstance(plaintext, StructPlaintext):
+                raise RuntimeError("invalid committee value")
+            amount = plaintext["microcredits"]
+            if not isinstance(amount, LiteralPlaintext):
+                raise RuntimeError("invalid committee value")
+            if not isinstance(amount.literal.primitive, u64):
+                raise RuntimeError("invalid committee value")
+            is_open = plaintext["is_open"]
+            if not isinstance(is_open, LiteralPlaintext):
+                raise RuntimeError("invalid committee value")
+            if not isinstance(is_open.literal.primitive, bool_):
+                raise RuntimeError("invalid committee value")
+            committee_members[key.literal.primitive] = amount.literal.primitive, is_open.literal.primitive
+        return committee_members
+
+    @staticmethod
+    async def _get_bonded_mapping(cur: psycopg.AsyncCursor[dict[str, Any]]) -> dict[Address, tuple[Address, u64]]:
+        bonded_mapping_id = Field.loads(aleo.get_mapping_id("credits.aleo", "bonded"))
+        await cur.execute(
+            "SELECT content FROM mapping m WHERE m.mapping_id = %s",
+            (bonded_mapping_id,)
+        )
+        data = await cur.fetchone()
+        if data is None:
+            raise RuntimeError("missing current bonded data")
+
+        stakers: dict[Address, tuple[Address, u64]] = {}
+        for d in data["content"].values():
+            key = Plaintext.load(BytesIO(bytes.fromhex(d["key"])))
+            if not isinstance(key, LiteralPlaintext):
+                raise RuntimeError("invalid bonded key")
+            if not isinstance(key.literal.primitive, Address):
+                raise RuntimeError("invalid bonded key")
+            value = Value.load(BytesIO(bytes.fromhex(d["value"])))
+            if not isinstance(value, PlaintextValue):
+                raise RuntimeError("invalid bonded value")
+            plaintext = value.plaintext
+            if not isinstance(plaintext, StructPlaintext):
+                raise RuntimeError("invalid bonded value")
+            validator = plaintext["validator"]
+            if not isinstance(validator, LiteralPlaintext):
+                raise RuntimeError("invalid bonded value")
+            if not isinstance(validator.literal.primitive, Address):
+                raise RuntimeError("invalid bonded value")
+            amount = plaintext["microcredits"]
+            if not isinstance(amount, LiteralPlaintext):
+                raise RuntimeError("invalid bonded value")
+            if not isinstance(amount.literal.primitive, u64):
+                raise RuntimeError("invalid bonded value")
+            stakers[key.literal.primitive] = validator.literal.primitive, amount.literal.primitive
+        return stakers
+
+    @staticmethod
+    def _check_committee_staker_match(ommittee_members: dict[Address, tuple[u64, bool_]],
+                                      stakers: dict[Address, tuple[Address, u64]]):
+        address_stakes: dict[Address, u64] = defaultdict(lambda: u64())
+        for _, (validator, amount) in stakers.items():
+            address_stakes[validator] += amount # type: ignore[reportGeneralTypeIssues]
+        if len(address_stakes) != len(stakers):
+            raise RuntimeError("size mismatch between stakers and committee members")
+
+        committee_total_stake = sum(amount for amount, _ in ommittee_members.values())
+        stakers_total_stake = sum(address_stakes.values())
+        if committee_total_stake != stakers_total_stake:
+            raise RuntimeError("total stake mismatch between stakers and committee members")
+
+        for address, amount in address_stakes.items():
+            if address not in ommittee_members:
+                raise RuntimeError("staked address not in committee members")
+            if amount != ommittee_members[address][0]:
+                raise RuntimeError("stake mismatch between stakers and committee members")
+
+
+    @staticmethod
+    async def _post_ratify(cur: psycopg.AsyncCursor[dict[str, Any]], height: int, ratifications: list[Ratify]):
+        committee_mapping_id = Field.loads(aleo.get_mapping_id("credits.aleo", "committee"))
+        bonded_mapping_id = Field.loads(aleo.get_mapping_id("credits.aleo", "bonded"))
+
+        for ratification in ratifications:
+            if isinstance(ratification, BlockRewardRatify):
+                committee_members = await Database._get_committee_mapping(cur)
+                stakers = await Database._get_bonded_mapping(cur)
+
+                Database._check_committee_staker_match(committee_members, stakers)
+        raise NotImplementedError
 
     async def _save_block(self, block: Block):
         async with self.pool.connection() as conn:
             async with conn.transaction():
                 async with conn.cursor() as cur:
                     try:
-                        from interpreter.interpreter import finalize_block
-                        reject_reasons = await finalize_block(self, cur, block)
 
                         block_reward, coinbase_reward = block.compute_rewards(
                             await self.get_latest_coinbase_target(),
@@ -285,6 +480,11 @@ class Database:
                             elif isinstance(ratification, PuzzleRewardRatify):
                                 if ratification.amount != puzzle_reward:
                                     raise RuntimeError("invalid puzzle reward")
+                            elif isinstance(ratification, GenesisRatify):
+                                await self._pre_ratify(cur, ratification)
+
+                        from interpreter.interpreter import finalize_block
+                        reject_reasons = await finalize_block(self, cur, block)
 
                         await cur.execute(
                             "INSERT INTO block (height, block_hash, previous_hash, previous_state_root, transactions_root, "
@@ -537,21 +737,6 @@ class Database:
                                         "INSERT INTO ratification_genesis_balance (address, amount) VALUES (%s, %s)",
                                         (str(address), balance)
                                     )
-                                committee = ratify.committee
-                                await cur.execute(
-                                    "INSERT INTO committee_history (height, starting_round, total_stake) "
-                                    "VALUES (%s, %s, %s) RETURNING id",
-                                    (block.header.metadata.height, committee.starting_round, committee.total_stake)
-                                )
-                                if (res := await cur.fetchone()) is None:
-                                    raise RuntimeError("failed to insert row into database")
-                                committee_db_id = res["id"]
-                                for address, stake, is_open in committee.members:
-                                    await cur.execute(
-                                        "INSERT INTO committee_history_member (committee_id, address, stake, is_open) "
-                                        "VALUES (%s, %s, %s, %s)",
-                                        (committee_db_id, str(address), stake, is_open)
-                                    )
                             elif isinstance(ratify, (BlockRewardRatify, PuzzleRewardRatify)):
                                 await cur.execute(
                                     "INSERT INTO ratification (block_id, index, type, amount) VALUES (%s, %s, %s, %s)",
@@ -617,7 +802,7 @@ class Database:
                                         (sum(reward for _, _, reward in solutions),)
                                     )
 
-                        await self._ratify_block(cur, block.ratifications, block_reward, puzzle_reward, address_puzzle_rewards)
+                        await self._post_ratify(cur, block.height, block.ratifications)
 
                         await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseBlockAdded, block.header.metadata.height))
                     except Exception as e:
@@ -1961,18 +2146,27 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_mapping_cache(self, mapping_id: str) -> list[dict[str, Any]]:
+    async def get_mapping_cache(self, mapping_id: str) -> dict[str, Any]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT index, key_id, value_id, key, value FROM mapping_value mv "
-                        "JOIN mapping m on mv.mapping_id = m.id "
-                        "WHERE m.mapping_id = %s "
-                        "ORDER BY index",
+                        "SELECT content FROM mapping m "
+                        "WHERE m.mapping_id = %s",
                         (mapping_id,)
                     )
-                    return await cur.fetchall()
+                    data = await cur.fetchone()
+                    if data is None:
+                        return {}
+                    def transform(d: dict[str, Any]):
+                        return {
+                            "index": d["index"],
+                            "value_id": d["value_id"],
+                            "key": Plaintext.load(BytesIO(bytes.fromhex(d["key"]))),
+                            "value": Value.load(BytesIO(bytes.fromhex(d["value"]))),
+                        }
+                    return {x: transform(y) for x, y in data["content"].items()}
+
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
@@ -1982,15 +2176,14 @@ class Database:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT value FROM mapping_value mv "
-                        "JOIN mapping m on mv.mapping_id = m.id "
-                        "WHERE m.program_id = %s AND m.mapping = %s AND mv.key_id = %s",
-                        (program_id, mapping, key_id)
+                        "SELECT content[%s]['value'] FROM mapping m "
+                        "WHERE m.program_id = %s AND m.mapping = %s",
+                        (key_id, program_id, mapping)
                     )
                     res = await cur.fetchone()
                     if res is None:
                         return None
-                    return res['value']
+                    return bytes.fromhex(res['content'])
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
@@ -2000,10 +2193,9 @@ class Database:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT index FROM mapping_value mv "
-                        "JOIN mapping m on mv.mapping_id = m.id "
-                        "WHERE m.program_id = %s AND m.mapping = %s AND mv.key_id = %s",
-                        (program_id, mapping, key_id)
+                        "SELECT content[%s]['value'] FROM mapping m "
+                        "WHERE m.program_id = %s AND m.mapping = %s",
+                        (key_id, program_id, mapping)
                     )
                     res = await cur.fetchone()
                     if res is None:
@@ -2018,9 +2210,9 @@ class Database:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT COUNT(*) FROM mapping_value mv "
-                        "JOIN mapping m on mv.mapping_id = m.id "
-                        "WHERE m.program_id = %s AND m.mapping = %s",
+                        "SELECT COUNT(*) FROM "
+                        "(SELECT jsonb_object_keys(content) FROM mapping m "
+                        " WHERE m.program_id = %s AND m.mapping = %s) k",
                         (program_id, mapping)
                     )
                     if (res := await cur.fetchone()) is None:
@@ -2033,8 +2225,8 @@ class Database:
     async def initialize_mapping(self, cur: psycopg.AsyncCursor[dict[str, Any]], mapping_id: str, program_id: str, mapping: str):
         try:
             await cur.execute(
-                "INSERT INTO mapping (mapping_id, program_id, mapping) VALUES (%s, %s, %s)",
-                (mapping_id, program_id, mapping)
+                "INSERT INTO mapping (mapping_id, program_id, mapping, content) VALUES (%s, %s, %s, %s)",
+                (mapping_id, program_id, mapping, Jsonb({}))
             )
         except Exception as e:
             await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
@@ -2045,8 +2237,8 @@ class Database:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "INSERT INTO mapping (mapping_id, program_id, mapping) VALUES (%s, %s, %s)",
-                        (mapping_id, program_id, mapping)
+                        "INSERT INTO mapping (mapping_id, program_id, mapping, content) VALUES (%s, %s, %s, %s)",
+                        (mapping_id, program_id, mapping, Jsonb({}))
                     )
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
@@ -2055,56 +2247,69 @@ class Database:
     async def update_mapping_key_value(self, cur: psycopg.AsyncCursor[dict[str, Any]], mapping_id: str, index: int, key_id: str, value_id: str,
                                         key: bytes, value: bytes):
         try:
-            await cur.execute("SELECT id FROM mapping WHERE mapping_id = %s", (mapping_id,))
-            mapping = await cur.fetchone()
-            if mapping is None:
-                raise ValueError(f"Mapping {mapping_id} not found")
-            mapping_id = mapping['id']
-            await cur.execute(
-                "SELECT key_id, key FROM mapping_value WHERE mapping_id = %s AND index = %s",
-                (mapping_id, index)
-            )
-            if (res := await cur.fetchone()) is None:
-                await cur.execute(
-                    "INSERT INTO mapping_value (mapping_id, index, key_id, value_id, key, value) "
-                    "VALUES (%s, %s, %s, %s, %s, %s)",
-                    (mapping_id, index, key_id, value_id, key, value)
-                )
-            else:
-                if res["key_id"] != key_id:
-                    raise ValueError(f"Key id mismatch: {res['key_id']} != {key_id}")
-                await cur.execute(
-                    "UPDATE mapping_value SET value_id = %s, value = %s "
-                    "WHERE mapping_id = %s AND index = %s",
-                    (value_id, value, mapping_id, index)
-                )
+            # safety check
+            await cur.execute("SELECT content[%s] FROM mapping WHERE mapping_id = %s", (key_id, mapping_id))
+            if (res := await cur.fetchone()) is not None:
+                if res["index"] != index:
+                    raise ValueError(f"Index mismatch: {res['index']} != {index}")
+
+            await cur.execute("UPDATE mapping SET content[%s] = %s WHERE mapping_id = %s", (key_id, Jsonb({
+                "index": index,
+                "value_id": value_id,
+                "key": key.hex(),
+                "value": value.hex()
+            }), mapping_id))
+
         except Exception as e:
             await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
             raise
 
+    # noinspection SqlResolve
     async def remove_mapping_key_value(self, cur: psycopg.AsyncCursor[dict[str, Any]], mapping_id: str, index: int):
         try:
-            await cur.execute("SELECT id FROM mapping WHERE mapping_id = %s", (mapping_id,))
-            mapping = await cur.fetchone()
-            if mapping is None:
-                raise ValueError(f"Mapping {mapping_id} not found")
-            mapping_id = mapping['id']
+            # in theory we don't need the escaping for mapping id, but anyway
             await cur.execute(
-                "SELECT id, index FROM mapping_value WHERE mapping_id = %s ORDER BY index DESC LIMIT 1",
+                psycopg.sql.SQL(
+                    "CREATE TEMP TABLE {} AS "
+                    "  SELECT key, value FROM jsonb_each("
+                    "    (SELECT content FROM mapping WHERE mapping_id = %s)"
+                    "  )"
+                ).format(psycopg.sql.Identifier(f"temp_{mapping_id}")),
                 (mapping_id,)
             )
-            res = await cur.fetchone()
             await cur.execute(
-                "DELETE FROM mapping_value WHERE mapping_id = %s AND index = %s",
-                (mapping_id, index)
+                psycopg.sql.SQL(
+                    "SELECT key, value FROM {} WHERE value['index'] = %s"
+                ).format(psycopg.sql.Identifier(f"temp_{mapping_id}")),
+                (index,)
             )
-            if res is not None and res["index"] != index:
-                await cur.execute("UPDATE mapping_value SET index = %s WHERE id = %s", (index, res["id"]))
+            to_delete = await cur.fetchone()
+            if to_delete is not None:
+                await cur.execute(
+                    psycopg.sql.SQL(
+                    "SELECT key, value FROM {} ORDER BY value['index']::integer DESC LIMIT 1"
+                    ).format(psycopg.sql.Identifier(f"temp_{mapping_id}")),
+                    (to_delete["key"],)
+                )
+                max_index = await cur.fetchone()
+                await cur.execute(
+                    "UPDATE mapping SET content = content - %s WHERE mapping_id = %s",
+                    (to_delete["key"], mapping_id)
+                )
+                if max_index is not None and max_index["key"] != to_delete["key"]:
+                    await cur.execute(
+                        "UPDATE mapping SET content[%s]['index'] = %s WHERE mapping_id = %s",
+                        (max_index["key"], index, mapping_id)
+                    )
 
         except Exception as e:
             await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
             raise
-                
+
+        finally:
+            await cur.execute(
+                psycopg.sql.SQL("DROP TABLE IF EXISTS {}").format(f"temp_{mapping_id}")
+            )
                 
     async def get_program_leo_source_code(self, program_id: str) -> Optional[str]:
         async with self.pool.connection() as conn:

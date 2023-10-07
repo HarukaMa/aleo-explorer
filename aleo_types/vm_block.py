@@ -723,7 +723,7 @@ class ProgramDefinition(IntEnumu8):
 
 
 class Program(Serializable):
-    version = u8()
+    version = u8(1)
 
     def __init__(self, *, id_: ProgramID, imports: Vec[Import, u8], mappings: dict[Identifier, Mapping],
                  structs: dict[Identifier, Struct], records: dict[Identifier, RecordType],
@@ -917,7 +917,7 @@ class SonicVerifierKey(Serializable):
 
 
 class VerifyingKey(Serializable):
-    version = u8()
+    version = u8(1)
 
     # Skipping a layer of marlin::CircuitVerifyingKey
     def __init__(self, *, circuit_info: CircuitInfo, circuit_commitments: Vec[KZGCommitment, u64], id_: Vec[u8, FixedSize[32]]):
@@ -988,7 +988,7 @@ class BatchLCProof(Serializable):
 
 
 class Certificate(Serializable):
-    version = u8()
+    version = u8(1)
 
     # Skipping a layer of marlin::Certificate
     def __init__(self, *, pc_proof: BatchLCProof):
@@ -1007,7 +1007,7 @@ class Certificate(Serializable):
 
 
 class Deployment(Serializable):
-    version = u8()
+    version = u8(1)
 
     def __init__(self, *, edition: u16, program: Program,
                  verifying_keys: Vec[Tuple[Identifier, VerifyingKey, Certificate], u16]):
@@ -1229,7 +1229,7 @@ class FourthMessage(Serializable):
 
 
 class Proof(Serializable):
-    version = u8()
+    version = u8(1)
 
     # Skipping a layer of varuna::Proof
     def __init__(self, *, batch_sizes: Vec[u64, u64], commitments: Commitments, evaluations: Evaluations,
@@ -1475,7 +1475,7 @@ class StructPlaintext(Plaintext):
     def __repr__(self):
         return str(self)
 
-    def get_member(self, identifier: Identifier):
+    def get_member(self, identifier: Identifier) -> Plaintext:
         for member in self.members:
             if member[0] == identifier:
                 return member[1]
@@ -1487,6 +1487,12 @@ class StructPlaintext(Plaintext):
                 self.members[i] = Tuple[Identifier, Plaintext]((identifier, plaintext))
                 return
         raise ValueError("Identifier not found")
+
+    def __getitem__(self, item: str) -> Plaintext:
+        return self.get_member(Identifier.loads(item))
+
+    def __setitem__(self, key: str, value: Plaintext):
+        self.set_member(Identifier.loads(key), value)
 
     def __eq__(self, other: object):
         if not isinstance(other, StructPlaintext):
@@ -1792,6 +1798,8 @@ class Argument(EnumBaseSerialize, RustEnum, Serializable):
 
     @classmethod
     def load(cls, data: BytesIO):
+        size = u16.load(data)
+        data = BytesIO(data.read(size))
         type_ = Argument.Type.load(data)
         if type_ == Argument.Type.Plaintext:
             return PlaintextArgument.load(data)
@@ -1807,7 +1815,8 @@ class PlaintextArgument(Argument):
         self.plaintext = plaintext
 
     def dump(self) -> bytes:
-        return self.type.dump() + self.plaintext.dump()
+        data = self.type.dump() + self.plaintext.dump()
+        return u16(len(data)).dump() + data
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -1821,7 +1830,8 @@ class FutureArgument(Argument):
         self.future = future
 
     def dump(self) -> bytes:
-        return self.type.dump() + self.future.dump()
+        data = self.type.dump() + self.future.dump()
+        return u16(len(data)).dump() + data
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -1961,6 +1971,7 @@ class TransitionOutput(EnumBaseSerialize, RustEnum, Serializable):
         Private = 2
         Record = 3
         ExternalRecord = 4
+        Future = 5
 
     type: Type
 
@@ -1977,6 +1988,8 @@ class TransitionOutput(EnumBaseSerialize, RustEnum, Serializable):
             return RecordTransitionOutput.load(data)
         elif type_ == TransitionOutput.Type.ExternalRecord:
             return ExternalRecordTransitionOutput.load(data)
+        elif type_ == TransitionOutput.Type.Future:
+            return FutureTransitionOutput.load(data)
         else:
             raise ValueError("unknown transition output type")
 
@@ -2065,19 +2078,34 @@ class ExternalRecordTransitionOutput(TransitionOutput):
         commitment = Field.load(data)
         return cls(commitment=commitment)
 
+class FutureTransitionOutput(TransitionOutput):
+    type = TransitionOutput.Type.Future
+
+    def __init__(self, *, future_hash: Field, future: Option[Future]):
+        self.future_hash = future_hash
+        self.future = future
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.future_hash.dump() + self.future.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        future_hash = Field.load(data)
+        future = Option[Future].load(data)
+        return cls(future_hash=future_hash, future=future)
+
 
 class Transition(Serializable):
-    version = u8()
+    version = u8(1)
 
     def __init__(self, *, id_: TransitionID, program_id: ProgramID, function_name: Identifier,
-                 inputs: Vec[TransitionInput, u8], outputs: Vec[TransitionOutput, u8], finalize: Option[Vec[Value, u8]],
+                 inputs: Vec[TransitionInput, u8], outputs: Vec[TransitionOutput, u8],
                  tpk: Group, tcm: Field):
         self.id = id_
         self.program_id = program_id
         self.function_name = function_name
         self.inputs = inputs
         self.outputs = outputs
-        self.finalize = finalize
         self.tpk = tpk
         self.tcm = tcm
 
@@ -2089,7 +2117,6 @@ class Transition(Serializable):
         res += self.function_name.dump()
         res += self.inputs.dump()
         res += self.outputs.dump()
-        res += self.finalize.dump()
         res += self.tpk.dump()
         res += self.tcm.dump()
         return res
@@ -2104,15 +2131,14 @@ class Transition(Serializable):
         function_name = Identifier.load(data)
         inputs = Vec[TransitionInput, u8].load(data)
         outputs = Vec[TransitionOutput, u8].load(data)
-        finalize = Option[Vec[Value, u8]].load(data)
         tpk = Group.load(data)
         tcm = Field.load(data)
         return cls(id_=id_, program_id=program_id, function_name=function_name, inputs=inputs, outputs=outputs,
-                   finalize=finalize, tpk=tpk, tcm=tcm)
+                   tpk=tpk, tcm=tcm)
 
 
 class Fee(Serializable):
-    version = u8()
+    version = u8(1)
 
     def __init__(self, *, transition: Transition, global_state_root: StateRoot, proof: Option[Proof]):
         self.transition = transition
@@ -2139,7 +2165,7 @@ class Fee(Serializable):
 
 
 class Execution(Serializable):
-    version = u8()
+    version = u8(1)
 
     def __init__(self, *, transitions: Vec[Transition, u8], global_state_root: StateRoot,
                  proof: Option[Proof]):
@@ -2187,7 +2213,7 @@ class Execution(Serializable):
 
 
 class Transaction(EnumBaseSerialize, RustEnum, Serializable):
-    version = u8()
+    version = u8(1)
 
     class Type(IntEnumu8):
         Deploy = 0
@@ -2220,7 +2246,7 @@ class Transaction(EnumBaseSerialize, RustEnum, Serializable):
 
 
 class ProgramOwner(Serializable):
-    version = u8()
+    version = u8(1)
 
     def __init__(self, *, address: Address, signature: "Signature"):
         self.address = address
@@ -2557,7 +2583,7 @@ class RejectedExecute(ConfirmedTransaction):
 
 
 class Transactions(Serializable):
-    version = u8()
+    version = u8(1)
 
     def __init__(self, *, transactions: Vec[ConfirmedTransaction, u32]):  # we probably don't need IDs here so using Vec
         self.transactions = transactions
@@ -2579,7 +2605,7 @@ class Transactions(Serializable):
 
 
 class BlockHeaderMetadata(Serializable):
-    version = u8()
+    version = u8(1)
 
     def __init__(self, *, network: u16, round_: u64, height: u32,
                  cumulative_weight: u128, cumulative_proof_target: u128, coinbase_target: u64, proof_target: u64,
@@ -2626,21 +2652,22 @@ class BlockHeaderMetadata(Serializable):
 
 
 class BlockHeader(Serializable):
-    version = u8()
+    version = u8(1)
 
     def __init__(self, *, previous_state_root: StateRoot, transactions_root: Field, finalize_root: Field,
-                 ratifications_root: Field, solutions_root: Field, metadata: BlockHeaderMetadata):
+                 ratifications_root: Field, solutions_root: Field, subdag_root: Field, metadata: BlockHeaderMetadata):
         self.previous_state_root = previous_state_root
         self.transactions_root = transactions_root
         self.finalize_root = finalize_root
         self.ratifications_root = ratifications_root
         self.solutions_root = solutions_root
+        self.subdag_root = subdag_root
         self.metadata = metadata
 
     def dump(self) -> bytes:
         return self.version.dump() + self.previous_state_root.dump() + self.transactions_root.dump() \
                + self.finalize_root.dump() + self.ratifications_root.dump() + self.solutions_root.dump() \
-               + self.metadata.dump()
+               + self.subdag_root.dump() + self.metadata.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -2650,12 +2677,13 @@ class BlockHeader(Serializable):
         finalize_root = Field.load(data)
         ratifications_root = Field.load(data)
         solutions_root = Field.load(data)
+        subdag_root = Field.load(data)
         metadata = BlockHeaderMetadata.load(data)
         if version != cls.version:
             raise ValueError("invalid header version")
         return cls(previous_state_root=previous_state_root, transactions_root=transactions_root,
                    finalize_root=finalize_root, ratifications_root=ratifications_root,
-                   solutions_root=solutions_root, metadata=metadata)
+                   solutions_root=solutions_root, subdag_root=subdag_root, metadata=metadata)
 
 
 class PuzzleCommitment(Serializable):
@@ -2745,7 +2773,7 @@ class Ratify(EnumBaseSerialize, RustEnum, Serializable):
         BlockReward = 1
         PuzzleReward = 2
 
-    version = 0
+    version = u8(1)
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -2763,9 +2791,9 @@ class Ratify(EnumBaseSerialize, RustEnum, Serializable):
             raise ValueError(f"invalid ratify type {type_}")
 
 class Committee(Serializable):
-    version = u8()
+    version = u8(1)
 
-    def __init__(self, *, starting_round: u64, members: Vec[Tuple[Address, u64, bool_], u32], total_stake: u64):
+    def __init__(self, *, starting_round: u64, members: Vec[Tuple[Address, u64, bool_], u16], total_stake: u64):
         self.starting_round = starting_round
         self.members = members
         self.total_stake = total_stake
@@ -2779,7 +2807,7 @@ class Committee(Serializable):
         if version != cls.version:
             raise ValueError(f"invalid committee version")
         starting_round = u64.load(data)
-        members = Vec[Tuple[Address, u64, bool_], u32].load(data)
+        members = Vec[Tuple[Address, u64, bool_], u16].load(data)
         total_stake = u64.load(data)
         return cls(starting_round=starting_round, members=members, total_stake=total_stake)
 
@@ -2792,7 +2820,7 @@ class GenesisRatify(Ratify):
         self.public_balances = public_balances
 
     def dump(self) -> bytes:
-        return self.type.dump() + self.committee.dump() + self.public_balances.dump()
+        return self.version.dump() + self.type.dump() + self.committee.dump() + self.public_balances.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -2808,7 +2836,7 @@ class BlockRewardRatify(Ratify):
         self.amount = amount
 
     def dump(self) -> bytes:
-        return self.amount.dump()
+        return self.version.dump() + self.amount.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -2822,7 +2850,7 @@ class PuzzleRewardRatify(Ratify):
         self.amount = amount
 
     def dump(self) -> bytes:
-        return self.amount.dump()
+        return self.version.dump() + self.amount.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -2947,7 +2975,7 @@ class TransactionTransmissionID(TransmissionID):
 
 
 class BatchHeader(Serializable):
-    version = u8()
+    version = u8(1)
 
     def __init__(self, *, batch_id: Field, author: Address, round_: u64, timestamp: i64, transmission_ids: Vec[TransmissionID, u32],
                  previous_certificate_ids: Vec[Field, u32], signature: Signature):
@@ -2980,7 +3008,7 @@ class BatchHeader(Serializable):
                    signature=signature)
 
 class BatchCertificate(Serializable):
-    version = u8()
+    version = u8(1)
 
     def __init__(self, *, certificate_id: Field, batch_header: BatchHeader, signatures: Vec[Tuple[Signature, i64], u32]):
         self.certificate_id = certificate_id
@@ -3002,7 +3030,7 @@ class BatchCertificate(Serializable):
 
 
 class Subdag(Serializable):
-    version = u8()
+    version = u8(1)
 
     def __init__(self, *, subdag: dict[u32, Vec[BatchCertificate, u32]]):
         self.subdag = subdag
@@ -3042,7 +3070,7 @@ class QuorumAuthority(Authority):
 
 
 class Block(Serializable):
-    version = u8()
+    version = u8(1)
 
     def __init__(self, *, block_hash: BlockHash, previous_hash: BlockHash, header: BlockHeader, authority: Authority,
                  transactions: Transactions, ratifications: Vec[Ratify, u32], coinbase: Option[CoinbaseSolution]):

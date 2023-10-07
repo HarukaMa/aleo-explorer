@@ -128,6 +128,9 @@ class Address(AleoObject, Cast):
             raise ValueError("invalid type")
         return destination_type.primitive_type.load(BytesIO(aleo.address_cast(str(self), destination_type, lossy)))
 
+    def __hash__(self):
+        return hash(self._data)
+
 
 class Field(Serializable, Double, Sub, Square, Div, Sqrt, Compare, Pow, Inv, Neg, Cast):
     # Fr, Fp256
