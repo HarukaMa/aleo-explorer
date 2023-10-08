@@ -1,8 +1,7 @@
 from aleo_types import *
 from .environment import Registers
 
-#                         kid    vid    k          v
-MappingCacheTuple = tuple[Field, Field, Plaintext, Value]
+MappingCacheDict = dict[Field, dict[str, Any]]
 
 class FinalizeState:
     def __init__(self, block: Block):
@@ -23,19 +22,25 @@ def load_plaintext_from_operand(operand: Operand, registers: Registers, finalize
     elif isinstance(operand, RegisterOperand):
         register = operand.register
         if isinstance(register, LocatorRegister):
-            return registers[int(register.locator)]
-        elif isinstance(register, MemberRegister):
-            struct_ = registers[int(register.locator)]
-            if not isinstance(struct_, StructPlaintext):
-                raise TypeError("register is not struct")
-            for i, identifier in enumerate(register.identifiers):
-                if i == len(register.identifiers) - 1:
-                    return struct_.get_member(identifier)
-                else:
-                    struct_ = struct_.get_member(identifier)
-                    if not isinstance(struct_, StructPlaintext):
+            value = registers[int(register.locator)]
+            if not isinstance(value, PlaintextValue):
+                raise TypeError("register is not plaintext")
+            return value.plaintext
+        elif isinstance(register, AccessRegister):
+            value = registers[int(register.locator)]
+            if not isinstance(value, PlaintextValue):
+                raise TypeError("register is not plaintext")
+            plaintext = value.plaintext
+            for access in register.accesses:
+                if isinstance(access, MemberAccess):
+                    if not isinstance(plaintext, StructPlaintext):
                         raise TypeError("register is not struct")
-            raise ValueError("unreachable")
+                    plaintext = plaintext.get_member(access.identifier)
+                elif isinstance(access, IndexAccess):
+                    if not isinstance(plaintext, ArrayPlaintext):
+                        raise TypeError("register is not array")
+                    plaintext = plaintext[access.index]
+            return plaintext
         else:
             raise NotImplementedError
     elif isinstance(operand, BlockHeightOperand):
@@ -48,19 +53,30 @@ def load_plaintext_from_operand(operand: Operand, registers: Registers, finalize
     else:
         raise NotImplementedError
 
+def load_future_from_operand(operand: Operand, registers: Registers, finalize_state: FinalizeState) -> Future:
+    if not isinstance(operand, RegisterOperand):
+        raise ValueError("operand is not register")
+    register = operand.register
+    if not isinstance(register, LocatorRegister):
+        raise ValueError("register is not locator")
+    value = registers[int(register.locator)]
+    if not isinstance(value, FutureValue):
+        raise TypeError("register is not future")
+    return value.future
+
 def store_plaintext_to_register(plaintext: Plaintext, register: Register, registers: Registers):
     if isinstance(register, LocatorRegister):
-        registers[int(register.locator)] = plaintext
-    elif isinstance(register, MemberRegister):
-        struct_ = registers[int(register.locator)]
-        if not isinstance(struct_, StructPlaintext):
-            raise TypeError("register is not struct")
-        for i, identifier in enumerate(register.identifiers):
-            if i == len(register.identifiers) - 1:
-                struct_.set_member(identifier, plaintext)
-            else:
-                struct_ = struct_.get_member(identifier)
-                if not isinstance(struct_, StructPlaintext):
-                    raise TypeError("register is not struct")
+        registers[int(register.locator)] = PlaintextValue(plaintext=plaintext)
+    # elif isinstance(register, AccessRegister):
+    #     struct_ = registers[int(register.locator)]
+    #     if not isinstance(struct_, StructPlaintext):
+    #         raise TypeError("register is not struct")
+    #     for i, identifier in enumerate(register.identifiers):
+    #         if i == len(register.identifiers) - 1:
+    #             struct_.set_member(identifier, plaintext)
+    #         else:
+    #             struct_ = struct_.get_member(identifier)
+    #             if not isinstance(struct_, StructPlaintext):
+    #                 raise TypeError("register is not struct")
     else:
         raise NotImplementedError

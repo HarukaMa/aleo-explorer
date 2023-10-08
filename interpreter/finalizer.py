@@ -6,29 +6,12 @@ from db import Database
 from disasm.aleo import disasm_instruction, disasm_command
 from .environment import Registers
 from .instruction import execute_instruction
-from .utils import load_plaintext_from_operand, store_plaintext_to_register, FinalizeState, MappingCacheTuple
+from .utils import load_plaintext_from_operand, store_plaintext_to_register, FinalizeState, MappingCacheDict
 
 
-async def mapping_cache_read(db: Database, mapping_id: Field) -> list[MappingCacheTuple]:
+async def mapping_cache_read(db: Database, mapping_id: Field) -> MappingCacheDict:
     print(f"Reading mapping cache {mapping_id}")
-    mapping = await db.get_mapping_cache(str(mapping_id))
-    if not mapping:
-        return []
-    res: list[MappingCacheTuple] = []
-    for m in mapping:
-        res.append((
-            Field.loads(m["key_id"]),
-            Field.loads(m["value_id"]),
-            Plaintext.load(BytesIO(m["key"])),
-            Value.load(BytesIO(m["value"])),
-        ))
-    return res
-
-def mapping_find_index(mapping: list[MappingCacheTuple], key_id: Field) -> int:
-    for i, (k, _, _, _) in enumerate(mapping):
-        if k == key_id:
-            return i
-    return -1
+    return await db.get_mapping_cache(str(mapping_id))
 
 class ExecuteError(Exception):
     def __init__(self, message: str, exception: Optional[Exception], instruction: str):
@@ -38,20 +21,20 @@ class ExecuteError(Exception):
 
 
 async def execute_finalizer(db: Database, finalize_state: FinalizeState, transition_id: TransitionID, program: Program,
-                            function_name: Identifier, inputs: list[Plaintext],
-                            mapping_cache: Optional[dict[Field, list[MappingCacheTuple]]],
+                            function_name: Identifier, inputs: list[Value],
+                            mapping_cache: Optional[dict[Field, MappingCacheDict]],
                             allow_state_change: bool) -> list[dict[str, Any]]:
     registers = Registers()
     operations: list[dict[str, Any]] = []
     function = program.functions[function_name]
     if function.finalize.value is None:
         raise ValueError("invalid finalize function")
-    finalize = function.finalize.value[1]
+    finalize = function.finalize.value
 
     if len(inputs) != len(finalize.inputs):
         raise TypeError("invalid number of inputs")
     for fi, i in zip(finalize.inputs, inputs):
-        if fi.plaintext_type.type.value != i.type.value:
+        if fi.finalize_type.type.name != i.type.name:
             raise TypeError("invalid input type")
         ir = fi.register
         if not isinstance(ir, LocatorRegister):
@@ -87,11 +70,10 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
             key = load_plaintext_from_operand(c.key, registers, finalize_state)
             key_id = Field.loads(aleo.get_key_id(str(mapping_id), key.dump()))
             if mapping_cache:
-                index = mapping_find_index(mapping_cache[mapping_id], key_id)
-                contains = index != -1
+                contains = key_id in mapping_cache[mapping_id]
             else:
-                index = await db.get_mapping_value(str(program.id), str(mapping_id), str(key_id))
-                contains = index is not None
+                value = await db.get_mapping_value(str(program.id), str(mapping_id), str(key_id))
+                contains = value is not None
             value = PlaintextValue(
                 plaintext=LiteralPlaintext(
                     literal=Literal(
@@ -110,15 +92,14 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
             key = load_plaintext_from_operand(c.key, registers, finalize_state)
             key_id = Field.loads(aleo.get_key_id(str(mapping_id), key.dump()))
             if mapping_cache:
-                index = mapping_find_index(mapping_cache[mapping_id], key_id)
-                if index == -1:
+                if key_id not in mapping_cache[mapping_id]:
                     if isinstance(c, GetCommand):
                         raise ExecuteError(f"key {key} not found in mapping {c.mapping}", None, disasm_command(c))
                     default = load_plaintext_from_operand(c.default, registers, finalize_state)
                     value = PlaintextValue(plaintext=default)
                 else:
-                    value = mapping_cache[mapping_id][index][3]
-                    print(f"get {c.mapping}[{key}, {index}] = {value}")
+                    value = mapping_cache[mapping_id][key_id]["value"]
+                    print(f"get {c.mapping}[{key}, {mapping_cache[mapping_id][key_id]['index']}] = {value}")
                     if not isinstance(value, PlaintextValue):
                         raise TypeError("invalid value type")
             else:
@@ -144,19 +125,23 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
             key_id = Field.loads(aleo.get_key_id(str(mapping_id), key.dump()))
             value_id = Field.loads(aleo.get_value_id(str(key_id), value.dump()))
             if mapping_cache:
-                index = mapping_find_index(mapping_cache[mapping_id], key_id)
-                if index == -1:
-                    index = len(mapping_cache[mapping_id])
                 if allow_state_change:
-                    if index == len(mapping_cache[mapping_id]):
-                        mapping_cache[mapping_id].append((key_id, value_id, key, value))
+                    if key_id not in mapping_cache[mapping_id]:
+                        index = len(mapping_cache[mapping_id])
+                        mapping_cache[mapping_id][key_id] = {
+                            "value_id": value_id,
+                            "key": key,
+                            "value": value,
+                            "index": index,
+                        }
                         print(f"new {c.mapping}[{key}, {index}] = {value}")
                     else:
-                        if mapping_cache[mapping_id][index][0] != key_id:
-                            raise RuntimeError("find_index returned invalid index")
-                        mapping_cache[mapping_id][index] = (key_id, value_id, key, value)
+                        index = mapping_cache[mapping_id][key_id]['index']
+                        mapping_cache[mapping_id][key_id]["value_id"] = value_id
+                        mapping_cache[mapping_id][key_id]["value"] = value
                         print(f"set {c.mapping}[{key}, {index}] = {value}")
                 else:
+                    index = mapping_cache[mapping_id][key_id]['index'] if key_id in mapping_cache[mapping_id] else len(mapping_cache[mapping_id])
                     print("Not updating mapping cache because allow_state_change is False")
             else:
                 index = await db.get_mapping_index_by_key(str(program.id), str(mapping_id), str(key_id))
@@ -206,21 +191,17 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
             key = load_plaintext_from_operand(c.key, registers, finalize_state)
             key_id = Field.loads(aleo.get_key_id(str(mapping_id), key.dump()))
             if mapping_cache:
-                index = mapping_find_index(mapping_cache[mapping_id], key_id)
-                if index == -1:
+                if key_id not in mapping_cache[mapping_id]:
                     print(f"Key {key} not found in mapping {c.mapping}")
                     continue
                 if allow_state_change:
-                    kv_list = mapping_cache[mapping_id]
-                    if len(kv_list) > 1:
-                        kv_list[len(kv_list) - 1], kv_list[index] = kv_list[index], kv_list[len(kv_list) - 1]
-                        if kv_list[len(kv_list) - 1][0] != key_id:
-                            kv_list[len(kv_list) - 1], kv_list[index] = kv_list[index], kv_list[len(kv_list) - 1]
-                            raise RuntimeError("remove logic failed to swap key/value")
-                    popped = kv_list.pop()
-                    if popped[0] != key_id:
-                        kv_list.append(popped)
-                        raise RuntimeError("remove logic popped invalid key/value")
+                    index = mapping_cache[mapping_id][key_id]['index']
+                    if index != len(mapping_cache[mapping_id]) - 1:
+                        for key_id, kv in mapping_cache[mapping_id].items():
+                            if kv['index'] == len(mapping_cache[mapping_id]) - 1:
+                                mapping_cache[mapping_id][key_id]['index'] = index
+                                break
+                    mapping_cache[mapping_id].pop(key_id)
                     print(f"del {c.mapping}[{key}, {index}]")
                 else:
                     print("Not updating mapping cache because allow_state_change is False")

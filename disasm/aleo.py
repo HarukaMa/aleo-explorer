@@ -15,7 +15,7 @@ def disasm_entry_type(value: EntryType) -> str:
 def disasm_register(value: Register) -> str:
     if isinstance(value, LocatorRegister):
         return f"r{value.locator}"
-    elif isinstance(value, MemberRegister):
+    elif isinstance(value, AccessRegister):
         locator = f"r{value.locator}."
         identifiers = ".".join(map(str, value.identifiers))
         return locator + identifiers

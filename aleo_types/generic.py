@@ -130,6 +130,9 @@ class Vec(list[T], Serializable, Generic[T, L]):
             size = size_type.load(data)
         return cls(list(value_type.load(data) for _ in range(size)))
 
+    def __str__(self):
+        return f"[{', '.join(str(item) for item in self)}]"
+
 
 @access_generic_type
 class Option(Serializable, Generic[T]):

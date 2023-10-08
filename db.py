@@ -43,25 +43,41 @@ class Database:
         await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseConnected, None))
 
     @staticmethod
-    async def _insert_finalize_future(conn: psycopg.AsyncConnection[dict[str, Any]], finalize_db_id: int,
-                                      value: Future):
+    async def _insert_future(conn: psycopg.AsyncConnection[dict[str, Any]], future: Future,
+                             transition_output_future_db_id: Optional[int] = None, argument_db_id: Optional[int] = None):
         async with conn.cursor() as cur:
-            await cur.execute(
-                "INSERT INTO transition_finalize_future (type, transition_finalize_id, program_id, function_name) "
-                "VALUES ('Value', %s, %s, %s) RETURNING id",
-                (finalize_db_id, str(value.program_id), str(value.function_name))
-            )
+            if transition_output_future_db_id:
+                await cur.execute(
+                    "INSERT INTO future (type, transition_output_future_id, program_id, function_name) "
+                    "VALUES ('Output', %s, %s, %s) RETURNING id",
+                    (transition_output_future_db_id, str(future.program_id), str(future.function_name))
+                )
+            elif argument_db_id:
+                await cur.execute(
+                    "INSERT INTO future (type, future_argument_id, program_id, function_name) "
+                    "VALUES ('Argument', %s, %s, %s) RETURNING id",
+                    (argument_db_id, str(future.program_id), str(future.function_name))
+                )
+            else:
+                raise ValueError("transition_output_db_id or argument_db_id must be set")
             if (res := await cur.fetchone()) is None:
-                raise Exception("failed to insert row into database")
+                raise RuntimeError("failed to insert row into database")
             future_db_id = res["id"]
-            for argument in value.arguments:
+            for argument in future.arguments:
                 if isinstance(argument, PlaintextArgument):
                     await cur.execute(
-                        "INSERT INTO transition_finalize_future_argument (future_id, type, plaintext) VALUES (%s, %s, %s)",
+                        "INSERT INTO future_argument (future_id, type, plaintext) VALUES (%s, %s, %s)",
                         (future_db_id, argument.type.name, argument.plaintext.dump())
                     )
                 elif isinstance(argument, FutureArgument):
-                    await Database._insert_finalize_future(conn, future_db_id, argument.future)
+                    await cur.execute(
+                        "INSERT INTO future_argument (future_id, type) VALUES (%s, %s) RETURNING id",
+                        (future_db_id, argument.type.name)
+                    )
+                    if (res := await cur.fetchone()) is None:
+                        raise RuntimeError("failed to insert row into database")
+                    argument_db_id = res["id"]
+                    await Database._insert_future(conn, argument.future, argument_db_id=argument_db_id)
                 else:
                     raise NotImplementedError
 
@@ -156,36 +172,19 @@ class Database:
                         "VALUES (%s, %s)",
                         (transition_output_db_id, str(transition_output.commitment))
                     )
-                else:
-                    raise NotImplementedError
-
-            if transition.finalize.value is not None:
-                for finalize_index, finalize in enumerate(transition.finalize.value):
+                elif isinstance(transition_output, FutureTransitionOutput):
                     await cur.execute(
-                       "INSERT INTO transition_finalize (transition_id, type, index) VALUES (%s, %s, %s) "
-                       "RETURNING id",
-                        (transition_db_id, finalize.type.name, finalize_index)
+                        "INSERT INTO transition_output_future (transition_output_id, future_hash) "
+                        "VALUES (%s, %s) RETURNING id",
+                        (transition_output_db_id, str(transition_output.future_hash))
                     )
                     if (res := await cur.fetchone()) is None:
-                        raise RuntimeError("failed to insert row into database")
-                    transition_finalize_db_id = res["id"]
-                    if isinstance(finalize, PlaintextValue):
-                        await cur.execute(
-                            "INSERT INTO transition_finalize_plaintext (transition_finalize_id, plaintext) "
-                            "VALUES (%s, %s)",
-                            (transition_finalize_db_id, finalize.plaintext.dump())
-                        )
-                    elif isinstance(finalize, RecordValue):
-                        await cur.execute(
-                            "INSERT INTO transition_finalize_record (transition_finalize_id, record) "
-                            "VALUES (%s, %s)",
-                            (transition_finalize_db_id, str(finalize.record))
-                        )
-                    elif isinstance(finalize, FutureValue):
-                        await Database._insert_finalize_future(conn, transition_finalize_db_id, finalize.future)
-                    else:
-                        raise NotImplementedError
-
+                        raise Exception("failed to insert row into database")
+                    transition_output_future_db_id = res["id"]
+                    if transition_output.future.value is not None:
+                        await Database._insert_future(conn, transition_output.future.value, transition_output_future_db_id)
+                else:
+                    raise NotImplementedError
 
             await cur.execute(
                 "SELECT id FROM program WHERE program_id = %s", (str(transition.program_id),)
@@ -244,13 +243,16 @@ class Database:
             outputs: list[str] = []
             output_modes: list[str] = []
             for o in function.outputs:
+                if isinstance(o.value_type, FutureValueType):
+                    continue
                 mode, _type = value_type_to_mode_type_str(o.value_type)
                 outputs.append(_type)
                 output_modes.append(mode)
             finalizes: list[str] = []
             if function.finalize.value is not None:
-                for f in function.finalize.value[1].inputs:
-                    finalizes.append(plaintext_type_to_str(f.plaintext_type))
+                for f in function.finalize.value.inputs:
+                    if isinstance(f.finalize_type, PlaintextFinalizeType):
+                        finalizes.append(plaintext_type_to_str(f.finalize_type.plaintext_type))
             await cur.execute(
                 "INSERT INTO program_function (program_id, name, input, input_mode, output, output_mode, finalize) "
                 "VALUES (%s, %s, %s, %s, %s, %s, %s)",
@@ -340,11 +342,10 @@ class Database:
             await cur.execute(
                 "INSERT INTO committee_history_member (committee_id, address, stake, is_open) "
                 "VALUES (%s, %s, %s, %s)",
-                (committee_db_id, str(address), stake, is_open)
+                (committee_db_id, str(address), stake, bool(is_open))
             )
 
-    @staticmethod
-    async def _pre_ratify(cur: psycopg.AsyncCursor[dict[str, Any]], ratification: GenesisRatify):
+    async def _pre_ratify(self, cur: psycopg.AsyncCursor[dict[str, Any]], ratification: GenesisRatify):
         committee = ratification.committee
         await Database._save_committee_history(cur, 0, committee)
 
@@ -353,6 +354,28 @@ class Database:
             stakers[validator] = validator, amount
         committee_members = {address: (amount, is_open) for address, amount, is_open in committee.members}
         await Database._update_committee_bonded_map(cur, committee_members, stakers)
+
+        account_mapping_id = Field.loads(aleo.get_mapping_id("credits.aleo", "account"))
+        public_balances = ratification.public_balances
+        operations: list[dict[str, Any]] = []
+        for index, (address, balance) in enumerate(public_balances):
+            key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=address))
+            key_id = Field.loads(aleo.get_key_id(str(account_mapping_id), key.dump()))
+            value = PlaintextValue(plaintext=LiteralPlaintext(literal=Literal(type_=Literal.Type.U64, primitive=balance)))
+            value_id = Field.loads(aleo.get_value_id(str(key_id), value.dump()))
+            operations.append({
+                "type": FinalizeOperation.Type.UpdateKeyValue,
+                "mapping_id": account_mapping_id,
+                "index": index,
+                "key_id": key_id,
+                "value_id": value_id,
+                "mapping": "account",
+                "key": key,
+                "value": value,
+            })
+        from interpreter.interpreter import execute_operations
+        await execute_operations(self, cur, operations)
+        await cur.execute("COMMIT")
 
     @staticmethod
     async def _get_committee_mapping(cur: psycopg.AsyncCursor[dict[str, Any]]) -> dict[Address, tuple[u64, bool_]]:
@@ -460,19 +483,25 @@ class Database:
                 stakers = await Database._get_bonded_mapping(cur)
 
                 Database._check_committee_staker_match(committee_members, stakers)
-        raise NotImplementedError
+                # TODO continue
+                raise NotImplementedError
+            elif isinstance(ratification, PuzzleRewardRatify):
+                # TODO continue
+                raise NotImplementedError
 
     async def _save_block(self, block: Block):
         async with self.pool.connection() as conn:
             async with conn.transaction():
                 async with conn.cursor() as cur:
                     try:
-
-                        block_reward, coinbase_reward = block.compute_rewards(
-                            await self.get_latest_coinbase_target(),
-                            await self.get_latest_cumulative_proof_target()
-                        )
-                        puzzle_reward = coinbase_reward // 2
+                        if block.height != 0:
+                            block_reward, coinbase_reward = block.compute_rewards(
+                                await self.get_latest_coinbase_target(),
+                                await self.get_latest_cumulative_proof_target()
+                            )
+                            puzzle_reward = coinbase_reward // 2
+                        else:
+                            block_reward, coinbase_reward, puzzle_reward = 0, 0, 0
                         for ratification in block.ratifications:
                             if isinstance(ratification, BlockRewardRatify):
                                 if ratification.amount != block_reward:
@@ -488,18 +517,18 @@ class Database:
 
                         await cur.execute(
                             "INSERT INTO block (height, block_hash, previous_hash, previous_state_root, transactions_root, "
-                            "finalize_root, ratifications_root, solutions_root, round, cumulative_weight, "
+                            "finalize_root, ratifications_root, solutions_root, subdag_root, round, cumulative_weight, "
                             "cumulative_proof_target, coinbase_target, proof_target, last_coinbase_target, "
                             "last_coinbase_timestamp, timestamp, block_reward, coinbase_reward) "
-                            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
                             "RETURNING id",
-                            (block.height, block.block_hash, block.previous_hash, block.header.previous_state_root,
-                             block.header.transactions_root, block.header.finalize_root, block.header.ratifications_root,
-                             block.header.solutions_root, block.round, block.header.metadata.cumulative_weight,
-                             block.header.metadata.cumulative_proof_target, block.header.metadata.coinbase_target,
-                             block.header.metadata.proof_target, block.header.metadata.last_coinbase_target,
-                             block.header.metadata.last_coinbase_timestamp, block.header.metadata.timestamp,
-                             block_reward, coinbase_reward)
+                            (block.height, str(block.block_hash), str(block.previous_hash), str(block.header.previous_state_root),
+                             str(block.header.transactions_root), str(block.header.finalize_root), str(block.header.ratifications_root),
+                             str(block.header.solutions_root), str(block.header.subdag_root), block.round,
+                             block.header.metadata.cumulative_weight, block.header.metadata.cumulative_proof_target,
+                             block.header.metadata.coinbase_target, block.header.metadata.proof_target,
+                             block.header.metadata.last_coinbase_target, block.header.metadata.last_coinbase_timestamp,
+                             block.header.metadata.timestamp, block_reward, coinbase_reward)
                         )
                         if (res := await cur.fetchone()) is None:
                             raise RuntimeError("failed to insert row into database")
@@ -577,7 +606,10 @@ class Database:
                             confirmed_transaction_db_id = res["id"]
                             transaction = confirmed_transaction.transaction
                             transaction_id = transaction.id
-                            dag_vertex_db_id = dag_transmission_ids[1][str(transaction_id)]
+                            if block.height != 0:
+                                dag_vertex_db_id = dag_transmission_ids[1][str(transaction_id)]
+                            else:
+                                dag_vertex_db_id = None
                             await cur.execute(
                                 "INSERT INTO transaction (dag_vertex_id, confimed_transaction_id, transaction_id, type) "
                                 "VALUES (%s, %s, %s, %s) RETURNING id",
@@ -820,6 +852,7 @@ class Database:
             finalize_root=Field.loads(block["finalize_root"]),
             ratifications_root=Field.loads(block["ratifications_root"]),
             solutions_root=Field.loads(block["solutions_root"]),
+            subdag_root=Field.loads(block["subdag_root"]),
             metadata=BlockHeaderMetadata(
                 network=u16(3),
                 round_=u64(block["round"]),
@@ -977,48 +1010,13 @@ class Database:
                         tos.append((ExternalRecordTransitionOutput(
                             commitment=Field.loads(transition_output_external_record["commitment"]),
                         ), transition_output["index"]))
+                    case TransitionOutput.Type.Future.name:
+                        raise NotImplementedError
+                        # TODO implement
                     case _:
                         raise NotImplementedError
             tos.sort(key=lambda x: x[1])
             transition_outputs = [x[0] for x in tos]
-
-            await cur.execute(
-                "SELECT * FROM transition_finalize WHERE transition_id = %s",
-                (transition["id"],)
-            )
-            transition_finalizes = await cur.fetchall()
-            if len(transition_finalizes) == 0:
-                finalize = None
-            else:
-                f: list[tuple[Value, int]] = []
-                for transition_finalize in transition_finalizes:
-                    match transition_finalize["type"]:
-                        case Value.Type.Plaintext.name:
-                            await cur.execute(
-                                "SELECT * FROM transition_finalize_plaintext WHERE transition_finalize_id = %s",
-                                (transition_finalize["id"],)
-                            )
-                            transition_finalize_plaintext = await cur.fetchone()
-                            if transition_finalize_plaintext is None:
-                                raise RuntimeError("database inconsistent")
-                            f.append((PlaintextValue(
-                                plaintext=Plaintext.load(BytesIO(transition_finalize_plaintext["plaintext"]))
-                            ), transition_finalize["index"]))
-                        case Value.Type.Record.name:
-                            await cur.execute(
-                                "SELECT * FROM transition_finalize_record WHERE transition_finalize_id = %s",
-                                (transition_finalize["id"],)
-                            )
-                            transition_finalize_record = await cur.fetchone()
-                            if transition_finalize_record is None:
-                                raise RuntimeError("database inconsistent")
-                            f.append((RecordValue(
-                                record=Record[Plaintext].loads(transition_finalize_record["record"])
-                            ), transition_finalize["index"]))
-                        case _:
-                            raise NotImplementedError
-                f.sort(key=lambda x: x[1])
-                finalize = Vec[Value, u8]([x[0] for x in f])
 
             return Transition(
                 id_=TransitionID.loads(transition["transition_id"]),
@@ -1026,7 +1024,6 @@ class Database:
                 function_name=Identifier.loads(transition["function_name"]),
                 inputs=Vec[TransitionInput, u8](transition_inputs),
                 outputs=Vec[TransitionOutput, u8](transition_outputs),
-                finalize=Option[Vec[Value, u8]](finalize),
                 tpk=Group.loads(transition["tpk"]),
                 tcm=Field.loads(transition["tcm"]),
             )
@@ -1265,7 +1262,7 @@ class Database:
                             ))
                         committee = Committee(
                             starting_round=u64(committee_history["starting_round"]),
-                            members=Vec[Tuple[Address, u64, bool_], u32](members),
+                            members=Vec[Tuple[Address, u64, bool_], u16](members),
                             total_stake=u64(committee_history["total_stake"]),
                         )
                         await cur.execute("SELECT * FROM ratification_genesis_balance")
@@ -2146,7 +2143,7 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_mapping_cache(self, mapping_id: str) -> dict[str, Any]:
+    async def get_mapping_cache(self, mapping_id: str) -> dict[Field, Any]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -2156,16 +2153,16 @@ class Database:
                         (mapping_id,)
                     )
                     data = await cur.fetchone()
-                    if data is None:
+                    if data is None or data["content"] is None:
                         return {}
                     def transform(d: dict[str, Any]):
                         return {
                             "index": d["index"],
-                            "value_id": d["value_id"],
+                            "value_id": Field.loads(d["value_id"]),
                             "key": Plaintext.load(BytesIO(bytes.fromhex(d["key"]))),
                             "value": Value.load(BytesIO(bytes.fromhex(d["value"]))),
                         }
-                    return {x: transform(y) for x, y in data["content"].items()}
+                    return {Field.loads(x): transform(y) for x, y in data["content"].items()}
 
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
@@ -2181,7 +2178,7 @@ class Database:
                         (key_id, program_id, mapping)
                     )
                     res = await cur.fetchone()
-                    if res is None:
+                    if res is None or res['content'] is None:
                         return None
                     return bytes.fromhex(res['content'])
                 except Exception as e:
@@ -2193,14 +2190,14 @@ class Database:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT content[%s]['value'] FROM mapping m "
+                        "SELECT content[%s]['index'] FROM mapping m "
                         "WHERE m.program_id = %s AND m.mapping = %s",
                         (key_id, program_id, mapping)
                     )
                     res = await cur.fetchone()
                     if res is None:
                         return None
-                    return res['index']
+                    return res["content"]
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
@@ -2250,8 +2247,8 @@ class Database:
             # safety check
             await cur.execute("SELECT content[%s] FROM mapping WHERE mapping_id = %s", (key_id, mapping_id))
             if (res := await cur.fetchone()) is not None:
-                if res["index"] != index:
-                    raise ValueError(f"Index mismatch: {res['index']} != {index}")
+                if res["content"] is not None and res["content"]["index"] != index:
+                    raise ValueError(f"Index mismatch: {res['content']['index']} != {index}")
 
             await cur.execute("UPDATE mapping SET content[%s] = %s WHERE mapping_id = %s", (key_id, Jsonb({
                 "index": index,
@@ -2347,7 +2344,6 @@ class Database:
     # migration methods
     async def migrate(self):
         migrations: list[tuple[int, Callable[[psycopg.AsyncConnection[dict[str, Any]]], Awaitable[None]]]] = [
-            (1, self.migrate_1_add_reject_reason_to_confirmed_transaction)
         ]
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -2363,13 +2359,6 @@ class Database:
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
-
-    # noinspection PyMethodMayBeStatic
-    async def migrate_1_add_reject_reason_to_confirmed_transaction(self, conn: psycopg.AsyncConnection[dict[str, Any]]):
-        async with conn.cursor() as cur:
-            await cur.execute(
-                "ALTER TABLE confirmed_transaction ADD COLUMN reject_reason TEXT"
-            )
 
     # debug method
     async def clear_database(self):

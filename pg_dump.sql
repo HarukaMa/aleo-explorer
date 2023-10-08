@@ -2,8 +2,8 @@
 -- PostgreSQL database dump
 --
 
--- Dumped from database version 15.1
--- Dumped by pg_dump version 15.3
+-- Dumped from database version 15.4 (Debian 15.4-3)
+-- Dumped by pg_dump version 15.4
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -73,7 +73,7 @@ CREATE TYPE explorer.finalize_operation_type AS ENUM (
 --
 
 CREATE TYPE explorer.future_type AS ENUM (
-    'Value',
+    'Output',
     'Argument'
 );
 
@@ -187,6 +187,7 @@ CREATE TABLE explorer.block (
     finalize_root text NOT NULL,
     ratifications_root text NOT NULL,
     solutions_root text NOT NULL,
+    subdag_root text NOT NULL,
     round numeric(20,0) NOT NULL,
     cumulative_weight numeric(40,0) NOT NULL,
     cumulative_proof_target numeric(40,0) NOT NULL,
@@ -736,6 +737,52 @@ ALTER SEQUENCE explorer.finalize_operation_update_kv_id_seq OWNED BY explorer.fi
 
 
 --
+-- Name: future; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.future (
+    id integer NOT NULL,
+    type explorer.future_type NOT NULL,
+    transition_output_future_id integer,
+    future_argument_id integer,
+    program_id text NOT NULL,
+    function_name text NOT NULL
+);
+
+
+--
+-- Name: future_argument; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.future_argument (
+    id integer NOT NULL,
+    future_id integer NOT NULL,
+    type explorer.argument_type NOT NULL,
+    plaintext bytea
+);
+
+
+--
+-- Name: future_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.future_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: future_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.future_id_seq OWNED BY explorer.future.id;
+
+
+--
 -- Name: leaderboard; Type: TABLE; Schema: explorer; Owner: -
 --
 
@@ -1048,7 +1095,7 @@ ALTER SEQUENCE explorer.ratification_id_seq OWNED BY explorer.ratification.id;
 CREATE TABLE explorer.transaction (
     id integer NOT NULL,
     confimed_transaction_id integer NOT NULL,
-    dag_vertex_id bigint NOT NULL,
+    dag_vertex_id bigint,
     transaction_id text NOT NULL,
     type explorer.transaction_type NOT NULL
 );
@@ -1124,18 +1171,6 @@ CREATE TABLE explorer.transition (
 
 
 --
--- Name: transition_output_future_argument; Type: TABLE; Schema: explorer; Owner: -
---
-
-CREATE TABLE explorer.transition_output_future_argument (
-    id integer NOT NULL,
-    future_id integer NOT NULL,
-    type explorer.argument_type NOT NULL,
-    plaintext bytea
-);
-
-
---
 -- Name: transition_finalize_future_argument_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
 --
 
@@ -1152,7 +1187,7 @@ CREATE SEQUENCE explorer.transition_finalize_future_argument_id_seq
 -- Name: transition_finalize_future_argument_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
 --
 
-ALTER SEQUENCE explorer.transition_finalize_future_argument_id_seq OWNED BY explorer.transition_output_future_argument.id;
+ALTER SEQUENCE explorer.transition_finalize_future_argument_id_seq OWNED BY explorer.future_argument.id;
 
 
 --
@@ -1161,11 +1196,8 @@ ALTER SEQUENCE explorer.transition_finalize_future_argument_id_seq OWNED BY expl
 
 CREATE TABLE explorer.transition_output_future (
     id integer NOT NULL,
-    type explorer.future_type,
-    transition_finalize_id integer,
-    argument_id integer,
-    program_id text NOT NULL,
-    function_name text NOT NULL
+    transition_output_id integer NOT NULL,
+    future_hash text NOT NULL
 );
 
 
@@ -1187,37 +1219,6 @@ CREATE SEQUENCE explorer.transition_finalize_future_id_seq
 --
 
 ALTER SEQUENCE explorer.transition_finalize_future_id_seq OWNED BY explorer.transition_output_future.id;
-
-
---
--- Name: transition_output_plaintext; Type: TABLE; Schema: explorer; Owner: -
---
-
-CREATE TABLE explorer.transition_output_plaintext (
-    id integer NOT NULL,
-    transition_finalize_id integer NOT NULL,
-    plaintext bytea NOT NULL
-);
-
-
---
--- Name: transition_finalize_plaintext_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
---
-
-CREATE SEQUENCE explorer.transition_finalize_plaintext_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: transition_finalize_plaintext_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
---
-
-ALTER SEQUENCE explorer.transition_finalize_plaintext_id_seq OWNED BY explorer.transition_output_plaintext.id;
 
 
 --
@@ -1647,6 +1648,20 @@ ALTER TABLE ONLY explorer.finalize_operation_update_kv ALTER COLUMN id SET DEFAU
 
 
 --
+-- Name: future id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.future ALTER COLUMN id SET DEFAULT nextval('explorer.future_id_seq'::regclass);
+
+
+--
+-- Name: future_argument id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.future_argument ALTER COLUMN id SET DEFAULT nextval('explorer.transition_finalize_future_argument_id_seq'::regclass);
+
+
+--
 -- Name: mapping id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -1777,20 +1792,6 @@ ALTER TABLE ONLY explorer.transition_output_external_record ALTER COLUMN id SET 
 --
 
 ALTER TABLE ONLY explorer.transition_output_future ALTER COLUMN id SET DEFAULT nextval('explorer.transition_finalize_future_id_seq'::regclass);
-
-
---
--- Name: transition_output_future_argument id; Type: DEFAULT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.transition_output_future_argument ALTER COLUMN id SET DEFAULT nextval('explorer.transition_finalize_future_argument_id_seq'::regclass);
-
-
---
--- Name: transition_output_plaintext id; Type: DEFAULT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.transition_output_plaintext ALTER COLUMN id SET DEFAULT nextval('explorer.transition_finalize_plaintext_id_seq'::regclass);
 
 
 --
@@ -1951,6 +1952,14 @@ ALTER TABLE ONLY explorer.finalize_operation_update_kv
 
 
 --
+-- Name: future future_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.future
+    ADD CONSTRAINT future_pk PRIMARY KEY (id);
+
+
+--
 -- Name: leaderboard leaderboard_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -2015,6 +2024,14 @@ ALTER TABLE ONLY explorer.program
 
 
 --
+-- Name: program program_pk2; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.program
+    ADD CONSTRAINT program_pk2 UNIQUE (program_id);
+
+
+--
 -- Name: ratification ratification_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -2047,27 +2064,11 @@ ALTER TABLE ONLY explorer.transaction
 
 
 --
--- Name: transition_output_future_argument transition_finalize_future_argument_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+-- Name: future_argument transition_finalize_future_argument_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
-ALTER TABLE ONLY explorer.transition_output_future_argument
+ALTER TABLE ONLY explorer.future_argument
     ADD CONSTRAINT transition_finalize_future_argument_pk PRIMARY KEY (id);
-
-
---
--- Name: transition_output_future transition_finalize_future_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.transition_output_future
-    ADD CONSTRAINT transition_finalize_future_pk PRIMARY KEY (id);
-
-
---
--- Name: transition_output_plaintext transition_finalize_plaintext_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.transition_output_plaintext
-    ADD CONSTRAINT transition_finalize_plaintext_pk PRIMARY KEY (id);
 
 
 --
@@ -2116,6 +2117,14 @@ ALTER TABLE ONLY explorer.transition_input_record
 
 ALTER TABLE ONLY explorer.transition_output_external_record
     ADD CONSTRAINT transition_output_external_record_pk PRIMARY KEY (id);
+
+
+--
+-- Name: transition_output_future transition_output_future_id_uindex; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transition_output_future
+    ADD CONSTRAINT transition_output_future_id_uindex PRIMARY KEY (id);
 
 
 --
@@ -2390,6 +2399,41 @@ CREATE INDEX finalize_operation_update_kv_mapping_id_index ON explorer.finalize_
 
 
 --
+-- Name: future_argument_future_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX future_argument_future_id_index ON explorer.future_argument USING btree (future_id);
+
+
+--
+-- Name: future_future_argument_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX future_future_argument_id_index ON explorer.future USING btree (future_argument_id);
+
+
+--
+-- Name: future_program_id_function_name_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX future_program_id_function_name_index ON explorer.future USING btree (program_id, function_name);
+
+
+--
+-- Name: future_transition_output_future_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX future_transition_output_future_id_index ON explorer.future USING btree (transition_output_future_id);
+
+
+--
+-- Name: future_type_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX future_type_index ON explorer.future USING btree (type);
+
+
+--
 -- Name: leaderboard_address_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -2467,6 +2511,13 @@ CREATE INDEX partial_solution_dag_vertex_id_index ON explorer.partial_solution U
 
 
 --
+-- Name: program_feature_hash_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX program_feature_hash_index ON explorer.program USING btree (feature_hash);
+
+
+--
 -- Name: program_filter_hash_hash_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -2495,10 +2546,17 @@ CREATE INDEX program_import_index ON explorer.program USING gin (import);
 
 
 --
--- Name: program_program_id_index; Type: INDEX; Schema: explorer; Owner: -
+-- Name: program_is_helloworld_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-CREATE INDEX program_program_id_index ON explorer.program USING btree (program_id text_pattern_ops);
+CREATE INDEX program_is_helloworld_index ON explorer.program USING btree (is_helloworld);
+
+
+--
+-- Name: program_owner_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX program_owner_index ON explorer.program USING btree (owner);
 
 
 --
@@ -2568,35 +2626,7 @@ CREATE INDEX transition_fee_id_index ON explorer.transition USING btree (fee_id)
 -- Name: transition_finalize_future_argument_type_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-CREATE INDEX transition_finalize_future_argument_type_index ON explorer.transition_output_future_argument USING btree (type);
-
-
---
--- Name: transition_finalize_future_function_name_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX transition_finalize_future_function_name_index ON explorer.transition_output_future USING btree (function_name);
-
-
---
--- Name: transition_finalize_future_program_id_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX transition_finalize_future_program_id_index ON explorer.transition_output_future USING btree (program_id);
-
-
---
--- Name: transition_finalize_future_type_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX transition_finalize_future_type_index ON explorer.transition_output_future USING btree (type);
-
-
---
--- Name: transition_finalize_plaintext_transition_finalize_id_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX transition_finalize_plaintext_transition_finalize_id_index ON explorer.transition_output_plaintext USING btree (transition_finalize_id);
+CREATE INDEX transition_finalize_future_argument_type_index ON explorer.future_argument USING btree (type);
 
 
 --
@@ -2660,6 +2690,13 @@ CREATE INDEX transition_input_transition_id_index ON explorer.transition_input U
 --
 
 CREATE INDEX transition_output_external_record_transition_output_id_index ON explorer.transition_output_external_record USING btree (transition_output_id);
+
+
+--
+-- Name: transition_output_future_transition_output_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX transition_output_future_transition_output_id_index ON explorer.transition_output_future USING btree (transition_output_id);
 
 
 --
@@ -2839,6 +2876,30 @@ ALTER TABLE ONLY explorer.finalize_operation_update_kv
 
 
 --
+-- Name: future_argument future_argument_future_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.future_argument
+    ADD CONSTRAINT future_argument_future_id_fk FOREIGN KEY (future_id) REFERENCES explorer.future(id);
+
+
+--
+-- Name: future future_future_argument_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.future
+    ADD CONSTRAINT future_future_argument_id_fk FOREIGN KEY (future_argument_id) REFERENCES explorer.future_argument(id);
+
+
+--
+-- Name: future future_transition_output_future_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.future
+    ADD CONSTRAINT future_transition_output_future_id_fk FOREIGN KEY (transition_output_future_id) REFERENCES explorer.transition_output_future(id);
+
+
+--
 -- Name: mapping_history mapping_history_mapping_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -2927,22 +2988,6 @@ ALTER TABLE ONLY explorer.transition
 
 
 --
--- Name: transition_output_future_argument transition_finalize_future_argument_transition_finalize_future_; Type: FK CONSTRAINT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.transition_output_future_argument
-    ADD CONSTRAINT transition_finalize_future_argument_transition_finalize_future_ FOREIGN KEY (future_id) REFERENCES explorer.transition_output_future(id);
-
-
---
--- Name: transition_output_future transition_finalize_future_transition_finalize_future_argument_; Type: FK CONSTRAINT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.transition_output_future
-    ADD CONSTRAINT transition_finalize_future_transition_finalize_future_argument_ FOREIGN KEY (argument_id) REFERENCES explorer.transition_output_future_argument(id);
-
-
---
 -- Name: transition_input_external_record transition_input_external_record_transition_input_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -2988,6 +3033,14 @@ ALTER TABLE ONLY explorer.transition_input
 
 ALTER TABLE ONLY explorer.transition_output_external_record
     ADD CONSTRAINT transition_output_external_record_transition_output_id_fk FOREIGN KEY (transition_output_id) REFERENCES explorer.transition_output(id);
+
+
+--
+-- Name: transition_output_future transition_output_future_transition_output_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.transition_output_future
+    ADD CONSTRAINT transition_output_future_transition_output_id_fk FOREIGN KEY (transition_output_id) REFERENCES explorer.transition_output(id);
 
 
 --

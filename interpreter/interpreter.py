@@ -2,10 +2,10 @@ import psycopg
 
 from aleo_types import *
 from db import Database
-from interpreter.finalizer import execute_finalizer, ExecuteError, mapping_cache_read, mapping_find_index
-from interpreter.utils import FinalizeState, MappingCacheTuple
+from interpreter.finalizer import execute_finalizer, ExecuteError, mapping_cache_read
+from interpreter.utils import FinalizeState, MappingCacheDict
 
-global_mapping_cache: dict[Field, list[MappingCacheTuple]] = {}
+global_mapping_cache: dict[Field, MappingCacheDict] = {}
 global_program_cache: dict[str, Program] = {}
 
 async def init_builtin_program(db: Database, program: Program):
@@ -35,9 +35,30 @@ async def finalize_deploy(confirmed_transaction: ConfirmedTransaction) -> tuple[
         raise NotImplementedError
     return expected_operations, operations, None
 
+async def _load_program(db: Database, program_id: str) -> Program:
+    if program_id in global_program_cache:
+        program = global_program_cache[program_id]
+    else:
+        program_bytes = await db.get_program(program_id)
+        if program_bytes is None:
+            raise RuntimeError("program not found")
+        program = Program.load(BytesIO(program_bytes))
+        global_program_cache[program_id] = program
+    return program
+
+def _load_input_from_arguments(arguments: list[Argument]) -> list[Value]:
+    inputs: list[Value] = []
+    for argument in arguments:
+        if isinstance(argument, PlaintextArgument):
+            inputs.append(PlaintextValue(plaintext=argument.plaintext))
+        elif isinstance(argument, FutureArgument):
+            inputs.append(FutureValue(future=argument.future))
+        else:
+            raise NotImplementedError
+    return inputs
 
 async def finalize_execute(db: Database, finalize_state: FinalizeState, confirmed_transaction: ConfirmedTransaction,
-                           mapping_cache: dict[Field, list[MappingCacheTuple]]) -> tuple[list[FinalizeOperation], list[dict[str, Any]], Optional[str]]:
+                           mapping_cache: dict[Field, MappingCacheDict]) -> tuple[list[FinalizeOperation], list[dict[str, Any]], Optional[str]]:
     if isinstance(confirmed_transaction, AcceptedExecute):
         transaction = confirmed_transaction.transaction
         if not isinstance(transaction, ExecuteTransaction):
@@ -45,41 +66,54 @@ async def finalize_execute(db: Database, finalize_state: FinalizeState, confirme
         execution = transaction.execution
         allow_state_change = True
         expected_operations = list(confirmed_transaction.finalize)
+        fee = transaction.additional_fee.value
     elif isinstance(confirmed_transaction, RejectedExecute):
         if not isinstance(confirmed_transaction.rejected, RejectedExecution):
             raise TypeError("invalid rejected execute transaction")
         execution = confirmed_transaction.rejected.execution
         allow_state_change = False
         expected_operations = []
+        if not isinstance(confirmed_transaction.transaction, FeeTransaction):
+            raise TypeError("invalid rejected execute transaction")
+        fee = confirmed_transaction.transaction.fee
     else:
         raise NotImplementedError
     operations: list[dict[str, Any]] = []
     reject_reason: str | None = None
     for index, transition in enumerate(execution.transitions):
-        finalize = transition.finalize.value
-        if finalize is not None:
-            if str(transition.program_id) in global_program_cache:
-                program = global_program_cache[str(transition.program_id)]
-            else:
-                program_bytes = await db.get_program(str(transition.program_id))
-                if program_bytes is None:
-                    raise RuntimeError("program not found")
-                program = Program.load(BytesIO(program_bytes))
-                global_program_cache[str(transition.program_id)] = program
-            inputs: list[Plaintext] = []
-            for value in finalize:
-                if isinstance(value, PlaintextValue):
-                    inputs.append(value.plaintext)
-                elif isinstance(value, RecordValue):
-                    raise NotImplementedError
+        maybe_future_output = transition.outputs[-1]
+        if isinstance(maybe_future_output, FutureTransitionOutput):
+            future_option = maybe_future_output.future
+            if future_option.value is None:
+                raise RuntimeError("invalid future is None")
+            # noinspection PyTypeChecker
+            future: Future = future_option.value
+            program = await _load_program(db, str(future.program_id))
+
+            inputs: list[Value] = _load_input_from_arguments(future.arguments)
             try:
                 operations.extend(
-                    await execute_finalizer(db, finalize_state, transition.id, program, transition.function_name, inputs, mapping_cache, allow_state_change)
+                    await execute_finalizer(db, finalize_state, transition.id, program, future.function_name, inputs, mapping_cache, allow_state_change)
                 )
             except ExecuteError as e:
                 reject_reason = f"execute error: {e}, at transition #{index}, instruction \"{e.instruction}\""
                 operations = []
                 break
+    if fee:
+        transition = fee.transition
+        if transition.function_name == "fee_public":
+            output = transition.outputs[0]
+            if not isinstance(output, FutureTransitionOutput):
+                raise TypeError("invalid fee transition output")
+            future = output.future.value
+            if future is None:
+                raise RuntimeError("invalid fee transition output")
+            program = await _load_program(db, str(future.program_id))
+
+            inputs: list[Value] = _load_input_from_arguments(future.arguments)
+            operations.extend(
+                await execute_finalizer(db, finalize_state, transition.id, program, future.function_name, inputs, mapping_cache, allow_state_change)
+            )
     if isinstance(confirmed_transaction, RejectedExecute):
         if reject_reason is None:
             raise RuntimeError("rejected execute transaction should not finalize without ExecuteError")
@@ -97,6 +131,9 @@ async def finalize_block(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]],
             expected_operations, operations, reject_reason = await finalize_execute(db, finalize_state, confirmed_transaction, global_mapping_cache)
         else:
             raise NotImplementedError
+
+        if len(expected_operations) != len(operations):
+            raise TypeError("invalid finalize operation length")
 
         for e, o in zip(expected_operations, operations):
             if e.type != o["type"]:
@@ -160,16 +197,15 @@ async def get_mapping_value(db: Database, program_id: str, mapping_name: str, ke
         raise TypeError("unsupported key type")
     key_plaintext = LiteralPlaintext(literal=Literal.loads(Literal.Type(mapping_key_type.literal_type.value), key))
     key_id = Field.loads(aleo.get_key_id(str(mapping_id), key_plaintext.dump()))
-    index = mapping_find_index(global_mapping_cache[mapping_id], key_id)
-    if index == -1:
+    if key_id not in global_mapping_cache[mapping_id]:
         raise ExecuteError(f"key {key} not found in mapping {mapping_id}", None, "")
     else:
-        value = global_mapping_cache[mapping_id][index][3]
+        value = global_mapping_cache[mapping_id][key_id]["value"]
         if not isinstance(value, PlaintextValue):
             raise TypeError("invalid value type")
     return value
 
-async def preview_finalize_execution(db: Database, program: Program, function_name: Identifier, inputs: list[Plaintext]) -> list[dict[str, Any]]:
+async def preview_finalize_execution(db: Database, program: Program, function_name: Identifier, inputs: list[Value]) -> list[dict[str, Any]]:
     block = await db.get_latest_block()
     finalize_state = FinalizeState(block)
     return await execute_finalizer(

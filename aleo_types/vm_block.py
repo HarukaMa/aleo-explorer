@@ -268,23 +268,44 @@ class FinalizeCommand(Serializable):
         return cls(operands=operands)
 
 
+class AwaitCommand(Serializable):
+
+    def __init__(self, *, register: Register):
+        self.register = register
+
+    def dump(self) -> bytes:
+        return self.register.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        register = Register.load(data)
+        return cls(register=register)
+
+
 class Command(EnumBaseSerialize, RustEnum, Serializable):
     type: "Command.Type"
 
     class Type(IntEnumu8):
-        Instruction = 0
-        Contains = 1
-        Get = 2
-        GetOrUse = 3
-        RandChaCha = 4
-        Remove = 5
-        Set = 6
-        BranchEq = 7
-        BranchNeq = 8
-        Position = 9
+
+        @staticmethod
+        def _generate_next_value_(name: str, start: int, count: int, last_values: list[int]):
+            return count
+
+        Instruction = auto()
+        Await = auto()
+        Contains = auto()
+        Get = auto()
+        GetOrUse = auto()
+        RandChaCha = auto()
+        Remove = auto()
+        Set = auto()
+        BranchEq = auto()
+        BranchNeq = auto()
+        Position = auto()
 
     fee_map = {
         Type.Instruction: 0,
+        Type.Await: 2_000,
         Type.Contains: 250_000,
         Type.Get: 500_000,
         Type.GetOrUse: 500_000,
@@ -301,6 +322,8 @@ class Command(EnumBaseSerialize, RustEnum, Serializable):
         type_ = cls.Type.load(data)
         if type_ == cls.Type.Instruction:
             return InstructionCommand.load(data)
+        elif type_ == cls.Type.Await:
+            return AwaitCommand.load(data)
         elif type_ == cls.Type.Contains:
             return ContainsCommand.load(data)
         elif type_ == cls.Type.Get:
@@ -510,20 +533,66 @@ class PositionCommand(Command):
         return cls(position=position)
 
 
-class FinalizeInput(Serializable):
+class FinalizeType(EnumBaseSerialize, RustEnum, Serializable):
 
-    def __init__(self, *, register: Register, plaintext_type: PlaintextType):
-        self.register = register
+    class Type(IntEnumu8):
+        Plaintext = 0
+        Future = 1
+
+    type: Type
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        type_ = cls.Type.load(data)
+        if type_ == cls.Type.Plaintext:
+            return PlaintextFinalizeType.load(data)
+        elif type_ == cls.Type.Future:
+            return FutureFinalizeType.load(data)
+        else:
+            raise ValueError("Invalid variant")
+
+class PlaintextFinalizeType(FinalizeType):
+    type = FinalizeType.Type.Plaintext
+
+    def __init__(self, *, plaintext_type: PlaintextType):
         self.plaintext_type = plaintext_type
 
     def dump(self) -> bytes:
-        return self.register.dump() + self.plaintext_type.dump()
+        return self.type.dump() + self.plaintext_type.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        plaintext_type = PlaintextType.load(data)
+        return cls(plaintext_type=plaintext_type)
+
+class FutureFinalizeType(FinalizeType):
+    type = FinalizeType.Type.Future
+
+    def __init__(self, *, locator: Locator):
+        self.locator = locator
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.locator.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        locator = Locator.load(data)
+        return cls(locator=locator)
+
+class FinalizeInput(Serializable):
+
+    def __init__(self, *, register: Register, finalize_type: FinalizeType):
+        self.register = register
+        self.finalize_type = finalize_type
+
+    def dump(self) -> bytes:
+        return self.register.dump() + self.finalize_type.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
         register = Register.load(data)
-        plaintext_type = PlaintextType.load(data)
-        return cls(register=register, plaintext_type=plaintext_type)
+        finalize_type = FinalizeType.load(data)
+        return cls(register=register, finalize_type=finalize_type)
 
 class Finalize(Serializable):
 
@@ -531,6 +600,12 @@ class Finalize(Serializable):
         self.name = name
         self.inputs = inputs
         self.commands = commands
+        self.num_writes = len(list(filter(lambda x: isinstance(x, SetCommand) or isinstance(x, RemoveCommand), commands)))
+        positions: dict[Identifier, int] = {}
+        for i, c in enumerate(commands, start=1):
+            if isinstance(c, PositionCommand):
+                positions[c.position] = i
+        self.positions = positions
 
     def dump(self) -> bytes:
         return self.name.dump() + self.inputs.dump() + self.commands.dump()
@@ -555,6 +630,7 @@ class ValueType(EnumBaseSerialize, RustEnum, Serializable):
         Private = 2
         Record = 3
         ExternalRecord = 4
+        Future = 5
 
     type: Type
 
@@ -571,6 +647,8 @@ class ValueType(EnumBaseSerialize, RustEnum, Serializable):
             return RecordValueType.load(data)
         elif type_ == cls.Type.ExternalRecord:
             return ExternalRecordValueType.load(data)
+        elif type_ == cls.Type.Future:
+            return FutureValueType.load(data)
         else:
             raise ValueError("Invalid variant")
 
@@ -650,6 +728,21 @@ class ExternalRecordValueType(ValueType):
         return cls(locator=locator)
 
 
+class FutureValueType(ValueType):
+    type = ValueType.Type.Future
+
+    def __init__(self, *, locator: Locator):
+        self.locator = locator
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.locator.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        locator = Locator.load(data)
+        return cls(locator=locator)
+
+
 class FunctionInput(Serializable):
 
     def __init__(self, *, register: Register, value_type: ValueType):
@@ -685,7 +778,7 @@ class FunctionOutput(Serializable):
 class Function(Serializable):
 
     def __init__(self, *, name: Identifier, inputs: Vec[FunctionInput, u16], instructions: Vec[Instruction, u32],
-                 outputs: Vec[FunctionOutput, u16], finalize: Option[Tuple[FinalizeCommand, Finalize]]):
+                 outputs: Vec[FunctionOutput, u16], finalize: Option[Finalize]):
         self.name = name
         self.inputs = inputs
         self.instructions = instructions
@@ -707,7 +800,7 @@ class Function(Serializable):
         inputs = Vec[FunctionInput, u16].load(data)
         instructions = Vec[Instruction, u32].load(data)
         outputs = Vec[FunctionOutput, u16].load(data)
-        finalize = Option[Tuple[FinalizeCommand, Finalize]].load(data)
+        finalize = Option[Finalize].load(data)
         return cls(name=name, inputs=inputs, instructions=instructions, outputs=outputs, finalize=finalize)
 
     def instruction_feature_string(self) -> str:
@@ -1301,6 +1394,7 @@ class Plaintext(EnumBaseSerialize, RustEnum, Serializable):  # enum
     class Type(IntEnumu8):
         Literal = 0
         Struct = 1
+        Array = 2
 
     type: Type
 
@@ -1311,6 +1405,8 @@ class Plaintext(EnumBaseSerialize, RustEnum, Serializable):  # enum
             return LiteralPlaintext.load(data)
         elif type_ == Plaintext.Type.Struct:
             return StructPlaintext.load(data)
+        elif type_ == Plaintext.Type.Array:
+            return ArrayPlaintext.load(data)
         else:
             raise ValueError("invalid type")
 
@@ -1499,6 +1595,57 @@ class StructPlaintext(Plaintext):
             return False
         for identifier, plaintext in self.members:
             if plaintext != other.get_member(identifier):
+                return False
+        return True
+
+class ArrayPlaintext(Plaintext):
+    type = Plaintext.Type.Array
+
+    def __init__(self, *, elements: Vec[Plaintext, u32]):
+        self.elements = elements
+
+    def dump(self) -> bytes:
+        res = self.type.dump()
+        res += u32(len(self.elements)).dump()
+        for element in self.elements:
+            data = element.dump()
+            res += u16(len(data)).dump()
+            res += data
+        return res
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        elements: list[Plaintext] = []
+        num_elements = u32.load(data)
+        for _ in range(num_elements):
+            num_bytes = u16.load(data)
+            element = Plaintext.load(BytesIO(data.read(num_bytes)))
+            elements.append(element)
+        return cls(elements=Vec[Plaintext, u32](elements))
+
+    @classmethod
+    def loads(cls, data: str) -> Self:
+        raise NotImplementedError
+
+    def __str__(self):
+        return str(self.elements)
+
+    def __repr__(self):
+        return str(self.elements)
+
+    def __getitem__(self, item: int) -> Plaintext:
+        return self.elements[item]
+
+    def __setitem__(self, key: int, value: Plaintext):
+        self.elements[key] = value
+
+    def __eq__(self, other: object):
+        if not isinstance(other, ArrayPlaintext):
+            return False
+        if len(self.elements) != len(other.elements):
+            return False
+        for i in range(len(self.elements)):
+            if self.elements[i] != other.elements[i]:
                 return False
         return True
 

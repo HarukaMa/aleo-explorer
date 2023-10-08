@@ -6,7 +6,8 @@ from interpreter.utils import load_plaintext_from_operand, store_plaintext_to_re
 
 IT = Instruction.Type
 HT = HashInstruction.Type
-CT = CommitInstruction.Type
+CmT = CommitInstruction.Type
+CsT = CastType.Type
 
 def execute_instruction(instruction: Instruction, program: Program, registers: Registers, finalize_state: FinalizeState):
     literals = instruction.literals
@@ -33,9 +34,11 @@ def execute_instruction(instruction: Instruction, program: Program, registers: R
     elif isinstance(literals, HashInstruction):
         type_ = literals.type
         hash_op(literals.operands, literals.destination, literals.destination_type, registers, finalize_state, type_)
-    else:
+    elif isinstance(literals, CommitInstruction):
         type_ = literals.type
         commit_op(literals.operands, literals.destination, literals.destination_type, registers, finalize_state, type_)
+    else:
+        raise NotImplementedError
 
 
 def abs_(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
@@ -154,12 +157,9 @@ def cast_op(operands: list[Operand], destination: Register, cast_type: CastType,
                 sub_struct_definition = program.structs[member_type.struct]
                 verify_struct_type(member_value, sub_struct_definition)
 
-    if not isinstance(cast_type, RegisterTypeCastType):
+    if not isinstance(cast_type, PlaintextCastType):
         raise NotImplementedError
-    register_type = cast_type.register_type
-    if not isinstance(register_type, PlaintextRegisterType):
-        raise RuntimeError("invalid register type")
-    plaintext_type = register_type.plaintext_type
+    plaintext_type = cast_type.plaintext_type
     if isinstance(plaintext_type, LiteralPlaintextType):
         plaintext = load_plaintext_from_operand(operands[0], registers, finalize_state)
         if not isinstance(plaintext, LiteralPlaintext):
@@ -192,7 +192,7 @@ def cast_op(operands: list[Operand], destination: Register, cast_type: CastType,
     else:
         raise NotImplementedError
 
-def commit_op(operands: tuple[Operand, Operand], destination: Register, destination_type: LiteralType, registers: Registers, finalize_state: FinalizeState, commit_type: CT):
+def commit_op(operands: tuple[Operand, Operand], destination: Register, destination_type: LiteralType, registers: Registers, finalize_state: FinalizeState, commit_type: CmT):
     op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
     op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
     if not isinstance(op2, LiteralPlaintext):
@@ -808,10 +808,10 @@ hash_ops = {
 }
 
 commit_ops = {
-    CT.CommitBHP256: "bhp256",
-    CT.CommitBHP512: "bhp512",
-    CT.CommitBHP768: "bhp768",
-    CT.CommitBHP1024: "bhp1024",
-    CT.CommitPED64: "ped64",
-    CT.CommitPED128: "ped128",
+    CmT.CommitBHP256: "bhp256",
+    CmT.CommitBHP512: "bhp512",
+    CmT.CommitBHP768: "bhp768",
+    CmT.CommitBHP1024: "bhp1024",
+    CmT.CommitPED64: "ped64",
+    CmT.CommitPED128: "ped128",
 }
