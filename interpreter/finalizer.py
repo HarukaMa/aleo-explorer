@@ -203,8 +203,8 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
                 if key_id not in mapping_cache[mapping_id]:
                     print(f"Key {key} not found in mapping {c.mapping}")
                     continue
+                index = mapping_cache[mapping_id][key_id]['index']
                 if allow_state_change:
-                    index = mapping_cache[mapping_id][key_id]['index']
                     if index != len(mapping_cache[mapping_id]) - 1:
                         for key_id, kv in mapping_cache[mapping_id].items():
                             if kv['index'] == len(mapping_cache[mapping_id]) - 1:

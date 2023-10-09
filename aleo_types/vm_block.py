@@ -2372,8 +2372,6 @@ class Transaction(EnumBaseSerialize, RustEnum, Serializable):
 
     @classmethod
     def load(cls, data: BytesIO):
-        if data.getbuffer().nbytes < 1:
-            raise ValueError("incorrect length")
         version = u8.load(data)
         type_ = cls.Type.load(data)
         if type_ == cls.Type.Deploy:

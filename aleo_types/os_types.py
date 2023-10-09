@@ -385,8 +385,6 @@ class Frame(Serializable):
 
     @classmethod
     def load(cls, data: BytesIO):
-        if data.tell() + 2 > data.getbuffer().nbytes:
-            raise ValueError("missing message id")
         message = Message.load(data)
 
         return cls(message=message)

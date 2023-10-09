@@ -146,11 +146,7 @@ class Identifier(Serializable):
 
     @classmethod
     def load(cls, data: BytesIO):
-        if data.tell() >= data.getbuffer().nbytes:
-            raise ValueError("incorrect length")
         length = data.read(1)[0]
-        if data.tell() + length > data.getbuffer().nbytes:
-            raise ValueError("incorrect length")
         value = data.read(length).decode("ascii") # let the exception propagate
         return cls(value=value)
 
@@ -243,20 +239,12 @@ class VarInt(int, Serializable):
 
     @classmethod
     def load(cls, data: BytesIO):
-        if data.tell() >= data.getbuffer().nbytes:
-            raise ValueError("data is too short")
         value = data.read(1)[0]
         if value == 0xfd:
-            if data.tell() + 2 > data.getbuffer().nbytes:
-                raise ValueError("data is too short")
             value = u16.load(data)
         elif value == 0xfe:
-            if data.tell() + 4 > data.getbuffer().nbytes:
-                raise ValueError("data is too short")
             value = u32.load(data)
         elif value == 0xff:
-            if data.tell() + 8 > data.getbuffer().nbytes:
-                raise ValueError("data is too short")
             value = u64.load(data)
         else:
             value = u8(value)
@@ -373,8 +361,6 @@ class Operand(EnumBaseSerialize, Serialize, RustEnum):
 
     @classmethod
     def load(cls, data: BytesIO):
-        if data.tell() >= data.getbuffer().nbytes:
-            raise ValueError("incorrect length")
         type_ = cls.Type.load(data)
         if type_ == cls.Type.Literal:
             return LiteralOperand.load(data)
@@ -561,8 +547,6 @@ class CallOperator(EnumBaseSerialize, Serialize, RustEnum):
 
     @classmethod
     def load(cls, data: BytesIO):
-        if data.tell() >= data.getbuffer().nbytes:
-            raise ValueError("incorrect length")
         type_ = cls.Type.load(data)
         if type_ == cls.Type.Locator:
             return LocatorCallOperator.load(data)
@@ -691,8 +675,6 @@ class PlaintextType(EnumBaseSerialize, Serialize, RustEnum):
 
     @classmethod
     def load(cls, data: BytesIO):
-        if data.tell() >= data.getbuffer().nbytes:
-            raise ValueError("incorrect length")
         type_ = cls.Type.load(data)
         if type_ == cls.Type.Literal:
             return LiteralPlaintextType.load(data)

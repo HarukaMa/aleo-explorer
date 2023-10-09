@@ -16,6 +16,10 @@ L = TypeVar('L', bound=Int | FixedSize)
 I_co = TypeVar('I_co', bound=Int, covariant=True)
 
 
+@lru_cache(maxsize=1024)
+def _get_args(self):
+    return get_args(self)
+
 class TypedGenericAlias(GenericAlias):
     def __getattribute__(self, item: str) -> Any:
         attr = super().__getattribute__(item)
@@ -23,11 +27,11 @@ class TypedGenericAlias(GenericAlias):
             return attr
         if isinstance(attr, MethodType):
             attr = attr.__get__(self) # type: ignore
-            return partial(attr, types=get_args(self)) # type: ignore
+            return partial(attr, types=_get_args(self)) # type: ignore
         return attr
 
     def __call__(self, *args: Any, **kwargs: Any):
-        kwargs["types"] = get_args(self)
+        kwargs["types"] = _get_args(self)
         return super().__call__(*args, **kwargs)
 
 def access_generic_type(c): # type: ignore

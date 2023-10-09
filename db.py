@@ -964,14 +964,14 @@ class Database:
                                 current_total_credit = 0
                             else:
                                 current_total_credit = current_total_credit["total_credit"]
-                            copy_data: list[tuple[int, int, str, u64, str, int, int, str, str, bool]] = []
+                            copy_data: list[tuple[int, int, str, u64, str, int, int, str, bool]] = []
                             for prover_solution, target, reward in solutions:
                                 partial_solution = prover_solution.partial_solution
                                 dag_vertex_db_id = dag_transmission_ids[0][str(partial_solution.commitment)]
                                 copy_data.append(
                                     (dag_vertex_db_id, coinbase_solution_db_id, str(partial_solution.address), partial_solution.nonce,
                                      str(partial_solution.commitment), partial_solution.commitment.to_target(), reward,
-                                     str(prover_solution.proof.w.x), str(prover_solution.proof.w.y), prover_solution.proof.w.infinity)
+                                     str(prover_solution.proof.w.x), prover_solution.proof.w.y_is_positive)
                                 )
                                 if reward > 0:
                                     address_puzzle_rewards[str(partial_solution.address)] += reward
@@ -987,7 +987,7 @@ class Database:
                                                 (reward, str(partial_solution.address))
                                             )
                             if not os.environ.get("DEBUG_SKIP_COINBASE"):
-                                async with cur.copy("COPY prover_solution (dag_vertex_id, coinbase_solution_id, address, nonce, commitment, target, reward, proof_x, proof_y, proof_infinity) FROM STDIN") as copy:
+                                async with cur.copy("COPY prover_solution (dag_vertex_id, coinbase_solution_id, address, nonce, commitment, target, reward, proof_x, proof_y_is_positive) FROM STDIN") as copy:
                                     for row in copy_data:
                                         await copy.write_row(row)
                                 if block.header.metadata.height >= 130888 and block.header.metadata.timestamp < 1675209600 and current_total_credit < 37_500_000_000_000:
@@ -1475,8 +1475,7 @@ class Database:
                         proof=KZGProof(
                             w=G1Affine(
                                 x=Fq(value=int(prover_solution["proof_x"])),
-                                y=Fq(value=int(prover_solution["proof_y"])),
-                                infinity=prover_solution["proof_infinity"],
+                                y_is_positive=prover_solution["proof_y_is_positive"],
                             ),
                             random_v=Option[Field](None),
                         )

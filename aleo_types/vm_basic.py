@@ -20,8 +20,6 @@ class AleoID(AleoIDProtocol):
 
     @classmethod
     def load(cls, data: BytesIO):
-        if data.tell() + cls.size > data.getbuffer().nbytes:
-            raise ValueError("incorrect length")
         size = cls.size
         self = cls(data.read(size))
         return self
@@ -61,9 +59,6 @@ class AleoObject(AleoIDProtocol):
     @classmethod
     def load(cls, data: BytesIO):
         size = cls.size
-        # noinspection PyTypeChecker
-        if data.tell() + size > data.getbuffer().nbytes:
-            raise ValueError("incorrect length")
         self = cls(data.read(size))
         return self
 
@@ -144,8 +139,6 @@ class Field(Serializable, Double, Sub, Square, Div, Sqrt, Compare, Pow, Inv, Neg
 
     @classmethod
     def load(cls, data: BytesIO):
-        if data.tell() + 32 > data.getbuffer().nbytes:
-            raise ValueError("incorrect length")
         data_ = int.from_bytes(data.read(32), "little")
         return cls(data_)
 
@@ -226,8 +219,6 @@ class Group(Serializable, Add, Sub, Mul, Neg, Cast):
 
     @classmethod
     def load(cls, data: BytesIO):
-        if data.tell() + 32 > data.getbuffer().nbytes:
-            raise ValueError("incorrect length")
         data_ = int.from_bytes(data.read(32), "little")
         return cls(data_)
 
@@ -274,8 +265,6 @@ class Scalar(Serializable, Add, Sub, Mul, Compare, Cast):
 
     @classmethod
     def load(cls, data: BytesIO):
-        if data.tell() + 32 > data.getbuffer().nbytes:
-            raise ValueError("incorrect length")
         data_ = int.from_bytes(data.read(32), "little")
         return cls(data_)
 
@@ -328,8 +317,6 @@ class Fq(Serializable):
 
     @classmethod
     def load(cls, data: BytesIO):
-        if data.tell() + 48 > data.getbuffer().nbytes:
-            raise ValueError("incorrect length")
         value = int.from_bytes(data.read(48), "little")
         return cls(value=value)
 
@@ -338,20 +325,23 @@ class Fq(Serializable):
 
 class G1Affine(Serializable):
 
-    def __init__(self, *, x: Fq, y: Fq, infinity: bool):
+    def __init__(self, *, x: Fq, y_is_positive: bool):
         self.x = x
-        self.y = y
-        self.infinity = infinity
+        self.y_is_positive = y_is_positive
 
     def dump(self) -> bytes:
-        return aleo.serialize_g1affine(self.x.dump(), self.y.dump(), self.infinity)
+        res = bytearray(self.x.dump())
+        res[-1] |= self.y_is_positive << 7
+        return bytes(res)
 
     @classmethod
     def load(cls, data: BytesIO):
-        x, y, infinity = aleo.deserialize_g1affine(data.read(48))
-        x = Fq.load(BytesIO(bytes(x)))
-        y = Fq.load(BytesIO(bytes(y)))
-        return cls(x=x, y=y, infinity=infinity)
+        data_ = bytearray(data.read(48))
+        y_is_positive = bool(data_[-1] >> 7)
+        data_[-1] &= 0x7f
+        x = Fq.load(BytesIO(data_))
+        return cls(x=x, y_is_positive=y_is_positive)
+
 
 class Fq2(Serializable):
 

@@ -214,8 +214,6 @@ class IntEnumu8(Serializable, IntEnum, metaclass=ProtocolEnumMeta):
 
     @classmethod
     def load(cls, data: BytesIO):
-        if data.tell() >= data.getbuffer().nbytes:
-            raise ValueError("incorrect length")
         self = cls(struct.unpack("<B", data.read(1))[0])
         return self
 
@@ -227,8 +225,6 @@ class IntEnumu16(Serializable, IntEnum, metaclass=ProtocolEnumMeta):
 
     @classmethod
     def load(cls, data: BytesIO):
-        if data.tell() + 2 > data.getbuffer().nbytes:
-            raise ValueError("incorrect length")
         self = cls(struct.unpack("<H", data.read(2))[0])
         return self
 
@@ -240,8 +236,6 @@ class IntEnumu32(Serializable, IntEnum, metaclass=ProtocolEnumMeta):
 
     @classmethod
     def load(cls, data: BytesIO):
-        if data.tell() + 4 > data.getbuffer().nbytes:
-            raise ValueError("incorrect length")
         self = cls(struct.unpack("<I", data.read(4))[0])
         return self
 
@@ -428,6 +422,7 @@ class i128(Int, AbsWrapped, Neg):
     def __neg__(self):
         return i128(-int(self))
 
+from line_profiler import profile
 
 class bool_(Sized, Serializable, And, Or, Not, Xor, Nand, Nor):
 
@@ -440,8 +435,9 @@ class bool_(Sized, Serializable, And, Or, Not, Xor, Nand, Nor):
         return struct.pack("<B", 1 if self else 0)
 
     @classmethod
+    @profile
     def load(cls, data: BytesIO):
-        value = struct.unpack("<B", data.read(1))[0]
+        value = data.read(1)[0]
         if value == 0:
             value = False
         elif value == 1:
