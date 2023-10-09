@@ -1,6 +1,8 @@
 import os
 import time
 
+import psycopg
+
 from aleo_types import *
 from db import Database
 from disasm.aleo import disasm_instruction, disasm_command
@@ -13,6 +15,11 @@ async def mapping_cache_read(db: Database, mapping_id: Field) -> MappingCacheDic
     print(f"Reading mapping cache {mapping_id}")
     return await db.get_mapping_cache(str(mapping_id))
 
+async def mapping_cache_read_with_cur(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]], mapping_id: Field
+                                      ) -> MappingCacheDict:
+    print(f"Reading mapping cache {mapping_id}")
+    return await db.get_mapping_cache_with_cur(cur, str(mapping_id))
+
 class ExecuteError(Exception):
     def __init__(self, message: str, exception: Optional[Exception], instruction: str):
         super().__init__(message)
@@ -20,7 +27,8 @@ class ExecuteError(Exception):
         self.instruction = instruction
 
 
-async def execute_finalizer(db: Database, finalize_state: FinalizeState, transition_id: TransitionID, program: Program,
+async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]], finalize_state: FinalizeState,
+                            transition_id: TransitionID, program: Program,
                             function_name: Identifier, inputs: list[Value],
                             mapping_cache: Optional[dict[Field, MappingCacheDict]],
                             allow_state_change: bool) -> list[dict[str, Any]]:
@@ -66,7 +74,7 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
         elif isinstance(c, ContainsCommand):
             mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(c.mapping)))
             if mapping_cache is not None and mapping_id not in mapping_cache:
-                mapping_cache[mapping_id] = await mapping_cache_read(db, mapping_id)
+                mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, mapping_id)
             key = load_plaintext_from_operand(c.key, registers, finalize_state)
             key_id = Field.loads(aleo.get_key_id(str(mapping_id), key.dump()))
             if mapping_cache:
@@ -88,7 +96,7 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
         elif isinstance(c, GetCommand | GetOrUseCommand):
             mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(c.mapping)))
             if mapping_cache is not None and mapping_id not in mapping_cache:
-                mapping_cache[mapping_id] = await mapping_cache_read(db, mapping_id)
+                mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, mapping_id)
             key = load_plaintext_from_operand(c.key, registers, finalize_state)
             key_id = Field.loads(aleo.get_key_id(str(mapping_id), key.dump()))
             if mapping_cache:
@@ -119,7 +127,7 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
         elif isinstance(c, SetCommand):
             mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(c.mapping)))
             if mapping_cache is not None and mapping_id not in mapping_cache:
-                mapping_cache[mapping_id] = await mapping_cache_read(db, mapping_id)
+                mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, mapping_id)
             key = load_plaintext_from_operand(c.key, registers, finalize_state)
             value = PlaintextValue(plaintext=load_plaintext_from_operand(c.value, registers, finalize_state))
             key_id = Field.loads(aleo.get_key_id(str(mapping_id), key.dump()))
@@ -161,6 +169,7 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
                 "mapping": c.mapping,
                 "key": key,
                 "value": value,
+                "height": finalize_state.block_height,
             })
 
         elif isinstance(c, RandChaChaCommand):
@@ -187,7 +196,7 @@ async def execute_finalizer(db: Database, finalize_state: FinalizeState, transit
         elif isinstance(c, RemoveCommand):
             mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(c.mapping)))
             if mapping_cache is not None and mapping_id not in mapping_cache:
-                mapping_cache[mapping_id] = await mapping_cache_read(db, mapping_id)
+                mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, mapping_id)
             key = load_plaintext_from_operand(c.key, registers, finalize_state)
             key_id = Field.loads(aleo.get_key_id(str(mapping_id), key.dump()))
             if mapping_cache:

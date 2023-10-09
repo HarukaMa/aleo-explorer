@@ -57,8 +57,9 @@ def _load_input_from_arguments(arguments: list[Argument]) -> list[Value]:
             raise NotImplementedError
     return inputs
 
-async def finalize_execute(db: Database, finalize_state: FinalizeState, confirmed_transaction: ConfirmedTransaction,
-                           mapping_cache: dict[Field, MappingCacheDict]) -> tuple[list[FinalizeOperation], list[dict[str, Any]], Optional[str]]:
+async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]], finalize_state: FinalizeState,
+                           confirmed_transaction: ConfirmedTransaction, mapping_cache: dict[Field, MappingCacheDict]
+                           ) -> tuple[list[FinalizeOperation], list[dict[str, Any]], Optional[str]]:
     if isinstance(confirmed_transaction, AcceptedExecute):
         transaction = confirmed_transaction.transaction
         if not isinstance(transaction, ExecuteTransaction):
@@ -87,13 +88,13 @@ async def finalize_execute(db: Database, finalize_state: FinalizeState, confirme
             if future_option.value is None:
                 raise RuntimeError("invalid future is None")
             # noinspection PyTypeChecker
-            future: Future = future_option.value
+            future = future_option.value
             program = await _load_program(db, str(future.program_id))
 
             inputs: list[Value] = _load_input_from_arguments(future.arguments)
             try:
                 operations.extend(
-                    await execute_finalizer(db, finalize_state, transition.id, program, future.function_name, inputs, mapping_cache, allow_state_change)
+                    await execute_finalizer(db, cur, finalize_state, transition.id, program, future.function_name, inputs, mapping_cache, allow_state_change)
                 )
             except ExecuteError as e:
                 reject_reason = f"execute error: {e}, at transition #{index}, instruction \"{e.instruction}\""
@@ -112,7 +113,7 @@ async def finalize_execute(db: Database, finalize_state: FinalizeState, confirme
 
             inputs: list[Value] = _load_input_from_arguments(future.arguments)
             operations.extend(
-                await execute_finalizer(db, finalize_state, transition.id, program, future.function_name, inputs, mapping_cache, allow_state_change)
+                await execute_finalizer(db, cur, finalize_state, transition.id, program, future.function_name, inputs, mapping_cache, allow_state_change)
             )
     if isinstance(confirmed_transaction, RejectedExecute):
         if reject_reason is None:
@@ -128,7 +129,7 @@ async def finalize_block(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]],
         if confirmed_transaction.type in [CTType.AcceptedDeploy, CTType.RejectedDeploy]:
             expected_operations, operations, reject_reason = await finalize_deploy(confirmed_transaction)
         elif confirmed_transaction.type in [CTType.AcceptedExecute, CTType.RejectedExecute]:
-            expected_operations, operations, reject_reason = await finalize_execute(db, finalize_state, confirmed_transaction, global_mapping_cache)
+            expected_operations, operations, reject_reason = await finalize_execute(db, cur, finalize_state, confirmed_transaction, global_mapping_cache)
         else:
             raise NotImplementedError
 
@@ -171,11 +172,11 @@ async def execute_operations(db: Database, cur: psycopg.AsyncCursor[dict[str, An
                 value_id = operation["value_id"]
                 key = operation["key"]
                 value = operation["value"]
-                await db.update_mapping_key_value(cur, str(mapping_id), index, str(key_id), str(value_id), key.dump(), value.dump())
+                await db.update_mapping_key_value(cur, str(mapping_id), index, str(key_id), str(value_id), key.dump(), value.dump(), operation["height"])
             case FinalizeOperation.Type.RemoveKeyValue:
                 mapping_id = operation["mapping_id"]
                 index = operation["index"]
-                await db.remove_mapping_key_value(cur, str(mapping_id), index)
+                await db.remove_mapping_key_value(cur, str(mapping_id), index, operation["height"])
             case _:
                 raise NotImplementedError
 

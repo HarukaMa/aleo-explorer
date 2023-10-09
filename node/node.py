@@ -254,7 +254,16 @@ class Node:
         ping = Ping(
             version=Testnet3.version,
             node_type=NodeType.Client,
-            block_locators=Option[BlockLocators](None)
+            block_locators=Option[BlockLocators](
+                BlockLocators(
+                    recents=dict[u32, BlockHash]({
+                        u32(): await self.explorer_request(explorer.Request.GetBlockHashByHeight(0)),
+                    }),
+                    checkpoints=dict[u32, BlockHash]({
+                        u32(): await self.explorer_request(explorer.Request.GetBlockHashByHeight(0)),
+                    }),
+                )
+            )
         )
         await self.send_message(ping)
 

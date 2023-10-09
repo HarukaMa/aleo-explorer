@@ -115,6 +115,17 @@ CREATE TYPE explorer.transition_data_type AS ENUM (
 
 
 --
+-- Name: transmission_id_type; Type: TYPE; Schema: explorer; Owner: -
+--
+
+CREATE TYPE explorer.transmission_id_type AS ENUM (
+    'Ratification',
+    'Solution',
+    'Transaction'
+);
+
+
+--
 -- Name: get_block_target_sum(bigint); Type: FUNCTION; Schema: explorer; Owner: -
 --
 
@@ -228,8 +239,6 @@ ALTER SEQUENCE explorer.block_id_seq OWNED BY explorer.block.id;
 CREATE TABLE explorer.coinbase_solution (
     id integer NOT NULL,
     block_id integer NOT NULL,
-    proof_x text NOT NULL,
-    proof_y_positive boolean NOT NULL,
     target_sum numeric(20,0) DEFAULT 0 NOT NULL
 );
 
@@ -260,9 +269,9 @@ ALTER SEQUENCE explorer.coinbase_solution_id_seq OWNED BY explorer.coinbase_solu
 
 CREATE TABLE explorer.committee_history (
     id integer NOT NULL,
-    height bigint,
-    starting_round numeric(20,0),
-    total_stake numeric(20,0)
+    height bigint NOT NULL,
+    starting_round numeric(20,0) NOT NULL,
+    total_stake numeric(20,0) NOT NULL
 );
 
 
@@ -364,7 +373,8 @@ CREATE TABLE explorer.dag_vertex (
     batch_id text NOT NULL,
     author text NOT NULL,
     "timestamp" bigint NOT NULL,
-    author_signature text NOT NULL
+    author_signature text NOT NULL,
+    index integer NOT NULL
 );
 
 
@@ -375,7 +385,8 @@ CREATE TABLE explorer.dag_vertex (
 CREATE TABLE explorer.dag_vertex_adjacency (
     id bigint NOT NULL,
     vertex_id bigint NOT NULL,
-    previous_vertex_id bigint NOT NULL
+    previous_vertex_id bigint NOT NULL,
+    index integer NOT NULL
 );
 
 
@@ -426,7 +437,8 @@ CREATE TABLE explorer.dag_vertex_signature (
     vertex_id bigint NOT NULL,
     signature text NOT NULL,
     signature_address text NOT NULL,
-    "timestamp" bigint NOT NULL
+    "timestamp" bigint NOT NULL,
+    index integer NOT NULL
 );
 
 
@@ -447,6 +459,39 @@ CREATE SEQUENCE explorer.dag_vertex_signature_id_seq
 --
 
 ALTER SEQUENCE explorer.dag_vertex_signature_id_seq OWNED BY explorer.dag_vertex_signature.id;
+
+
+--
+-- Name: dag_vertex_transmission_id; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.dag_vertex_transmission_id (
+    id bigint NOT NULL,
+    vertex_id bigint NOT NULL,
+    type explorer.transmission_id_type NOT NULL,
+    index integer NOT NULL,
+    commitment text,
+    transaction_id text
+);
+
+
+--
+-- Name: dag_vertex_transmission_id_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.dag_vertex_transmission_id_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: dag_vertex_transmission_id_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.dag_vertex_transmission_id_id_seq OWNED BY explorer.dag_vertex_transmission_id.id;
 
 
 --
@@ -551,7 +596,8 @@ ALTER SEQUENCE explorer.feedback_id_seq OWNED BY explorer.feedback.id;
 CREATE TABLE explorer.finalize_operation (
     id integer NOT NULL,
     confirmed_transaction_id integer NOT NULL,
-    type explorer.finalize_operation_type NOT NULL
+    type explorer.finalize_operation_type NOT NULL,
+    index integer NOT NULL
 );
 
 
@@ -816,6 +862,37 @@ CREATE TABLE explorer.mapping (
 
 
 --
+-- Name: mapping_bonded_history; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.mapping_bonded_history (
+    id integer NOT NULL,
+    height bigint NOT NULL,
+    content jsonb NOT NULL
+);
+
+
+--
+-- Name: mapping_bonded_history_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.mapping_bonded_history_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: mapping_bonded_history_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.mapping_bonded_history_id_seq OWNED BY explorer.mapping_bonded_history.id;
+
+
+--
 -- Name: mapping_history; Type: TABLE; Schema: explorer; Owner: -
 --
 
@@ -823,7 +900,7 @@ CREATE TABLE explorer.mapping_history (
     id bigint NOT NULL,
     mapping_id integer NOT NULL,
     height integer NOT NULL,
-    key_id text,
+    key_id text NOT NULL,
     value bytea,
     index integer NOT NULL
 );
@@ -869,10 +946,10 @@ ALTER SEQUENCE explorer.mapping_id_seq OWNED BY explorer.mapping.id;
 
 
 --
--- Name: partial_solution; Type: TABLE; Schema: explorer; Owner: -
+-- Name: prover_solution; Type: TABLE; Schema: explorer; Owner: -
 --
 
-CREATE TABLE explorer.partial_solution (
+CREATE TABLE explorer.prover_solution (
     id bigint NOT NULL,
     coinbase_solution_id integer NOT NULL,
     dag_vertex_id bigint NOT NULL,
@@ -880,7 +957,10 @@ CREATE TABLE explorer.partial_solution (
     nonce numeric(20,0) NOT NULL,
     commitment text NOT NULL,
     target numeric(20,0) NOT NULL,
-    reward integer NOT NULL
+    reward integer NOT NULL,
+    proof_x text NOT NULL,
+    proof_y text NOT NULL,
+    proof_infinity boolean NOT NULL
 );
 
 
@@ -900,7 +980,7 @@ CREATE SEQUENCE explorer.partial_solution_id_seq
 -- Name: partial_solution_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
 --
 
-ALTER SEQUENCE explorer.partial_solution_id_seq OWNED BY explorer.partial_solution.id;
+ALTER SEQUENCE explorer.partial_solution_id_seq OWNED BY explorer.prover_solution.id;
 
 
 --
@@ -1592,6 +1672,13 @@ ALTER TABLE ONLY explorer.dag_vertex_signature ALTER COLUMN id SET DEFAULT nextv
 
 
 --
+-- Name: dag_vertex_transmission_id id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.dag_vertex_transmission_id ALTER COLUMN id SET DEFAULT nextval('explorer.dag_vertex_transmission_id_id_seq'::regclass);
+
+
+--
 -- Name: fee id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -1669,17 +1756,17 @@ ALTER TABLE ONLY explorer.mapping ALTER COLUMN id SET DEFAULT nextval('explorer.
 
 
 --
+-- Name: mapping_bonded_history id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping_bonded_history ALTER COLUMN id SET DEFAULT nextval('explorer.mapping_bonded_history_id_seq'::regclass);
+
+
+--
 -- Name: mapping_history id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
 ALTER TABLE ONLY explorer.mapping_history ALTER COLUMN id SET DEFAULT nextval('explorer.mapping_history_id_seq'::regclass);
-
-
---
--- Name: partial_solution id; Type: DEFAULT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.partial_solution ALTER COLUMN id SET DEFAULT nextval('explorer.partial_solution_id_seq'::regclass);
 
 
 --
@@ -1694,6 +1781,13 @@ ALTER TABLE ONLY explorer.program ALTER COLUMN id SET DEFAULT nextval('explorer.
 --
 
 ALTER TABLE ONLY explorer.program_function ALTER COLUMN id SET DEFAULT nextval('explorer.program_function_id_seq'::regclass);
+
+
+--
+-- Name: prover_solution id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.prover_solution ALTER COLUMN id SET DEFAULT nextval('explorer.partial_solution_id_seq'::regclass);
 
 
 --
@@ -1888,6 +1982,14 @@ ALTER TABLE ONLY explorer.dag_vertex_signature
 
 
 --
+-- Name: dag_vertex_transmission_id dag_vertex_transmission_id_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.dag_vertex_transmission_id
+    ADD CONSTRAINT dag_vertex_transmission_id_pk PRIMARY KEY (id);
+
+
+--
 -- Name: fee fee_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -1968,6 +2070,14 @@ ALTER TABLE ONLY explorer.leaderboard
 
 
 --
+-- Name: mapping_bonded_history mapping_bonded_history_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping_bonded_history
+    ADD CONSTRAINT mapping_bonded_history_pk PRIMARY KEY (id);
+
+
+--
 -- Name: mapping_history mapping_history_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -2000,10 +2110,10 @@ ALTER TABLE ONLY explorer.mapping
 
 
 --
--- Name: partial_solution partial_solution_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+-- Name: prover_solution partial_solution_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
-ALTER TABLE ONLY explorer.partial_solution
+ALTER TABLE ONLY explorer.prover_solution
     ADD CONSTRAINT partial_solution_pk PRIMARY KEY (id);
 
 
@@ -2259,6 +2369,13 @@ CREATE INDEX dag_vertex_adjacency_end_vertex_index ON explorer.dag_vertex_adjace
 
 
 --
+-- Name: dag_vertex_adjacency_index_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX dag_vertex_adjacency_index_index ON explorer.dag_vertex_adjacency USING btree (index);
+
+
+--
 -- Name: dag_vertex_adjacency_start_vertex_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -2287,10 +2404,24 @@ CREATE UNIQUE INDEX dag_vertex_batch_certificate_id_uindex ON explorer.dag_verte
 
 
 --
+-- Name: dag_vertex_index_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX dag_vertex_index_index ON explorer.dag_vertex USING btree (index);
+
+
+--
 -- Name: dag_vertex_round_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
 CREATE INDEX dag_vertex_round_index ON explorer.dag_vertex USING btree (round);
+
+
+--
+-- Name: dag_vertex_signature_index_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX dag_vertex_signature_index_index ON explorer.dag_vertex_signature USING btree (index);
 
 
 --
@@ -2308,6 +2439,20 @@ CREATE INDEX dag_vertex_signature_vertex_id_index ON explorer.dag_vertex_signatu
 
 
 --
+-- Name: dag_vertex_transmission_id_index_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX dag_vertex_transmission_id_index_index ON explorer.dag_vertex_transmission_id USING btree (index);
+
+
+--
+-- Name: dag_vertex_transmission_id_vertex_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX dag_vertex_transmission_id_vertex_id_index ON explorer.dag_vertex_transmission_id USING btree (vertex_id);
+
+
+--
 -- Name: fee_transaction_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -2319,6 +2464,13 @@ CREATE INDEX fee_transaction_id_index ON explorer.fee USING btree (transaction_i
 --
 
 CREATE INDEX finalize_operation_confirmed_transaction_id_index ON explorer.finalize_operation USING btree (confirmed_transaction_id);
+
+
+--
+-- Name: finalize_operation_index_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX finalize_operation_index_index ON explorer.finalize_operation USING btree (index);
 
 
 --
@@ -2462,6 +2614,20 @@ CREATE INDEX "mapping_(content->'index')_index" ON explorer.mapping USING gin ((
 
 
 --
+-- Name: mapping_bonded_history_content_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX mapping_bonded_history_content_index ON explorer.mapping_bonded_history USING gin (content);
+
+
+--
+-- Name: mapping_bonded_history_height_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX mapping_bonded_history_height_index ON explorer.mapping_bonded_history USING btree (height);
+
+
+--
 -- Name: mapping_content_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -2493,21 +2659,21 @@ CREATE INDEX mapping_history_mapping_id_index ON explorer.mapping_history USING 
 -- Name: partial_solution_address_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-CREATE INDEX partial_solution_address_index ON explorer.partial_solution USING btree (address text_pattern_ops);
+CREATE INDEX partial_solution_address_index ON explorer.prover_solution USING btree (address text_pattern_ops);
 
 
 --
 -- Name: partial_solution_coinbase_solution_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-CREATE INDEX partial_solution_coinbase_solution_id_index ON explorer.partial_solution USING btree (coinbase_solution_id);
+CREATE INDEX partial_solution_coinbase_solution_id_index ON explorer.prover_solution USING btree (coinbase_solution_id);
 
 
 --
 -- Name: partial_solution_dag_vertex_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-CREATE INDEX partial_solution_dag_vertex_id_index ON explorer.partial_solution USING btree (dag_vertex_id);
+CREATE INDEX partial_solution_dag_vertex_id_index ON explorer.prover_solution USING btree (dag_vertex_id);
 
 
 --
@@ -2820,6 +2986,14 @@ ALTER TABLE ONLY explorer.dag_vertex_signature
 
 
 --
+-- Name: dag_vertex_transmission_id dag_vertex_transmission_id_dag_vertex_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.dag_vertex_transmission_id
+    ADD CONSTRAINT dag_vertex_transmission_id_dag_vertex_id_fk FOREIGN KEY (vertex_id) REFERENCES explorer.dag_vertex(id);
+
+
+--
 -- Name: fee fee_transaction_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -2908,18 +3082,18 @@ ALTER TABLE ONLY explorer.mapping_history
 
 
 --
--- Name: partial_solution partial_solution_coinbase_solution_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+-- Name: prover_solution partial_solution_coinbase_solution_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
-ALTER TABLE ONLY explorer.partial_solution
+ALTER TABLE ONLY explorer.prover_solution
     ADD CONSTRAINT partial_solution_coinbase_solution_id_fk FOREIGN KEY (coinbase_solution_id) REFERENCES explorer.coinbase_solution(id);
 
 
 --
--- Name: partial_solution partial_solution_dag_vertex_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+-- Name: prover_solution partial_solution_dag_vertex_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
-ALTER TABLE ONLY explorer.partial_solution
+ALTER TABLE ONLY explorer.prover_solution
     ADD CONSTRAINT partial_solution_dag_vertex_id_fk FOREIGN KEY (dag_vertex_id) REFERENCES explorer.dag_vertex(id);
 
 

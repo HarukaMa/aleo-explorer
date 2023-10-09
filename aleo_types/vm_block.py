@@ -2880,7 +2880,6 @@ class PartialSolution(Serializable):
 
 PuzzleProof = KZGProof
 
-
 class ProverSolution(Serializable):
 
     def __init__(self, *, partial_solution: PartialSolution, proof: PuzzleProof):
@@ -2899,18 +2898,16 @@ class ProverSolution(Serializable):
 
 class CoinbaseSolution(Serializable):
 
-    def __init__(self, *, partial_solutions: Vec[PartialSolution, u32], proof: PuzzleProof):
-        self.partial_solutions = partial_solutions
-        self.proof = proof
+    def __init__(self, *, solutions: Vec[ProverSolution, u16]):
+        self.solutions = solutions
 
     def dump(self) -> bytes:
-        return self.partial_solutions.dump() + self.proof.dump()
+        return self.solutions.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
-        partial_solutions = Vec[PartialSolution, u32].load(data)
-        proof = PuzzleProof.load(data)
-        return cls(partial_solutions=partial_solutions, proof=proof)
+        solutions = Vec[ProverSolution, u16].load(data)
+        return cls(solutions=solutions)
 
 
 class Ratify(EnumBaseSerialize, RustEnum, Serializable):
@@ -3179,7 +3176,7 @@ class BatchCertificate(Serializable):
 class Subdag(Serializable):
     version = u8(1)
 
-    def __init__(self, *, subdag: dict[u32, Vec[BatchCertificate, u32]]):
+    def __init__(self, *, subdag: dict[u64, Vec[BatchCertificate, u32]]):
         self.subdag = subdag
 
     def dump(self) -> bytes:
@@ -3196,7 +3193,7 @@ class Subdag(Serializable):
             raise ValueError("invalid subdag version")
         subdag = {}
         for _ in range(u32.load(data)):
-            round_ = u32.load(data)
+            round_ = u64.load(data)
             certificates = Vec[BatchCertificate, u32].load(data)
             subdag[round_] = certificates
         return cls(subdag=subdag)
@@ -3257,17 +3254,20 @@ class Block(Serializable):
         anchor_time = 25
         block_time = 10
         anchor_height = anchor_time // block_time
-        combined_proof_target = int(self.header.metadata.cumulative_proof_target)
+        if self.coinbase.value is None:
+            combined_proof_target = 0
+        else:
+            combined_proof_target = sum(s.partial_solution.commitment.to_target() for s in self.coinbase.value.solutions)
 
         remaining_coinbase_target = max(0, last_coinbase_target - last_cumulative_proof_target)
         remaining_proof_target = min(combined_proof_target, remaining_coinbase_target)
 
-        block_height_at_year_10 = 31536000 // 25 * 10
+        block_height_at_year_10 = 31536000 // 10 * 10
         remaining_blocks = max(0, block_height_at_year_10 - self.header.metadata.height)
         anchor_block_reward = 2 * starting_supply * anchor_height * remaining_blocks // (block_height_at_year_10 * (block_height_at_year_10 + 1))
         coinbase_reward = anchor_block_reward * remaining_proof_target // last_coinbase_target
 
-        block_height_at_year_1 = 31536000 // 25
+        block_height_at_year_1 = 31536000 // 10
         annual_reward = starting_supply // 1000 * 50
         block_reward = annual_reward // block_height_at_year_1 + coinbase_reward // 2
 

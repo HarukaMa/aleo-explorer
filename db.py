@@ -82,6 +82,53 @@ class Database:
                     raise NotImplementedError
 
     @staticmethod
+    async def _load_future(conn: psycopg.AsyncConnection[dict[str, Any]], transition_output_db_id: Optional[int],
+                           future_argument_db_id: Optional[int]) -> Optional[Future]:
+        async with conn.cursor() as cur:
+            if transition_output_db_id:
+                await cur.execute(
+                    "SELECT id, program_id, function_name FROM future WHERE type = 'Output' AND "
+                    "transition_output_future_id = %s",
+                    (transition_output_db_id,)
+                )
+            elif future_argument_db_id:
+                await cur.execute(
+                    "SELECT id, program_id, function_name FROM future WHERE type = 'Argument' AND "
+                    "future_argument_id = %s",
+                    (future_argument_db_id,)
+                )
+            else:
+                raise ValueError("transition_output_db_id or future_argument_db_id must be set")
+            if (res := await cur.fetchone()) is None:
+                if transition_output_db_id:
+                    return None
+                raise RuntimeError("failed to insert row into database")
+            future_db_id = res["id"]
+            program_id = res["program_id"]
+            function_name = res["function_name"]
+            await cur.execute(
+                "SELECT type, plaintext FROM future_argument WHERE future_id = %s",
+                (future_db_id,)
+            )
+            arguments: list[Argument] = []
+            for res in await cur.fetchall():
+                if res["type"] == "Plaintext":
+                    arguments.append(PlaintextArgument(
+                        plaintext=Plaintext.load(BytesIO(res["plaintext"]))
+                    ))
+                elif res["type"] == "Argument":
+                    arguments.append(FutureArgument(
+                        future=await Database._load_future(conn, None, res["id"]) # type: ignore
+                    ))
+                else:
+                    raise NotImplementedError
+            return Future(
+                program_id=ProgramID.loads(program_id),
+                function_name=Identifier.loads(function_name),
+                arguments=Vec[Argument, u8](arguments)
+            )
+
+    @staticmethod
     async def _insert_transition(conn: psycopg.AsyncConnection[dict[str, Any]], exe_tx_db_id: Optional[int], fee_db_id: Optional[int],
                                  transition: Transition, ts_index: int):
         async with conn.cursor() as cur:
@@ -262,7 +309,8 @@ class Database:
     @staticmethod
     async def _update_committee_bonded_map(cur: psycopg.AsyncCursor[dict[str, Any]],
                                            committee_members: dict[Address, tuple[u64, bool_]],
-                                           stakers: dict[Address, tuple[Address, u64]]):
+                                           stakers: dict[Address, tuple[Address, u64]],
+                                           height: int):
         committee_mapping_id = Field.loads(aleo.get_mapping_id("credits.aleo", "committee"))
         bonded_mapping_id = Field.loads(aleo.get_mapping_id("credits.aleo", "bonded"))
 
@@ -325,8 +373,10 @@ class Database:
             "UPDATE mapping SET content = %s WHERE mapping_id = %s",
             (Jsonb(bonded_mapping), str(bonded_mapping_id))
         )
-
-
+        await cur.execute(
+            "INSERT INTO mapping_bonded_history (height, content) VALUES (%s, %s)",
+            (height, Jsonb(bonded_mapping))
+        )
 
     @staticmethod
     async def _save_committee_history(cur: psycopg.AsyncCursor[dict[str, Any]], height: int, committee: Committee):
@@ -353,7 +403,7 @@ class Database:
         for validator, amount, _ in committee.members:
             stakers[validator] = validator, amount
         committee_members = {address: (amount, is_open) for address, amount, is_open in committee.members}
-        await Database._update_committee_bonded_map(cur, committee_members, stakers)
+        await Database._update_committee_bonded_map(cur, committee_members, stakers, 0)
 
         account_mapping_id = Field.loads(aleo.get_mapping_id("credits.aleo", "account"))
         public_balances = ratification.public_balances
@@ -372,17 +422,17 @@ class Database:
                 "mapping": "account",
                 "key": key,
                 "value": value,
+                "height": 0,
             })
         from interpreter.interpreter import execute_operations
         await execute_operations(self, cur, operations)
-        await cur.execute("COMMIT")
 
     @staticmethod
     async def _get_committee_mapping(cur: psycopg.AsyncCursor[dict[str, Any]]) -> dict[Address, tuple[u64, bool_]]:
         committee_mapping_id = Field.loads(aleo.get_mapping_id("credits.aleo", "committee"))
         await cur.execute(
             "SELECT content FROM mapping m WHERE m.mapping_id = %s",
-            (committee_mapping_id,)
+            (str(committee_mapping_id),)
         )
         data = await cur.fetchone()
         if data is None:
@@ -419,7 +469,7 @@ class Database:
         bonded_mapping_id = Field.loads(aleo.get_mapping_id("credits.aleo", "bonded"))
         await cur.execute(
             "SELECT content FROM mapping m WHERE m.mapping_id = %s",
-            (bonded_mapping_id,)
+            (str(bonded_mapping_id),)
         )
         data = await cur.fetchone()
         if data is None:
@@ -473,21 +523,108 @@ class Database:
 
 
     @staticmethod
-    async def _post_ratify(cur: psycopg.AsyncCursor[dict[str, Any]], height: int, ratifications: list[Ratify]):
-        committee_mapping_id = Field.loads(aleo.get_mapping_id("credits.aleo", "committee"))
-        bonded_mapping_id = Field.loads(aleo.get_mapping_id("credits.aleo", "bonded"))
+    def _stake_rewards(committee_members: dict[Address, tuple[u64, bool_]],
+                       stakers: dict[Address, tuple[Address, u64]], block_reward: u64):
+        total_stake = sum(x[0] for x in committee_members.values())
+        if not stakers or total_stake == 0 or block_reward == 0:
+            return stakers
 
+        new_stakers: dict[Address, tuple[Address, u64]] = {}
+
+        for staker, (validator, stake) in stakers.items():
+            if committee_members[validator][0] > total_stake // 4:
+                new_stakers[staker] = validator, stake
+                continue
+            if stake < 10_000_000:
+                new_stakers[staker] = validator, stake
+                continue
+
+            new_stake = int(block_reward) * stake // total_stake + stake
+            new_stakers[staker] = validator, u64(new_stake)
+
+        return new_stakers
+
+    @staticmethod
+    def _next_committee_members(committee_members: dict[Address, tuple[u64, bool_]],
+                                stakers: dict[Address, tuple[Address, u64]]) -> dict[Address, tuple[u64, bool_]]:
+        validators: dict[Address, u64] = defaultdict(lambda: u64())
+        for _, (validator, amount) in stakers.items():
+            validators[validator] += amount # type: ignore[reportGeneralTypeIssues]
+        new_committee_members: dict[Address, tuple[u64, bool_]] = {}
+        for validator, amount in validators.items():
+            new_committee_members[validator] = amount, committee_members[validator][1]
+        return new_committee_members
+
+    async def _post_ratify(self, cur: psycopg.AsyncCursor[dict[str, Any]], height: int, round_: int,
+                           ratifications: list[Ratify], address_puzzle_rewards: dict[str, int]):
         for ratification in ratifications:
             if isinstance(ratification, BlockRewardRatify):
                 committee_members = await Database._get_committee_mapping(cur)
                 stakers = await Database._get_bonded_mapping(cur)
 
                 Database._check_committee_staker_match(committee_members, stakers)
-                # TODO continue
-                raise NotImplementedError
+
+                stakers = Database._stake_rewards(committee_members, stakers, ratification.amount)
+                committee_members = Database._next_committee_members(committee_members, stakers)
+
+                await Database._update_committee_bonded_map(cur, committee_members, stakers, height)
+                await Database._save_committee_history(cur, height, Committee(
+                    starting_round=u64(round_),
+                    members=Vec[Tuple[Address, u64, bool_], u16]([
+                        Tuple[Address, u64, bool_]((address, amount, is_open)) for address, (amount, is_open) in committee_members.items()
+                    ]),
+                    total_stake=u64(sum(x[0] for x in committee_members.values()))
+                ))
             elif isinstance(ratification, PuzzleRewardRatify):
-                # TODO continue
-                raise NotImplementedError
+                if ratification.amount == 0:
+                    continue
+                account_mapping_id = Field.loads(aleo.get_mapping_id("credits.aleo", "account"))
+                await cur.execute(
+                    "SELECT content FROM mapping m WHERE m.mapping_id = %s",
+                    (str(account_mapping_id),)
+                )
+                data = await cur.fetchone()
+                if data is None:
+                    raise RuntimeError("missing current account data")
+                current_balances = data["content"]
+
+                operations: list[dict[str, Any]] = []
+                for address, amount in address_puzzle_rewards.items():
+                    key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=Address.loads(address)))
+                    key_id = Field.loads(aleo.get_key_id(str(account_mapping_id), key.dump()))
+                    new_index = len(current_balances)
+                    if str(key_id) not in current_balances:
+                        current_balance = u64()
+                        index = new_index
+                        new_index += 1
+                    else:
+                        current_balance_data = current_balances[str(key_id)]
+                        value = Value.load(BytesIO(bytes.fromhex(current_balance_data["value"])))
+                        if not isinstance(value, PlaintextValue):
+                            raise RuntimeError("invalid account value")
+                        plaintext = value.plaintext
+                        if not isinstance(plaintext, LiteralPlaintext) or not isinstance(plaintext.literal.primitive, u64):
+                            raise RuntimeError("invalid account value")
+                        current_balance = plaintext.literal.primitive
+                        index = current_balance_data["index"]
+                    new_value = current_balance + u64(amount)
+                    value = PlaintextValue(plaintext=LiteralPlaintext(literal=Literal(type_=Literal.Type.U64, primitive=new_value)))
+                    value_id = Field.loads(aleo.get_value_id(str(key_id), value.dump()))
+                    operations.append({
+                        "type": FinalizeOperation.Type.UpdateKeyValue,
+                        "mapping_id": account_mapping_id,
+                        "index": index,
+                        "key_id": key_id,
+                        "value_id": value_id,
+                        "mapping": "account",
+                        "key": key,
+                        "value": value,
+                        "height": height,
+                    })
+                from interpreter.interpreter import execute_operations
+                await execute_operations(self, cur, operations)
+
+
 
     async def _save_block(self, block: Block):
         async with self.pool.connection() as conn:
@@ -551,49 +688,70 @@ class Database:
                             authority_db_id = res["id"]
                             subdag = block.authority.subdag
                             for round_, certificates in subdag.subdag.items():
-                                for certificate in certificates:
+                                for index, certificate in enumerate(certificates):
                                     if round_ != certificate.batch_header.round:
                                         raise ValueError("invalid subdag round")
-                                    if certificate.batch_header.author != aleo.signature_to_address(str(certificate.batch_header.signature)):
+                                    if str(certificate.batch_header.author) != aleo.signature_to_address(str(certificate.batch_header.signature)):
                                         raise ValueError("invalid subdag author signature")
                                     await cur.execute(
                                         "INSERT INTO dag_vertex (authority_id, round, batch_certificate_id, batch_id, "
-                                        "author, timestamp, author_signature) "
-                                        "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                                        "author, timestamp, author_signature, index) "
+                                        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
                                         (authority_db_id, round_, str(certificate.certificate_id), str(certificate.batch_header.batch_id),
                                          str(certificate.batch_header.author), certificate.batch_header.timestamp,
-                                         str(certificate.batch_header.signature))
+                                         str(certificate.batch_header.signature), index)
                                     )
                                     if (res := await cur.fetchone()) is None:
                                         raise RuntimeError("failed to insert row into database")
                                     vertex_db_id = res["id"]
 
-                                    for signature, timestamp in certificate.signatures:
+                                    for sig_index, (signature, timestamp) in enumerate(certificate.signatures):
                                         await cur.execute(
-                                            "INSERT INTO dag_vertex_signature (vertex_id, signature, signature_address, timestamp) "
-                                            "VALUES (%s, %s, %s, %s)",
-                                            (vertex_db_id, str(signature), aleo.signature_to_address(str(signature)), timestamp)
+                                            "INSERT INTO dag_vertex_signature (vertex_id, signature, signature_address, timestamp, index) "
+                                            "VALUES (%s, %s, %s, %s, %s)",
+                                            (vertex_db_id, str(signature), aleo.signature_to_address(str(signature)), timestamp, sig_index)
                                         )
 
                                     prev_cert_ids = certificate.batch_header.previous_certificate_ids
                                     await cur.execute(
-                                        "SELECT id, batch_certificate_id FROM dag_vertex WHERE batch_certificate_id = ANY(%s::text)", (str(prev_cert_ids),)
+                                        "SELECT v.id, batch_certificate_id FROM dag_vertex v "
+                                        "JOIN UNNEST(%s::text[]) WITH ORDINALITY c(id, ord) ON v.batch_certificate_id = c.id "
+                                        "ORDER BY ord",
+                                        (list(map(str, prev_cert_ids)),)
                                     )
                                     res = await cur.fetchall()
                                     if len(res) != len(prev_cert_ids):
                                         raise RuntimeError("dag referenced unknown previous certificate")
                                     prev_vertex_db_ids = {x["batch_certificate_id"]: x["id"] for x in res}
-                                    for prev_cert_id in prev_cert_ids:
+                                    for prev_index, prev_cert_id in enumerate(prev_cert_ids):
                                         await cur.execute(
-                                            "INSERT INTO dag_vertex_adjacency (vertex_id, previous_vertex_id) VALUES (%s, %s)",
-                                            (vertex_db_id, prev_vertex_db_ids[str(prev_cert_id)])
+                                            "INSERT INTO dag_vertex_adjacency (vertex_id, previous_vertex_id, index) VALUES (%s, %s, %s)",
+                                            (vertex_db_id, prev_vertex_db_ids[str(prev_cert_id)], prev_index)
                                         )
 
-                                    for transmission_id in certificate.batch_header.transmission_ids:
+                                    for tid_index, transmission_id in enumerate(certificate.batch_header.transmission_ids):
                                         if isinstance(transmission_id, SolutionTransmissionID):
+                                            await cur.execute(
+                                                "INSERT INTO dag_vertex_transmission_id (vertex_id, type, index, commitment) "
+                                                "VALUES (%s, %s, %s, %s)",
+                                                (vertex_db_id, transmission_id.type.name, tid_index, str(transmission_id.id))
+                                            )
                                             dag_transmission_ids[0][str(transmission_id.id)] = vertex_db_id
                                         elif isinstance(transmission_id, TransactionTransmissionID):
+                                            await cur.execute(
+                                                "INSERT INTO dag_vertex_transmission_id (vertex_id, type, index, transaction_id) "
+                                                "VALUES (%s, %s, %s, %s)",
+                                                (vertex_db_id, transmission_id.type.name, tid_index, str(transmission_id.id))
+                                            )
                                             dag_transmission_ids[1][str(transmission_id.id)] = vertex_db_id
+                                        elif isinstance(transmission_id, RatificationTransmissionID):
+                                            await cur.execute(
+                                                "INSERT INTO dag_vertex_transmission_id (vertex_id, type, index) "
+                                                "VALUES (%s, %s, %s)",
+                                                (vertex_db_id, transmission_id.type.name, tid_index)
+                                            )
+                                        else:
+                                            raise NotImplementedError
 
 
                         for ct_index, confirmed_transaction in enumerate(block.transactions):
@@ -713,11 +871,11 @@ class Database:
                                     await self._insert_transition(conn, execute_transaction_db_id, None, transition, ts_index)
 
                             if isinstance(confirmed_transaction, (AcceptedDeploy, AcceptedExecute)):
-                                for finalize_operation in confirmed_transaction.finalize:
+                                for index, finalize_operation in enumerate(confirmed_transaction.finalize):
                                     await cur.execute(
-                                        "INSERT INTO finalize_operation (confirmed_transaction_id, type) "
-                                        "VALUES (%s, %s) RETURNING id",
-                                        (confirmed_transaction_db_id, finalize_operation.type.name)
+                                        "INSERT INTO finalize_operation (confirmed_transaction_id, type, index) "
+                                        "VALUES (%s, %s, %s) RETURNING id",
+                                        (confirmed_transaction_db_id, finalize_operation.type.name, index)
                                     )
                                     if (res := await cur.fetchone()) is None:
                                         raise RuntimeError("failed to insert row into database")
@@ -780,19 +938,21 @@ class Database:
                         address_puzzle_rewards: dict[str, int] = defaultdict(int)
 
                         if block.coinbase.value is not None:
-                            partial_solutions = list(block.coinbase.value.partial_solutions)
-                            solutions: list[tuple[PartialSolution, int, int]] = []
-                            partial_solutions_target = list(zip(partial_solutions,
-                                                    [partial_solution.commitment.to_target() for partial_solution in
-                                                     partial_solutions]))
-                            target_sum = sum(target for _, target in partial_solutions_target)
-                            for partial_solution, target in partial_solutions_target:
-                                solutions.append((partial_solution, target, puzzle_reward * target // target_sum))
+                            prover_solutions = block.coinbase.value.solutions
+                            solutions: list[tuple[ProverSolution, int, int]] = []
+                            prover_solutions_target = list(zip(
+                                prover_solutions,
+                                [prover_solution.partial_solution.commitment.to_target() for prover_solution
+                                 in prover_solutions]
+                            ))
+                            target_sum = sum(target for _, target in prover_solutions_target)
+                            for prover_solution, target in prover_solutions_target:
+                                solutions.append((prover_solution, target, puzzle_reward * target // target_sum))
 
                             await cur.execute(
-                                "INSERT INTO coinbase_solution (block_id, proof_x, proof_y_positive, target_sum) "
-                                "VALUES (%s, %s, %s, %s) RETURNING id",
-                                (block_db_id, str(block.coinbase.value.proof.w.x), block.coinbase.value.proof.w.flags, target_sum)
+                                "INSERT INTO coinbase_solution (block_id, target_sum) "
+                                "VALUES (%s, %s) RETURNING id",
+                                (block_db_id, target_sum)
                             )
                             if (res := await cur.fetchone()) is None:
                                 raise RuntimeError("failed to insert row into database")
@@ -804,12 +964,14 @@ class Database:
                                 current_total_credit = 0
                             else:
                                 current_total_credit = current_total_credit["total_credit"]
-                            copy_data: list[tuple[int, int, str, u64, str, int, int]] = []
-                            for partial_solution, target, reward in solutions:
+                            copy_data: list[tuple[int, int, str, u64, str, int, int, str, str, bool]] = []
+                            for prover_solution, target, reward in solutions:
+                                partial_solution = prover_solution.partial_solution
                                 dag_vertex_db_id = dag_transmission_ids[0][str(partial_solution.commitment)]
                                 copy_data.append(
                                     (dag_vertex_db_id, coinbase_solution_db_id, str(partial_solution.address), partial_solution.nonce,
-                                     str(partial_solution.commitment), partial_solution.commitment.to_target(), reward)
+                                     str(partial_solution.commitment), partial_solution.commitment.to_target(), reward,
+                                     str(prover_solution.proof.w.x), str(prover_solution.proof.w.y), prover_solution.proof.w.infinity)
                                 )
                                 if reward > 0:
                                     address_puzzle_rewards[str(partial_solution.address)] += reward
@@ -825,7 +987,7 @@ class Database:
                                                 (reward, str(partial_solution.address))
                                             )
                             if not os.environ.get("DEBUG_SKIP_COINBASE"):
-                                async with cur.copy("COPY partial_solution (dag_vertex_id, coinbase_solution_id, address, nonce, commitment, target, reward) FROM STDIN") as copy:
+                                async with cur.copy("COPY prover_solution (dag_vertex_id, coinbase_solution_id, address, nonce, commitment, target, reward, proof_x, proof_y, proof_infinity) FROM STDIN") as copy:
                                     for row in copy_data:
                                         await copy.write_row(row)
                                 if block.header.metadata.height >= 130888 and block.header.metadata.timestamp < 1675209600 and current_total_credit < 37_500_000_000_000:
@@ -834,7 +996,7 @@ class Database:
                                         (sum(reward for _, _, reward in solutions),)
                                     )
 
-                        await self._post_ratify(cur, block.height, block.ratifications)
+                        await self._post_ratify(cur, block.height, block.round, block.ratifications, address_puzzle_rewards)
 
                         await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseBlockAdded, block.header.metadata.height))
                     except Exception as e:
@@ -1011,8 +1173,17 @@ class Database:
                             commitment=Field.loads(transition_output_external_record["commitment"]),
                         ), transition_output["index"]))
                     case TransitionOutput.Type.Future.name:
-                        raise NotImplementedError
-                        # TODO implement
+                        await cur.execute(
+                            "SELECT * FROM transition_output_future WHERE transition_output_id = %s",
+                            (transition_output["id"],)
+                        )
+                        transition_output_future = await cur.fetchone()
+                        if transition_output_future is None:
+                            raise RuntimeError("database inconsistent")
+                        tos.append((FutureTransitionOutput(
+                            future_hash=Field.loads(transition_output_future["future_hash"]),
+                            future=Option[Future](await Database._load_future(conn, transition_output_future["id"], None))
+                        ), transition_output["index"]))
                     case _:
                         raise NotImplementedError
             tos.sort(key=lambda x: x[1])
@@ -1289,35 +1460,117 @@ class Database:
             coinbase_solution = await cur.fetchone()
             if coinbase_solution is not None:
                 await cur.execute(
-                    "SELECT * FROM partial_solution WHERE coinbase_solution_id = %s",
+                    "SELECT * FROM prover_solution WHERE coinbase_solution_id = %s",
                     (coinbase_solution["id"],)
                 )
-                partial_solutions = await cur.fetchall()
-                pss: list[PartialSolution] = []
-                for partial_solution in partial_solutions:
-                    pss.append(PartialSolution(
-                        address=Address.loads(partial_solution["address"]),
-                        nonce=u64(partial_solution["nonce"]),
-                        commitment=PuzzleCommitment.loads(partial_solution["commitment"]),
-                    ))
-                coinbase_solution = CoinbaseSolution(
-                    partial_solutions=Vec[PartialSolution, u32](pss),
-                    proof=KZGProof(
-                        w=G1Affine(
-                            x=Fq(value=int(coinbase_solution["proof_x"])),
-                            # This is very wrong
-                            flags=False,
+                prover_solutions = await cur.fetchall()
+                pss: list[ProverSolution] = []
+                for prover_solution in prover_solutions:
+                    pss.append(ProverSolution(
+                        partial_solution=PartialSolution(
+                            address=Address.loads(prover_solution["address"]),
+                            nonce=u64(prover_solution["nonce"]),
+                            commitment=PuzzleCommitment.loads(prover_solution["commitment"]),
                         ),
-                        random_v=Option[Field](None),
-                    )
-                )
+                        proof=KZGProof(
+                            w=G1Affine(
+                                x=Fq(value=int(prover_solution["proof_x"])),
+                                y=Fq(value=int(prover_solution["proof_y"])),
+                                infinity=prover_solution["proof_infinity"],
+                            ),
+                            random_v=Option[Field](None),
+                        )
+                    ))
+                coinbase_solution = CoinbaseSolution(solutions=Vec[ProverSolution, u16](pss))
             else:
                 coinbase_solution = None
+
+            await cur.execute("SELECT * FROM authority WHERE block_id = %s", (block["id"],))
+            authority = await cur.fetchone()
+            if authority is None:
+                raise RuntimeError("database inconsistent")
+            if authority["type"] == Authority.Type.Beacon.name:
+                auth = BeaconAuthority(
+                    signature=Signature.loads(authority["signature"]),
+                )
+            elif authority["type"] == Authority.Type.Quorum.name:
+                await cur.execute(
+                    "SELECT * FROM dag_vertex WHERE authority_id = %s ORDER BY index",
+                    (authority["id"],)
+                )
+                dag_vertices = await cur.fetchall()
+                certificates: list[BatchCertificate] = []
+                for dag_vertex in dag_vertices:
+                    await cur.execute(
+                        "SELECT * FROM dag_vertex_signature WHERE vertex_id = %s ORDER BY index",
+                        (dag_vertex["id"],)
+                    )
+                    dag_vertex_signatures = await cur.fetchall()
+                    signatures: list[Tuple[Signature, i64]] = []
+                    for signature in dag_vertex_signatures:
+                        signatures.append(
+                            Tuple[Signature, i64]((
+                                Signature.loads(signature["signature"]),
+                                i64(signature["timestamp"]),
+                            ))
+                        )
+                    await cur.execute(
+                        "SELECT previous_vertex_id FROM dag_vertex_adjacency WHERE vertex_id = %s ORDER BY index",
+                        (dag_vertex["id"],)
+                    )
+                    previous_ids = [x["previous_vertex_id"] for x in await cur.fetchall()]
+
+                    await cur.execute(
+                        "SELECT batch_certificate_id FROM dag_vertex v "
+                        "JOIN UNNEST(%s) WITH ORDINALITY q(id, ord) ON q.id = v.id "
+                        "ORDER BY ord",
+                        (previous_ids,)
+                    )
+                    previous_cert_ids = [x["batch_certificate_id"] for x in await cur.fetchall()]
+
+                    await cur.execute(
+                        "SELECT * FROM dag_vertex_transmission_id WHERE vertex_id = %s ORDER BY index",
+                        (dag_vertex["id"],)
+                    )
+                    tids: list[TransmissionID] = []
+                    for tid in await cur.fetchall():
+                        if tid["type"] == TransmissionID.Type.Ratification:
+                            tids.append(RatificationTransmissionID())
+                        elif tid["type"] == TransmissionID.Type.Solution:
+                            tids.append(SolutionTransmissionID(id_=PuzzleCommitment.loads(tid["commitment"])))
+                        elif tid["type"] == TransmissionID.Type.Transaction:
+                            tids.append(TransactionTransmissionID(id_=TransactionID.loads(tid["transaction_id"])))
+
+                    certificates.append(
+                        BatchCertificate(
+                            certificate_id=Field.loads(dag_vertex["certificate_id"]),
+                            batch_header=BatchHeader(
+                                batch_id=Field.loads(dag_vertex["batch_id"]),
+                                author=Address.loads(dag_vertex["author"]),
+                                round_=u64(dag_vertex["round"]),
+                                timestamp=i64(dag_vertex["timestamp"]),
+                                transmission_ids=Vec[TransmissionID, u32](tids),
+                                previous_certificate_ids=Vec[Field, u32]([Field.loads(x) for x in previous_cert_ids]),
+                                signature=Signature.loads(dag_vertex["author_signature"]),
+                            ),
+                            signatures=Vec[Tuple[Signature, i64], u32](signatures),
+                        )
+                    )
+                subdags: dict[u64, Vec[BatchCertificate, u32]] = defaultdict(lambda: Vec[BatchCertificate, u32]([]))
+                for certificate in certificates:
+                    subdags[certificate.batch_header.round].append(certificate)
+                subdag = Subdag(
+                    subdag=subdags
+                )
+                auth = QuorumAuthority(subdag=subdag)
+            else:
+                raise NotImplementedError
 
             return Block(
                 block_hash=BlockHash.loads(block['block_hash']),
                 previous_hash=BlockHash.loads(block['previous_hash']),
                 header=Database._get_block_header(block),
+                authority=auth,
                 transactions=Transactions(
                     transactions=Vec[ConfirmedTransaction, u32](ctxs),
                 ),
@@ -1347,7 +1600,7 @@ class Database:
             else:
                 transaction_count = res["count"]
             await cur.execute(
-                "SELECT COUNT(*) FROM partial_solution ps "
+                "SELECT COUNT(*) FROM prover_solution ps "
                 "JOIN coinbase_solution cs on ps.coinbase_solution_id = cs.id "
                 "WHERE cs.block_id = %s",
                 (block["id"],)
@@ -1416,11 +1669,11 @@ class Database:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
-                    await cur.execute("SELECT last_coinbase_target FROM block ORDER BY height DESC LIMIT 1")
+                    await cur.execute("SELECT coinbase_target FROM block ORDER BY height DESC LIMIT 1")
                     result = await cur.fetchone()
                     if result is None:
                         raise RuntimeError("no blocks in database")
-                    return result['last_coinbase_timestamp']
+                    return result['coinbase_target']
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
@@ -1725,7 +1978,7 @@ class Database:
                 try:
                     await cur.execute(
                         "SELECT b.height, b.timestamp, ps.nonce, ps.target, reward, cs.target_sum "
-                        "FROM partial_solution ps "
+                        "FROM prover_solution ps "
                         "JOIN coinbase_solution cs ON cs.id = ps.coinbase_solution_id "
                         "JOIN block b ON b.id = cs.block_id "
                         "WHERE ps.address = %s "
@@ -1743,7 +1996,7 @@ class Database:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT COUNT(*) FROM partial_solution WHERE address = %s", (address,)
+                        "SELECT COUNT(*) FROM prover_solution WHERE address = %s", (address,)
                     )
                     if (res := await cur.fetchone()) is None:
                         return 0
@@ -1758,7 +2011,7 @@ class Database:
                 try:
                     await cur.execute(
                         "SELECT b.height, b.timestamp, ps.nonce, ps.target, reward, cs.target_sum "
-                        "FROM partial_solution ps "
+                        "FROM prover_solution ps "
                         "JOIN coinbase_solution cs ON cs.id = ps.coinbase_solution_id "
                         "JOIN block b ON b.id = cs.block_id "
                         "WHERE ps.address = %s "
@@ -1777,7 +2030,7 @@ class Database:
                 try:
                     await cur.execute(
                         "SELECT ps.address, ps.nonce, ps.commitment, ps.target, reward "
-                        "FROM partial_solution ps "
+                        "FROM prover_solution ps "
                         "JOIN coinbase_solution cs on ps.coinbase_solution_id = cs.id "
                         "JOIN block b on cs.block_id = b.id "
                         "WHERE b.height = %s "
@@ -1815,7 +2068,7 @@ class Database:
                 try:
                     for interval in interval_list:
                         await cur.execute(
-                            "SELECT b.height FROM partial_solution ps "
+                            "SELECT b.height FROM prover_solution ps "
                             "JOIN coinbase_solution cs ON ps.coinbase_solution_id = cs.id "
                             "JOIN block b ON cs.block_id = b.id "
                             "WHERE address = %s AND timestamp > %s",
@@ -1847,7 +2100,7 @@ class Database:
                 interval = 900
                 try:
                     await cur.execute(
-                        "SELECT b.height FROM partial_solution ps "
+                        "SELECT b.height FROM prover_solution ps "
                         "JOIN coinbase_solution cs ON ps.coinbase_solution_id = cs.id "
                         "JOIN block b ON cs.block_id = b.id "
                         "WHERE timestamp > %s",
@@ -1888,8 +2141,8 @@ class Database:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT reward, height FROM partial_solution "
-                        "JOIN coinbase_solution cs on cs.id = partial_solution.coinbase_solution_id "
+                        "SELECT reward, height FROM prover_solution "
+                        "JOIN coinbase_solution cs on cs.id = prover_solution.coinbase_solution_id "
                         "JOIN block b on b.id = cs.block_id "
                         "WHERE commitment = %s",
                         (commitment,)
@@ -2143,30 +2396,33 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
+    async def get_mapping_cache_with_cur(self, cur: psycopg.AsyncCursor[dict[str, Any]], mapping_id: str) -> dict[Field, Any]:
+        try:
+            await cur.execute(
+                "SELECT content FROM mapping m "
+                "WHERE m.mapping_id = %s",
+                (mapping_id,)
+            )
+            data = await cur.fetchone()
+            if data is None or data["content"] is None:
+                return {}
+            def transform(d: dict[str, Any]):
+                return {
+                    "index": d["index"],
+                    "value_id": Field.loads(d["value_id"]),
+                    "key": Plaintext.load(BytesIO(bytes.fromhex(d["key"]))),
+                    "value": Value.load(BytesIO(bytes.fromhex(d["value"]))),
+                }
+            return {Field.loads(x): transform(y) for x, y in data["content"].items()}
+
+        except Exception as e:
+            await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+            raise
+
     async def get_mapping_cache(self, mapping_id: str) -> dict[Field, Any]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
-                try:
-                    await cur.execute(
-                        "SELECT content FROM mapping m "
-                        "WHERE m.mapping_id = %s",
-                        (mapping_id,)
-                    )
-                    data = await cur.fetchone()
-                    if data is None or data["content"] is None:
-                        return {}
-                    def transform(d: dict[str, Any]):
-                        return {
-                            "index": d["index"],
-                            "value_id": Field.loads(d["value_id"]),
-                            "key": Plaintext.load(BytesIO(bytes.fromhex(d["key"]))),
-                            "value": Value.load(BytesIO(bytes.fromhex(d["value"]))),
-                        }
-                    return {Field.loads(x): transform(y) for x, y in data["content"].items()}
-
-                except Exception as e:
-                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
-                    raise
+                return await self.get_mapping_cache_with_cur(cur, mapping_id)
 
     async def get_mapping_value(self, program_id: str, mapping: str, key_id: str) -> Optional[bytes]:
         async with self.pool.connection() as conn:
@@ -2242,14 +2498,16 @@ class Database:
                     raise
 
     async def update_mapping_key_value(self, cur: psycopg.AsyncCursor[dict[str, Any]], mapping_id: str, index: int, key_id: str, value_id: str,
-                                        key: bytes, value: bytes):
+                                        key: bytes, value: bytes, height: int):
         try:
             # safety check
-            await cur.execute("SELECT content[%s] FROM mapping WHERE mapping_id = %s", (key_id, mapping_id))
+            await cur.execute("SELECT id, content[%s] FROM mapping WHERE mapping_id = %s", (key_id, mapping_id))
             if (res := await cur.fetchone()) is not None:
                 if res["content"] is not None and res["content"]["index"] != index:
-                    raise ValueError(f"Index mismatch: {res['content']['index']} != {index}")
-
+                    raise ValueError(f"index mismatch: {res['content']['index']} != {index}")
+                mapping_db_id = res["id"]
+            else:
+                raise ValueError(f"mapping_id {mapping_id} not found")
             await cur.execute("UPDATE mapping SET content[%s] = %s WHERE mapping_id = %s", (key_id, Jsonb({
                 "index": index,
                 "value_id": value_id,
@@ -2257,13 +2515,24 @@ class Database:
                 "value": value.hex()
             }), mapping_id))
 
+            await cur.execute(
+                "INSERT INTO mapping_history (mapping_id, height, key_id, value, index) "
+                "VALUES (%s, %s, %s, %s, %s)",
+                (mapping_db_id, height, key_id, value, index)
+            )
+
         except Exception as e:
             await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
             raise
 
     # noinspection SqlResolve
-    async def remove_mapping_key_value(self, cur: psycopg.AsyncCursor[dict[str, Any]], mapping_id: str, index: int):
+    async def remove_mapping_key_value(self, cur: psycopg.AsyncCursor[dict[str, Any]], mapping_id: str, index: int,
+                                       height: int):
         try:
+            await cur.execute("SELECT id FROM mapping WHERE mapping_id = %s", (mapping_id,))
+            if (res := await cur.fetchone()) is None:
+                raise ValueError(f"mapping_id {mapping_id} not found")
+            mapping_db_id = res["id"]
             # in theory we don't need the escaping for mapping id, but anyway
             await cur.execute(
                 psycopg.sql.SQL(
@@ -2298,6 +2567,12 @@ class Database:
                         "UPDATE mapping SET content[%s]['index'] = %s WHERE mapping_id = %s",
                         (max_index["key"], index, mapping_id)
                     )
+
+                await cur.execute(
+                    "INSERT INTO mapping_history (mapping_id, height, key_id, value, index) "
+                    "VALUES (%s, %s, %s, %s, %s)",
+                    (mapping_db_id, height, to_delete["key"], None, index)
+                )
 
         except Exception as e:
             await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))

@@ -104,17 +104,17 @@ class Vec(list[T], Serializable, Generic[T, L]):
     # noinspection PyMissingConstructor
     def __init__(self, value: list[T]):
         list[T].__init__(self, value)
-        self.type = self.types[0]
+        self._type = self.types[0]
         if isinstance(self.types[1], FixedSize):
-            self.size = self.types[1]
+            self._size = self.types[1]
         else:
-            self.size_type = self.types[1]
-            self.size = self.size_type(len(value))
+            self._size_type = self.types[1]
+            self._size = self._size_type(len(value))
 
     def dump(self) -> bytes:
         res = b""
-        if isinstance(self.size, Int):
-            res += self.size.dump()
+        if isinstance(self._size, Int):
+            res += self._size.dump()
         for item in self:
             res += item.dump()
         return res

@@ -338,21 +338,20 @@ class Fq(Serializable):
 
 class G1Affine(Serializable):
 
-    def __init__(self, *, x: Fq, flags: bool):
+    def __init__(self, *, x: Fq, y: Fq, infinity: bool):
         self.x = x
-        self.flags = flags
+        self.y = y
+        self.infinity = infinity
 
     def dump(self) -> bytes:
-        res = bytearray(self.x.dump())
-        res[-1] |= self.flags << 7
-        return bytes(res)
+        return aleo.serialize_g1affine(self.x.dump(), self.y.dump(), self.infinity)
 
     @classmethod
     def load(cls, data: BytesIO):
-        data_ = bytearray(data.read(48))
-        flags = bool(data_[-1] >> 7)
-        data_[-1] &= 0x7f
-        return cls(x=Fq.load(BytesIO(data_)), flags=flags)
+        x, y, infinity = aleo.deserialize_g1affine(data.read(48))
+        x = Fq.load(BytesIO(bytes(x)))
+        y = Fq.load(BytesIO(bytes(y)))
+        return cls(x=x, y=y, infinity=infinity)
 
 class Fq2(Serializable):
 
@@ -443,3 +442,6 @@ class Signature(Serializable):
 
     def __str__(self):
         return str(Bech32m(self.dump(), "sign"))
+
+    def __repr__(self):
+        return str(self)

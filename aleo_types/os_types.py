@@ -16,22 +16,19 @@ class NodeType(IntEnumu32):
 
 class Message(EnumBaseSerialize, RustEnum, Serializable):
     class Type(IntEnumu16):
-        BeaconPropose = 0
-        BeaconTimeout = 1
-        BeaconVote = 2
-        BlockRequest = 3
-        BlockResponse = 4
-        ChallengeRequest = 5
-        ChallengeResponse = 6
-        Disconnect = 7
-        PeerRequest = 8
-        PeerResponse = 9
-        Ping = 10
-        Pong = 11
-        PuzzleRequest = 12
-        PuzzleResponse = 13
-        UnconfirmedSolution = 14
-        UnconfirmedTransaction = 15
+        BlockRequest = 0
+        BlockResponse = 1
+        ChallengeRequest = 2
+        ChallengeResponse = 3
+        Disconnect = 4
+        PeerRequest = 5
+        PeerResponse = 6
+        Ping = 7
+        Pong = 8
+        PuzzleRequest = 9
+        PuzzleResponse = 10
+        UnconfirmedSolution = 11
+        UnconfirmedTransaction = 12
 
         def __str__(self):
             return self.name
@@ -45,12 +42,6 @@ class Message(EnumBaseSerialize, RustEnum, Serializable):
     def load(cls, data: BytesIO) -> Self:
         type_ = Message.Type(struct.unpack("<H", data.read(2))[0])
         match type_:
-            case Message.Type.BeaconPropose:
-                message = BeaconPropose.load(data)
-            case Message.Type.BeaconTimeout:
-                message = BeaconTimeout.load(data)
-            case Message.Type.BeaconVote:
-                message = BeaconVote.load(data)
             case Message.Type.BlockRequest:
                 message = BlockRequest.load(data)
             case Message.Type.BlockResponse:
@@ -79,81 +70,6 @@ class Message(EnumBaseSerialize, RustEnum, Serializable):
                 message = UnconfirmedTransaction.load(data)
         # noinspection PyUnboundLocalVariable
         return message
-
-class BeaconPropose(Message):
-    type = Message.Type.BeaconPropose
-
-    def __init__(self, version: u8, round_: u64, block_height: u32, block_hash: BlockHash, block: Block):
-        self.version = version
-        self.round = round_
-        self.block_height = block_height
-        self.block_hash = block_hash
-        self.block = block
-
-    def dump(self) -> bytes:
-        return self.type.dump() + self.version.dump() + self.round.dump() + self.block_height.dump() + self.block_hash.dump() + \
-               self.block.dump()
-
-    @classmethod
-    def load(cls, data: BytesIO):
-        version = u8.load(data)
-        round_ = u64.load(data)
-        block_height = u32.load(data)
-        block_hash = BlockHash.load(data)
-        block = Block.load(data)
-        return cls(version, round_, block_height, block_hash, block)
-
-
-class BeaconTimeout(Message):
-    type = Message.Type.BeaconTimeout
-
-    def __init__(self, version: u8, round_: u64, block_height: u32, block_hash: BlockHash, signature: Signature):
-        self.version = version
-        self.round = round_
-        self.block_height = block_height
-        self.block_hash = block_hash
-        self.signature = signature
-
-    def dump(self) -> bytes:
-        return self.type.dump() + self.version.dump() + self.round.dump() + self.block_height.dump() + self.block_hash.dump() + \
-               self.signature.dump()
-
-    @classmethod
-    def load(cls, data: BytesIO):
-        version = u8.load(data)
-        round_ = u64.load(data)
-        block_height = u32.load(data)
-        block_hash = BlockHash.load(data)
-        signature = Signature.load(data)
-        return cls(version, round_, block_height, block_hash, signature)
-
-
-class BeaconVote(Message):
-    type = Message.Type.BeaconVote
-
-    def __init__(self, version: u8, round_: u64, block_height: u32, block_hash: BlockHash,
-                 timestamp: u64, signature: Signature):
-        self.version = version
-        self.round = round_
-        self.block_height = block_height
-        self.block_hash = block_hash
-        self.timestamp = timestamp
-        self.signature = signature
-
-    def dump(self) -> bytes:
-        return self.type.dump() + self.version.dump() + self.round.dump() + self.block_height.dump() + self.block_hash.dump() + \
-               self.timestamp.dump() + self.signature.dump()
-
-    @classmethod
-    def load(cls, data: BytesIO):
-        version = u8.load(data)
-        round_ = u64.load(data)
-        block_height = u32.load(data)
-        block_hash = BlockHash.load(data)
-        timestamp = u64.load(data)
-        signature = Signature.load(data)
-        return cls(version, round_, block_height, block_hash, timestamp, signature)
-
 
 class BlockRequest(Message):
     type = Message.Type.BlockRequest
