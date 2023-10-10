@@ -13,6 +13,12 @@ from aleo_types import *
 from disasm.utils import value_type_to_mode_type_str, plaintext_type_to_str
 from explorer.types import Message as ExplorerMessage
 
+try:
+    from line_profiler import profile
+except ImportError:
+    def profile(func):
+        return func
+
 
 class Database:
 
