@@ -436,7 +436,6 @@ CREATE TABLE explorer.dag_vertex_signature (
     id bigint NOT NULL,
     vertex_id bigint NOT NULL,
     signature text NOT NULL,
-    signature_address text NOT NULL,
     "timestamp" bigint NOT NULL,
     index integer NOT NULL
 );
@@ -959,8 +958,7 @@ CREATE TABLE explorer.prover_solution (
     target numeric(20,0) NOT NULL,
     reward integer NOT NULL,
     proof_x text NOT NULL,
-    proof_y text NOT NULL,
-    proof_infinity boolean NOT NULL
+    proof_y_is_positive boolean NOT NULL
 );
 
 
@@ -2422,13 +2420,6 @@ CREATE INDEX dag_vertex_round_index ON explorer.dag_vertex USING btree (round);
 --
 
 CREATE INDEX dag_vertex_signature_index_index ON explorer.dag_vertex_signature USING btree (index);
-
-
---
--- Name: dag_vertex_signature_signature_address_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX dag_vertex_signature_signature_address_index ON explorer.dag_vertex_signature USING btree (signature_address);
 
 
 --

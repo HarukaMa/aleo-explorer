@@ -10,7 +10,7 @@ global_program_cache: dict[str, Program] = {}
 
 async def init_builtin_program(db: Database, program: Program):
     for mapping in program.mappings.keys():
-        mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(mapping)))
+        mapping_id = Field.loads(cached_get_mapping_id(str(program.id), str(mapping)))
         await db.initialize_builtin_mapping(str(mapping_id), str(program.id), str(mapping))
 
 
@@ -137,20 +137,28 @@ async def finalize_block(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]],
             raise TypeError("invalid finalize operation length")
 
         for e, o in zip(expected_operations, operations):
-            if e.type != o["type"]:
-                raise TypeError("invalid finalize operation type")
-            if e.mapping_id != o["mapping_id"]:
-                raise TypeError("invalid finalize mapping id")
-            if isinstance(e, InitializeMapping):
-                pass
-            elif isinstance(e, UpdateKeyValue):
-                if e.index != o["index"] or e.key_id != o["key_id"] or e.value_id != o["value_id"]:
-                    raise TypeError("invalid finalize operation")
-            elif isinstance(e, RemoveKeyValue):
-                if e.index != o["index"]:
-                    raise TypeError("invalid finalize operation")
-            else:
-                raise NotImplementedError
+            try:
+                if e.type != o["type"]:
+                    raise TypeError("invalid finalize operation type")
+                if e.mapping_id != o["mapping_id"]:
+                    raise TypeError("invalid finalize mapping id")
+                if isinstance(e, InitializeMapping):
+                    pass
+                elif isinstance(e, UpdateKeyValue):
+                    if e.index != o["index"] or e.key_id != o["key_id"] or e.value_id != o["value_id"]:
+                        raise TypeError("invalid finalize operation")
+                elif isinstance(e, RemoveKeyValue):
+                    if e.index != o["index"]:
+                        raise TypeError("invalid finalize operation")
+                else:
+                    raise NotImplementedError
+            except TypeError:
+                print("expected:", e)
+                print("actual:", o)
+                if e.mapping_id in global_mapping_cache:
+                    print("mapping cache:", global_mapping_cache[e.mapping_id])
+                # global_mapping_cache.clear()
+                raise
 
         await execute_operations(db, cur, operations)
         reject_reasons.append(reject_reason)

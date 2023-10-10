@@ -52,7 +52,8 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
     debug = os.environ.get("DEBUG", False)
     timer = time.perf_counter_ns()
 
-    print(f"finalize {program.id}/{function_name}({', '.join(str(i) for i in registers)})")
+    if debug:
+        print(f"finalize {program.id}/{function_name}({', '.join(str(i) for i in registers)})")
 
     for c in finalize.commands:
         if debug:
@@ -72,11 +73,11 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
                 raise
 
         elif isinstance(c, ContainsCommand):
-            mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(c.mapping)))
+            mapping_id = Field.loads(cached_get_mapping_id(str(program.id), str(c.mapping)))
             if mapping_cache is not None and mapping_id not in mapping_cache:
                 mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, mapping_id)
             key = load_plaintext_from_operand(c.key, registers, finalize_state)
-            key_id = Field.loads(aleo.get_key_id(str(mapping_id), key.dump()))
+            key_id = Field.loads(cached_get_key_id(str(mapping_id), key.dump()))
             if mapping_cache:
                 contains = key_id in mapping_cache[mapping_id]
             else:
@@ -94,11 +95,11 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
             store_plaintext_to_register(value.plaintext, destination, registers)
 
         elif isinstance(c, GetCommand | GetOrUseCommand):
-            mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(c.mapping)))
+            mapping_id = Field.loads(cached_get_mapping_id(str(program.id), str(c.mapping)))
             if mapping_cache is not None and mapping_id not in mapping_cache:
                 mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, mapping_id)
             key = load_plaintext_from_operand(c.key, registers, finalize_state)
-            key_id = Field.loads(aleo.get_key_id(str(mapping_id), key.dump()))
+            key_id = Field.loads(cached_get_key_id(str(mapping_id), key.dump()))
             if mapping_cache:
                 if key_id not in mapping_cache[mapping_id]:
                     if isinstance(c, GetCommand):
@@ -107,7 +108,8 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
                     value = PlaintextValue(plaintext=default)
                 else:
                     value = mapping_cache[mapping_id][key_id]["value"]
-                    print(f"get {c.mapping}[{key}, {mapping_cache[mapping_id][key_id]['index']}] = {value}")
+                    if debug:
+                        print(f"get {c.mapping}[{key}, {mapping_cache[mapping_id][key_id]['index']}] = {value}")
                     if not isinstance(value, PlaintextValue):
                         raise TypeError("invalid value type")
             else:
@@ -125,12 +127,12 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
             store_plaintext_to_register(value.plaintext, destination, registers)
 
         elif isinstance(c, SetCommand):
-            mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(c.mapping)))
+            mapping_id = Field.loads(cached_get_mapping_id(str(program.id), str(c.mapping)))
             if mapping_cache is not None and mapping_id not in mapping_cache:
                 mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, mapping_id)
             key = load_plaintext_from_operand(c.key, registers, finalize_state)
             value = PlaintextValue(plaintext=load_plaintext_from_operand(c.value, registers, finalize_state))
-            key_id = Field.loads(aleo.get_key_id(str(mapping_id), key.dump()))
+            key_id = Field.loads(cached_get_key_id(str(mapping_id), key.dump()))
             value_id = Field.loads(aleo.get_value_id(str(key_id), value.dump()))
             if mapping_cache:
                 if allow_state_change:
@@ -142,12 +144,14 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
                             "value": value,
                             "index": index,
                         }
-                        print(f"new {c.mapping}[{key}, {index}] = {value}")
+                        if debug:
+                            print(f"new {c.mapping}[{key}, {index}] = {value}")
                     else:
                         index = mapping_cache[mapping_id][key_id]['index']
                         mapping_cache[mapping_id][key_id]["value_id"] = value_id
                         mapping_cache[mapping_id][key_id]["value"] = value
-                        print(f"set {c.mapping}[{key}, {index}] = {value}")
+                        if debug:
+                            print(f"set {c.mapping}[{key}, {index}] = {value}")
                 else:
                     index = mapping_cache[mapping_id][key_id]['index'] if key_id in mapping_cache[mapping_id] else len(mapping_cache[mapping_id])
                     print("Not updating mapping cache because allow_state_change is False")
@@ -194,11 +198,11 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
             store_plaintext_to_register(res, c.destination, registers)
 
         elif isinstance(c, RemoveCommand):
-            mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(c.mapping)))
+            mapping_id = Field.loads(cached_get_mapping_id(str(program.id), str(c.mapping)))
             if mapping_cache is not None and mapping_id not in mapping_cache:
                 mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, mapping_id)
             key = load_plaintext_from_operand(c.key, registers, finalize_state)
-            key_id = Field.loads(aleo.get_key_id(str(mapping_id), key.dump()))
+            key_id = Field.loads(cached_get_key_id(str(mapping_id), key.dump()))
             if mapping_cache:
                 if key_id not in mapping_cache[mapping_id]:
                     print(f"Key {key} not found in mapping {c.mapping}")
@@ -211,7 +215,8 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
                                 mapping_cache[mapping_id][key_id]['index'] = index
                                 break
                     mapping_cache[mapping_id].pop(key_id)
-                    print(f"del {c.mapping}[{key}, {index}]")
+                    if debug:
+                        print(f"del {c.mapping}[{key}, {index}]")
                 else:
                     print("Not updating mapping cache because allow_state_change is False")
             else:
@@ -235,7 +240,8 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
 
         if debug:
             registers.dump()
-    print(f"execution took {time.perf_counter_ns() - timer} ns")
+    if debug:
+        print(f"execution took {time.perf_counter_ns() - timer} ns")
     return operations
 
 

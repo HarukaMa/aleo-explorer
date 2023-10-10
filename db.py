@@ -311,13 +311,13 @@ class Database:
                                            committee_members: dict[Address, tuple[u64, bool_]],
                                            stakers: dict[Address, tuple[Address, u64]],
                                            height: int):
-        committee_mapping_id = Field.loads(aleo.get_mapping_id("credits.aleo", "committee"))
-        bonded_mapping_id = Field.loads(aleo.get_mapping_id("credits.aleo", "bonded"))
+        committee_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "committee"))
+        bonded_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "bonded"))
 
         committee_mapping = {}
         for index, (address, (amount, is_open)) in enumerate(committee_members.items()):
             key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=address))
-            key_id = Field.loads(aleo.get_key_id(str(committee_mapping_id), key.dump()))
+            key_id = Field.loads(cached_get_key_id(str(committee_mapping_id), key.dump()))
             value = PlaintextValue(
                 plaintext=StructPlaintext(
                     members=Vec[Tuple[Identifier, Plaintext], u8]([
@@ -347,7 +347,7 @@ class Database:
         bonded_mapping = {}
         for index, (address, (validator, amount)) in enumerate(stakers.items()):
             key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=address))
-            key_id = Field.loads(aleo.get_key_id(str(bonded_mapping_id), key.dump()))
+            key_id = Field.loads(cached_get_key_id(str(bonded_mapping_id), key.dump()))
             value = PlaintextValue(
                 plaintext=StructPlaintext(
                     members=Vec[Tuple[Identifier, Plaintext], u8]([
@@ -405,12 +405,12 @@ class Database:
         committee_members = {address: (amount, is_open) for address, amount, is_open in committee.members}
         await Database._update_committee_bonded_map(cur, committee_members, stakers, 0)
 
-        account_mapping_id = Field.loads(aleo.get_mapping_id("credits.aleo", "account"))
+        account_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "account"))
         public_balances = ratification.public_balances
         operations: list[dict[str, Any]] = []
         for index, (address, balance) in enumerate(public_balances):
             key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=address))
-            key_id = Field.loads(aleo.get_key_id(str(account_mapping_id), key.dump()))
+            key_id = Field.loads(cached_get_key_id(str(account_mapping_id), key.dump()))
             value = PlaintextValue(plaintext=LiteralPlaintext(literal=Literal(type_=Literal.Type.U64, primitive=balance)))
             value_id = Field.loads(aleo.get_value_id(str(key_id), value.dump()))
             operations.append({
@@ -429,7 +429,7 @@ class Database:
 
     @staticmethod
     async def _get_committee_mapping(cur: psycopg.AsyncCursor[dict[str, Any]]) -> dict[Address, tuple[u64, bool_]]:
-        committee_mapping_id = Field.loads(aleo.get_mapping_id("credits.aleo", "committee"))
+        committee_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "committee"))
         await cur.execute(
             "SELECT content FROM mapping m WHERE m.mapping_id = %s",
             (str(committee_mapping_id),)
@@ -466,7 +466,7 @@ class Database:
 
     @staticmethod
     async def _get_bonded_mapping(cur: psycopg.AsyncCursor[dict[str, Any]]) -> dict[Address, tuple[Address, u64]]:
-        bonded_mapping_id = Field.loads(aleo.get_mapping_id("credits.aleo", "bonded"))
+        bonded_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "bonded"))
         await cur.execute(
             "SELECT content FROM mapping m WHERE m.mapping_id = %s",
             (str(bonded_mapping_id),)
@@ -578,7 +578,7 @@ class Database:
             elif isinstance(ratification, PuzzleRewardRatify):
                 if ratification.amount == 0:
                     continue
-                account_mapping_id = Field.loads(aleo.get_mapping_id("credits.aleo", "account"))
+                account_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "account"))
                 await cur.execute(
                     "SELECT content FROM mapping m WHERE m.mapping_id = %s",
                     (str(account_mapping_id),)
@@ -591,7 +591,7 @@ class Database:
                 operations: list[dict[str, Any]] = []
                 for address, amount in address_puzzle_rewards.items():
                     key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=Address.loads(address)))
-                    key_id = Field.loads(aleo.get_key_id(str(account_mapping_id), key.dump()))
+                    key_id = Field.loads(cached_get_key_id(str(account_mapping_id), key.dump()))
                     new_index = len(current_balances)
                     if str(key_id) not in current_balances:
                         current_balance = u64()
@@ -624,8 +624,7 @@ class Database:
                 from interpreter.interpreter import execute_operations
                 await execute_operations(self, cur, operations)
 
-
-
+    @profile
     async def _save_block(self, block: Block):
         async with self.pool.connection() as conn:
             async with conn.transaction():
@@ -691,8 +690,6 @@ class Database:
                                 for index, certificate in enumerate(certificates):
                                     if round_ != certificate.batch_header.round:
                                         raise ValueError("invalid subdag round")
-                                    if str(certificate.batch_header.author) != aleo.signature_to_address(str(certificate.batch_header.signature)):
-                                        raise ValueError("invalid subdag author signature")
                                     await cur.execute(
                                         "INSERT INTO dag_vertex (authority_id, round, batch_certificate_id, batch_id, "
                                         "author, timestamp, author_signature, index) "
@@ -707,9 +704,9 @@ class Database:
 
                                     for sig_index, (signature, timestamp) in enumerate(certificate.signatures):
                                         await cur.execute(
-                                            "INSERT INTO dag_vertex_signature (vertex_id, signature, signature_address, timestamp, index) "
-                                            "VALUES (%s, %s, %s, %s, %s)",
-                                            (vertex_db_id, str(signature), aleo.signature_to_address(str(signature)), timestamp, sig_index)
+                                            "INSERT INTO dag_vertex_signature (vertex_id, signature, timestamp, index) "
+                                            "VALUES (%s, %s, %s, %s)",
+                                            (vertex_db_id, str(signature), timestamp, sig_index)
                                         )
 
                                     prev_cert_ids = certificate.batch_header.previous_certificate_ids
@@ -720,38 +717,33 @@ class Database:
                                         (list(map(str, prev_cert_ids)),)
                                     )
                                     res = await cur.fetchall()
-                                    if len(res) != len(prev_cert_ids):
-                                        raise RuntimeError("dag referenced unknown previous certificate")
+                                    # temp allow
+                                    # if len(res) != len(prev_cert_ids):
+                                    #     raise RuntimeError("dag referenced unknown previous certificate")
                                     prev_vertex_db_ids = {x["batch_certificate_id"]: x["id"] for x in res}
+                                    adj_copy_data: list[tuple[int, int, int]] = []
                                     for prev_index, prev_cert_id in enumerate(prev_cert_ids):
-                                        await cur.execute(
-                                            "INSERT INTO dag_vertex_adjacency (vertex_id, previous_vertex_id, index) VALUES (%s, %s, %s)",
-                                            (vertex_db_id, prev_vertex_db_ids[str(prev_cert_id)], prev_index)
-                                        )
+                                        if str(prev_cert_id) in prev_vertex_db_ids:
+                                            adj_copy_data.append((vertex_db_id, prev_vertex_db_ids[str(prev_cert_id)], prev_index))
+                                    async with cur.copy("COPY dag_vertex_adjacency (vertex_id, previous_vertex_id, index) FROM STDIN") as copy:
+                                        for row in adj_copy_data:
+                                            await copy.write_row(row)
 
+                                    tid_copy_data: list[tuple[int, str, int, Optional[str], Optional[str]]] = []
                                     for tid_index, transmission_id in enumerate(certificate.batch_header.transmission_ids):
                                         if isinstance(transmission_id, SolutionTransmissionID):
-                                            await cur.execute(
-                                                "INSERT INTO dag_vertex_transmission_id (vertex_id, type, index, commitment) "
-                                                "VALUES (%s, %s, %s, %s)",
-                                                (vertex_db_id, transmission_id.type.name, tid_index, str(transmission_id.id))
-                                            )
+                                            tid_copy_data.append((vertex_db_id, transmission_id.type.name, tid_index, str(transmission_id.id), None))
                                             dag_transmission_ids[0][str(transmission_id.id)] = vertex_db_id
                                         elif isinstance(transmission_id, TransactionTransmissionID):
-                                            await cur.execute(
-                                                "INSERT INTO dag_vertex_transmission_id (vertex_id, type, index, transaction_id) "
-                                                "VALUES (%s, %s, %s, %s)",
-                                                (vertex_db_id, transmission_id.type.name, tid_index, str(transmission_id.id))
-                                            )
+                                            tid_copy_data.append((vertex_db_id, transmission_id.type.name, tid_index, None, str(transmission_id.id)))
                                             dag_transmission_ids[1][str(transmission_id.id)] = vertex_db_id
                                         elif isinstance(transmission_id, RatificationTransmissionID):
-                                            await cur.execute(
-                                                "INSERT INTO dag_vertex_transmission_id (vertex_id, type, index) "
-                                                "VALUES (%s, %s, %s)",
-                                                (vertex_db_id, transmission_id.type.name, tid_index)
-                                            )
+                                            tid_copy_data.append((vertex_db_id, transmission_id.type.name, tid_index, None, None))
                                         else:
                                             raise NotImplementedError
+                                    async with cur.copy("COPY dag_vertex_transmission_id (vertex_id, type, index, commitment, transaction_id) FROM STDIN") as copy:
+                                        for row in tid_copy_data:
+                                            await copy.write_row(row)
 
 
                         for ct_index, confirmed_transaction in enumerate(block.transactions):
@@ -871,6 +863,7 @@ class Database:
                                     await self._insert_transition(conn, execute_transaction_db_id, None, transition, ts_index)
 
                             if isinstance(confirmed_transaction, (AcceptedDeploy, AcceptedExecute)):
+                                update_copy_data: list[tuple[int, str, int, str, str]] = []
                                 for index, finalize_operation in enumerate(confirmed_transaction.finalize):
                                     await cur.execute(
                                         "INSERT INTO finalize_operation (confirmed_transaction_id, type, index) "
@@ -894,13 +887,11 @@ class Database:
                                             str(finalize_operation.key_id), str(finalize_operation.value_id))
                                         )
                                     elif isinstance(finalize_operation, UpdateKeyValue):
-                                        await cur.execute(
-                                            "INSERT INTO finalize_operation_update_kv (finalize_operation_id, "
-                                            "mapping_id, index, key_id, value_id) VALUES (%s, %s, %s, %s, %s)",
-                                            (finalize_operation_db_id, str(finalize_operation.mapping_id),
+                                        update_copy_data.append((
+                                            finalize_operation_db_id, str(finalize_operation.mapping_id),
                                             finalize_operation.index, str(finalize_operation.key_id),
-                                            str(finalize_operation.value_id))
-                                        )
+                                            str(finalize_operation.value_id)
+                                        ))
                                     elif isinstance(finalize_operation, RemoveKeyValue):
                                         await cur.execute(
                                             "INSERT INTO finalize_operation_remove_kv (finalize_operation_id, "
@@ -914,6 +905,10 @@ class Database:
                                             "mapping_id) VALUES (%s, %s)",
                                             (finalize_operation_db_id, str(finalize_operation.mapping_id))
                                         )
+                                if update_copy_data:
+                                    async with cur.copy("COPY finalize_operation_update_kv (finalize_operation_id, mapping_id, index, key_id, value_id) FROM STDIN") as copy:
+                                        for row in update_copy_data:
+                                            await copy.write_row(row)
 
                         for index, ratify in enumerate(block.ratifications):
                             if isinstance(ratify, GenesisRatify):
@@ -975,17 +970,6 @@ class Database:
                                 )
                                 if reward > 0:
                                     address_puzzle_rewards[str(partial_solution.address)] += reward
-                                    if not os.environ.get("DEBUG_SKIP_COINBASE"):
-                                        await cur.execute(
-                                            "INSERT INTO leaderboard (address, total_reward) VALUES (%s, %s) "
-                                            "ON CONFLICT (address) DO UPDATE SET total_reward = leaderboard.total_reward + %s",
-                                            (str(partial_solution.address), reward, reward)
-                                        )
-                                        if block.header.metadata.height >= 130888 and block.header.metadata.timestamp < 1675209600 and current_total_credit < 37_500_000_000_000:
-                                            await cur.execute(
-                                                "UPDATE leaderboard SET total_incentive = leaderboard.total_incentive + %s WHERE address = %s",
-                                                (reward, str(partial_solution.address))
-                                            )
                             if not os.environ.get("DEBUG_SKIP_COINBASE"):
                                 async with cur.copy("COPY prover_solution (dag_vertex_id, coinbase_solution_id, address, nonce, commitment, target, reward, proof_x, proof_y_is_positive) FROM STDIN") as copy:
                                     for row in copy_data:
@@ -995,6 +979,17 @@ class Database:
                                         "UPDATE leaderboard_total SET total_credit = leaderboard_total.total_credit + %s",
                                         (sum(reward for _, _, reward in solutions),)
                                     )
+                                for address, reward in address_puzzle_rewards.items():
+                                    await cur.execute(
+                                        "INSERT INTO leaderboard (address, total_reward) VALUES (%s, %s) "
+                                        "ON CONFLICT (address) DO UPDATE SET total_reward = leaderboard.total_reward + %s",
+                                        (address, reward, reward)
+                                    )
+                                    if block.header.metadata.height >= 130888 and block.header.metadata.timestamp < 1675209600 and current_total_credit < 37_500_000_000_000:
+                                        await cur.execute(
+                                            "UPDATE leaderboard SET total_incentive = leaderboard.total_incentive + %s WHERE address = %s",
+                                            (reward, str(partial_solution.address))
+                                        )
 
                         await self._post_ratify(cur, block.height, block.round, block.ratifications, address_puzzle_rewards)
 

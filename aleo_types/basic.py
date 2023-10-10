@@ -422,7 +422,6 @@ class i128(Int, AbsWrapped, Neg):
     def __neg__(self):
         return i128(-int(self))
 
-from line_profiler import profile
 
 class bool_(Sized, Serializable, And, Or, Not, Xor, Nand, Nor):
 
@@ -435,7 +434,6 @@ class bool_(Sized, Serializable, And, Or, Not, Xor, Nand, Nor):
         return struct.pack("<B", 1 if self else 0)
 
     @classmethod
-    @profile
     def load(cls, data: BytesIO):
         value = data.read(1)[0]
         if value == 0:
