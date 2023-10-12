@@ -335,8 +335,8 @@ ALTER SEQUENCE explorer.committee_history_member_id_seq OWNED BY explorer.commit
 CREATE TABLE explorer.confirmed_transaction (
     id integer NOT NULL,
     block_id integer,
-    index bigint,
-    type explorer.confirmed_transaction_type,
+    index integer NOT NULL,
+    type explorer.confirmed_transaction_type NOT NULL,
     reject_reason text
 );
 
@@ -2346,13 +2346,6 @@ CREATE INDEX confirmed_transaction_block_id_index ON explorer.confirmed_transact
 
 
 --
--- Name: confirmed_transaction_index_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX confirmed_transaction_index_index ON explorer.confirmed_transaction USING btree (index);
-
-
---
 -- Name: confirmed_transaction_type_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -2371,13 +2364,6 @@ CREATE INDEX dag_vertex_adjacency_end_vertex_index ON explorer.dag_vertex_adjace
 --
 
 CREATE INDEX dag_vertex_adjacency_index_index ON explorer.dag_vertex_adjacency USING btree (index);
-
-
---
--- Name: dag_vertex_adjacency_start_vertex_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX dag_vertex_adjacency_start_vertex_index ON explorer.dag_vertex_adjacency USING btree (vertex_id);
 
 
 --
@@ -2402,13 +2388,6 @@ CREATE UNIQUE INDEX dag_vertex_batch_certificate_id_uindex ON explorer.dag_verte
 
 
 --
--- Name: dag_vertex_index_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX dag_vertex_index_index ON explorer.dag_vertex USING btree (index);
-
-
---
 -- Name: dag_vertex_round_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -2416,24 +2395,10 @@ CREATE INDEX dag_vertex_round_index ON explorer.dag_vertex USING btree (round);
 
 
 --
--- Name: dag_vertex_signature_index_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX dag_vertex_signature_index_index ON explorer.dag_vertex_signature USING btree (index);
-
-
---
 -- Name: dag_vertex_signature_vertex_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
 CREATE INDEX dag_vertex_signature_vertex_id_index ON explorer.dag_vertex_signature USING btree (vertex_id);
-
-
---
--- Name: dag_vertex_transmission_id_index_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX dag_vertex_transmission_id_index_index ON explorer.dag_vertex_transmission_id USING btree (index);
 
 
 --
@@ -2455,13 +2420,6 @@ CREATE INDEX fee_transaction_id_index ON explorer.fee USING btree (transaction_i
 --
 
 CREATE INDEX finalize_operation_confirmed_transaction_id_index ON explorer.finalize_operation USING btree (confirmed_transaction_id);
-
-
---
--- Name: finalize_operation_index_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX finalize_operation_index_index ON explorer.finalize_operation USING btree (index);
 
 
 --
@@ -2794,24 +2752,10 @@ CREATE INDEX transition_function_name_index ON explorer.transition USING btree (
 
 
 --
--- Name: transition_index_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX transition_index_index ON explorer.transition USING btree (index);
-
-
---
 -- Name: transition_input_external_record_transition_input_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
 CREATE INDEX transition_input_external_record_transition_input_id_index ON explorer.transition_input_external_record USING btree (transition_input_id);
-
-
---
--- Name: transition_input_index_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX transition_input_index_index ON explorer.transition_input USING btree (index);
 
 
 --
@@ -2854,13 +2798,6 @@ CREATE INDEX transition_output_external_record_transition_output_id_index ON exp
 --
 
 CREATE INDEX transition_output_future_transition_output_id_index ON explorer.transition_output_future USING btree (transition_output_id);
-
-
---
--- Name: transition_output_index_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX transition_output_index_index ON explorer.transition_output USING btree (index);
 
 
 --
