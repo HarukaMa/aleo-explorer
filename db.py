@@ -1,3 +1,4 @@
+import asyncio
 import os
 import time
 from collections import defaultdict
@@ -8,6 +9,7 @@ import psycopg.sql
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from psycopg_pool import AsyncConnectionPool
+from redis import WatchError
 from redis.asyncio import Redis
 
 from aleo_types import *
@@ -49,7 +51,8 @@ class Database:
                 },
                 max_size=16,
             )
-            self.redis = Redis(host=self.redis_server, port=self.redis_port, db=self.redis_db)
+            self.redis = Redis(host=self.redis_server, port=self.redis_port, db=self.redis_db, protocol=3,
+                               decode_responses=True)
         except Exception as e:
             await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseConnectError, e))
             return
@@ -321,6 +324,7 @@ class Database:
 
     @staticmethod
     async def _update_committee_bonded_map(cur: psycopg.AsyncCursor[dict[str, Any]],
+                                           redis_conn: Redis,
                                            committee_members: dict[Address, tuple[u64, bool_]],
                                            stakers: dict[Address, tuple[Address, u64]],
                                            height: int):
@@ -352,10 +356,10 @@ class Database:
                 "value_id": str(value_id),
                 "value": value.dump().hex(),
             }
-        await cur.execute(
-            "UPDATE mapping SET content = %s WHERE mapping_id = %s",
-            (Jsonb(committee_mapping), str(committee_mapping_id))
-        )
+        await redis_conn.execute_command("MULTI")
+        await redis_conn.delete("credits.aleo:committee")
+        await redis_conn.hset("credits.aleo:committee", mapping={k: json.dumps(v) for k, v in committee_mapping.items()})
+        await redis_conn.execute_command("EXEC")
 
         bonded_mapping = {}
         for index, (address, (validator, amount)) in enumerate(stakers.items()):
@@ -382,10 +386,10 @@ class Database:
                 "value_id": str(value_id),
                 "value": value.dump().hex(),
             }
-        await cur.execute(
-            "UPDATE mapping SET content = %s WHERE mapping_id = %s",
-            (Jsonb(bonded_mapping), str(bonded_mapping_id))
-        )
+        await redis_conn.execute_command("MULTI")
+        await redis_conn.delete("credits.aleo:bonded")
+        await redis_conn.hset("credits.aleo:bonded", mapping={k: json.dumps(v) for k, v in bonded_mapping.items()})
+        await redis_conn.execute_command("EXEC")
         await cur.execute(
             "INSERT INTO mapping_bonded_history (height, content) VALUES (%s, %s)",
             (height, Jsonb(bonded_mapping))
@@ -416,7 +420,7 @@ class Database:
         for validator, amount, _ in committee.members:
             stakers[validator] = validator, amount
         committee_members = {address: (amount, is_open) for address, amount, is_open in committee.members}
-        await Database._update_committee_bonded_map(cur, committee_members, stakers, 0)
+        await Database._update_committee_bonded_map(cur, self.redis.client(), committee_members, stakers, 0)
 
         account_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "account"))
         public_balances = ratification.public_balances
@@ -441,18 +445,11 @@ class Database:
         await execute_operations(self, cur, operations)
 
     @staticmethod
-    async def _get_committee_mapping(cur: psycopg.AsyncCursor[dict[str, Any]]) -> dict[Address, tuple[u64, bool_]]:
-        committee_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "committee"))
-        await cur.execute(
-            "SELECT content FROM mapping m WHERE m.mapping_id = %s",
-            (str(committee_mapping_id),)
-        )
-        data = await cur.fetchone()
-        if data is None:
-            raise RuntimeError("missing current committee data")
+    async def _get_committee_mapping(redis_conn: Redis) -> dict[Address, tuple[u64, bool_]]:
+        data = await redis_conn.hgetall("credits.aleo:committee")
 
         committee_members: dict[Address, tuple[u64, bool_]] = {}
-        for d in data["content"].values():
+        for d in data.values():
             key = Plaintext.load(BytesIO(bytes.fromhex(d["key"])))
             if not isinstance(key, LiteralPlaintext):
                 raise RuntimeError("invalid committee key")
@@ -478,15 +475,8 @@ class Database:
         return committee_members
 
     @staticmethod
-    async def _get_bonded_mapping(cur: psycopg.AsyncCursor[dict[str, Any]]) -> dict[Address, tuple[Address, u64]]:
-        bonded_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "bonded"))
-        await cur.execute(
-            "SELECT content FROM mapping m WHERE m.mapping_id = %s",
-            (str(bonded_mapping_id),)
-        )
-        data = await cur.fetchone()
-        if data is None:
-            raise RuntimeError("missing current bonded data")
+    async def _get_bonded_mapping(redis_conn: Redis) -> dict[Address, tuple[Address, u64]]:
+        data = await redis_conn.hgetall("credits.aleo:bonded")
 
         stakers: dict[Address, tuple[Address, u64]] = {}
         for d in data["content"].values():
@@ -568,19 +558,19 @@ class Database:
             new_committee_members[validator] = amount, committee_members[validator][1]
         return new_committee_members
 
-    async def _post_ratify(self, cur: psycopg.AsyncCursor[dict[str, Any]], height: int, round_: int,
+    async def _post_ratify(self, cur: psycopg.AsyncCursor[dict[str, Any]], redis_conn: Redis, height: int, round_: int,
                            ratifications: list[Ratify], address_puzzle_rewards: dict[str, int]):
         for ratification in ratifications:
             if isinstance(ratification, BlockRewardRatify):
-                committee_members = await Database._get_committee_mapping(cur)
-                stakers = await Database._get_bonded_mapping(cur)
+                committee_members = await Database._get_committee_mapping(redis_conn)
+                stakers = await Database._get_bonded_mapping(redis_conn)
 
                 Database._check_committee_staker_match(committee_members, stakers)
 
                 stakers = Database._stake_rewards(committee_members, stakers, ratification.amount)
                 committee_members = Database._next_committee_members(committee_members, stakers)
 
-                await Database._update_committee_bonded_map(cur, committee_members, stakers, height)
+                await Database._update_committee_bonded_map(cur, self.redis.client(), committee_members, stakers, height)
                 await Database._save_committee_history(cur, height, Committee(
                     starting_round=u64(round_),
                     members=Vec[Tuple[Address, u64, bool_], u16]([
@@ -593,12 +583,13 @@ class Database:
                     continue
                 account_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "account"))
                 await cur.execute(
-                    "SELECT content FROM mapping m WHERE m.mapping_id = %s",
+                    "SELECT id FROM mapping m WHERE m.mapping_id = %s",
                     (str(account_mapping_id),)
                 )
                 data = await cur.fetchone()
                 if data is None:
                     raise RuntimeError("missing current account data")
+
                 current_balances = data["content"]
 
                 operations: list[dict[str, Any]] = []
@@ -2506,73 +2497,139 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def update_mapping_key_value(self, cur: psycopg.AsyncCursor[dict[str, Any]], mapping_id: str, index: int, key_id: str, value_id: str,
-                                        key: bytes, value: bytes, height: int):
+    async def update_mapping_key_value(self, cur: psycopg.AsyncCursor[dict[str, Any]], program_name: str,
+                                       mapping_name: str, mapping_id: str, index: int, key_id: str, value_id: str,
+                                       key: bytes, value: bytes, height: int):
         try:
-            await cur.execute("SELECT id FROM mapping WHERE mapping_id = %s", (mapping_id,))
-            mapping = await cur.fetchone()
-            if mapping is None:
-                raise ValueError(f"Mapping {mapping_id} not found")
-            mapping_id = mapping['id']
-            await cur.execute(
-                "SELECT key_id, key FROM mapping_value WHERE mapping_id = %s AND index = %s",
-                (mapping_id, index)
-            )
-            if (res := await cur.fetchone()) is None:
-                await cur.execute(
-                    "INSERT INTO mapping_value (mapping_id, index, key_id, value_id, key, value) "
-                    "VALUES (%s, %s, %s, %s, %s, %s)",
-                    (mapping_id, index, key_id, value_id, key, value)
-                )
+            if program_name == "credits.aleo" and mapping_name in ["committee", "bonded"]:
+                async with self.redis.client() as conn:
+                    while True:
+                        try:
+                            await conn.watch(
+                                f"{program_name}:{mapping_name}",
+                                f"{program_name}:{mapping_name}:index"
+                            )
+                            old_key_id = await conn.hget(f"{program_name}:{mapping_name}:index", str(index))
+                            if old_key_id is not None and old_key_id != key_id:
+                                raise ValueError(f"key id mismatch: {old_key_id} != {key_id}")
+                            data = {
+                                "key": key.hex(),
+                                "value_id": value_id,
+                                "value": value.hex(),
+                                "index": index,
+                            }
+                            await conn.execute_command("MULTI")
+                            await conn.hset(f"{program_name}:{mapping_name}", key_id, json.dumps(data))
+                            await conn.hset(f"{program_name}:{mapping_name}:index", str(index), key_id)
+                            await conn.execute_command("EXEC")
+                        except WatchError:
+                            await asyncio.sleep(0.01)
+                            continue
+                        except:
+                            try:
+                                await conn.execute_command("DISCARD")
+                            finally:
+                                raise
             else:
-                if res["key_id"] != key_id:
-                    raise ValueError(f"Key id mismatch: {res['key_id']} != {key_id}")
+                await cur.execute("SELECT id FROM mapping WHERE mapping_id = %s", (mapping_id,))
+                mapping = await cur.fetchone()
+                if mapping is None:
+                    raise ValueError(f"mapping {mapping_id} not found")
+                mapping_id = mapping['id']
                 await cur.execute(
-                    "UPDATE mapping_value SET value_id = %s, value = %s "
-                    "WHERE mapping_id = %s AND index = %s",
-                    (value_id, value, mapping_id, index)
+                    "SELECT key_id, key FROM mapping_value WHERE mapping_id = %s AND index = %s",
+                    (mapping_id, index)
                 )
+                if (res := await cur.fetchone()) is None:
+                    await cur.execute(
+                        "INSERT INTO mapping_value (mapping_id, index, key_id, value_id, key, value) "
+                        "VALUES (%s, %s, %s, %s, %s, %s)",
+                        (mapping_id, index, key_id, value_id, key, value)
+                    )
+                else:
+                    if res["key_id"] != key_id:
+                        raise ValueError(f"key id mismatch: {res['key_id']} != {key_id}")
+                    await cur.execute(
+                        "UPDATE mapping_value SET value_id = %s, value = %s "
+                        "WHERE mapping_id = %s AND index = %s",
+                        (value_id, value, mapping_id, index)
+                    )
 
-            await cur.execute(
-                "INSERT INTO mapping_history (mapping_id, height, key_id, value, index) "
-                "VALUES (%s, %s, %s, %s, %s)",
-                (mapping_id, height, key_id, value, index)
-            )
+                await cur.execute(
+                    "INSERT INTO mapping_history (mapping_id, height, key_id, value, index) "
+                    "VALUES (%s, %s, %s, %s, %s)",
+                    (mapping_id, height, key_id, value, index)
+                )
 
         except Exception as e:
             await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
             raise
 
     # noinspection SqlResolve
-    async def remove_mapping_key_value(self, cur: psycopg.AsyncCursor[dict[str, Any]], mapping_id: str, index: int,
-                                       height: int):
+    async def remove_mapping_key_value(self, cur: psycopg.AsyncCursor[dict[str, Any]], program_name: str,
+                                       mapping_name: str, mapping_id: str, index: int, height: int):
         try:
-            await cur.execute("SELECT id FROM mapping WHERE mapping_id = %s", (mapping_id,))
-            mapping = await cur.fetchone()
-            if mapping is None:
-                raise ValueError(f"mapping {mapping_id} not found")
-            mapping_id = mapping['id']
-            await cur.execute("SELECT key_id FROM mapping_value WHERE mapping_id = %s AND index = %s", (mapping_id, index))
-            if (res := await cur.fetchone()) is None:
-                raise ValueError(f"index {index} not found")
-            to_delete = res
-            await cur.execute(
-                "SELECT id, index FROM mapping_value WHERE mapping_id = %s ORDER BY index DESC LIMIT 1",
-                (mapping_id,)
-            )
-            res = await cur.fetchone()
-            await cur.execute(
-                "DELETE FROM mapping_value WHERE mapping_id = %s AND index = %s",
-                (mapping_id, index)
-            )
-            if res is not None and res["index"] != index:
-                await cur.execute("UPDATE mapping_value SET index = %s WHERE id = %s", (index, res["id"]))
+            if program_name == "credits.aleo" and mapping_name in ["committee", "bonded"]:
+                async with self.redis.client() as conn:
+                    while True:
+                        try:
+                            await conn.watch(
+                                f"{program_name}:{mapping_name}",
+                                f"{program_name}:{mapping_name}:index"
+                            )
+                            key_id = await conn.hget(f"{program_name}:{mapping_name}:index", str(index))
+                            if key_id is None:
+                                raise ValueError(f"index {index} not found")
+                            data = json.loads(await conn.hget(f"{program_name}:{mapping_name}", key_id))
+                            if data["index"] != index:
+                                raise RuntimeError("redis data corrupted")
+                            indices = await conn.hkeys(f"{program_name}:{mapping_name}:index")
+                            max_index = max(map(int, indices))
+                            max_index_key_id = await conn.hget(f"{program_name}:{mapping_name}:index", str(max_index))
+                            max_index_data = json.loads(await conn.hget(f"{program_name}:{mapping_name}", max_index_key_id))
+                            await conn.execute_command("MULTI")
+                            await conn.hdel(f"{program_name}:{mapping_name}", [key_id])
+                            await conn.hdel(f"{program_name}:{mapping_name}:index", [str(max_index)])
+                            if max_index != index:
+                                await conn.hset(f"{program_name}:{mapping_name}:index", str(index), max_index_key_id)
+                                max_index_data["index"] = index
+                                await conn.hset(f"{program_name}:{mapping_name}", max_index_key_id, json.dumps(max_index_data))
+                            await conn.execute_command("EXEC")
+                        except WatchError:
+                            await asyncio.sleep(0.01)
+                            continue
+                        except:
+                            try:
+                                await conn.execute_command("DISCARD")
+                            finally:
+                                raise
+            else:
+                await cur.execute("SELECT id FROM mapping WHERE mapping_id = %s", (mapping_id,))
+                mapping = await cur.fetchone()
+                if mapping is None:
+                    raise ValueError(f"mapping {mapping_id} not found")
+                mapping_id = mapping['id']
+                await cur.execute("SELECT key_id FROM mapping_value WHERE mapping_id = %s AND index = %s", (mapping_id, index))
+                if (res := await cur.fetchone()) is None:
+                    raise ValueError(f"index {index} not found")
+                deleted_key_id = res["key_id"]
+                await cur.execute(
+                    "SELECT id, index FROM mapping_value WHERE mapping_id = %s ORDER BY index DESC LIMIT 1",
+                    (mapping_id,)
+                )
+                res = await cur.fetchone()
+                await cur.execute(
+                    "DELETE FROM mapping_value WHERE mapping_id = %s AND index = %s",
+                    (mapping_id, index)
+                )
+                if res is not None and res["index"] != index:
+                    await cur.execute("UPDATE mapping_value SET index = %s WHERE id = %s", (index, res["id"]))
 
-            await cur.execute(
-                "INSERT INTO mapping_history (mapping_id, height, key_id, value, index) "
-                "VALUES (%s, %s, %s, %s, %s)",
-                (mapping_id, height, to_delete["key_id"], None, index)
-            )
+                await cur.execute(
+                    "INSERT INTO mapping_history (mapping_id, height, key_id, value, index) "
+                    "VALUES (%s, %s, %s, %s, %s)",
+                    (mapping_id, height, deleted_key_id, None, index)
+                )
 
         except Exception as e:
             await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))

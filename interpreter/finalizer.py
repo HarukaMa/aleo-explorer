@@ -166,6 +166,7 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
 
             operations.append({
                 "type": FinalizeOperation.Type.UpdateKeyValue,
+                "program_id": str(program.id),
                 "mapping_id": mapping_id,
                 "index": index,
                 "key_id": key_id,
@@ -230,6 +231,7 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
                     print("Not updating database because allow_state_change is False")
             operations.append({
                 "type": FinalizeOperation.Type.RemoveKeyValue,
+                "program_id": str(program.id),
                 "mapping_id": mapping_id,
                 "index": index,
                 "mapping": c.mapping,

@@ -1974,8 +1974,10 @@ set-max-intset-entries 512
 # data structure when they have a small number of entries, and the biggest entry
 # does not exceed a given threshold. These thresholds can be configured using
 # the following directives.
-set-max-listpack-entries 128
-set-max-listpack-value 64
+# set-max-listpack-entries 128
+# set-max-listpack-value 64
+#
+# ^^^ 7.2+
 
 # Similarly to hashes and lists, sorted sets are also specially encoded in
 # order to save a lot of space. This encoding is only used when the length and
