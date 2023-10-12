@@ -8,6 +8,7 @@ import psycopg.sql
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from psycopg_pool import AsyncConnectionPool
+from redis.asyncio import Redis
 
 from aleo_types import *
 from disasm.utils import value_type_to_mode_type_str, plaintext_type_to_str
@@ -23,6 +24,7 @@ except ImportError:
 class Database:
 
     def __init__(self, *, server: str, user: str, password: str, database: str, schema: str,
+                 redis_server: str, redis_port: int, redis_db: int,
                  message_callback: Callable[[ExplorerMessage], Awaitable[None]]):
         self.server = server
         self.user = user
@@ -30,7 +32,11 @@ class Database:
         self.database = database
         self.schema = schema
         self.message_callback = message_callback
+        self.redis_server = redis_server
+        self.redis_port = redis_port
+        self.redis_db = redis_db
         self.pool: AsyncConnectionPool
+        self.redis: Redis
 
     async def connect(self):
         try:
@@ -43,6 +49,7 @@ class Database:
                 },
                 max_size=16,
             )
+            self.redis = Redis(host=self.redis_server, port=self.redis_port, db=self.redis_db)
         except Exception as e:
             await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseConnectError, e))
             return
@@ -2399,13 +2406,13 @@ class Database:
     async def get_mapping_cache_with_cur(self, cur: psycopg.AsyncCursor[dict[str, Any]], mapping_id: str) -> dict[Field, Any]:
         try:
             await cur.execute(
-                "SELECT content FROM mapping m "
-                "WHERE m.mapping_id = %s",
+                "SELECT index, key_id, value_id, key, value FROM mapping_value mv "
+                "JOIN mapping m on mv.mapping_id = m.id "
+                "WHERE m.mapping_id = %s "
+                "ORDER BY index",
                 (mapping_id,)
             )
-            data = await cur.fetchone()
-            if data is None or data["content"] is None:
-                return {}
+            data = await cur.fetchall()
             def transform(d: dict[str, Any]):
                 return {
                     "index": d["index"],
@@ -2413,7 +2420,7 @@ class Database:
                     "key": Plaintext.load(BytesIO(bytes.fromhex(d["key"]))),
                     "value": Value.load(BytesIO(bytes.fromhex(d["value"]))),
                 }
-            return {Field.loads(x): transform(y) for x, y in data["content"].items()}
+            return {Field.loads(x["key_id"]): transform(x) for x in data}
 
         except Exception as e:
             await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
@@ -2429,14 +2436,15 @@ class Database:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT content[%s]['value'] FROM mapping m "
-                        "WHERE m.program_id = %s AND m.mapping = %s",
-                        (key_id, program_id, mapping)
+                        "SELECT value FROM mapping_value mv "
+                        "JOIN mapping m on mv.mapping_id = m.id "
+                        "WHERE m.program_id = %s AND m.mapping = %s AND mv.key_id = %s",
+                        (program_id, mapping, key_id)
                     )
                     res = await cur.fetchone()
-                    if res is None or res['content'] is None:
+                    if res is None:
                         return None
-                    return bytes.fromhex(res['content'])
+                    return res['value']
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
@@ -2446,14 +2454,15 @@ class Database:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT content[%s]['index'] FROM mapping m "
-                        "WHERE m.program_id = %s AND m.mapping = %s",
-                        (key_id, program_id, mapping)
+                        "SELECT index FROM mapping_value mv "
+                        "JOIN mapping m on mv.mapping_id = m.id "
+                        "WHERE m.program_id = %s AND m.mapping = %s AND mv.key_id = %s",
+                        (program_id, mapping, key_id)
                     )
                     res = await cur.fetchone()
                     if res is None:
                         return None
-                    return res["content"]
+                    return res['index']
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
@@ -2463,9 +2472,9 @@ class Database:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT COUNT(*) FROM "
-                        "(SELECT jsonb_object_keys(content) FROM mapping m "
-                        " WHERE m.program_id = %s AND m.mapping = %s) k",
+                        "SELECT COUNT(*) FROM mapping_value mv "
+                        "JOIN mapping m on mv.mapping_id = m.id "
+                        "WHERE m.program_id = %s AND m.mapping = %s",
                         (program_id, mapping)
                     )
                     if (res := await cur.fetchone()) is None:
@@ -2478,8 +2487,8 @@ class Database:
     async def initialize_mapping(self, cur: psycopg.AsyncCursor[dict[str, Any]], mapping_id: str, program_id: str, mapping: str):
         try:
             await cur.execute(
-                "INSERT INTO mapping (mapping_id, program_id, mapping, content) VALUES (%s, %s, %s, %s)",
-                (mapping_id, program_id, mapping, Jsonb({}))
+                "INSERT INTO mapping (mapping_id, program_id, mapping) VALUES (%s, %s, %s)",
+                (mapping_id, program_id, mapping)
             )
         except Exception as e:
             await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
@@ -2490,8 +2499,8 @@ class Database:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "INSERT INTO mapping (mapping_id, program_id, mapping, content) VALUES (%s, %s, %s, %s)",
-                        (mapping_id, program_id, mapping, Jsonb({}))
+                        "INSERT INTO mapping (mapping_id, program_id, mapping) VALUES (%s, %s, %s)",
+                        (mapping_id, program_id, mapping)
                     )
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
@@ -2500,25 +2509,34 @@ class Database:
     async def update_mapping_key_value(self, cur: psycopg.AsyncCursor[dict[str, Any]], mapping_id: str, index: int, key_id: str, value_id: str,
                                         key: bytes, value: bytes, height: int):
         try:
-            # safety check
-            await cur.execute("SELECT id, content[%s] FROM mapping WHERE mapping_id = %s", (key_id, mapping_id))
-            if (res := await cur.fetchone()) is not None:
-                if res["content"] is not None and res["content"]["index"] != index:
-                    raise ValueError(f"index mismatch: {res['content']['index']} != {index}")
-                mapping_db_id = res["id"]
+            await cur.execute("SELECT id FROM mapping WHERE mapping_id = %s", (mapping_id,))
+            mapping = await cur.fetchone()
+            if mapping is None:
+                raise ValueError(f"Mapping {mapping_id} not found")
+            mapping_id = mapping['id']
+            await cur.execute(
+                "SELECT key_id, key FROM mapping_value WHERE mapping_id = %s AND index = %s",
+                (mapping_id, index)
+            )
+            if (res := await cur.fetchone()) is None:
+                await cur.execute(
+                    "INSERT INTO mapping_value (mapping_id, index, key_id, value_id, key, value) "
+                    "VALUES (%s, %s, %s, %s, %s, %s)",
+                    (mapping_id, index, key_id, value_id, key, value)
+                )
             else:
-                raise ValueError(f"mapping_id {mapping_id} not found")
-            await cur.execute("UPDATE mapping SET content[%s] = %s WHERE mapping_id = %s", (key_id, Jsonb({
-                "index": index,
-                "value_id": value_id,
-                "key": key.hex(),
-                "value": value.hex()
-            }), mapping_id))
+                if res["key_id"] != key_id:
+                    raise ValueError(f"Key id mismatch: {res['key_id']} != {key_id}")
+                await cur.execute(
+                    "UPDATE mapping_value SET value_id = %s, value = %s "
+                    "WHERE mapping_id = %s AND index = %s",
+                    (value_id, value, mapping_id, index)
+                )
 
             await cur.execute(
                 "INSERT INTO mapping_history (mapping_id, height, key_id, value, index) "
                 "VALUES (%s, %s, %s, %s, %s)",
-                (mapping_db_id, height, key_id, value, index)
+                (mapping_id, height, key_id, value, index)
             )
 
         except Exception as e:
@@ -2530,58 +2548,35 @@ class Database:
                                        height: int):
         try:
             await cur.execute("SELECT id FROM mapping WHERE mapping_id = %s", (mapping_id,))
+            mapping = await cur.fetchone()
+            if mapping is None:
+                raise ValueError(f"mapping {mapping_id} not found")
+            mapping_id = mapping['id']
+            await cur.execute("SELECT key_id FROM mapping_value WHERE mapping_id = %s AND index = %s", (mapping_id, index))
             if (res := await cur.fetchone()) is None:
-                raise ValueError(f"mapping_id {mapping_id} not found")
-            mapping_db_id = res["id"]
-            # in theory we don't need the escaping for mapping id, but anyway
+                raise ValueError(f"index {index} not found")
+            to_delete = res
             await cur.execute(
-                psycopg.sql.SQL(
-                    "CREATE TEMP TABLE {} AS "
-                    "  SELECT key, value FROM jsonb_each("
-                    "    (SELECT content FROM mapping WHERE mapping_id = %s)"
-                    "  )"
-                ).format(psycopg.sql.Identifier(f"temp_{mapping_id}")),
+                "SELECT id, index FROM mapping_value WHERE mapping_id = %s ORDER BY index DESC LIMIT 1",
                 (mapping_id,)
             )
+            res = await cur.fetchone()
             await cur.execute(
-                psycopg.sql.SQL(
-                    "SELECT key, value FROM {} WHERE value['index'] = %s"
-                ).format(psycopg.sql.Identifier(f"temp_{mapping_id}")),
-                (index,)
+                "DELETE FROM mapping_value WHERE mapping_id = %s AND index = %s",
+                (mapping_id, index)
             )
-            to_delete = await cur.fetchone()
-            if to_delete is not None:
-                await cur.execute(
-                    psycopg.sql.SQL(
-                    "SELECT key, value FROM {} ORDER BY value['index']::integer DESC LIMIT 1"
-                    ).format(psycopg.sql.Identifier(f"temp_{mapping_id}")),
-                    (to_delete["key"],)
-                )
-                max_index = await cur.fetchone()
-                await cur.execute(
-                    "UPDATE mapping SET content = content - %s WHERE mapping_id = %s",
-                    (to_delete["key"], mapping_id)
-                )
-                if max_index is not None and max_index["key"] != to_delete["key"]:
-                    await cur.execute(
-                        "UPDATE mapping SET content[%s]['index'] = %s WHERE mapping_id = %s",
-                        (max_index["key"], index, mapping_id)
-                    )
+            if res is not None and res["index"] != index:
+                await cur.execute("UPDATE mapping_value SET index = %s WHERE id = %s", (index, res["id"]))
 
-                await cur.execute(
-                    "INSERT INTO mapping_history (mapping_id, height, key_id, value, index) "
-                    "VALUES (%s, %s, %s, %s, %s)",
-                    (mapping_db_id, height, to_delete["key"], None, index)
-                )
+            await cur.execute(
+                "INSERT INTO mapping_history (mapping_id, height, key_id, value, index) "
+                "VALUES (%s, %s, %s, %s, %s)",
+                (mapping_id, height, to_delete["key_id"], None, index)
+            )
 
         except Exception as e:
             await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
             raise
-
-        finally:
-            await cur.execute(
-                psycopg.sql.SQL("DROP TABLE IF EXISTS {}").format(f"temp_{mapping_id}")
-            )
                 
     async def get_program_leo_source_code(self, program_id: str) -> Optional[str]:
         async with self.pool.connection() as conn:

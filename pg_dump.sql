@@ -2,8 +2,8 @@
 -- PostgreSQL database dump
 --
 
--- Dumped from database version 15.4 (Debian 15.4-3)
--- Dumped by pg_dump version 15.4
+-- Dumped from database version 15.1
+-- Dumped by pg_dump version 15.3
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -855,8 +855,7 @@ CREATE TABLE explorer.mapping (
     id integer NOT NULL,
     mapping_id text NOT NULL,
     program_id text NOT NULL,
-    mapping text NOT NULL,
-    content jsonb NOT NULL
+    mapping text NOT NULL
 );
 
 
@@ -942,6 +941,40 @@ CREATE SEQUENCE explorer.mapping_id_seq
 --
 
 ALTER SEQUENCE explorer.mapping_id_seq OWNED BY explorer.mapping.id;
+
+
+--
+-- Name: mapping_value; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.mapping_value (
+    id integer NOT NULL,
+    mapping_id integer NOT NULL,
+    index integer NOT NULL,
+    key_id text NOT NULL,
+    value_id text NOT NULL,
+    key bytea NOT NULL,
+    value bytea NOT NULL
+);
+
+
+--
+-- Name: mapping_value_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.mapping_value_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: mapping_value_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.mapping_value_id_seq OWNED BY explorer.mapping_value.id;
 
 
 --
@@ -1768,6 +1801,13 @@ ALTER TABLE ONLY explorer.mapping_history ALTER COLUMN id SET DEFAULT nextval('e
 
 
 --
+-- Name: mapping_value id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping_value ALTER COLUMN id SET DEFAULT nextval('explorer.mapping_value_id_seq'::regclass);
+
+
+--
 -- Name: program id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -2105,6 +2145,22 @@ ALTER TABLE ONLY explorer.mapping
 
 ALTER TABLE ONLY explorer.mapping
     ADD CONSTRAINT mapping_pk3 UNIQUE (program_id, mapping);
+
+
+--
+-- Name: mapping_value mapping_value_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping_value
+    ADD CONSTRAINT mapping_value_pk PRIMARY KEY (id);
+
+
+--
+-- Name: mapping_value mapping_value_pk2; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping_value
+    ADD CONSTRAINT mapping_value_pk2 UNIQUE (index, mapping_id);
 
 
 --
@@ -2556,13 +2612,6 @@ CREATE INDEX leaderboard_total_reward_index ON explorer.leaderboard USING btree 
 
 
 --
--- Name: mapping_(content->'index')_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX "mapping_(content->'index')_index" ON explorer.mapping USING gin (((content -> 'index'::text)));
-
-
---
 -- Name: mapping_bonded_history_content_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -2574,13 +2623,6 @@ CREATE INDEX mapping_bonded_history_content_index ON explorer.mapping_bonded_his
 --
 
 CREATE INDEX mapping_bonded_history_height_index ON explorer.mapping_bonded_history USING btree (height);
-
-
---
--- Name: mapping_content_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX mapping_content_index ON explorer.mapping USING gin (content);
 
 
 --
@@ -2602,6 +2644,20 @@ CREATE INDEX mapping_history_key_id_index ON explorer.mapping_history USING btre
 --
 
 CREATE INDEX mapping_history_mapping_id_index ON explorer.mapping_history USING btree (mapping_id);
+
+
+--
+-- Name: mapping_value_key_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX mapping_value_key_id_index ON explorer.mapping_value USING btree (key_id);
+
+
+--
+-- Name: mapping_value_mapping_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX mapping_value_mapping_id_index ON explorer.mapping_value USING btree (mapping_id);
 
 
 --
@@ -3007,6 +3063,14 @@ ALTER TABLE ONLY explorer.future
 
 ALTER TABLE ONLY explorer.mapping_history
     ADD CONSTRAINT mapping_history_mapping_id_fk FOREIGN KEY (mapping_id) REFERENCES explorer.mapping(id);
+
+
+--
+-- Name: mapping_value mapping_value_mapping_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping_value
+    ADD CONSTRAINT mapping_value_mapping_id_fk FOREIGN KEY (mapping_id) REFERENCES explorer.mapping(id);
 
 
 --
