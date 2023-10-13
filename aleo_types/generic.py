@@ -1,4 +1,4 @@
-from functools import partial, lru_cache
+from functools import partial
 from types import GenericAlias, MethodType
 from typing import Generic, TypeVar, get_args, Optional, Callable, TypeVarTuple, TypeGuard
 
@@ -17,7 +17,7 @@ I_co = TypeVar('I_co', bound=Int, covariant=True)
 
 
 @lru_cache(maxsize=1024)
-def _get_args(self):
+def _get_args(self: GenericAlias):
     return get_args(self)
 
 class TypedGenericAlias(GenericAlias):

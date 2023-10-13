@@ -193,9 +193,9 @@ async def execute_operations(db: Database, cur: psycopg.AsyncCursor[dict[str, An
                 raise NotImplementedError
 
 async def get_mapping_value(db: Database, program_id: str, mapping_name: str, key: str) -> Value:
-    mapping_id = Field.loads(aleo.get_mapping_id(program_id, mapping_name))
+    mapping_id = Field.loads(cached_get_mapping_id(program_id, mapping_name))
     if mapping_id not in global_mapping_cache:
-        global_mapping_cache[mapping_id] = await mapping_cache_read(db, mapping_id)
+        global_mapping_cache[mapping_id] = await mapping_cache_read(db, program_id, mapping_name)
     if str(program_id) in global_program_cache:
         program = global_program_cache[str(program_id)]
     else:

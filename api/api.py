@@ -60,6 +60,8 @@ async def startup():
     # different thread so need to get a new database instance
     db = Database(server=os.environ["DB_HOST"], user=os.environ["DB_USER"], password=os.environ["DB_PASS"],
                   database=os.environ["DB_DATABASE"], schema=os.environ["DB_SCHEMA"],
+                  redis_server=os.environ["REDIS_HOST"], redis_port=int(os.environ["REDIS_PORT"]),
+                  redis_db=int(os.environ["REDIS_DB"]),
                   message_callback=noop)
     await db.connect()
     app.state.db = db

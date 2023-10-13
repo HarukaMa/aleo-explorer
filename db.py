@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import asyncio
 import os
 import time
 from collections import defaultdict
-from typing import Awaitable
+from typing import Awaitable, ParamSpec
 
 import psycopg
 import psycopg.sql
@@ -19,8 +21,12 @@ from explorer.types import Message as ExplorerMessage
 try:
     from line_profiler import profile
 except ImportError:
-    def profile(func):
-        return func
+    P = ParamSpec('P')
+    R = TypeVar('R')
+    def profile(func: Callable[P, R]) -> Callable[P, R]:
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+            return func(*args, **kwargs)
+        return wrapper
 
 
 class Database:
@@ -38,7 +44,7 @@ class Database:
         self.redis_port = redis_port
         self.redis_db = redis_db
         self.pool: AsyncConnectionPool
-        self.redis: Redis
+        self.redis: Redis[str]
 
     async def connect(self):
         try:
@@ -51,8 +57,9 @@ class Database:
                 },
                 max_size=16,
             )
+            # noinspection PyArgumentList
             self.redis = Redis(host=self.redis_server, port=self.redis_port, db=self.redis_db, protocol=3,
-                               decode_responses=True)
+                               decode_responses=True) # type: ignore
         except Exception as e:
             await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseConnectError, e))
             return
@@ -324,14 +331,14 @@ class Database:
 
     @staticmethod
     async def _update_committee_bonded_map(cur: psycopg.AsyncCursor[dict[str, Any]],
-                                           redis_conn: Redis,
+                                           redis_conn: Redis[str],
                                            committee_members: dict[Address, tuple[u64, bool_]],
                                            stakers: dict[Address, tuple[Address, u64]],
                                            height: int):
         committee_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "committee"))
         bonded_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "bonded"))
 
-        committee_mapping = {}
+        committee_mapping: dict[str, dict[str, Any]] = {}
         for index, (address, (amount, is_open)) in enumerate(committee_members.items()):
             key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=address))
             key_id = Field.loads(cached_get_key_id(str(committee_mapping_id), key.dump()))
@@ -361,7 +368,7 @@ class Database:
         await redis_conn.hset("credits.aleo:committee", mapping={k: json.dumps(v) for k, v in committee_mapping.items()})
         await redis_conn.execute_command("EXEC")
 
-        bonded_mapping = {}
+        bonded_mapping: dict[str, dict[str, Any]] = {}
         for index, (address, (validator, amount)) in enumerate(stakers.items()):
             key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=address))
             key_id = Field.loads(cached_get_key_id(str(bonded_mapping_id), key.dump()))
@@ -440,16 +447,18 @@ class Database:
                 "key": key,
                 "value": value,
                 "height": 0,
+                "program_name": "credits.aleo",
+                "mapping_name": "account",
             })
         from interpreter.interpreter import execute_operations
         await execute_operations(self, cur, operations)
 
     @staticmethod
-    async def _get_committee_mapping(redis_conn: Redis) -> dict[Address, tuple[u64, bool_]]:
+    async def _get_committee_mapping(redis_conn: Redis[str]) -> dict[Address, tuple[u64, bool_]]:
         data = await redis_conn.hgetall("credits.aleo:committee")
-
         committee_members: dict[Address, tuple[u64, bool_]] = {}
         for d in data.values():
+            d = json.loads(d)
             key = Plaintext.load(BytesIO(bytes.fromhex(d["key"])))
             if not isinstance(key, LiteralPlaintext):
                 raise RuntimeError("invalid committee key")
@@ -475,11 +484,12 @@ class Database:
         return committee_members
 
     @staticmethod
-    async def _get_bonded_mapping(redis_conn: Redis) -> dict[Address, tuple[Address, u64]]:
+    async def _get_bonded_mapping(redis_conn: Redis[str]) -> dict[Address, tuple[Address, u64]]:
         data = await redis_conn.hgetall("credits.aleo:bonded")
 
         stakers: dict[Address, tuple[Address, u64]] = {}
-        for d in data["content"].values():
+        for d in data.values():
+            d = json.loads(d)
             key = Plaintext.load(BytesIO(bytes.fromhex(d["key"])))
             if not isinstance(key, LiteralPlaintext):
                 raise RuntimeError("invalid bonded key")
@@ -558,7 +568,7 @@ class Database:
             new_committee_members[validator] = amount, committee_members[validator][1]
         return new_committee_members
 
-    async def _post_ratify(self, cur: psycopg.AsyncCursor[dict[str, Any]], redis_conn: Redis, height: int, round_: int,
+    async def _post_ratify(self, cur: psycopg.AsyncCursor[dict[str, Any]], redis_conn: Redis[str], height: int, round_: int,
                            ratifications: list[Ratify], address_puzzle_rewards: dict[str, int]):
         for ratification in ratifications:
             if isinstance(ratification, BlockRewardRatify):
@@ -992,10 +1002,10 @@ class Database:
                                     if block.header.metadata.height >= 130888 and block.header.metadata.timestamp < 1675209600 and current_total_credit < 37_500_000_000_000:
                                         await cur.execute(
                                             "UPDATE leaderboard SET total_incentive = leaderboard.total_incentive + %s WHERE address = %s",
-                                            (reward, str(partial_solution.address))
+                                            (reward, address)
                                         )
 
-                        await self._post_ratify(cur, block.height, block.round, block.ratifications, address_puzzle_rewards)
+                        await self._post_ratify(cur, self.redis, block.height, block.round, block.ratifications, address_puzzle_rewards)
 
                         await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseBlockAdded, block.header.metadata.height))
                     except Exception as e:
@@ -2394,16 +2404,9 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_mapping_cache_with_cur(self, cur: psycopg.AsyncCursor[dict[str, Any]], mapping_id: str) -> dict[Field, Any]:
-        try:
-            await cur.execute(
-                "SELECT index, key_id, value_id, key, value FROM mapping_value mv "
-                "JOIN mapping m on mv.mapping_id = m.id "
-                "WHERE m.mapping_id = %s "
-                "ORDER BY index",
-                (mapping_id,)
-            )
-            data = await cur.fetchall()
+    async def get_mapping_cache_with_cur(self, cur: psycopg.AsyncCursor[dict[str, Any]], program_name: str,
+                                         mapping_name: str) -> dict[Field, Any]:
+        if program_name == "credits.aleo" and mapping_name in ["committee", "bonded"]:
             def transform(d: dict[str, Any]):
                 return {
                     "index": d["index"],
@@ -2411,16 +2414,35 @@ class Database:
                     "key": Plaintext.load(BytesIO(bytes.fromhex(d["key"]))),
                     "value": Value.load(BytesIO(bytes.fromhex(d["value"]))),
                 }
-            return {Field.loads(x["key_id"]): transform(x) for x in data}
+            data = await self.redis.hgetall(f"mapping:{program_name}:{mapping_name}")
+            return {Field.loads(k): transform(json.loads(v)) for k, v in data.items()}
+        else:
+            mapping_id = Field.loads(cached_get_mapping_id(program_name, mapping_name))
+            try:
+                await cur.execute(
+                    "SELECT index, key_id, value_id, key, value FROM mapping_value mv "
+                    "JOIN mapping m on mv.mapping_id = m.id "
+                    "WHERE m.mapping_id = %s "
+                    "ORDER BY index",
+                    (str(mapping_id),)
+                )
+                data = await cur.fetchall()
+                def transform(d: dict[str, Any]):
+                    return {
+                        "index": d["index"],
+                        "value_id": Field.loads(d["value_id"]),
+                        "key": Plaintext.load(BytesIO(d["key"])),
+                        "value": Value.load(BytesIO(d["value"])),
+                    }
+                return {Field.loads(x["key_id"]): transform(x) for x in data}
+            except Exception as e:
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                raise
 
-        except Exception as e:
-            await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
-            raise
-
-    async def get_mapping_cache(self, mapping_id: str) -> dict[Field, Any]:
+    async def get_mapping_cache(self, program_name: str, mapping_name: str) -> dict[Field, Any]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
-                return await self.get_mapping_cache_with_cur(cur, mapping_id)
+                return await self.get_mapping_cache_with_cur(cur, program_name, mapping_name)
 
     async def get_mapping_value(self, program_id: str, mapping: str, key_id: str) -> Optional[bytes]:
         async with self.pool.connection() as conn:
@@ -2502,34 +2524,34 @@ class Database:
                                        key: bytes, value: bytes, height: int):
         try:
             if program_name == "credits.aleo" and mapping_name in ["committee", "bonded"]:
-                async with self.redis.client() as conn:
-                    while True:
+                conn = self.redis
+                while True:
+                    try:
+                        await conn.watch(
+                            f"{program_name}:{mapping_name}",
+                            f"{program_name}:{mapping_name}:index"
+                        )
+                        old_key_id = await conn.hget(f"{program_name}:{mapping_name}:index", str(index))
+                        if old_key_id is not None and old_key_id != key_id:
+                            raise ValueError(f"key id mismatch: {old_key_id} != {key_id}")
+                        data = {
+                            "key": key.hex(),
+                            "value_id": value_id,
+                            "value": value.hex(),
+                            "index": index,
+                        }
+                        await conn.execute_command("MULTI")
+                        await conn.hset(f"{program_name}:{mapping_name}", key_id, json.dumps(data))
+                        await conn.hset(f"{program_name}:{mapping_name}:index", str(index), key_id)
+                        await conn.execute_command("EXEC")
+                    except WatchError:
+                        await asyncio.sleep(0.01)
+                        continue
+                    except:
                         try:
-                            await conn.watch(
-                                f"{program_name}:{mapping_name}",
-                                f"{program_name}:{mapping_name}:index"
-                            )
-                            old_key_id = await conn.hget(f"{program_name}:{mapping_name}:index", str(index))
-                            if old_key_id is not None and old_key_id != key_id:
-                                raise ValueError(f"key id mismatch: {old_key_id} != {key_id}")
-                            data = {
-                                "key": key.hex(),
-                                "value_id": value_id,
-                                "value": value.hex(),
-                                "index": index,
-                            }
-                            await conn.execute_command("MULTI")
-                            await conn.hset(f"{program_name}:{mapping_name}", key_id, json.dumps(data))
-                            await conn.hset(f"{program_name}:{mapping_name}:index", str(index), key_id)
-                            await conn.execute_command("EXEC")
-                        except WatchError:
-                            await asyncio.sleep(0.01)
-                            continue
-                        except:
-                            try:
-                                await conn.execute_command("DISCARD")
-                            finally:
-                                raise
+                            await conn.execute_command("DISCARD")
+                        finally:
+                            raise
             else:
                 await cur.execute("SELECT id FROM mapping WHERE mapping_id = %s", (mapping_id,))
                 mapping = await cur.fetchone()
@@ -2570,39 +2592,47 @@ class Database:
                                        mapping_name: str, mapping_id: str, index: int, height: int):
         try:
             if program_name == "credits.aleo" and mapping_name in ["committee", "bonded"]:
-                async with self.redis.client() as conn:
-                    while True:
+                conn = self.redis
+                while True:
+                    try:
+                        await conn.watch(
+                            f"{program_name}:{mapping_name}",
+                            f"{program_name}:{mapping_name}:index"
+                        )
+                        key_id = await conn.hget(f"{program_name}:{mapping_name}:index", str(index))
+                        if key_id is None:
+                            raise ValueError(f"index {index} not found")
+                        d = await conn.hget(f"{program_name}:{mapping_name}", key_id)
+                        if d is None:
+                            raise RuntimeError("redis data corrupted")
+                        data = json.loads(d)
+                        if data["index"] != index:
+                            raise RuntimeError("redis data corrupted")
+                        indices = await conn.hkeys(f"{program_name}:{mapping_name}:index")
+                        max_index = max(map(int, indices))
+                        max_index_key_id = await conn.hget(f"{program_name}:{mapping_name}:index", str(max_index))
+                        if max_index_key_id is None:
+                            raise RuntimeError("redis data corrupted")
+                        d = await conn.hget(f"{program_name}:{mapping_name}", max_index_key_id)
+                        if d is None:
+                            raise RuntimeError("redis data corrupted")
+                        max_index_data = json.loads(d)
+                        await conn.execute_command("MULTI")
+                        await conn.hdel(f"{program_name}:{mapping_name}", key_id)
+                        await conn.hdel(f"{program_name}:{mapping_name}:index", str(max_index))
+                        if max_index != index:
+                            await conn.hset(f"{program_name}:{mapping_name}:index", str(index), max_index_key_id)
+                            max_index_data["index"] = index
+                            await conn.hset(f"{program_name}:{mapping_name}", max_index_key_id, json.dumps(max_index_data))
+                        await conn.execute_command("EXEC")
+                    except WatchError:
+                        await asyncio.sleep(0.01)
+                        continue
+                    except:
                         try:
-                            await conn.watch(
-                                f"{program_name}:{mapping_name}",
-                                f"{program_name}:{mapping_name}:index"
-                            )
-                            key_id = await conn.hget(f"{program_name}:{mapping_name}:index", str(index))
-                            if key_id is None:
-                                raise ValueError(f"index {index} not found")
-                            data = json.loads(await conn.hget(f"{program_name}:{mapping_name}", key_id))
-                            if data["index"] != index:
-                                raise RuntimeError("redis data corrupted")
-                            indices = await conn.hkeys(f"{program_name}:{mapping_name}:index")
-                            max_index = max(map(int, indices))
-                            max_index_key_id = await conn.hget(f"{program_name}:{mapping_name}:index", str(max_index))
-                            max_index_data = json.loads(await conn.hget(f"{program_name}:{mapping_name}", max_index_key_id))
-                            await conn.execute_command("MULTI")
-                            await conn.hdel(f"{program_name}:{mapping_name}", [key_id])
-                            await conn.hdel(f"{program_name}:{mapping_name}:index", [str(max_index)])
-                            if max_index != index:
-                                await conn.hset(f"{program_name}:{mapping_name}:index", str(index), max_index_key_id)
-                                max_index_data["index"] = index
-                                await conn.hset(f"{program_name}:{mapping_name}", max_index_key_id, json.dumps(max_index_data))
-                            await conn.execute_command("EXEC")
-                        except WatchError:
-                            await asyncio.sleep(0.01)
-                            continue
-                        except:
-                            try:
-                                await conn.execute_command("DISCARD")
-                            finally:
-                                raise
+                            await conn.execute_command("DISCARD")
+                        finally:
+                            raise
             else:
                 await cur.execute("SELECT id FROM mapping WHERE mapping_id = %s", (mapping_id,))
                 mapping = await cur.fetchone()
@@ -2693,6 +2723,7 @@ class Database:
             try:
                 await conn.execute("TRUNCATE TABLE block RESTART IDENTITY CASCADE")
                 await conn.execute("TRUNCATE TABLE mapping RESTART IDENTITY CASCADE")
+                await self.redis.flushall()
             except Exception as e:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise

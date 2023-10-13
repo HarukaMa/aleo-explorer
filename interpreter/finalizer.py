@@ -11,14 +11,12 @@ from .instruction import execute_instruction
 from .utils import load_plaintext_from_operand, store_plaintext_to_register, FinalizeState, MappingCacheDict
 
 
-async def mapping_cache_read(db: Database, mapping_id: Field) -> MappingCacheDict:
-    print(f"Reading mapping cache {mapping_id}")
-    return await db.get_mapping_cache(str(mapping_id))
+async def mapping_cache_read(db: Database, program_name: str, mapping_name: str) -> MappingCacheDict:
+    return await db.get_mapping_cache(program_name, mapping_name)
 
-async def mapping_cache_read_with_cur(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]], mapping_id: Field
-                                      ) -> MappingCacheDict:
-    print(f"Reading mapping cache {mapping_id}")
-    return await db.get_mapping_cache_with_cur(cur, str(mapping_id))
+async def mapping_cache_read_with_cur(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]], program_name: str,
+                                      mapping_name: str) -> MappingCacheDict:
+    return await db.get_mapping_cache_with_cur(cur, program_name, mapping_name)
 
 class ExecuteError(Exception):
     def __init__(self, message: str, exception: Optional[Exception], instruction: str):
@@ -75,7 +73,7 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
         elif isinstance(c, ContainsCommand):
             mapping_id = Field.loads(cached_get_mapping_id(str(program.id), str(c.mapping)))
             if mapping_cache is not None and mapping_id not in mapping_cache:
-                mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, mapping_id)
+                mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, str(program.id), str(c.mapping))
             key = load_plaintext_from_operand(c.key, registers, finalize_state)
             key_id = Field.loads(cached_get_key_id(str(mapping_id), key.dump()))
             if mapping_cache:
@@ -97,7 +95,7 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
         elif isinstance(c, GetCommand | GetOrUseCommand):
             mapping_id = Field.loads(cached_get_mapping_id(str(program.id), str(c.mapping)))
             if mapping_cache is not None and mapping_id not in mapping_cache:
-                mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, mapping_id)
+                mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, str(program.id), str(c.mapping))
             key = load_plaintext_from_operand(c.key, registers, finalize_state)
             key_id = Field.loads(cached_get_key_id(str(mapping_id), key.dump()))
             if mapping_cache:
@@ -129,7 +127,7 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
         elif isinstance(c, SetCommand):
             mapping_id = Field.loads(cached_get_mapping_id(str(program.id), str(c.mapping)))
             if mapping_cache is not None and mapping_id not in mapping_cache:
-                mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, mapping_id)
+                mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, str(program.id), str(c.mapping))
             key = load_plaintext_from_operand(c.key, registers, finalize_state)
             value = PlaintextValue(plaintext=load_plaintext_from_operand(c.value, registers, finalize_state))
             key_id = Field.loads(cached_get_key_id(str(mapping_id), key.dump()))
@@ -166,12 +164,12 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
 
             operations.append({
                 "type": FinalizeOperation.Type.UpdateKeyValue,
-                "program_id": str(program.id),
+                "program_name": str(program.id),
                 "mapping_id": mapping_id,
                 "index": index,
                 "key_id": key_id,
                 "value_id": value_id,
-                "mapping": c.mapping,
+                "mapping_name": c.mapping,
                 "key": key,
                 "value": value,
                 "height": finalize_state.block_height,
@@ -201,7 +199,7 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
         elif isinstance(c, RemoveCommand):
             mapping_id = Field.loads(cached_get_mapping_id(str(program.id), str(c.mapping)))
             if mapping_cache is not None and mapping_id not in mapping_cache:
-                mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, mapping_id)
+                mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, str(program.id), str(c.mapping))
             key = load_plaintext_from_operand(c.key, registers, finalize_state)
             key_id = Field.loads(cached_get_key_id(str(mapping_id), key.dump()))
             if mapping_cache:
@@ -231,10 +229,10 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
                     print("Not updating database because allow_state_change is False")
             operations.append({
                 "type": FinalizeOperation.Type.RemoveKeyValue,
-                "program_id": str(program.id),
+                "program_name": str(program.id),
                 "mapping_id": mapping_id,
                 "index": index,
-                "mapping": c.mapping,
+                "mapping_name": c.mapping,
             })
 
         else:

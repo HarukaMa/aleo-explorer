@@ -353,7 +353,7 @@ class Fq2(Serializable):
     def dump(self) -> bytes:
         res = bytearray(self.c0.dump() + self.c1.dump())
         res[-1] |= self.flags << 7
-        return res
+        return bytes(res)
 
     @classmethod
     def load(cls, data: BytesIO):
