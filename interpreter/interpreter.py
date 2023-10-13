@@ -153,10 +153,12 @@ async def finalize_block(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]],
                 else:
                     raise NotImplementedError
             except TypeError:
+                from pprint import pprint
                 print("expected:", e)
                 print("actual:", o)
                 if e.mapping_id in global_mapping_cache:
-                    print("mapping cache:", global_mapping_cache[e.mapping_id])
+                    print("mapping cache:")
+                    pprint(global_mapping_cache[e.mapping_id])
                 # global_mapping_cache.clear()
                 raise
 

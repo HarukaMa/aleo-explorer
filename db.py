@@ -330,6 +330,7 @@ class Database:
             )
 
     @staticmethod
+    @profile
     async def _update_committee_bonded_map(cur: psycopg.AsyncCursor[dict[str, Any]],
                                            redis_conn: Redis[str],
                                            committee_members: dict[Address, tuple[u64, bool_]],
@@ -338,6 +339,9 @@ class Database:
         committee_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "committee"))
         bonded_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "bonded"))
 
+        from interpreter.interpreter import global_mapping_cache
+
+        global_mapping_cache[committee_mapping_id] = {}
         committee_mapping: dict[str, dict[str, Any]] = {}
         for index, (address, (amount, is_open)) in enumerate(committee_members.items()):
             key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=address))
@@ -363,11 +367,18 @@ class Database:
                 "value_id": str(value_id),
                 "value": value.dump().hex(),
             }
+            global_mapping_cache[committee_mapping_id][key_id] = {
+                "index": index,
+                "key": key,
+                "value_id": value_id,
+                "value": value,
+            }
         await redis_conn.execute_command("MULTI")
         await redis_conn.delete("credits.aleo:committee")
         await redis_conn.hset("credits.aleo:committee", mapping={k: json.dumps(v) for k, v in committee_mapping.items()})
         await redis_conn.execute_command("EXEC")
 
+        global_mapping_cache[bonded_mapping_id] = {}
         bonded_mapping: dict[str, dict[str, Any]] = {}
         for index, (address, (validator, amount)) in enumerate(stakers.items()):
             key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=address))
@@ -392,6 +403,12 @@ class Database:
                 "key": key.dump().hex(),
                 "value_id": str(value_id),
                 "value": value.dump().hex(),
+            }
+            global_mapping_cache[bonded_mapping_id][key_id] = {
+                "index": index,
+                "key": key,
+                "value_id": value_id,
+                "value": value,
             }
         await redis_conn.execute_command("MULTI")
         await redis_conn.delete("credits.aleo:bonded")
@@ -420,6 +437,7 @@ class Database:
             )
 
     async def _pre_ratify(self, cur: psycopg.AsyncCursor[dict[str, Any]], ratification: GenesisRatify):
+        from interpreter.interpreter import global_mapping_cache
         committee = ratification.committee
         await Database._save_committee_history(cur, 0, committee)
 
@@ -427,23 +445,29 @@ class Database:
         for validator, amount, _ in committee.members:
             stakers[validator] = validator, amount
         committee_members = {address: (amount, is_open) for address, amount, is_open in committee.members}
-        await Database._update_committee_bonded_map(cur, self.redis.client(), committee_members, stakers, 0)
+        await Database._update_committee_bonded_map(cur, self.redis, committee_members, stakers, 0)
 
         account_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "account"))
         public_balances = ratification.public_balances
+        global_mapping_cache[account_mapping_id] = {}
         operations: list[dict[str, Any]] = []
         for index, (address, balance) in enumerate(public_balances):
             key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=address))
             key_id = Field.loads(cached_get_key_id(str(account_mapping_id), key.dump()))
             value = PlaintextValue(plaintext=LiteralPlaintext(literal=Literal(type_=Literal.Type.U64, primitive=balance)))
             value_id = Field.loads(aleo.get_value_id(str(key_id), value.dump()))
+            global_mapping_cache[account_mapping_id][key_id] = {
+                "index": index,
+                "key": key,
+                "value_id": value_id,
+                "value": value,
+            }
             operations.append({
                 "type": FinalizeOperation.Type.UpdateKeyValue,
                 "mapping_id": account_mapping_id,
                 "index": index,
                 "key_id": key_id,
                 "value_id": value_id,
-                "mapping": "account",
                 "key": key,
                 "value": value,
                 "height": 0,
@@ -568,6 +592,7 @@ class Database:
             new_committee_members[validator] = amount, committee_members[validator][1]
         return new_committee_members
 
+    @profile
     async def _post_ratify(self, cur: psycopg.AsyncCursor[dict[str, Any]], redis_conn: Redis[str], height: int, round_: int,
                            ratifications: list[Ratify], address_puzzle_rewards: dict[str, int]):
         for ratification in ratifications:
@@ -580,7 +605,7 @@ class Database:
                 stakers = Database._stake_rewards(committee_members, stakers, ratification.amount)
                 committee_members = Database._next_committee_members(committee_members, stakers)
 
-                await Database._update_committee_bonded_map(cur, self.redis.client(), committee_members, stakers, height)
+                await Database._update_committee_bonded_map(cur, self.redis, committee_members, stakers, height)
                 await Database._save_committee_history(cur, height, Committee(
                     starting_round=u64(round_),
                     members=Vec[Tuple[Address, u64, bool_], u16]([
@@ -599,8 +624,21 @@ class Database:
                 data = await cur.fetchone()
                 if data is None:
                     raise RuntimeError("missing current account data")
+                mapping_db_id = data["id"]
+                await cur.execute(
+                    "SELECT index, key_id, value FROM mapping_value WHERE mapping_id = %s",
+                    (mapping_db_id,)
+                )
+                data = await cur.fetchall()
 
-                current_balances = data["content"]
+                current_balances: dict[str, dict[str, Any]] = {}
+                for d in data:
+                    current_balances[str(d["key_id"])] = {
+                        "index": d["index"],
+                        "value": d["value"],
+                    }
+
+                from interpreter.interpreter import global_mapping_cache
 
                 operations: list[dict[str, Any]] = []
                 for address, amount in address_puzzle_rewards.items():
@@ -613,7 +651,7 @@ class Database:
                         new_index += 1
                     else:
                         current_balance_data = current_balances[str(key_id)]
-                        value = Value.load(BytesIO(bytes.fromhex(current_balance_data["value"])))
+                        value = Value.load(BytesIO(current_balance_data["value"]))
                         if not isinstance(value, PlaintextValue):
                             raise RuntimeError("invalid account value")
                         plaintext = value.plaintext
@@ -624,13 +662,20 @@ class Database:
                     new_value = current_balance + u64(amount)
                     value = PlaintextValue(plaintext=LiteralPlaintext(literal=Literal(type_=Literal.Type.U64, primitive=new_value)))
                     value_id = Field.loads(aleo.get_value_id(str(key_id), value.dump()))
+                    global_mapping_cache[account_mapping_id][key_id] = {
+                        "index": index,
+                        "key": key,
+                        "value_id": value_id,
+                        "value": value,
+                    }
                     operations.append({
                         "type": FinalizeOperation.Type.UpdateKeyValue,
                         "mapping_id": account_mapping_id,
                         "index": index,
                         "key_id": key_id,
                         "value_id": value_id,
-                        "mapping": "account",
+                        "program_name": "credits.aleo",
+                        "mapping_name": "account",
                         "key": key,
                         "value": value,
                         "height": height,
@@ -644,6 +689,7 @@ class Database:
             async with conn.transaction():
                 async with conn.cursor() as cur:
                     try:
+
                         if block.height != 0:
                             block_reward, coinbase_reward = block.compute_rewards(
                                 await self.get_latest_coinbase_target(),
