@@ -2374,17 +2374,13 @@ class Transaction(EnumBaseSerialize, RustEnum, Serializable):
     def load(cls, data: BytesIO):
         version = u8.load(data)
         type_ = cls.Type.load(data)
+        if version != cls.version:
+            raise ValueError("incorrect version")
         if type_ == cls.Type.Deploy:
-            if version != DeployTransaction.version:
-                raise ValueError("incorrect version")
             return DeployTransaction.load(data)
         elif type_ == cls.Type.Execute:
-            if version != ExecuteTransaction.version:
-                raise ValueError("incorrect version")
             return ExecuteTransaction.load(data)
         elif type_ == cls.Type.Fee:
-            if version != FeeTransaction.version:
-                raise ValueError("incorrect version")
             return FeeTransaction.load(data)
         else:
             raise ValueError("incorrect type")
