@@ -12,7 +12,8 @@ async def init_builtin_program(db: Database, program: Program):
     for mapping in program.mappings.keys():
         mapping_id = Field.loads(cached_get_mapping_id(str(program.id), str(mapping)))
         await db.initialize_builtin_mapping(str(mapping_id), str(program.id), str(mapping))
-
+        if await db.get_program(str(program.id)) is None:
+            await db.save_builtin_program(program)
 
 async def finalize_deploy(confirmed_transaction: ConfirmedTransaction) -> tuple[list[FinalizeOperation], list[dict[str, Any]], Optional[str]]:
     if isinstance(confirmed_transaction, AcceptedDeploy):
@@ -60,20 +61,19 @@ def _load_input_from_arguments(arguments: list[Argument]) -> list[Value]:
 async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]], finalize_state: FinalizeState,
                            confirmed_transaction: ConfirmedTransaction, mapping_cache: dict[Field, MappingCacheDict]
                            ) -> tuple[list[FinalizeOperation], list[dict[str, Any]], Optional[str]]:
+    expected_operations = list(confirmed_transaction.finalize)
     if isinstance(confirmed_transaction, AcceptedExecute):
         transaction = confirmed_transaction.transaction
         if not isinstance(transaction, ExecuteTransaction):
             raise TypeError("invalid execute transaction")
         execution = transaction.execution
         allow_state_change = True
-        expected_operations = list(confirmed_transaction.finalize)
         fee = transaction.additional_fee.value
     elif isinstance(confirmed_transaction, RejectedExecute):
         if not isinstance(confirmed_transaction.rejected, RejectedExecution):
             raise TypeError("invalid rejected execute transaction")
         execution = confirmed_transaction.rejected.execution
         allow_state_change = False
-        expected_operations = []
         if not isinstance(confirmed_transaction.transaction, FeeTransaction):
             raise TypeError("invalid rejected execute transaction")
         fee = confirmed_transaction.transaction.fee
@@ -89,6 +89,7 @@ async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]
                 raise RuntimeError("invalid future is None")
             # noinspection PyTypeChecker
             future = future_option.value
+            # TODO: use program cache
             program = await _load_program(db, str(future.program_id))
 
             inputs: list[Value] = _load_input_from_arguments(future.arguments)
@@ -154,7 +155,7 @@ async def finalize_block(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]],
                     raise NotImplementedError
             except TypeError:
                 from pprint import pprint
-                print("expected:", e)
+                print("expected:", e.__dict__)
                 print("actual:", o)
                 if e.mapping_id in global_mapping_cache:
                     print("mapping cache:")
@@ -211,7 +212,7 @@ async def get_mapping_value(db: Database, program_id: str, mapping_name: str, ke
     if not isinstance(mapping_key_type, LiteralPlaintextType):
         raise TypeError("unsupported key type")
     key_plaintext = LiteralPlaintext(literal=Literal.loads(Literal.Type(mapping_key_type.literal_type.value), key))
-    key_id = Field.loads(aleo.get_key_id(str(mapping_id), key_plaintext.dump()))
+    key_id = Field.loads(aleo.get_key_id(program_id, mapping_name, key_plaintext.dump()))
     if key_id not in global_mapping_cache[mapping_id]:
         raise ExecuteError(f"key {key} not found in mapping {mapping_id}", None, "")
     else:

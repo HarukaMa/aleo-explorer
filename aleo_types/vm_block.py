@@ -2462,31 +2462,6 @@ class FeeTransaction(Transaction):
         fee = Fee.load(data)
         return cls(id_=id_, fee=fee)
 
-class ConfirmedTransaction(EnumBaseSerialize, RustEnum, Serializable):
-    class Type(IntEnumu8):
-        AcceptedDeploy = 0
-        AcceptedExecute = 1
-        RejectedDeploy = 2
-        RejectedExecute = 3
-
-    type: Type
-    index: u32
-    transaction: Transaction
-
-    @classmethod
-    def load(cls, data: BytesIO):
-        type_ = cls.Type.load(data)
-        if type_ == cls.Type.AcceptedDeploy:
-            return AcceptedDeploy.load(data)
-        elif type_ == cls.Type.AcceptedExecute:
-            return AcceptedExecute.load(data)
-        elif type_ == cls.Type.RejectedDeploy:
-            return RejectedDeploy.load(data)
-        elif type_ == cls.Type.RejectedExecute:
-            return RejectedExecute.load(data)
-        else:
-            raise ValueError("incorrect type")
-
 
 class FinalizeOperation(EnumBaseSerialize, RustEnum, Serializable):
     class Type(IntEnumu8):
@@ -2512,6 +2487,33 @@ class FinalizeOperation(EnumBaseSerialize, RustEnum, Serializable):
             return RemoveKeyValue.load(data)
         elif type_ == cls.Type.RemoveMapping:
             return RemoveMapping.load(data)
+        else:
+            raise ValueError("incorrect type")
+
+
+class ConfirmedTransaction(EnumBaseSerialize, RustEnum, Serializable):
+    class Type(IntEnumu8):
+        AcceptedDeploy = 0
+        AcceptedExecute = 1
+        RejectedDeploy = 2
+        RejectedExecute = 3
+
+    type: Type
+    index: u32
+    transaction: Transaction
+    finalize: Vec[FinalizeOperation, u16]
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        type_ = cls.Type.load(data)
+        if type_ == cls.Type.AcceptedDeploy:
+            return AcceptedDeploy.load(data)
+        elif type_ == cls.Type.AcceptedExecute:
+            return AcceptedExecute.load(data)
+        elif type_ == cls.Type.RejectedDeploy:
+            return RejectedDeploy.load(data)
+        elif type_ == cls.Type.RejectedExecute:
+            return RejectedExecute.load(data)
         else:
             raise ValueError("incorrect type")
 
@@ -2688,39 +2690,43 @@ class RejectedExecution(Rejected):
 class RejectedDeploy(ConfirmedTransaction):
     type = ConfirmedTransaction.Type.RejectedDeploy
 
-    def __init__(self, *, index: u32, transaction: Transaction, rejected: Rejected):
+    def __init__(self, *, index: u32, transaction: Transaction, rejected: Rejected, finalize: Vec[FinalizeOperation, u16]):
         self.index = index
         self.transaction = transaction
         self.rejected = rejected
+        self.finalize = finalize
 
     def dump(self) -> bytes:
-        return self.type.dump() + self.index.dump() + self.transaction.dump() + self.rejected.dump()
+        return self.type.dump() + self.index.dump() + self.transaction.dump() + self.rejected.dump() + self.finalize.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
         index = u32.load(data)
         transaction = Transaction.load(data)
         rejected = Rejected.load(data)
-        return cls(index=index, transaction=transaction, rejected=rejected)
+        finalize = Vec[FinalizeOperation, u16].load(data)
+        return cls(index=index, transaction=transaction, rejected=rejected, finalize=finalize)
 
 
 class RejectedExecute(ConfirmedTransaction):
     type = ConfirmedTransaction.Type.RejectedExecute
 
-    def __init__(self, *, index: u32, transaction: Transaction, rejected: Rejected):
+    def __init__(self, *, index: u32, transaction: Transaction, rejected: Rejected, finalize: Vec[FinalizeOperation, u16]):
         self.index = index
         self.transaction = transaction
         self.rejected = rejected
+        self.finalize = finalize
 
     def dump(self) -> bytes:
-        return self.type.dump() + self.index.dump() + self.transaction.dump() + self.rejected.dump()
+        return self.type.dump() + self.index.dump() + self.transaction.dump() + self.rejected.dump() + self.finalize.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
         index = u32.load(data)
         transaction = Transaction.load(data)
         rejected = Rejected.load(data)
-        return cls(index=index, transaction=transaction, rejected=rejected)
+        finalize = Vec[FinalizeOperation, u16].load(data)
+        return cls(index=index, transaction=transaction, rejected=rejected, finalize=finalize)
 
 
 class Transactions(Serializable):
@@ -3207,22 +3213,43 @@ class QuorumAuthority(Authority):
         return cls(subdag=subdag)
 
 
+class Ratifications(Serializable):
+    version = u8(1)
+
+    def __init__(self, *, ratifications: Vec[Ratify, u32]):
+        self.ratifications = ratifications
+
+    def dump(self) -> bytes:
+        return self.version.dump() + self.ratifications.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        version = u8.load(data)
+        if version != cls.version:
+            raise ValueError("invalid ratifications version")
+        ratifications = Vec[Ratify, u32].load(data)
+        return cls(ratifications=ratifications)
+
+    def __iter__(self):
+        return iter(self.ratifications)
+
+
 class Block(Serializable):
     version = u8(1)
 
     def __init__(self, *, block_hash: BlockHash, previous_hash: BlockHash, header: BlockHeader, authority: Authority,
-                 transactions: Transactions, ratifications: Vec[Ratify, u32], coinbase: Option[CoinbaseSolution]):
+                 ratifications: Ratifications, transactions: Transactions, solutions: Option[CoinbaseSolution]):
         self.block_hash = block_hash
         self.previous_hash = previous_hash
         self.header = header
         self.authority = authority
-        self.transactions = transactions
         self.ratifications = ratifications
-        self.coinbase = coinbase
+        self.transactions = transactions
+        self.solutions = solutions
 
     def dump(self) -> bytes:
         return (self.version.dump() + self.block_hash.dump() + self.previous_hash.dump() + self.header.dump() +
-                self.authority.dump() + self.transactions.dump() + self.ratifications.dump() + self.coinbase.dump())
+                self.authority.dump() + self.transactions.dump() + self.ratifications.dump() + self.solutions.dump())
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -3231,13 +3258,13 @@ class Block(Serializable):
         previous_hash = BlockHash.load(data)
         header = BlockHeader.load(data)
         authority = Authority.load(data)
+        ratifications = Ratifications.load(data)
+        solutions = Option[CoinbaseSolution].load(data)
         transactions = Transactions.load(data)
-        ratifications = Vec[Ratify, u32].load(data)
-        coinbase = Option[CoinbaseSolution].load(data)
         if version != cls.version:
             raise ValueError("invalid block version")
         return cls(block_hash=block_hash, previous_hash=previous_hash, header=header, authority=authority,
-                   transactions=transactions, ratifications=ratifications, coinbase=coinbase)
+                   ratifications=ratifications, transactions=transactions, solutions=solutions)
 
 
     def __str__(self):
@@ -3248,10 +3275,10 @@ class Block(Serializable):
         anchor_time = 25
         block_time = 10
         anchor_height = anchor_time // block_time
-        if self.coinbase.value is None:
+        if self.solutions.value is None:
             combined_proof_target = 0
         else:
-            combined_proof_target = sum(s.partial_solution.commitment.to_target() for s in self.coinbase.value.solutions)
+            combined_proof_target = sum(s.partial_solution.commitment.to_target() for s in self.solutions.value.solutions)
 
         remaining_coinbase_target = max(0, last_coinbase_target - last_cumulative_proof_target)
         remaining_proof_target = min(combined_proof_target, remaining_coinbase_target)

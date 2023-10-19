@@ -9,3 +9,4 @@ python_multipart~=0.0.6
 minify-html~=0.11.1
 asgiref~=3.7.2
 redis[hiredis]~=5.0.1
+types-redis~=4.6.0

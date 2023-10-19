@@ -33,8 +33,8 @@ def bech32_to_bytes(s: str) -> BytesIO:
     return BytesIO(aleo.bech32_decode(s)[1])
 
 @lru_cache(maxsize=1024)
-def cached_get_key_id(mapping_id: str, key: bytes) -> str:
-    return aleo.get_key_id(mapping_id, key)
+def cached_get_key_id(program_id: str, mapping_name: str, key: bytes) -> str:
+    return aleo.get_key_id(program_id, mapping_name, key)
 
 @lru_cache(maxsize=1024)
 def cached_get_mapping_id(program_id: str, mapping: str) -> str:

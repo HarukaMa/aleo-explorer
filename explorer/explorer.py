@@ -113,7 +113,6 @@ class Explorer:
         if block in [Testnet3.genesis_block, Testnet3.dev_genesis_block]:
             for program in Testnet3.builtin_programs:
                 await init_builtin_program(self.db, program)
-                await self.db.save_builtin_program(program)
             await self.db.save_block(block)
             return
         if block.previous_hash != self.latest_block_hash:

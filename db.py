@@ -345,7 +345,7 @@ class Database:
         committee_mapping: dict[str, dict[str, Any]] = {}
         for index, (address, (amount, is_open)) in enumerate(committee_members.items()):
             key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=address))
-            key_id = Field.loads(cached_get_key_id(str(committee_mapping_id), key.dump()))
+            key_id = Field.loads(cached_get_key_id("credits.aleo", "committee", key.dump()))
             value = PlaintextValue(
                 plaintext=StructPlaintext(
                     members=Vec[Tuple[Identifier, Plaintext], u8]([
@@ -382,7 +382,7 @@ class Database:
         bonded_mapping: dict[str, dict[str, Any]] = {}
         for index, (address, (validator, amount)) in enumerate(stakers.items()):
             key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=address))
-            key_id = Field.loads(cached_get_key_id(str(bonded_mapping_id), key.dump()))
+            key_id = Field.loads(cached_get_key_id("credits.aleo", "bonded", key.dump()))
             value = PlaintextValue(
                 plaintext=StructPlaintext(
                     members=Vec[Tuple[Identifier, Plaintext], u8]([
@@ -453,7 +453,7 @@ class Database:
         operations: list[dict[str, Any]] = []
         for index, (address, balance) in enumerate(public_balances):
             key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=address))
-            key_id = Field.loads(cached_get_key_id(str(account_mapping_id), key.dump()))
+            key_id = Field.loads(cached_get_key_id("credits.aleo", "account", key.dump()))
             value = PlaintextValue(plaintext=LiteralPlaintext(literal=Literal(type_=Literal.Type.U64, primitive=balance)))
             value_id = Field.loads(aleo.get_value_id(str(key_id), value.dump()))
             global_mapping_cache[account_mapping_id][key_id] = {
@@ -643,7 +643,7 @@ class Database:
                 operations: list[dict[str, Any]] = []
                 for address, amount in address_puzzle_rewards.items():
                     key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=Address.loads(address)))
-                    key_id = Field.loads(cached_get_key_id(str(account_mapping_id), key.dump()))
+                    key_id = Field.loads(cached_get_key_id("credits.aleo", "account", key.dump()))
                     new_index = len(current_balances)
                     if str(key_id) not in current_balances:
                         current_balance = u64()
@@ -922,53 +922,52 @@ class Database:
                                 for ts_index, transition in enumerate(rejected.execution.transitions):
                                     await self._insert_transition(conn, execute_transaction_db_id, None, transition, ts_index)
 
-                            if isinstance(confirmed_transaction, (AcceptedDeploy, AcceptedExecute)):
-                                update_copy_data: list[tuple[int, str, int, str, str]] = []
-                                for index, finalize_operation in enumerate(confirmed_transaction.finalize):
+                            update_copy_data: list[tuple[int, str, int, str, str]] = []
+                            for index, finalize_operation in enumerate(confirmed_transaction.finalize):
+                                await cur.execute(
+                                    "INSERT INTO finalize_operation (confirmed_transaction_id, type, index) "
+                                    "VALUES (%s, %s, %s) RETURNING id",
+                                    (confirmed_transaction_db_id, finalize_operation.type.name, index)
+                                )
+                                if (res := await cur.fetchone()) is None:
+                                    raise RuntimeError("failed to insert row into database")
+                                finalize_operation_db_id = res["id"]
+                                if isinstance(finalize_operation, InitializeMapping):
                                     await cur.execute(
-                                        "INSERT INTO finalize_operation (confirmed_transaction_id, type, index) "
-                                        "VALUES (%s, %s, %s) RETURNING id",
-                                        (confirmed_transaction_db_id, finalize_operation.type.name, index)
+                                        "INSERT INTO finalize_operation_initialize_mapping (finalize_operation_id, "
+                                        "mapping_id) VALUES (%s, %s)",
+                                        (finalize_operation_db_id, str(finalize_operation.mapping_id))
                                     )
-                                    if (res := await cur.fetchone()) is None:
-                                        raise RuntimeError("failed to insert row into database")
-                                    finalize_operation_db_id = res["id"]
-                                    if isinstance(finalize_operation, InitializeMapping):
-                                        await cur.execute(
-                                            "INSERT INTO finalize_operation_initialize_mapping (finalize_operation_id, "
-                                            "mapping_id) VALUES (%s, %s)",
-                                            (finalize_operation_db_id, str(finalize_operation.mapping_id))
-                                        )
-                                    elif isinstance(finalize_operation, InsertKeyValue):
-                                        await cur.execute(
-                                            "INSERT INTO finalize_operation_insert_kv (finalize_operation_id, "
-                                            "mapping_id, key_id, value_id) VALUES (%s, %s, %s, %s)",
-                                            (finalize_operation_db_id, str(finalize_operation.mapping_id),
-                                            str(finalize_operation.key_id), str(finalize_operation.value_id))
-                                        )
-                                    elif isinstance(finalize_operation, UpdateKeyValue):
-                                        update_copy_data.append((
-                                            finalize_operation_db_id, str(finalize_operation.mapping_id),
-                                            finalize_operation.index, str(finalize_operation.key_id),
-                                            str(finalize_operation.value_id)
-                                        ))
-                                    elif isinstance(finalize_operation, RemoveKeyValue):
-                                        await cur.execute(
-                                            "INSERT INTO finalize_operation_remove_kv (finalize_operation_id, "
-                                            "mapping_id, index) VALUES (%s, %s, %s)",
-                                            (finalize_operation_db_id, str(finalize_operation.mapping_id),
-                                            finalize_operation.index)
-                                        )
-                                    elif isinstance(finalize_operation, RemoveMapping):
-                                        await cur.execute(
-                                            "INSERT INTO finalize_operation_remove_mapping (finalize_operation_id, "
-                                            "mapping_id) VALUES (%s, %s)",
-                                            (finalize_operation_db_id, str(finalize_operation.mapping_id))
-                                        )
-                                if update_copy_data:
-                                    async with cur.copy("COPY finalize_operation_update_kv (finalize_operation_id, mapping_id, index, key_id, value_id) FROM STDIN") as copy:
-                                        for row in update_copy_data:
-                                            await copy.write_row(row)
+                                elif isinstance(finalize_operation, InsertKeyValue):
+                                    await cur.execute(
+                                        "INSERT INTO finalize_operation_insert_kv (finalize_operation_id, "
+                                        "mapping_id, key_id, value_id) VALUES (%s, %s, %s, %s)",
+                                        (finalize_operation_db_id, str(finalize_operation.mapping_id),
+                                        str(finalize_operation.key_id), str(finalize_operation.value_id))
+                                    )
+                                elif isinstance(finalize_operation, UpdateKeyValue):
+                                    update_copy_data.append((
+                                        finalize_operation_db_id, str(finalize_operation.mapping_id),
+                                        finalize_operation.index, str(finalize_operation.key_id),
+                                        str(finalize_operation.value_id)
+                                    ))
+                                elif isinstance(finalize_operation, RemoveKeyValue):
+                                    await cur.execute(
+                                        "INSERT INTO finalize_operation_remove_kv (finalize_operation_id, "
+                                        "mapping_id, index) VALUES (%s, %s, %s)",
+                                        (finalize_operation_db_id, str(finalize_operation.mapping_id),
+                                        finalize_operation.index)
+                                    )
+                                elif isinstance(finalize_operation, RemoveMapping):
+                                    await cur.execute(
+                                        "INSERT INTO finalize_operation_remove_mapping (finalize_operation_id, "
+                                        "mapping_id) VALUES (%s, %s)",
+                                        (finalize_operation_db_id, str(finalize_operation.mapping_id))
+                                    )
+                            if update_copy_data:
+                                async with cur.copy("COPY finalize_operation_update_kv (finalize_operation_id, mapping_id, index, key_id, value_id) FROM STDIN") as copy:
+                                    for row in update_copy_data:
+                                        await copy.write_row(row)
 
                         for index, ratify in enumerate(block.ratifications):
                             if isinstance(ratify, GenesisRatify):
@@ -992,8 +991,8 @@ class Database:
 
                         address_puzzle_rewards: dict[str, int] = defaultdict(int)
 
-                        if block.coinbase.value is not None:
-                            prover_solutions = block.coinbase.value.solutions
+                        if block.solutions.value is not None:
+                            prover_solutions = block.solutions.value.solutions
                             solutions: list[tuple[ProverSolution, int, int]] = []
                             prover_solutions_target = list(zip(
                                 prover_solutions,
@@ -1051,7 +1050,7 @@ class Database:
                                             (reward, address)
                                         )
 
-                        await self._post_ratify(cur, self.redis, block.height, block.round, block.ratifications, address_puzzle_rewards)
+                        await self._post_ratify(cur, self.redis, block.height, block.round, block.ratifications.ratifications, address_puzzle_rewards)
 
                         await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseBlockAdded, block.header.metadata.height))
                     except Exception as e:
@@ -1462,7 +1461,8 @@ class Database:
                                         global_state_root=StateRoot.loads(execute_transaction["global_state_root"]),
                                         proof=Option[Proof](proof),
                                     )
-                                )
+                                ),
+                                finalize=Vec[FinalizeOperation, u16](f),
                             ))
                     case _:
                         raise NotImplementedError
@@ -1628,8 +1628,8 @@ class Database:
                 transactions=Transactions(
                     transactions=Vec[ConfirmedTransaction, u32](ctxs),
                 ),
-                ratifications=Vec[Ratify, u32](rs),
-                coinbase=Option[CoinbaseSolution](coinbase_solution),
+                ratifications=Ratifications(ratifications=Vec[Ratify, u32](rs)),
+                solutions=Option[CoinbaseSolution](coinbase_solution),
             )
 
     @staticmethod
@@ -2558,7 +2558,8 @@ class Database:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "INSERT INTO mapping (mapping_id, program_id, mapping) VALUES (%s, %s, %s)",
+                        "INSERT INTO mapping (mapping_id, program_id, mapping) VALUES (%s, %s, %s) "
+                        "ON CONFLICT DO NOTHING",
                         (mapping_id, program_id, mapping)
                     )
                 except Exception as e:
