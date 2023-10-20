@@ -435,3 +435,28 @@ class Signature(Serializable):
 
     def __repr__(self):
         return str(self)
+
+
+
+@access_generic_type
+class Data(Serializable, Generic[T]):
+    types: tuple[TType[T]]
+    version = u8(1)
+
+    def __init__(self, value: T):
+        self.value = value
+
+    def dump(self) -> bytes:
+        data = self.value.dump()
+        return self.version.dump() + u32(len(data)).dump() + data
+
+    @classmethod
+    def load(cls, data: BytesIO, *, types: Optional[tuple[TType[T]]] = None) -> Self:
+        if types is None:
+            raise TypeError("expected types")
+        version = u8.load(data)
+        if version != cls.version:
+            raise ValueError(f"expected version {cls.version}, got {version}")
+        size = u32.load(data)
+        value = types[0].load(BytesIO(data.read(size)))
+        return cls(value)

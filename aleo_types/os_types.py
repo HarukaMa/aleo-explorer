@@ -1,7 +1,7 @@
 
 from .vm_block import *
 
-class NodeType(IntEnumu32):
+class NodeType(IntEnumu8):
     Client = 0
     Prover = 1
     Validator = 2
@@ -91,7 +91,7 @@ class BlockRequest(Message):
 class BlockResponse(Message):
     type = Message.Type.BlockResponse
 
-    def __init__(self, *, request: BlockRequest, blocks: Vec[Block, u8]):
+    def __init__(self, *, request: BlockRequest, blocks: Data[Vec[Block, u8]]):
         self.request = request
         self.blocks = blocks
 
@@ -101,7 +101,7 @@ class BlockResponse(Message):
     @classmethod
     def load(cls, data: BytesIO):
         request = BlockRequest.load(data)
-        blocks = Vec[Block, u8].load(data)
+        blocks = Data[Vec[Block, u8]].load(data)
         return cls(request=request, blocks=blocks)
 
 
@@ -147,7 +147,7 @@ class ChallengeRequest(Message):
 class ChallengeResponse(Message):
     type = Message.Type.ChallengeResponse
 
-    def __init__(self, *, genesis_header: BlockHeader, signature: Signature):
+    def __init__(self, *, genesis_header: BlockHeader, signature: Data[Signature]):
         self.genesis_header = genesis_header
         self.signature = signature
 
@@ -157,7 +157,7 @@ class ChallengeResponse(Message):
     @classmethod
     def load(cls, data: BytesIO):
         genesis_header = BlockHeader.load(data)
-        signature = Signature.load(data)
+        signature = Data[Signature].load(data)
         return cls(genesis_header=genesis_header, signature=signature)
 
 
@@ -235,23 +235,23 @@ class BlockLocators(Serializable):
         self.checkpoints = checkpoints
 
     def dump(self) -> bytes:
-        res = u64(len(self.recents)).dump()
+        res = u32(len(self.recents)).dump()
         for height, block_hash in self.recents.items():
             res += height.dump() + block_hash.dump()
-        res += u64(len(self.checkpoints)).dump()
+        res += u32(len(self.checkpoints)).dump()
         for height, block_hash in self.checkpoints.items():
             res += height.dump() + block_hash.dump()
         return res
 
     @classmethod
     def load(cls, data: BytesIO):
-        num_locators = u64.load(data)
+        num_locators = u32.load(data)
         recents = {}
         for _ in range(num_locators):
             height = u32.load(data)
             block_hash = BlockHash.load(data)
             recents[height] = block_hash
-        num_checkpoints = u64.load(data)
+        num_checkpoints = u32.load(data)
         checkpoints = {}
         for _ in range(num_checkpoints):
             height = u32.load(data)

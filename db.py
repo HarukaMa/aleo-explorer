@@ -689,7 +689,7 @@ class Database:
             async with conn.transaction():
                 async with conn.cursor() as cur:
                     try:
-
+                        # TODO add priority fee
                         if block.height != 0:
                             block_reward, coinbase_reward = block.compute_rewards(
                                 await self.get_latest_coinbase_target(),
@@ -1630,6 +1630,8 @@ class Database:
                 ),
                 ratifications=Ratifications(ratifications=Vec[Ratify, u32](rs)),
                 solutions=Option[CoinbaseSolution](coinbase_solution),
+                # TODO: save and fill in
+                aborted_transactions_ids=Vec[TransactionID, u32]([]),
             )
 
     @staticmethod

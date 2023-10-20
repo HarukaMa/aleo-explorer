@@ -3238,7 +3238,8 @@ class Block(Serializable):
     version = u8(1)
 
     def __init__(self, *, block_hash: BlockHash, previous_hash: BlockHash, header: BlockHeader, authority: Authority,
-                 ratifications: Ratifications, transactions: Transactions, solutions: Option[CoinbaseSolution]):
+                 ratifications: Ratifications, transactions: Transactions, solutions: Option[CoinbaseSolution],
+                 aborted_transactions_ids: Vec[TransactionID, u32]):
         self.block_hash = block_hash
         self.previous_hash = previous_hash
         self.header = header
@@ -3246,10 +3247,12 @@ class Block(Serializable):
         self.ratifications = ratifications
         self.transactions = transactions
         self.solutions = solutions
+        self.aborted_transactions_ids = aborted_transactions_ids
 
     def dump(self) -> bytes:
         return (self.version.dump() + self.block_hash.dump() + self.previous_hash.dump() + self.header.dump() +
-                self.authority.dump() + self.transactions.dump() + self.ratifications.dump() + self.solutions.dump())
+                self.authority.dump() + self.transactions.dump() + self.ratifications.dump() + self.solutions.dump() +
+                self.aborted_transactions_ids.dump())
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -3261,10 +3264,12 @@ class Block(Serializable):
         ratifications = Ratifications.load(data)
         solutions = Option[CoinbaseSolution].load(data)
         transactions = Transactions.load(data)
+        aborted_transactions_ids = Vec[TransactionID, u32].load(data)
         if version != cls.version:
             raise ValueError("invalid block version")
         return cls(block_hash=block_hash, previous_hash=previous_hash, header=header, authority=authority,
-                   ratifications=ratifications, transactions=transactions, solutions=solutions)
+                   ratifications=ratifications, transactions=transactions, solutions=solutions,
+                   aborted_transactions_ids=aborted_transactions_ids)
 
 
     def __str__(self):

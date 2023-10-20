@@ -86,15 +86,15 @@ class Node:
                 raise Exception("handshake is not done")
             msg = frame.message
             for height in range(msg.start_height, msg.end_height):
-                block = await self.explorer_request(explorer.Request.GetBlockByHeight(height))
+                block = [await self.explorer_request(explorer.Request.GetBlockByHeight(height))]
                 print("sending block", height)
-                await self.send_message(BlockResponse(request=msg, blocks=block))
+                await self.send_message(BlockResponse(request=msg, blocks=Data[Vec[Block, u8]](block)))
 
         elif isinstance(frame.message, BlockResponse):
             if self.handshake_state != 1:
                 raise Exception("handshake is not done")
             msg = frame.message
-            for block in msg.blocks:
+            for block in msg.blocks.value:
                 height = block.header.metadata.height
                 if height in self.block_requests:
                     self.block_requests.remove(height)
@@ -118,7 +118,7 @@ class Node:
                 genesis = Testnet3.genesis_block.header
             response = ChallengeResponse(
                 genesis_header=genesis,
-                signature=Signature.load(BytesIO(aleo.sign_nonce("APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH", nonce.dump()))),
+                signature=Data[Signature](Signature.load(BytesIO(aleo.sign_nonce("APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH", nonce.dump())))),
             )
             self.handshake_state = 1
             await self.send_message(response)
