@@ -607,7 +607,7 @@ class Finalize(Serializable):
         self.commands = commands
         self.num_writes = len(list(filter(lambda x: isinstance(x, SetCommand) or isinstance(x, RemoveCommand), commands)))
         positions: dict[Identifier, int] = {}
-        for i, c in enumerate(commands, start=1):
+        for i, c in enumerate(commands):
             if isinstance(c, PositionCommand):
                 positions[c.position] = i
         self.positions = positions
