@@ -16,9 +16,13 @@ def disasm_register(value: Register) -> str:
     if isinstance(value, LocatorRegister):
         return f"r{value.locator}"
     elif isinstance(value, AccessRegister):
-        locator = f"r{value.locator}."
-        identifiers = ".".join(map(str, value.identifiers))
-        return locator + identifiers
+        locator = f"r{value.locator}"
+        for access in value.accesses:
+            if isinstance(access, MemberAccess):
+                locator += f".{access.identifier}"
+            elif isinstance(access, IndexAccess):
+                locator += f"[{access.index}]"
+        return locator
     else:
         raise TypeError("invalid register type")
 
@@ -125,8 +129,12 @@ def disasm_cast(value: CastInstruction) -> str:
         destination_type = "group.x"
     elif isinstance(cast_type, GroupYCoordinateCastType):
         destination_type = "group.y"
-    elif isinstance(cast_type, RegisterTypeCastType):
-        destination_type = disasm_register_type(cast_type.register_type)
+    elif isinstance(cast_type, PlaintextCastType):
+        destination_type = plaintext_type_to_str(cast_type.plaintext_type)
+    elif isinstance(cast_type, RecordCastType):
+        destination_type = str(cast_type.identifier) + ".record"
+    elif isinstance(cast_type, ExternalRecordCastType):
+        destination_type = str(cast_type.locator) + ".record"
     else:
         raise ValueError(f"unknown cast type")
     return f"{' '.join(map(disasm_operand, value.operands))} into {disasm_register(value.destination)} as {destination_type}"

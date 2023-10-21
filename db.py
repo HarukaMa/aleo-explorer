@@ -2468,7 +2468,7 @@ class Database:
                     "key": Plaintext.load(BytesIO(bytes.fromhex(d["key"]))),
                     "value": Value.load(BytesIO(bytes.fromhex(d["value"]))),
                 }
-            data = await self.redis.hgetall(f"mapping:{program_name}:{mapping_name}")
+            data = await self.redis.hgetall(f"{program_name}:{mapping_name}")
             return {Field.loads(k): transform(json.loads(v)) for k, v in data.items()}
         else:
             mapping_id = Field.loads(cached_get_mapping_id(program_name, mapping_name))
