@@ -88,7 +88,7 @@ class Node:
             for height in range(msg.start_height, msg.end_height):
                 block = [await self.explorer_request(explorer.Request.GetBlockByHeight(height))]
                 print("sending block", height)
-                await self.send_message(BlockResponse(request=msg, blocks=Data[Vec[Block, u8]](block)))
+                await self.send_message(BlockResponse(request=msg, blocks=Data[Vec[Block, u8]](Vec[Block, u8](block))))
 
         elif isinstance(frame.message, BlockResponse):
             if self.handshake_state != 1:

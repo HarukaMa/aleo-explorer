@@ -342,7 +342,7 @@ class Database:
 
         global_mapping_cache[committee_mapping_id] = {}
         committee_mapping: dict[str, dict[str, Any]] = {}
-        for index, (address, (amount, is_open)) in enumerate(committee_members.items()):
+        for address, (amount, is_open) in committee_members.items():
             key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=address))
             key_id = Field.loads(cached_get_key_id("credits.aleo", "committee", key.dump()))
             value = PlaintextValue(
@@ -361,13 +361,11 @@ class Database:
             )
             value_id = Field.loads(aleo.get_value_id(str(key_id), value.dump()))
             committee_mapping[str(key_id)] = {
-                "index": index,
                 "key": key.dump().hex(),
                 "value_id": str(value_id),
                 "value": value.dump().hex(),
             }
             global_mapping_cache[committee_mapping_id][key_id] = {
-                "index": index,
                 "key": key,
                 "value_id": value_id,
                 "value": value,
@@ -379,7 +377,7 @@ class Database:
 
         global_mapping_cache[bonded_mapping_id] = {}
         bonded_mapping: dict[str, dict[str, Any]] = {}
-        for index, (address, (validator, amount)) in enumerate(stakers.items()):
+        for address, (validator, amount) in stakers.items():
             key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=address))
             key_id = Field.loads(cached_get_key_id("credits.aleo", "bonded", key.dump()))
             value = PlaintextValue(
@@ -398,13 +396,11 @@ class Database:
             )
             value_id = Field.loads(aleo.get_value_id(str(key_id), value.dump()))
             bonded_mapping[str(key_id)] = {
-                "index": index,
                 "key": key.dump().hex(),
                 "value_id": str(value_id),
                 "value": value.dump().hex(),
             }
             global_mapping_cache[bonded_mapping_id][key_id] = {
-                "index": index,
                 "key": key,
                 "value_id": value_id,
                 "value": value,
@@ -450,13 +446,12 @@ class Database:
         public_balances = ratification.public_balances
         global_mapping_cache[account_mapping_id] = {}
         operations: list[dict[str, Any]] = []
-        for index, (address, balance) in enumerate(public_balances):
+        for address, balance in public_balances:
             key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=address))
             key_id = Field.loads(cached_get_key_id("credits.aleo", "account", key.dump()))
             value = PlaintextValue(plaintext=LiteralPlaintext(literal=Literal(type_=Literal.Type.U64, primitive=balance)))
             value_id = Field.loads(aleo.get_value_id(str(key_id), value.dump()))
             global_mapping_cache[account_mapping_id][key_id] = {
-                "index": index,
                 "key": key,
                 "value_id": value_id,
                 "value": value,
@@ -464,7 +459,6 @@ class Database:
             operations.append({
                 "type": FinalizeOperation.Type.UpdateKeyValue,
                 "mapping_id": account_mapping_id,
-                "index": index,
                 "key_id": key_id,
                 "value_id": value_id,
                 "key": key,
@@ -625,7 +619,7 @@ class Database:
                     raise RuntimeError("missing current account data")
                 mapping_db_id = data["id"]
                 await cur.execute(
-                    "SELECT index, key_id, value FROM mapping_value WHERE mapping_id = %s",
+                    "SELECT key_id, value FROM mapping_value WHERE mapping_id = %s",
                     (mapping_db_id,)
                 )
                 data = await cur.fetchall()
@@ -633,7 +627,6 @@ class Database:
                 current_balances: dict[str, dict[str, Any]] = {}
                 for d in data:
                     current_balances[str(d["key_id"])] = {
-                        "index": d["index"],
                         "value": d["value"],
                     }
 
@@ -643,11 +636,8 @@ class Database:
                 for address, amount in address_puzzle_rewards.items():
                     key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=Address.loads(address)))
                     key_id = Field.loads(cached_get_key_id("credits.aleo", "account", key.dump()))
-                    new_index = len(current_balances)
                     if str(key_id) not in current_balances:
                         current_balance = u64()
-                        index = new_index
-                        new_index += 1
                     else:
                         current_balance_data = current_balances[str(key_id)]
                         value = Value.load(BytesIO(current_balance_data["value"]))
@@ -657,12 +647,10 @@ class Database:
                         if not isinstance(plaintext, LiteralPlaintext) or not isinstance(plaintext.literal.primitive, u64):
                             raise RuntimeError("invalid account value")
                         current_balance = plaintext.literal.primitive
-                        index = current_balance_data["index"]
                     new_value = current_balance + u64(amount)
                     value = PlaintextValue(plaintext=LiteralPlaintext(literal=Literal(type_=Literal.Type.U64, primitive=new_value)))
                     value_id = Field.loads(aleo.get_value_id(str(key_id), value.dump()))
                     global_mapping_cache[account_mapping_id][key_id] = {
-                        "index": index,
                         "key": key,
                         "value_id": value_id,
                         "value": value,
@@ -670,7 +658,6 @@ class Database:
                     operations.append({
                         "type": FinalizeOperation.Type.UpdateKeyValue,
                         "mapping_id": account_mapping_id,
-                        "index": index,
                         "key_id": key_id,
                         "value_id": value_id,
                         "program_name": "credits.aleo",
@@ -924,7 +911,7 @@ class Database:
                                 for ts_index, transition in enumerate(rejected.execution.transitions):
                                     await self._insert_transition(conn, execute_transaction_db_id, None, transition, ts_index)
 
-                            update_copy_data: list[tuple[int, str, int, str, str]] = []
+                            update_copy_data: list[tuple[int, str, str, str]] = []
                             for index, finalize_operation in enumerate(confirmed_transaction.finalize):
                                 await cur.execute(
                                     "INSERT INTO finalize_operation (confirmed_transaction_id, type, index) "
@@ -950,15 +937,13 @@ class Database:
                                 elif isinstance(finalize_operation, UpdateKeyValue):
                                     update_copy_data.append((
                                         finalize_operation_db_id, str(finalize_operation.mapping_id),
-                                        finalize_operation.index, str(finalize_operation.key_id),
-                                        str(finalize_operation.value_id)
+                                        str(finalize_operation.key_id), str(finalize_operation.value_id)
                                     ))
                                 elif isinstance(finalize_operation, RemoveKeyValue):
                                     await cur.execute(
                                         "INSERT INTO finalize_operation_remove_kv (finalize_operation_id, "
-                                        "mapping_id, index) VALUES (%s, %s, %s)",
-                                        (finalize_operation_db_id, str(finalize_operation.mapping_id),
-                                        finalize_operation.index)
+                                        "mapping_id) VALUES (%s, %s)",
+                                        (finalize_operation_db_id, str(finalize_operation.mapping_id))
                                     )
                                 elif isinstance(finalize_operation, RemoveMapping):
                                     await cur.execute(
@@ -967,7 +952,7 @@ class Database:
                                         (finalize_operation_db_id, str(finalize_operation.mapping_id))
                                     )
                             if update_copy_data:
-                                async with cur.copy("COPY finalize_operation_update_kv (finalize_operation_id, mapping_id, index, key_id, value_id) FROM STDIN") as copy:
+                                async with cur.copy("COPY finalize_operation_update_kv (finalize_operation_id, mapping_id, key_id, value_id) FROM STDIN") as copy:
                                     for row in update_copy_data:
                                         await copy.write_row(row)
 
@@ -1305,7 +1290,7 @@ class Database:
                                 raise RuntimeError("database inconsistent")
                             f.append(UpdateKeyValue(
                                 mapping_id=Field.loads(update_kv["mapping_id"]),
-                                index=u64(update_kv["index"]),
+                                index=u64(),
                                 key_id=Field.loads(update_kv["key_id"]),
                                 value_id=Field.loads(update_kv["value_id"]),
                             ))
@@ -1319,7 +1304,7 @@ class Database:
                                 raise RuntimeError("database inconsistent")
                             f.append(RemoveKeyValue(
                                 mapping_id=Field.loads(remove_kv["mapping_id"]),
-                                index=u64(remove_kv["index"]),
+                                index=u64(),
                             ))
                         case FinalizeOperation.Type.RemoveMapping.name:
                             await cur.execute(
@@ -2465,7 +2450,6 @@ class Database:
         if program_name == "credits.aleo" and mapping_name in ["committee", "bonded"]:
             def transform(d: dict[str, Any]):
                 return {
-                    "index": d["index"],
                     "value_id": Field.loads(d["value_id"]),
                     "key": Plaintext.load(BytesIO(bytes.fromhex(d["key"]))),
                     "value": Value.load(BytesIO(bytes.fromhex(d["value"]))),
@@ -2476,16 +2460,14 @@ class Database:
             mapping_id = Field.loads(cached_get_mapping_id(program_name, mapping_name))
             try:
                 await cur.execute(
-                    "SELECT index, key_id, value_id, key, value FROM mapping_value mv "
+                    "SELECT key_id, value_id, key, value FROM mapping_value mv "
                     "JOIN mapping m on mv.mapping_id = m.id "
-                    "WHERE m.mapping_id = %s "
-                    "ORDER BY index",
+                    "WHERE m.mapping_id = %s ",
                     (str(mapping_id),)
                 )
                 data = await cur.fetchall()
                 def transform(d: dict[str, Any]):
                     return {
-                        "index": d["index"],
                         "value_id": Field.loads(d["value_id"]),
                         "key": Plaintext.load(BytesIO(d["key"])),
                         "value": Value.load(BytesIO(d["value"])),
@@ -2514,24 +2496,6 @@ class Database:
                     if res is None:
                         return None
                     return res['value']
-                except Exception as e:
-                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
-                    raise
-
-    async def get_mapping_index_by_key(self, program_id: str, mapping: str, key_id: str) -> Optional[bytes]:
-        async with self.pool.connection() as conn:
-            async with conn.cursor() as cur:
-                try:
-                    await cur.execute(
-                        "SELECT index FROM mapping_value mv "
-                        "JOIN mapping m on mv.mapping_id = m.id "
-                        "WHERE m.program_id = %s AND m.mapping = %s AND mv.key_id = %s",
-                        (program_id, mapping, key_id)
-                    )
-                    res = await cur.fetchone()
-                    if res is None:
-                        return None
-                    return res['index']
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
@@ -2577,29 +2541,20 @@ class Database:
                     raise
 
     async def update_mapping_key_value(self, cur: psycopg.AsyncCursor[dict[str, Any]], program_name: str,
-                                       mapping_name: str, mapping_id: str, index: int, key_id: str, value_id: str,
+                                       mapping_name: str, mapping_id: str, key_id: str, value_id: str,
                                        key: bytes, value: bytes, height: int):
         try:
             if program_name == "credits.aleo" and mapping_name in ["committee", "bonded"]:
                 conn = self.redis
                 while True:
                     try:
-                        await conn.watch(
-                            f"{program_name}:{mapping_name}",
-                            f"{program_name}:{mapping_name}:index"
-                        )
-                        old_key_id = await conn.hget(f"{program_name}:{mapping_name}:index", str(index))
-                        if old_key_id is not None and old_key_id != key_id:
-                            raise ValueError(f"key id mismatch: {old_key_id} != {key_id}")
                         data = {
                             "key": key.hex(),
                             "value_id": value_id,
                             "value": value.hex(),
-                            "index": index,
                         }
                         await conn.execute_command("MULTI")
                         await conn.hset(f"{program_name}:{mapping_name}", key_id, json.dumps(data))
-                        await conn.hset(f"{program_name}:{mapping_name}:index", str(index), key_id)
                         await conn.execute_command("EXEC")
                     except WatchError:
                         await asyncio.sleep(0.01)
@@ -2616,28 +2571,16 @@ class Database:
                     raise ValueError(f"mapping {mapping_id} not found")
                 mapping_id = mapping['id']
                 await cur.execute(
-                    "SELECT key_id, key FROM mapping_value WHERE mapping_id = %s AND index = %s",
-                    (mapping_id, index)
+                    "INSERT INTO mapping_value (mapping_id, key_id, value_id, key, value) "
+                    "VALUES (%s, %s, %s, %s, %s) "
+                    "ON CONFLICT (mapping_id, key_id) DO UPDATE SET value_id = %s, value = %s",
+                    (mapping_id, key_id, value_id, key, value, value_id, value)
                 )
-                if (res := await cur.fetchone()) is None:
-                    await cur.execute(
-                        "INSERT INTO mapping_value (mapping_id, index, key_id, value_id, key, value) "
-                        "VALUES (%s, %s, %s, %s, %s, %s)",
-                        (mapping_id, index, key_id, value_id, key, value)
-                    )
-                else:
-                    if res["key_id"] != key_id:
-                        raise ValueError(f"key id mismatch: {res['key_id']} != {key_id}")
-                    await cur.execute(
-                        "UPDATE mapping_value SET value_id = %s, value = %s "
-                        "WHERE mapping_id = %s AND index = %s",
-                        (value_id, value, mapping_id, index)
-                    )
 
                 await cur.execute(
-                    "INSERT INTO mapping_history (mapping_id, height, key_id, value, index) "
-                    "VALUES (%s, %s, %s, %s, %s)",
-                    (mapping_id, height, key_id, value, index)
+                    "INSERT INTO mapping_history (mapping_id, height, key_id, value) "
+                    "VALUES (%s, %s, %s, %s)",
+                    (mapping_id, height, key_id, value)
                 )
 
         except Exception as e:
@@ -2646,76 +2589,26 @@ class Database:
 
     # noinspection SqlResolve
     async def remove_mapping_key_value(self, cur: psycopg.AsyncCursor[dict[str, Any]], program_name: str,
-                                       mapping_name: str, mapping_id: str, index: int, height: int):
+                                       mapping_name: str, mapping_id: str, key_id: str, height: int):
         try:
             if program_name == "credits.aleo" and mapping_name in ["committee", "bonded"]:
                 conn = self.redis
-                while True:
-                    try:
-                        await conn.watch(
-                            f"{program_name}:{mapping_name}",
-                            f"{program_name}:{mapping_name}:index"
-                        )
-                        key_id = await conn.hget(f"{program_name}:{mapping_name}:index", str(index))
-                        if key_id is None:
-                            raise ValueError(f"index {index} not found")
-                        d = await conn.hget(f"{program_name}:{mapping_name}", key_id)
-                        if d is None:
-                            raise RuntimeError("redis data corrupted")
-                        data = json.loads(d)
-                        if data["index"] != index:
-                            raise RuntimeError("redis data corrupted")
-                        indices = await conn.hkeys(f"{program_name}:{mapping_name}:index")
-                        max_index = max(map(int, indices))
-                        max_index_key_id = await conn.hget(f"{program_name}:{mapping_name}:index", str(max_index))
-                        if max_index_key_id is None:
-                            raise RuntimeError("redis data corrupted")
-                        d = await conn.hget(f"{program_name}:{mapping_name}", max_index_key_id)
-                        if d is None:
-                            raise RuntimeError("redis data corrupted")
-                        max_index_data = json.loads(d)
-                        await conn.execute_command("MULTI")
-                        await conn.hdel(f"{program_name}:{mapping_name}", key_id)
-                        await conn.hdel(f"{program_name}:{mapping_name}:index", str(max_index))
-                        if max_index != index:
-                            await conn.hset(f"{program_name}:{mapping_name}:index", str(index), max_index_key_id)
-                            max_index_data["index"] = index
-                            await conn.hset(f"{program_name}:{mapping_name}", max_index_key_id, json.dumps(max_index_data))
-                        await conn.execute_command("EXEC")
-                    except WatchError:
-                        await asyncio.sleep(0.01)
-                        continue
-                    except:
-                        try:
-                            await conn.execute_command("DISCARD")
-                        finally:
-                            raise
+                await conn.hdel(f"{program_name}:{mapping_name}", key_id)
             else:
                 await cur.execute("SELECT id FROM mapping WHERE mapping_id = %s", (mapping_id,))
                 mapping = await cur.fetchone()
                 if mapping is None:
                     raise ValueError(f"mapping {mapping_id} not found")
                 mapping_id = mapping['id']
-                await cur.execute("SELECT key_id FROM mapping_value WHERE mapping_id = %s AND index = %s", (mapping_id, index))
-                if (res := await cur.fetchone()) is None:
-                    raise ValueError(f"index {index} not found")
-                deleted_key_id = res["key_id"]
                 await cur.execute(
-                    "SELECT id, index FROM mapping_value WHERE mapping_id = %s ORDER BY index DESC LIMIT 1",
-                    (mapping_id,)
+                    "DELETE FROM mapping_value WHERE mapping_id = %s AND key_id = %s",
+                    (mapping_id, key_id)
                 )
-                res = await cur.fetchone()
-                await cur.execute(
-                    "DELETE FROM mapping_value WHERE mapping_id = %s AND index = %s",
-                    (mapping_id, index)
-                )
-                if res is not None and res["index"] != index:
-                    await cur.execute("UPDATE mapping_value SET index = %s WHERE id = %s", (index, res["id"]))
 
                 await cur.execute(
-                    "INSERT INTO mapping_history (mapping_id, height, key_id, value, index) "
-                    "VALUES (%s, %s, %s, %s, %s)",
-                    (mapping_id, height, deleted_key_id, None, index)
+                    "INSERT INTO mapping_history (mapping_id, height, key_id, value) "
+                    "VALUES (%s, %s, %s, NULL)",
+                    (mapping_id, height, key_id)
                 )
 
         except Exception as e:

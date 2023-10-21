@@ -108,7 +108,7 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
                 else:
                     value = mapping_cache[mapping_id][key_id]["value"]
                     if debug:
-                        print(f"get {c.mapping}[{key}, {mapping_cache[mapping_id][key_id]['index']}] = {value}")
+                        print(f"get {c.mapping}[{key}] = {value}")
                     if not isinstance(value, PlaintextValue):
                         raise TypeError("invalid value type")
             else:
@@ -136,28 +136,19 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
             if mapping_cache:
                 if allow_state_change:
                     if key_id not in mapping_cache[mapping_id]:
-                        index = len(mapping_cache[mapping_id])
                         mapping_cache[mapping_id][key_id] = {
                             "value_id": value_id,
                             "key": key,
                             "value": value,
-                            "index": index,
                         }
-                        if debug:
-                            print(f"new {c.mapping}[{key}, {index}] = {value}")
                     else:
-                        index = mapping_cache[mapping_id][key_id]['index']
                         mapping_cache[mapping_id][key_id]["value_id"] = value_id
                         mapping_cache[mapping_id][key_id]["value"] = value
-                        if debug:
-                            print(f"set {c.mapping}[{key}, {index}] = {value}")
+                    if debug:
+                        print(f"set {c.mapping}[{key}] = {value}")
                 else:
-                    index = mapping_cache[mapping_id][key_id]['index'] if key_id in mapping_cache[mapping_id] else len(mapping_cache[mapping_id])
                     print("Not updating mapping cache because allow_state_change is False")
             else:
-                index = await db.get_mapping_index_by_key(str(program.id), str(mapping_id), str(key_id))
-                if index is None:
-                    index = await db.get_mapping_size(str(program.id), str(mapping_id))
                 if allow_state_change:
                     raise RuntimeError("unsupported execution configuration")
                 else:
@@ -167,7 +158,6 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
                 "type": FinalizeOperation.Type.UpdateKeyValue,
                 "program_name": str(program.id),
                 "mapping_id": mapping_id,
-                "index": index,
                 "key_id": key_id,
                 "value_id": value_id,
                 "mapping_name": c.mapping,
@@ -207,23 +197,13 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
                 if key_id not in mapping_cache[mapping_id]:
                     print(f"Key {key} not found in mapping {c.mapping}")
                     continue
-                index = mapping_cache[mapping_id][key_id]['index']
                 if allow_state_change:
-                    if index != len(mapping_cache[mapping_id]) - 1:
-                        for key_id, kv in mapping_cache[mapping_id].items():
-                            if kv['index'] == len(mapping_cache[mapping_id]) - 1:
-                                mapping_cache[mapping_id][key_id]['index'] = index
-                                break
                     mapping_cache[mapping_id].pop(key_id)
                     if debug:
-                        print(f"del {c.mapping}[{key}, {index}]")
+                        print(f"del {c.mapping}[{key}]")
                 else:
                     print("Not updating mapping cache because allow_state_change is False")
             else:
-                index = await db.get_mapping_index_by_key(str(program.id), str(mapping_id), str(key_id))
-                if index is None:
-                    print(f"Key {key} not found in mapping {c.mapping}")
-                    continue
                 if allow_state_change:
                     raise RuntimeError("unsupported execution configuration")
                 else:
@@ -232,7 +212,6 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
                 "type": FinalizeOperation.Type.RemoveKeyValue,
                 "program_name": str(program.id),
                 "mapping_id": mapping_id,
-                "index": index,
                 "mapping_name": c.mapping,
             })
 

@@ -1021,7 +1021,7 @@ class HashInstruction(Serializable, Generic[V]):
         HashManyPSD8 = auto()
 
     # shortcut here so check doesn't work
-    def __init__(self, *, operands: tuple[Operand, Optional[Operand]], destination: Register, destination_type: LiteralType):
+    def __init__(self, *, operands: tuple[Operand, Optional[Operand]], destination: Register, destination_type: PlaintextType):
         self.type = self.types[0]
         self.operands = operands
         self.destination = destination
@@ -1047,7 +1047,7 @@ class HashInstruction(Serializable, Generic[V]):
         else:
             op2 = None
         destination = Register.load(data)
-        destination_type = LiteralType.load(data)
+        destination_type = PlaintextType.load(data)
         return cls(operands=(op1, op2), destination=destination, destination_type=destination_type)
 
 class AsyncInstruction(Serializable):

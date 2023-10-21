@@ -145,11 +145,11 @@ async def finalize_block(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]],
                 if isinstance(e, InitializeMapping):
                     pass
                 elif isinstance(e, UpdateKeyValue):
-                    if e.index != o["index"] or e.key_id != o["key_id"] or e.value_id != o["value_id"]:
+                    if e.key_id != o["key_id"] or e.value_id != o["value_id"]:
                         raise TypeError("invalid finalize operation")
                 elif isinstance(e, RemoveKeyValue):
-                    if e.index != o["index"]:
-                        raise TypeError("invalid finalize operation")
+                    # snarkVM #2114
+                    pass
                 else:
                     raise NotImplementedError
             except TypeError:
@@ -177,20 +177,19 @@ async def execute_operations(db: Database, cur: psycopg.AsyncCursor[dict[str, An
                 await db.initialize_mapping(cur, str(mapping_id), str(program_id), str(mapping))
             case FinalizeOperation.Type.UpdateKeyValue:
                 mapping_id = operation["mapping_id"]
-                index = operation["index"]
                 key_id = operation["key_id"]
                 value_id = operation["value_id"]
                 key = operation["key"]
                 value = operation["value"]
                 program_name = operation["program_name"]
                 mapping_name = operation["mapping_name"]
-                await db.update_mapping_key_value(cur, program_name, mapping_name, str(mapping_id), index, str(key_id), str(value_id), key.dump(), value.dump(), operation["height"])
+                await db.update_mapping_key_value(cur, program_name, mapping_name, str(mapping_id), str(key_id), str(value_id), key.dump(), value.dump(), operation["height"])
             case FinalizeOperation.Type.RemoveKeyValue:
                 mapping_id = operation["mapping_id"]
-                index = operation["index"]
+                key_id = operation["key_id"]
                 program_name = operation["program_name"]
                 mapping_name = operation["mapping_name"]
-                await db.remove_mapping_key_value(cur, program_name, mapping_name, str(mapping_id), index, operation["height"])
+                await db.remove_mapping_key_value(cur, program_name, mapping_name, str(mapping_id), str(key_id), operation["height"])
             case _:
                 raise NotImplementedError
 
