@@ -675,7 +675,10 @@ class Database:
             async with conn.transaction():
                 async with conn.cursor() as cur:
                     try:
-                        # TODO add priority fee
+                        # redis is not protected by transaction so manually saving here
+                        bonded_save = await self.redis.hgetall("credits.aleo:bonded")
+                        committee_save = await self.redis.hgetall("credits.aleo:committee")
+
                         if block.height != 0:
                             block_reward, coinbase_reward = block.compute_rewards(
                                 await self.get_latest_coinbase_target(),
@@ -1047,6 +1050,18 @@ class Database:
 
                         await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseBlockAdded, block.header.metadata.height))
                     except Exception as e:
+                        bonded_backup_key = "credits.aleo:bonded:rollback_backup:{}".format(block.header.metadata.height)
+                        committee_backup_key = "credits.aleo:committee:rollback_backup:{}".format(block.header.metadata.height)
+                        if not self.redis.exists(bonded_backup_key):
+                            await self.redis.rename("credits.aleo:bonded", bonded_backup_key)
+                        else:
+                            await self.redis.delete("credits.aleo:bonded")
+                        if not self.redis.exists(committee_backup_key):
+                            await self.redis.rename("credits.aleo:committee", committee_backup_key)
+                        else:
+                            await self.redis.delete("credits.aleo:committee")
+                        await self.redis.hset("credits.aleo:bonded", mapping=bonded_save)
+                        await self.redis.hset("credits.aleo:committee", mapping=committee_save)
                         await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                         raise
 

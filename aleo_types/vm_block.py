@@ -272,20 +272,6 @@ class FinalizeCommand(Serializable):
         return cls(operands=operands)
 
 
-class AwaitCommand(Serializable):
-
-    def __init__(self, *, register: Register):
-        self.register = register
-
-    def dump(self) -> bytes:
-        return self.register.dump()
-
-    @classmethod
-    def load(cls, data: BytesIO):
-        register = Register.load(data)
-        return cls(register=register)
-
-
 class Command(EnumBaseSerialize, RustEnum, Serializable):
     type: "Command.Type"
 
@@ -375,6 +361,21 @@ class InstructionCommand(Command):
     def load(cls, data: BytesIO):
         instruction = Instruction.load(data)
         return cls(instruction=instruction)
+
+
+class AwaitCommand(Command):
+    type = Command.Type.Await
+
+    def __init__(self, *, register: Register):
+        self.register = register
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.register.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        register = Register.load(data)
+        return cls(register=register)
 
 class ContainsCommand(Command):
     type = Command.Type.Contains
