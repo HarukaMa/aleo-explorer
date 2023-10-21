@@ -1362,7 +1362,7 @@ class Instruction(Serializable):
         Type.ShlWrapped: 2_000,
         Type.Shr: 2_000,
         Type.ShrWrapped: 2_000,
-        Type.SignVerify: 1_000_000,
+        Type.SignVerify: 250_000,
         Type.Square: 2_000,
         Type.SquareRoot: 120_000,
         Type.Sub: 10_000,

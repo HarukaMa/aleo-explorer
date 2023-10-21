@@ -3,10 +3,9 @@ import psycopg
 from aleo_types import *
 from db import Database
 from interpreter.finalizer import execute_finalizer, ExecuteError, mapping_cache_read
-from interpreter.utils import FinalizeState, MappingCacheDict
+from interpreter.utils import FinalizeState
+from util.global_cache import global_mapping_cache, global_program_cache, MappingCacheDict
 
-global_mapping_cache: dict[Field, MappingCacheDict] = {}
-global_program_cache: dict[str, Program] = {}
 
 async def init_builtin_program(db: Database, program: Program):
     for mapping in program.mappings.keys():

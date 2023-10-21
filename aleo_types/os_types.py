@@ -344,24 +344,24 @@ class PuzzleResponse(Message):
 class UnconfirmedSolution(Message):
     type = Message.Type.UnconfirmedSolution
 
-    def __init__(self, *, puzzle_commitment: PuzzleCommitment, solution: ProverSolution):
-        self.puzzle_commitment = puzzle_commitment
+    def __init__(self, *, solution_id: PuzzleCommitment, solution: Data[ProverSolution]):
+        self.solution_id = solution_id
         self.solution = solution
 
     def dump(self) -> bytes:
-        return self.type.dump() + self.puzzle_commitment.dump() + self.solution.dump()
+        return self.type.dump() + self.solution_id.dump() + self.solution.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
-        puzzle_commitment = PuzzleCommitment.load(data)
-        solution = ProverSolution.load(data)
-        return cls(puzzle_commitment=puzzle_commitment, solution=solution)
+        solution_id = PuzzleCommitment.load(data)
+        solution = Data[ProverSolution].load(data)
+        return cls(solution_id=solution_id, solution=solution)
 
 
 class UnconfirmedTransaction(Message):
     type = Message.Type.UnconfirmedTransaction
 
-    def __init__(self, *, transaction_id: TransactionID, transaction: Transaction):
+    def __init__(self, *, transaction_id: TransactionID, transaction: Data[Transaction]):
         self.transaction_id = transaction_id
         self.transaction = transaction
 
@@ -371,7 +371,7 @@ class UnconfirmedTransaction(Message):
     @classmethod
     def load(cls, data: BytesIO):
         transaction_id = TransactionID.load(data)
-        transaction = Transaction.load(data)
+        transaction = Data[Transaction].load(data)
         return cls(transaction_id=transaction_id, transaction=transaction)
 
 

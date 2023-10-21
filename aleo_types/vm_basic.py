@@ -88,7 +88,7 @@ class BlockHash(AleoID):
 
 
 class StateRoot(AleoID):
-    _prefix = "ar"
+    _prefix = "sr"
 
 
 class TransactionID(AleoID):

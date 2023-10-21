@@ -1,8 +1,6 @@
 from aleo_types import *
 from .environment import Registers
 
-MappingCacheDict = dict[Field, dict[str, Any]]
-
 class FinalizeState:
     def __init__(self, block: Block):
         self.block_height = block.height

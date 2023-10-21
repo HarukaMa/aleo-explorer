@@ -17,6 +17,7 @@ from redis.asyncio import Redis
 from aleo_types import *
 from disasm.utils import value_type_to_mode_type_str, plaintext_type_to_str
 from explorer.types import Message as ExplorerMessage
+from util.global_cache import global_mapping_cache
 
 try:
     from line_profiler import profile
@@ -338,8 +339,6 @@ class Database:
                                            height: int):
         committee_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "committee"))
         bonded_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "bonded"))
-
-        from interpreter.interpreter import global_mapping_cache
 
         global_mapping_cache[committee_mapping_id] = {}
         committee_mapping: dict[str, dict[str, Any]] = {}
@@ -698,6 +697,9 @@ class Database:
                             puzzle_reward = coinbase_reward // 2
                         else:
                             block_reward, coinbase_reward, puzzle_reward = 0, 0, 0
+
+                        block_reward += await block.get_total_priority_fee(self)
+
                         for ratification in block.ratifications:
                             if isinstance(ratification, BlockRewardRatify):
                                 if ratification.amount != block_reward:
@@ -1049,6 +1051,12 @@ class Database:
                                             "UPDATE leaderboard SET total_incentive = leaderboard.total_incentive + %s WHERE address = %s",
                                             (reward, address)
                                         )
+
+                        for aborted in block.aborted_transactions_ids:
+                            await cur.execute(
+                                "INSERT INTO block_aborted_transaction_id (block_id, transaction_id) VALUES (%s, %s)",
+                                (block_db_id, str(aborted))
+                            )
 
                         await self._post_ratify(cur, self.redis, block.height, block.round, block.ratifications.ratifications, address_puzzle_rewards)
 

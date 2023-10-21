@@ -3,9 +3,7 @@ import os
 import time
 
 import aiohttp
-from starlette.exceptions import HTTPException
 
-from aleo_types import Transition, PublicTransitionInput, LiteralPlaintext
 from db import Database
 
 
@@ -91,17 +89,3 @@ async def function_definition(db: Database, program_id: str, function_name: str)
     if data is None:
         return f"Unknown function {program_id}/{function_name}"
     return data
-
-
-
-def get_fee_amount_from_transition(ts: Transition):
-    fee_input = ts.inputs[1]
-    if not isinstance(fee_input, PublicTransitionInput):
-        raise HTTPException(status_code=550, detail="Database inconsistent")
-    fee_value = fee_input.plaintext.value
-    if not isinstance(fee_value, LiteralPlaintext):
-        raise HTTPException(status_code=550, detail="Database inconsistent")
-    primitive = fee_value.literal.primitive
-    if not isinstance(primitive, int):
-        raise HTTPException(status_code=550, detail="Database inconsistent")
-    return primitive

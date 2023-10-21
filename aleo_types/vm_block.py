@@ -1,8 +1,12 @@
 import json
 import re
 from hashlib import sha256, md5
+from typing import TYPE_CHECKING
 
 from .vm_instruction import *
+
+if TYPE_CHECKING:
+    from db import Database
 
 
 # util functions
@@ -306,12 +310,12 @@ class Command(EnumBaseSerialize, RustEnum, Serializable):
     fee_map = {
         Type.Instruction: 0,
         Type.Await: 2_000,
-        Type.Contains: 250_000,
-        Type.Get: 500_000,
-        Type.GetOrUse: 500_000,
-        Type.RandChaCha: 500_000,
+        Type.Contains: 12_500,
+        Type.Get: 25_000,
+        Type.GetOrUse: 25_000,
+        Type.RandChaCha: 25_000,
         Type.Remove: 10_000,
-        Type.Set: 1_000_000,
+        Type.Set: 100_000,
         Type.BranchEq: 5_000,
         Type.BranchNeq: 5_000,
         Type.Position: 1_000,
@@ -806,6 +810,11 @@ class Function(Serializable):
     def instruction_feature_string(self) -> str:
         return feature_string_from_instructions(self.instructions)
 
+    @property
+    def finalize_cost(self):
+        if self.finalize.value is None:
+            return 0
+        return self.finalize.value.cost
 
 class ProgramDefinition(IntEnumu8):
     Mapping = 0
@@ -2311,6 +2320,34 @@ class Fee(Serializable):
         return cls(transition=transition, global_state_root=global_state_root, proof=proof)
 
 
+    @property
+    def amount(self):
+        def get_primitive_from_public_input(i: PublicTransitionInput):
+            value = i.plaintext.value
+            if not isinstance(value, LiteralPlaintext):
+                raise RuntimeError("bad transition data")
+            primitive = value.literal.primitive
+            if not isinstance(primitive, int):
+                raise RuntimeError("bad transition data")
+            return primitive
+
+        ts = self.transition
+
+        if str(ts.program_id) != "credits.aleo" or str(ts.function_name) not in ["fee_public", "fee_private"]:
+            raise RuntimeError("transition is not fee transition")
+        if str(ts.function_name) == "fee_public":
+            fee_start_index = 0
+        else:
+            fee_start_index = 1
+        fee_input = ts.inputs[fee_start_index]
+        if not isinstance(fee_input, PublicTransitionInput):
+            raise RuntimeError("malformed fee transition")
+        priority_fee_input = ts.inputs[fee_start_index + 1]
+        if not isinstance(priority_fee_input, PublicTransitionInput):
+            raise RuntimeError("malformed fee transition")
+        return int(get_primitive_from_public_input(fee_input) + get_primitive_from_public_input(priority_fee_input))
+
+
 class Execution(Serializable):
     version = u8(1)
 
@@ -2345,18 +2382,25 @@ class Execution(Serializable):
         transition: Transition = self.transitions[0]
         if transition.program_id != "credits.aleo":
             return False
-        if str(transition.function_name) in ["mint", "fee", "split"]:
+        if str(transition.function_name).startswith("fee_"):
             return True
         return False
 
     @property
-    def cost(self) -> tuple[int, int]:
+    def storage_cost(self) -> int:
         if self.is_free_execution:
-            return 0, 0
-        storage_cost = len(self.dump())
-        # we can't get the finalize cost without the program, and we don't have database here,
-        # plus we want to give a detailed breakdown, so we just return -1
-        return storage_cost, -1
+            return 0
+        return len(self.dump())
+
+    async def finalize_cost(self, db: "Database"):
+        finalize_cost = 0
+        for transition in self.transitions:
+            from util.global_cache import get_program
+            program = await get_program(db, str(transition.program_id))
+            if program is None:
+                raise RuntimeError("program not found")
+            finalize_cost += program.functions[transition.function_name].finalize_cost
+        return finalize_cost
 
 
 class Transaction(EnumBaseSerialize, RustEnum, Serializable):
@@ -2385,11 +2429,10 @@ class Transaction(EnumBaseSerialize, RustEnum, Serializable):
         else:
             raise ValueError("incorrect type")
 
-
 class ProgramOwner(Serializable):
     version = u8(1)
 
-    def __init__(self, *, address: Address, signature: "Signature"):
+    def __init__(self, *, address: Address, signature: Signature):
         self.address = address
         self.signature = signature
 
@@ -2426,6 +2469,7 @@ class DeployTransaction(Transaction):
         deployment = Deployment.load(data)
         fee = Fee.load(data)
         return cls(id_=id_, owner=owner, deployment=deployment, fee=fee)
+
 
 
 class ExecuteTransaction(Transaction):
@@ -2516,6 +2560,30 @@ class ConfirmedTransaction(EnumBaseSerialize, RustEnum, Serializable):
             return RejectedExecute.load(data)
         else:
             raise ValueError("incorrect type")
+
+    async def get_fee_breakdown(self, db: "Database"):
+        """
+        Returns (storage_cost, namespace_cost, finalize_cost , priority_fee)
+        """
+        tx = self.transaction
+        if isinstance(tx, DeployTransaction):
+            from node.testnet3 import Testnet3
+            storage_cost, namespace_cost = tx.deployment.cost
+            finalize_cost = 0
+            total_fee = tx.fee.amount
+            priority_fee = total_fee - storage_cost - namespace_cost - finalize_cost
+            return storage_cost, namespace_cost, finalize_cost, priority_fee
+        elif isinstance(tx, ExecuteTransaction):
+            storage_cost = tx.execution.storage_cost
+            finalize_cost = await tx.execution.finalize_cost(db)
+            if tx.additional_fee.value is not None:
+                total_fee = tx.additional_fee.value.amount
+            else:
+                return 0, 0, 0, 0
+            priority_fee = total_fee - storage_cost - finalize_cost
+            return storage_cost, 0, finalize_cost, priority_fee
+        else:
+            raise NotImplementedError
 
 
 class InitializeMapping(FinalizeOperation):
@@ -3317,3 +3385,6 @@ class Block(Serializable):
     @property
     def cumulative_proof_target(self) -> u128:
         return self.header.metadata.cumulative_proof_target
+
+    async def get_total_priority_fee(self, db: "Database"):
+        return sum([(await t.get_fee_breakdown(db))[3] for t in self.transactions])

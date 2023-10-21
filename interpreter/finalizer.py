@@ -6,9 +6,10 @@ import psycopg
 from aleo_types import *
 from db import Database
 from disasm.aleo import disasm_instruction, disasm_command
+from util.global_cache import MappingCacheDict
 from .environment import Registers
 from .instruction import execute_instruction
-from .utils import load_plaintext_from_operand, store_plaintext_to_register, FinalizeState, MappingCacheDict
+from .utils import load_plaintext_from_operand, store_plaintext_to_register, FinalizeState
 
 
 async def mapping_cache_read(db: Database, program_name: str, mapping_name: str) -> MappingCacheDict:

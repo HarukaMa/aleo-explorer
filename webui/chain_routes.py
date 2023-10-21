@@ -13,7 +13,7 @@ from aleo_types import u32, Transition, ExecuteTransaction, PrivateTransitionInp
     FeeTransaction, RejectedDeploy, RejectedExecution, RecordValue, Identifier, Entry
 from db import Database
 from .template import templates
-from .utils import function_signature, out_of_sync_check, function_definition, get_fee_amount_from_transition
+from .utils import function_signature, out_of_sync_check, function_definition
 
 DictList = list[dict[str, Any]]
 
@@ -128,7 +128,8 @@ async def block_route(request: Request):
 
 
 async def get_transition_finalize_cost(db: Database, ts: Transition):
-    if ts.program_id == "credits.aleo" and str(ts.function_name) in ["mint", "fee", "split"]:
+    if ts.program_id == "credits.aleo" and str(ts.function_name) == "split":
+        # TODO: this is wrong as split is not always free, should move this checking to the outer layer
         return 0
     else:
         pb = await db.get_program(str(ts.program_id))
@@ -137,7 +138,7 @@ async def get_transition_finalize_cost(db: Database, ts: Transition):
         p = Program.load(BytesIO(pb))
         f = p.functions[ts.function_name]
         if f.finalize.value is not None:
-            return f.finalize.value[1].cost
+            return f.finalize.value.cost
         else:
             return 0
 
