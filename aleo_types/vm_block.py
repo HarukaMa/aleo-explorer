@@ -2570,18 +2570,35 @@ class ConfirmedTransaction(EnumBaseSerialize, RustEnum, Serializable):
         Returns (storage_cost, namespace_cost, finalize_cost, priority_fee, burnt)
         """
         tx = self.transaction
-        if isinstance(tx, DeployTransaction):
-            from node.testnet3 import Testnet3
-            storage_cost, namespace_cost = tx.deployment.cost
+        # TODO: better way to express this?
+        if isinstance(tx, DeployTransaction) or isinstance(self, RejectedDeploy):
+            fee = tx.fee
+            if isinstance(tx, DeployTransaction):
+                deployment = tx.deployment
+            else:
+                if not isinstance(self.rejected, RejectedDeployment):
+                    raise RuntimeError("bad transaction data")
+                deployment = self.rejected.deploy
+            storage_cost, namespace_cost = deployment.cost
             finalize_cost = 0
-            base_fee, priority_fee = tx.fee.amount
+            base_fee, priority_fee = fee.amount
             burnt = base_fee - storage_cost - namespace_cost - finalize_cost
             return FeeComponent(storage_cost, namespace_cost, finalize_cost, priority_fee, burnt)
-        elif isinstance(tx, ExecuteTransaction):
-            storage_cost = tx.execution.storage_cost
-            finalize_cost = await tx.execution.finalize_cost(db)
-            if tx.additional_fee.value is not None:
-                base_fee, priority_fee = tx.additional_fee.value.amount
+        elif isinstance(tx, ExecuteTransaction) or isinstance(self, RejectedExecute):
+            if isinstance(tx, ExecuteTransaction):
+                execution = tx.execution
+                fee = tx.additional_fee.value
+            else:
+                if not isinstance(self.rejected, RejectedExecution):
+                    raise RuntimeError("bad transaction data")
+                if not isinstance(tx, FeeTransaction):
+                    raise RuntimeError("bad transaction data")
+                execution = self.rejected.execution
+                fee = tx.fee
+            storage_cost = execution.storage_cost
+            finalize_cost = await execution.finalize_cost(db)
+            if fee is not None:
+                base_fee, priority_fee = fee.amount
             else:
                 return FeeComponent(0, 0, 0, 0, 0)
             burnt = base_fee - storage_cost - finalize_cost
