@@ -213,6 +213,37 @@ CREATE TABLE explorer.block (
 
 
 --
+-- Name: block_aborted_transaction_id; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.block_aborted_transaction_id (
+    id integer NOT NULL,
+    block_id integer NOT NULL,
+    transaction_id text NOT NULL
+);
+
+
+--
+-- Name: block_aborted_transaction_id_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.block_aborted_transaction_id_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: block_aborted_transaction_id_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.block_aborted_transaction_id_id_seq OWNED BY explorer.block_aborted_transaction_id.id;
+
+
+--
 -- Name: block_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
 --
 
@@ -691,8 +722,7 @@ ALTER SEQUENCE explorer.finalize_operation_insert_kv_id_seq OWNED BY explorer.fi
 CREATE TABLE explorer.finalize_operation_remove_kv (
     id integer NOT NULL,
     finalize_operation_id integer NOT NULL,
-    mapping_id text NOT NULL,
-    index numeric(20,0) NOT NULL
+    mapping_id text NOT NULL
 );
 
 
@@ -755,7 +785,6 @@ CREATE TABLE explorer.finalize_operation_update_kv (
     id integer NOT NULL,
     finalize_operation_id integer NOT NULL,
     mapping_id text NOT NULL,
-    index numeric(20,0) NOT NULL,
     key_id text NOT NULL,
     value_id text NOT NULL
 );
@@ -899,8 +928,7 @@ CREATE TABLE explorer.mapping_history (
     mapping_id integer NOT NULL,
     height integer NOT NULL,
     key_id text NOT NULL,
-    value bytea,
-    index integer NOT NULL
+    value bytea
 );
 
 
@@ -950,7 +978,6 @@ ALTER SEQUENCE explorer.mapping_id_seq OWNED BY explorer.mapping.id;
 CREATE TABLE explorer.mapping_value (
     id integer NOT NULL,
     mapping_id integer NOT NULL,
-    index integer NOT NULL,
     key_id text NOT NULL,
     value_id text NOT NULL,
     key bytea NOT NULL,
@@ -1654,6 +1681,13 @@ ALTER TABLE ONLY explorer.block ALTER COLUMN id SET DEFAULT nextval('explorer.bl
 
 
 --
+-- Name: block_aborted_transaction_id id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.block_aborted_transaction_id ALTER COLUMN id SET DEFAULT nextval('explorer.block_aborted_transaction_id_id_seq'::regclass);
+
+
+--
 -- Name: coinbase_solution id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -1956,6 +1990,14 @@ ALTER TABLE ONLY explorer.authority
 
 
 --
+-- Name: block_aborted_transaction_id block_aborted_transaction_id_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.block_aborted_transaction_id
+    ADD CONSTRAINT block_aborted_transaction_id_pk PRIMARY KEY (id);
+
+
+--
 -- Name: block block_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -2160,7 +2202,7 @@ ALTER TABLE ONLY explorer.mapping_value
 --
 
 ALTER TABLE ONLY explorer.mapping_value
-    ADD CONSTRAINT mapping_value_pk2 UNIQUE (index, mapping_id);
+    ADD CONSTRAINT mapping_value_pk2 UNIQUE (mapping_id, key_id);
 
 
 --
@@ -2343,6 +2385,13 @@ CREATE INDEX authority_block_id_index ON explorer.authority USING btree (block_i
 --
 
 CREATE INDEX authority_type_index ON explorer.authority USING btree (type);
+
+
+--
+-- Name: block_aborted_transaction_id_block_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX block_aborted_transaction_id_block_id_index ON explorer.block_aborted_transaction_id USING btree (block_id);
 
 
 --
@@ -2911,6 +2960,14 @@ CREATE UNIQUE INDEX transition_transition_id_uindex ON explorer.transition USING
 
 ALTER TABLE ONLY explorer.authority
     ADD CONSTRAINT authority_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id);
+
+
+--
+-- Name: block_aborted_transaction_id block_aborted_transaction_id_block_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.block_aborted_transaction_id
+    ADD CONSTRAINT block_aborted_transaction_id_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id);
 
 
 --
