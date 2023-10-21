@@ -1,5 +1,6 @@
 import json
 import re
+from collections import namedtuple
 from hashlib import sha256, md5
 from typing import TYPE_CHECKING
 
@@ -2323,6 +2324,7 @@ class Fee(Serializable):
 
     @property
     def amount(self):
+        """ Returns base_fee, priority_fee """
         def get_primitive_from_public_input(i: PublicTransitionInput):
             value = i.plaintext.value
             if not isinstance(value, LiteralPlaintext):
@@ -2346,7 +2348,7 @@ class Fee(Serializable):
         priority_fee_input = ts.inputs[fee_start_index + 1]
         if not isinstance(priority_fee_input, PublicTransitionInput):
             raise RuntimeError("malformed fee transition")
-        return int(get_primitive_from_public_input(fee_input) + get_primitive_from_public_input(priority_fee_input))
+        return int(get_primitive_from_public_input(fee_input)), int(get_primitive_from_public_input(priority_fee_input))
 
 
 class Execution(Serializable):
@@ -2535,6 +2537,7 @@ class FinalizeOperation(EnumBaseSerialize, RustEnum, Serializable):
         else:
             raise ValueError("incorrect type")
 
+FeeComponent = namedtuple("FeeComponent", ["storage_cost", "namespace_cost", "finalize_cost", "priority_fee", "burnt"])
 
 class ConfirmedTransaction(EnumBaseSerialize, RustEnum, Serializable):
     class Type(IntEnumu8):
@@ -2564,25 +2567,25 @@ class ConfirmedTransaction(EnumBaseSerialize, RustEnum, Serializable):
 
     async def get_fee_breakdown(self, db: "Database"):
         """
-        Returns (storage_cost, namespace_cost, finalize_cost , priority_fee)
+        Returns (storage_cost, namespace_cost, finalize_cost, priority_fee, burnt)
         """
         tx = self.transaction
         if isinstance(tx, DeployTransaction):
             from node.testnet3 import Testnet3
             storage_cost, namespace_cost = tx.deployment.cost
             finalize_cost = 0
-            total_fee = tx.fee.amount
-            priority_fee = total_fee - storage_cost - namespace_cost - finalize_cost
-            return storage_cost, namespace_cost, finalize_cost, priority_fee
+            base_fee, priority_fee = tx.fee.amount
+            burnt = base_fee - storage_cost - namespace_cost - finalize_cost
+            return FeeComponent(storage_cost, namespace_cost, finalize_cost, priority_fee, burnt)
         elif isinstance(tx, ExecuteTransaction):
             storage_cost = tx.execution.storage_cost
             finalize_cost = await tx.execution.finalize_cost(db)
             if tx.additional_fee.value is not None:
-                total_fee = tx.additional_fee.value.amount
+                base_fee, priority_fee = tx.additional_fee.value.amount
             else:
-                return 0, 0, 0, 0
-            priority_fee = total_fee - storage_cost - finalize_cost
-            return storage_cost, 0, finalize_cost, priority_fee
+                return FeeComponent(0, 0, 0, 0, 0)
+            burnt = base_fee - storage_cost - finalize_cost
+            return FeeComponent(storage_cost, 0, finalize_cost, priority_fee, burnt)
         else:
             raise NotImplementedError
 
@@ -3388,4 +3391,4 @@ class Block(Serializable):
         return self.header.metadata.cumulative_proof_target
 
     async def get_total_priority_fee(self, db: "Database"):
-        return sum([(await t.get_fee_breakdown(db))[3] for t in self.transactions])
+        return sum([(await t.get_fee_breakdown(db)).priority_fee for t in self.transactions])
