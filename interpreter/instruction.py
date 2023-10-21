@@ -299,13 +299,15 @@ def greater_than_or_equal(operands: list[Operand], destination: Register, regist
         )
     store_plaintext_to_register(res, destination, registers)
 
-def hash_op(operands: tuple[Operand, Optional[Operand]], destination: Register, destination_type: LiteralType, registers: Registers, finalize_state: FinalizeState, hash_type: HT):
+def hash_op(operands: tuple[Operand, Optional[Operand]], destination: Register, destination_type: PlaintextType, registers: Registers, finalize_state: FinalizeState, hash_type: HT):
     op = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    value_type = destination_type.primitive_type
-    value = value_type.load(BytesIO(aleo.hash_ops(PlaintextValue(plaintext=op).dump(), hash_ops[hash_type], destination_type)))
+    if not isinstance(destination_type, LiteralPlaintextType):
+        raise TypeError("destination type must be literal")
+    value_type = destination_type.literal_type.primitive_type
+    value = value_type.load(BytesIO(aleo.hash_ops(PlaintextValue(plaintext=op).dump(), hash_ops[hash_type], destination_type.literal_type)))
     res = LiteralPlaintext(
         literal=Literal(
-            type_=Literal.Type(destination_type.value),
+            type_=Literal.Type(destination_type.literal_type.value),
             primitive=value,
         )
     )
