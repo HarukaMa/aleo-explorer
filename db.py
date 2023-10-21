@@ -674,11 +674,10 @@ class Database:
         async with self.pool.connection() as conn:
             async with conn.transaction():
                 async with conn.cursor() as cur:
+                    # redis is not protected by transaction so manually saving here
+                    bonded_save = await self.redis.hgetall("credits.aleo:bonded")
+                    committee_save = await self.redis.hgetall("credits.aleo:committee")
                     try:
-                        # redis is not protected by transaction so manually saving here
-                        bonded_save = await self.redis.hgetall("credits.aleo:bonded")
-                        committee_save = await self.redis.hgetall("credits.aleo:committee")
-
                         if block.height != 0:
                             block_reward, coinbase_reward = block.compute_rewards(
                                 await self.get_latest_coinbase_target(),

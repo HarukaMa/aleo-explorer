@@ -1393,7 +1393,10 @@ class Instruction(Serializable):
             inst = self.literals
             # need to redesign the fee map to go fully static
             fee_dict: dict[str, int] = Instruction.fee_map[self.type] # type: ignore[reportGeneralTypeIssues]
-            if inst.destination_type in (LiteralType.Address, LiteralType.Group):
+            if not isinstance(inst.destination_type, LiteralPlaintextType):
+                raise ValueError(f"expected LiteralPlaintextType, got {inst.destination_type}")
+            literal_type = inst.destination_type.literal_type
+            if literal_type in (LiteralType.Address, LiteralType.Group):
                 return fee_dict["high"]
             else:
                 return fee_dict["low"]

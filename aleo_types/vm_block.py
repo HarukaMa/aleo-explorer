@@ -1,8 +1,7 @@
 import json
 import re
-from collections import namedtuple
 from hashlib import sha256, md5
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 from .vm_instruction import *
 
@@ -2537,7 +2536,13 @@ class FinalizeOperation(EnumBaseSerialize, RustEnum, Serializable):
         else:
             raise ValueError("incorrect type")
 
-FeeComponent = namedtuple("FeeComponent", ["storage_cost", "namespace_cost", "finalize_cost", "priority_fee", "burnt"])
+FeeComponent = NamedTuple("FeeComponent", [
+    ("storage_cost", int),
+    ("namespace_cost", int),
+    ("finalize_cost", int),
+    ("priority_fee", int),
+    ("burnt", int)
+])
 
 class ConfirmedTransaction(EnumBaseSerialize, RustEnum, Serializable):
     class Type(IntEnumu8):
@@ -2572,13 +2577,18 @@ class ConfirmedTransaction(EnumBaseSerialize, RustEnum, Serializable):
         tx = self.transaction
         # TODO: better way to express this?
         if isinstance(tx, DeployTransaction) or isinstance(self, RejectedDeploy):
-            fee = tx.fee
             if isinstance(tx, DeployTransaction):
+                fee = tx.fee
                 deployment = tx.deployment
-            else:
+            elif isinstance(self, RejectedDeploy):
                 if not isinstance(self.rejected, RejectedDeployment):
                     raise RuntimeError("bad transaction data")
+                if not isinstance(tx, FeeTransaction):
+                    raise RuntimeError("bad transaction data")
                 deployment = self.rejected.deploy
+                fee = tx.fee
+            else:
+                raise RuntimeError("bad transaction data")
             storage_cost, namespace_cost = deployment.cost
             finalize_cost = 0
             base_fee, priority_fee = fee.amount
@@ -2588,13 +2598,15 @@ class ConfirmedTransaction(EnumBaseSerialize, RustEnum, Serializable):
             if isinstance(tx, ExecuteTransaction):
                 execution = tx.execution
                 fee = tx.additional_fee.value
-            else:
+            elif isinstance(self, RejectedExecute):
                 if not isinstance(self.rejected, RejectedExecution):
                     raise RuntimeError("bad transaction data")
                 if not isinstance(tx, FeeTransaction):
                     raise RuntimeError("bad transaction data")
                 execution = self.rejected.execution
                 fee = tx.fee
+            else:
+                raise RuntimeError("bad transaction data")
             storage_cost = execution.storage_cost
             finalize_cost = await execution.finalize_cost(db)
             if fee is not None:

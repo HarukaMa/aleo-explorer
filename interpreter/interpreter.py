@@ -29,6 +29,8 @@ async def finalize_deploy(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]]
         if future is None:
             raise RuntimeError("invalid fee transition output")
         program = await get_program(db, str(future.program_id))
+        if not program:
+            raise RuntimeError("program not found")
 
         inputs: list[Value] = _load_input_from_arguments(future.arguments)
         operations = await execute_finalizer(db, cur, finalize_state, transition.id, program, future.function_name, inputs, mapping_cache, True)
@@ -93,8 +95,9 @@ async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]
                 raise RuntimeError("invalid future is None")
             # noinspection PyTypeChecker
             future = future_option.value
-            # TODO: use program cache
             program = await get_program(db, str(future.program_id))
+            if not program:
+                raise RuntimeError("program not found")
 
             inputs: list[Value] = _load_input_from_arguments(future.arguments)
             try:
@@ -115,6 +118,8 @@ async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]
             if future is None:
                 raise RuntimeError("invalid fee transition output")
             program = await get_program(db, str(future.program_id))
+            if not program:
+                raise RuntimeError("program not found")
 
             inputs: list[Value] = _load_input_from_arguments(future.arguments)
             operations.extend(
