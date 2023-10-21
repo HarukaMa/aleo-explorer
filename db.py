@@ -807,7 +807,7 @@ class Database:
                             confirmed_transaction_db_id = res["id"]
                             transaction = confirmed_transaction.transaction
                             transaction_id = transaction.id
-                            if block.height != 0:
+                            if block.height != 0 and isinstance(confirmed_transaction, (AcceptedDeploy, AcceptedExecute)):
                                 dag_vertex_db_id = dag_transmission_ids[1][str(transaction_id)]
                             else:
                                 dag_vertex_db_id = None

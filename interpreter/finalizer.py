@@ -134,20 +134,17 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
             key_id = Field.loads(cached_get_key_id(str(program.id), str(c.mapping), key.dump()))
             value_id = Field.loads(aleo.get_value_id(str(key_id), value.dump()))
             if mapping_cache:
-                if allow_state_change:
-                    if key_id not in mapping_cache[mapping_id]:
-                        mapping_cache[mapping_id][key_id] = {
-                            "value_id": value_id,
-                            "key": key,
-                            "value": value,
-                        }
-                    else:
-                        mapping_cache[mapping_id][key_id]["value_id"] = value_id
-                        mapping_cache[mapping_id][key_id]["value"] = value
-                    if debug:
-                        print(f"set {c.mapping}[{key}] = {value}")
+                if key_id not in mapping_cache[mapping_id]:
+                    mapping_cache[mapping_id][key_id] = {
+                        "value_id": value_id,
+                        "key": key,
+                        "value": value,
+                    }
                 else:
-                    print("Not updating mapping cache because allow_state_change is False")
+                    mapping_cache[mapping_id][key_id]["value_id"] = value_id
+                    mapping_cache[mapping_id][key_id]["value"] = value
+                if debug:
+                    print(f"set {c.mapping}[{key}] = {value}")
             else:
                 if allow_state_change:
                     raise RuntimeError("unsupported execution configuration")
@@ -197,12 +194,9 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
                 if key_id not in mapping_cache[mapping_id]:
                     print(f"Key {key} not found in mapping {c.mapping}")
                     continue
-                if allow_state_change:
-                    mapping_cache[mapping_id].pop(key_id)
-                    if debug:
-                        print(f"del {c.mapping}[{key}]")
-                else:
-                    print("Not updating mapping cache because allow_state_change is False")
+                mapping_cache[mapping_id].pop(key_id)
+                if debug:
+                    print(f"del {c.mapping}[{key}]")
             else:
                 if allow_state_change:
                     raise RuntimeError("unsupported execution configuration")

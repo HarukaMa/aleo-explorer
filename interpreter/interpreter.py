@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import psycopg
 
 from aleo_types import *
@@ -14,6 +16,22 @@ async def init_builtin_program(db: Database, program: Program):
         if await db.get_program(str(program.id)) is None:
             await db.save_builtin_program(program)
 
+async def _execute_public_fee(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]], finalize_state: FinalizeState, fee_transition: Transition, mapping_cache: dict[Field, MappingCacheDict], allow_state_change: bool) -> list[dict[str, Any]]:
+    if fee_transition.program_id != "credits.aleo" or fee_transition.function_name != "fee_public":
+        raise TypeError("not a fee transition")
+    output = fee_transition.outputs[0]
+    if not isinstance(output, FutureTransitionOutput):
+        raise TypeError("invalid fee transition output")
+    future = output.future.value
+    if future is None:
+        raise RuntimeError("invalid fee transition output")
+    program = await get_program(db, str(future.program_id))
+    if not program:
+        raise RuntimeError("program not found")
+
+    inputs: list[Value] = _load_input_from_arguments(future.arguments)
+    return await execute_finalizer(db, cur, finalize_state, fee_transition.id, program, future.function_name, inputs, mapping_cache, allow_state_change)
+
 async def finalize_deploy(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]], finalize_state: FinalizeState,
                           confirmed_transaction: ConfirmedTransaction, mapping_cache: dict[Field, MappingCacheDict]
                           ) -> tuple[list[FinalizeOperation], list[dict[str, Any]], Optional[str]]:
@@ -22,18 +40,7 @@ async def finalize_deploy(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]]
         raise TypeError("invalid deploy transaction")
     transition = transaction.fee.transition
     if transition.function_name == "fee_public":
-        output = transition.outputs[0]
-        if not isinstance(output, FutureTransitionOutput):
-            raise TypeError("invalid fee transition output")
-        future = output.future.value
-        if future is None:
-            raise RuntimeError("invalid fee transition output")
-        program = await get_program(db, str(future.program_id))
-        if not program:
-            raise RuntimeError("program not found")
-
-        inputs: list[Value] = _load_input_from_arguments(future.arguments)
-        operations = await execute_finalizer(db, cur, finalize_state, transition.id, program, future.function_name, inputs, mapping_cache, True)
+        operations = await _execute_public_fee(db, cur, finalize_state, transition, mapping_cache, True)
     else:
         operations: list[dict[str, Any]] = []
 
@@ -74,12 +81,14 @@ async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]
             raise TypeError("invalid execute transaction")
         execution = transaction.execution
         allow_state_change = True
+        local_mapping_cache = mapping_cache
         fee = transaction.additional_fee.value
     elif isinstance(confirmed_transaction, RejectedExecute):
         if not isinstance(confirmed_transaction.rejected, RejectedExecution):
             raise TypeError("invalid rejected execute transaction")
         execution = confirmed_transaction.rejected.execution
         allow_state_change = False
+        local_mapping_cache = deepcopy(mapping_cache)
         if not isinstance(confirmed_transaction.transaction, FeeTransaction):
             raise TypeError("invalid rejected execute transaction")
         fee = confirmed_transaction.transaction.fee
@@ -102,29 +111,26 @@ async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]
             inputs: list[Value] = _load_input_from_arguments(future.arguments)
             try:
                 operations.extend(
-                    await execute_finalizer(db, cur, finalize_state, transition.id, program, future.function_name, inputs, mapping_cache, allow_state_change)
+                    await execute_finalizer(db, cur, finalize_state, transition.id, program, future.function_name, inputs, local_mapping_cache, allow_state_change)
                 )
             except ExecuteError as e:
                 reject_reason = f"execute error: {e}, at transition #{index}, instruction \"{e.instruction}\""
                 operations = []
                 break
+    if isinstance(confirmed_transaction, RejectedExecute) and reject_reason is None:
+        # execute fee as part of rejected execute as it failed here
+        transition = fee.transition
+        if transition.function_name == "fee_public":
+            try:
+                operations.extend(await _execute_public_fee(db, cur, finalize_state, transition, local_mapping_cache, allow_state_change))
+            except ExecuteError as e:
+                reject_reason = f"execute error: {e}, at fee transition, instruction \"{e.instruction}\""
+                operations = []
     if fee:
         transition = fee.transition
         if transition.function_name == "fee_public":
-            output = transition.outputs[0]
-            if not isinstance(output, FutureTransitionOutput):
-                raise TypeError("invalid fee transition output")
-            future = output.future.value
-            if future is None:
-                raise RuntimeError("invalid fee transition output")
-            program = await get_program(db, str(future.program_id))
-            if not program:
-                raise RuntimeError("program not found")
+            operations.extend(await _execute_public_fee(db, cur, finalize_state, transition, mapping_cache, True))
 
-            inputs: list[Value] = _load_input_from_arguments(future.arguments)
-            operations.extend(
-                await execute_finalizer(db, cur, finalize_state, transition.id, program, future.function_name, inputs, mapping_cache, allow_state_change)
-            )
     if isinstance(confirmed_transaction, RejectedExecute):
         if reject_reason is None:
             raise RuntimeError("rejected execute transaction should not finalize without ExecuteError")
