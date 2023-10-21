@@ -1314,7 +1314,7 @@ class Instruction(Serializable):
         Type.Double: 2_000,
         Type.GreaterThan: 2_000,
         Type.GreaterThanOrEqual: 2_000,
-        Type.HashBHP256: 200_000,
+        Type.HashBHP256: 100_000,
         Type.HashBHP512: 100_000,
         Type.HashBHP768: 100_000,
         Type.HashBHP1024: 100_000,

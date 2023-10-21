@@ -4,7 +4,7 @@ from aleo_types import *
 from db import Database
 from interpreter.finalizer import execute_finalizer, ExecuteError, mapping_cache_read
 from interpreter.utils import FinalizeState
-from util.global_cache import global_mapping_cache, global_program_cache, MappingCacheDict
+from util.global_cache import global_mapping_cache, global_program_cache, MappingCacheDict, get_program
 
 
 async def init_builtin_program(db: Database, program: Program):
@@ -14,15 +14,31 @@ async def init_builtin_program(db: Database, program: Program):
         if await db.get_program(str(program.id)) is None:
             await db.save_builtin_program(program)
 
-async def finalize_deploy(confirmed_transaction: ConfirmedTransaction) -> tuple[list[FinalizeOperation], list[dict[str, Any]], Optional[str]]:
+async def finalize_deploy(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]], finalize_state: FinalizeState,
+                          confirmed_transaction: ConfirmedTransaction, mapping_cache: dict[Field, MappingCacheDict]
+                          ) -> tuple[list[FinalizeOperation], list[dict[str, Any]], Optional[str]]:
+    transaction = confirmed_transaction.transaction
+    if not isinstance(transaction, DeployTransaction):
+        raise TypeError("invalid deploy transaction")
+    transition = transaction.fee.transition
+    if transition.function_name == "fee_public":
+        output = transition.outputs[0]
+        if not isinstance(output, FutureTransitionOutput):
+            raise TypeError("invalid fee transition output")
+        future = output.future.value
+        if future is None:
+            raise RuntimeError("invalid fee transition output")
+        program = await get_program(db, str(future.program_id))
+
+        inputs: list[Value] = _load_input_from_arguments(future.arguments)
+        operations = await execute_finalizer(db, cur, finalize_state, transition.id, program, future.function_name, inputs, mapping_cache, True)
+    else:
+        operations: list[dict[str, Any]] = []
+
     if isinstance(confirmed_transaction, AcceptedDeploy):
-        transaction: Transaction = confirmed_transaction.transaction
-        if not isinstance(transaction, DeployTransaction):
-            raise TypeError("invalid deploy transaction")
         deployment = transaction.deployment
         program = deployment.program
         expected_operations = confirmed_transaction.finalize
-        operations: list[dict[str, Any]] = []
         for mapping in program.mappings.keys():
             mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(mapping)))
             operations.append({
@@ -34,17 +50,6 @@ async def finalize_deploy(confirmed_transaction: ConfirmedTransaction) -> tuple[
     else:
         raise NotImplementedError
     return expected_operations, operations, None
-
-async def _load_program(db: Database, program_id: str) -> Program:
-    if program_id in global_program_cache:
-        program = global_program_cache[program_id]
-    else:
-        program_bytes = await db.get_program(program_id)
-        if program_bytes is None:
-            raise RuntimeError("program not found")
-        program = Program.load(BytesIO(program_bytes))
-        global_program_cache[program_id] = program
-    return program
 
 def _load_input_from_arguments(arguments: list[Argument]) -> list[Value]:
     inputs: list[Value] = []
@@ -89,7 +94,7 @@ async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]
             # noinspection PyTypeChecker
             future = future_option.value
             # TODO: use program cache
-            program = await _load_program(db, str(future.program_id))
+            program = await get_program(db, str(future.program_id))
 
             inputs: list[Value] = _load_input_from_arguments(future.arguments)
             try:
@@ -109,7 +114,7 @@ async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]
             future = output.future.value
             if future is None:
                 raise RuntimeError("invalid fee transition output")
-            program = await _load_program(db, str(future.program_id))
+            program = await get_program(db, str(future.program_id))
 
             inputs: list[Value] = _load_input_from_arguments(future.arguments)
             operations.extend(
@@ -127,7 +132,7 @@ async def finalize_block(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]],
         confirmed_transaction: ConfirmedTransaction
         CTType = ConfirmedTransaction.Type
         if confirmed_transaction.type in [CTType.AcceptedDeploy, CTType.RejectedDeploy]:
-            expected_operations, operations, reject_reason = await finalize_deploy(confirmed_transaction)
+            expected_operations, operations, reject_reason = await finalize_deploy(db, cur, finalize_state, confirmed_transaction, global_mapping_cache)
         elif confirmed_transaction.type in [CTType.AcceptedExecute, CTType.RejectedExecute]:
             expected_operations, operations, reject_reason = await finalize_execute(db, cur, finalize_state, confirmed_transaction, global_mapping_cache)
         else:
@@ -156,10 +161,7 @@ async def finalize_block(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]],
                 from pprint import pprint
                 print("expected:", e.__dict__)
                 print("actual:", o)
-                if e.mapping_id in global_mapping_cache:
-                    print("mapping cache:")
-                    pprint(global_mapping_cache[e.mapping_id])
-                # global_mapping_cache.clear()
+                global_mapping_cache.clear()
                 raise
 
         await execute_operations(db, cur, operations)

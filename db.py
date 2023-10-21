@@ -1050,13 +1050,13 @@ class Database:
 
                         await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseBlockAdded, block.header.metadata.height))
                     except Exception as e:
-                        bonded_backup_key = "credits.aleo:bonded:rollback_backup:{}".format(block.header.metadata.height)
-                        committee_backup_key = "credits.aleo:committee:rollback_backup:{}".format(block.header.metadata.height)
-                        if not self.redis.exists(bonded_backup_key):
+                        bonded_backup_key = f"credits.aleo:bonded:rollback_backup:{block.header.metadata.height}"
+                        committee_backup_key = f"credits.aleo:committee:rollback_backup:{block.header.metadata.height}"
+                        if await self.redis.exists(bonded_backup_key) == 0:
                             await self.redis.rename("credits.aleo:bonded", bonded_backup_key)
                         else:
                             await self.redis.delete("credits.aleo:bonded")
-                        if not self.redis.exists(committee_backup_key):
+                        if await self.redis.exists(committee_backup_key) == 0:
                             await self.redis.rename("credits.aleo:committee", committee_backup_key)
                         else:
                             await self.redis.delete("credits.aleo:committee")
