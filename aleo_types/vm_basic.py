@@ -96,7 +96,7 @@ class TransactionID(AleoID):
 
 
 class TransitionID(AleoID):
-    _prefix = "as"
+    _prefix = "au"
 
 
 ## Saved for reference
