@@ -536,7 +536,7 @@ async def search_route(request: Request):
             "too_many": too_many,
         }
         return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
-    elif query.startswith("as1"):
+    elif query.startswith("au1"):
         # transition id
         transitions = await db.search_transition_id(query)
         if not transitions:
