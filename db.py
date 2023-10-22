@@ -672,26 +672,27 @@ class Database:
         async with self.pool.connection() as conn:
             async with conn.transaction():
                 async with conn.cursor() as cur:
-                    # redis is not protected by transaction so manually saving here
-                    bonded_save = await self.redis.hgetall("credits.aleo:bonded")
-                    committee_save = await self.redis.hgetall("credits.aleo:committee")
+                    if block.height != 0:
+                        # redis is not protected by transaction so manually saving here
+                        bonded_save = await self.redis.hgetall("credits.aleo:bonded")
+                        committee_save = await self.redis.hgetall("credits.aleo:committee")
 
-                    bonded_backup_key = f"credits.aleo:bonded:rollback_backup:{block.header.metadata.height}"
-                    committee_backup_key = f"credits.aleo:committee:rollback_backup:{block.header.metadata.height}"
+                        bonded_backup_key = f"credits.aleo:bonded:rollback_backup:{block.header.metadata.height}"
+                        committee_backup_key = f"credits.aleo:committee:rollback_backup:{block.header.metadata.height}"
 
-                    if await self.redis.exists(bonded_backup_key) == 0:
-                        await self.redis.hset(bonded_backup_key, mapping=bonded_save)
-                    else:
-                        bonded_save = await self.redis.hgetall(bonded_backup_key)
-                        await self.redis.delete("credits.aleo:bonded")
-                        await self.redis.hset("credits.aleo:bonded", mapping=bonded_save)
+                        if await self.redis.exists(bonded_backup_key) == 0:
+                            await self.redis.hset(bonded_backup_key, mapping=bonded_save)
+                        else:
+                            bonded_save = await self.redis.hgetall(bonded_backup_key)
+                            await self.redis.delete("credits.aleo:bonded")
+                            await self.redis.hset("credits.aleo:bonded", mapping=bonded_save)
 
-                    if await self.redis.exists(committee_backup_key) == 0:
-                        await self.redis.hset(committee_backup_key, mapping=committee_save)
-                    else:
-                        committee_save = await self.redis.hgetall(committee_backup_key)
-                        await self.redis.delete("credits.aleo:committee")
-                        await self.redis.hset("credits.aleo:committee", mapping=committee_save)
+                        if await self.redis.exists(committee_backup_key) == 0:
+                            await self.redis.hset(committee_backup_key, mapping=committee_save)
+                        else:
+                            committee_save = await self.redis.hgetall(committee_backup_key)
+                            await self.redis.delete("credits.aleo:committee")
+                            await self.redis.hset("credits.aleo:committee", mapping=committee_save)
 
                     try:
                         if block.height != 0:
