@@ -1064,8 +1064,9 @@ class Database:
 
                         await self._post_ratify(cur, self.redis, block.height, block.round, block.ratifications.ratifications, address_puzzle_rewards)
 
-                        await self.redis.delete(bonded_backup_key)
-                        await self.redis.delete(committee_backup_key)
+                        if block.height != 0:
+                            await self.redis.delete(bonded_backup_key)
+                            await self.redis.delete(committee_backup_key)
 
                         await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseBlockAdded, block.header.metadata.height))
                     except Exception as e:
