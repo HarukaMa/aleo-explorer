@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import os
 import time
 from collections import defaultdict
@@ -11,7 +10,6 @@ import psycopg.sql
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from psycopg_pool import AsyncConnectionPool
-from redis import WatchError
 from redis.asyncio import Redis
 
 from aleo_types import *
@@ -532,23 +530,23 @@ class Database:
         return stakers
 
     @staticmethod
-    def _check_committee_staker_match(ommittee_members: dict[Address, tuple[u64, bool_]],
+    def _check_committee_staker_match(committee_members: dict[Address, tuple[u64, bool_]],
                                       stakers: dict[Address, tuple[Address, u64]]):
         address_stakes: dict[Address, u64] = defaultdict(lambda: u64())
         for _, (validator, amount) in stakers.items():
             address_stakes[validator] += amount # type: ignore[reportGeneralTypeIssues]
-        if len(address_stakes) != len(stakers):
+        if len(address_stakes) != len(committee_members):
             raise RuntimeError("size mismatch between stakers and committee members")
 
-        committee_total_stake = sum(amount for amount, _ in ommittee_members.values())
+        committee_total_stake = sum(amount for amount, _ in committee_members.values())
         stakers_total_stake = sum(address_stakes.values())
         if committee_total_stake != stakers_total_stake:
             raise RuntimeError("total stake mismatch between stakers and committee members")
 
         for address, amount in address_stakes.items():
-            if address not in ommittee_members:
+            if address not in committee_members:
                 raise RuntimeError("staked address not in committee members")
-            if amount != ommittee_members[address][0]:
+            if amount != committee_members[address][0]:
                 raise RuntimeError("stake mismatch between stakers and committee members")
 
 
@@ -677,6 +675,24 @@ class Database:
                     # redis is not protected by transaction so manually saving here
                     bonded_save = await self.redis.hgetall("credits.aleo:bonded")
                     committee_save = await self.redis.hgetall("credits.aleo:committee")
+
+                    bonded_backup_key = f"credits.aleo:bonded:rollback_backup:{block.header.metadata.height}"
+                    committee_backup_key = f"credits.aleo:committee:rollback_backup:{block.header.metadata.height}"
+
+                    if await self.redis.exists(bonded_backup_key) == 0:
+                        await self.redis.hset(bonded_backup_key, mapping=bonded_save)
+                    else:
+                        bonded_save = await self.redis.hgetall(bonded_backup_key)
+                        await self.redis.delete("credits.aleo:bonded")
+                        await self.redis.hset("credits.aleo:bonded", mapping=bonded_save)
+
+                    if await self.redis.exists(committee_backup_key) == 0:
+                        await self.redis.hset(committee_backup_key, mapping=committee_save)
+                    else:
+                        committee_save = await self.redis.hgetall(committee_backup_key)
+                        await self.redis.delete("credits.aleo:committee")
+                        await self.redis.hset("credits.aleo:committee", mapping=committee_save)
+
                     try:
                         if block.height != 0:
                             block_reward, coinbase_reward = block.compute_rewards(
@@ -1047,18 +1063,11 @@ class Database:
 
                         await self._post_ratify(cur, self.redis, block.height, block.round, block.ratifications.ratifications, address_puzzle_rewards)
 
+                        await self.redis.delete(bonded_backup_key)
+                        await self.redis.delete(committee_backup_key)
+
                         await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseBlockAdded, block.header.metadata.height))
                     except Exception as e:
-                        bonded_backup_key = f"credits.aleo:bonded:rollback_backup:{block.header.metadata.height}"
-                        committee_backup_key = f"credits.aleo:committee:rollback_backup:{block.header.metadata.height}"
-                        if await self.redis.exists(bonded_backup_key) == 0:
-                            await self.redis.rename("credits.aleo:bonded", bonded_backup_key)
-                        else:
-                            await self.redis.delete("credits.aleo:bonded")
-                        if await self.redis.exists(committee_backup_key) == 0:
-                            await self.redis.rename("credits.aleo:committee", committee_backup_key)
-                        else:
-                            await self.redis.delete("credits.aleo:committee")
                         await self.redis.hset("credits.aleo:bonded", mapping=bonded_save)
                         await self.redis.hset("credits.aleo:committee", mapping=committee_save)
                         await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
@@ -2560,24 +2569,12 @@ class Database:
         try:
             if program_name == "credits.aleo" and mapping_name in ["committee", "bonded"]:
                 conn = self.redis
-                while True:
-                    try:
-                        data = {
-                            "key": key.hex(),
-                            "value_id": value_id,
-                            "value": value.hex(),
-                        }
-                        await conn.execute_command("MULTI")
-                        await conn.hset(f"{program_name}:{mapping_name}", key_id, json.dumps(data))
-                        await conn.execute_command("EXEC")
-                    except WatchError:
-                        await asyncio.sleep(0.01)
-                        continue
-                    except:
-                        try:
-                            await conn.execute_command("DISCARD")
-                        finally:
-                            raise
+                data = {
+                    "key": key.hex(),
+                    "value_id": value_id,
+                    "value": value.hex(),
+                }
+                await conn.hset(f"{program_name}:{mapping_name}", key_id, json.dumps(data))
             else:
                 await cur.execute("SELECT id FROM mapping WHERE mapping_id = %s", (mapping_id,))
                 mapping = await cur.fetchone()

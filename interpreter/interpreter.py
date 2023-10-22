@@ -97,6 +97,8 @@ async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]
     operations: list[dict[str, Any]] = []
     reject_reason: str | None = None
     for index, transition in enumerate(execution.transitions):
+        if len(transition.outputs) == 0:
+            continue
         maybe_future_output = transition.outputs[-1]
         if isinstance(maybe_future_output, FutureTransitionOutput):
             future_option = maybe_future_output.future
@@ -126,14 +128,13 @@ async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]
             except ExecuteError as e:
                 reject_reason = f"execute error: {e}, at fee transition, instruction \"{e.instruction}\""
                 operations = []
+    if isinstance(confirmed_transaction, RejectedExecute) and reject_reason is None:
+        raise RuntimeError("rejected execute transaction should not finalize without ExecuteError")
+
     if fee:
         transition = fee.transition
         if transition.function_name == "fee_public":
             operations.extend(await _execute_public_fee(db, cur, finalize_state, transition, mapping_cache, True))
-
-    if isinstance(confirmed_transaction, RejectedExecute):
-        if reject_reason is None:
-            raise RuntimeError("rejected execute transaction should not finalize without ExecuteError")
     return expected_operations, operations, reject_reason
 
 async def finalize_block(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]], block: Block) -> list[Optional[str]]:
