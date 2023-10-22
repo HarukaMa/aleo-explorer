@@ -161,7 +161,7 @@ class ChallengeResponse(Message):
         return cls(genesis_header=genesis_header, signature=signature)
 
 
-class DisconnectReason(IntEnumu32):
+class DisconnectReason(IntEnumu8):
     ExceededForkRange = 0
     InvalidChallengeResponse = 1
     InvalidForkDepth = 2
