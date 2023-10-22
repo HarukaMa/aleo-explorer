@@ -123,6 +123,13 @@
             {% call data_line("Commitment") %}
                 <span class="mono">{{ output.commitment }}</span>
             {% endcall %}
+        {% elif output.type == "Future" %}
+            {% call data_line("Future hash") %}
+                <span class="mono">{{ output.future_hash }}</span>
+            {% endcall %}
+            {% call data_line("Future") %}
+                <span class="mono">{{ output.future.program_id }}/{{ output.future.function_name }}(...)</span>
+            {% endcall %}
         {% endif %}
             <br>
         {% endfor %}

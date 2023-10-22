@@ -1613,7 +1613,7 @@ class Database:
 
                     certificates.append(
                         BatchCertificate(
-                            certificate_id=Field.loads(dag_vertex["certificate_id"]),
+                            certificate_id=Field.loads(dag_vertex["batch_certificate_id"]),
                             batch_header=BatchHeader(
                                 batch_id=Field.loads(dag_vertex["batch_id"]),
                                 author=Address.loads(dag_vertex["author"]),

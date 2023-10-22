@@ -182,7 +182,7 @@ class DisconnectReason(IntEnumu8):
     def load(cls, data: BytesIO):
         if data.getbuffer().nbytes == 0:
             return cls(cls.NoReasonGiven)
-        reason = u32.load(data)
+        reason = u8.load(data)
         return cls(reason)
 
 

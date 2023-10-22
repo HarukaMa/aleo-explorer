@@ -2394,15 +2394,15 @@ class Execution(Serializable):
             return 0
         return len(self.dump())
 
-    async def finalize_cost(self, db: "Database"):
-        finalize_cost = 0
+    async def finalize_costs(self, db: "Database"):
+        finalize_costs = []
         for transition in self.transitions:
             from util.global_cache import get_program
             program = await get_program(db, str(transition.program_id))
             if program is None:
                 raise RuntimeError("program not found")
-            finalize_cost += program.functions[transition.function_name].finalize_cost
-        return finalize_cost
+            finalize_costs.append(program.functions[transition.function_name].finalize_cost)
+        return finalize_costs
 
 
 class Transaction(EnumBaseSerialize, RustEnum, Serializable):
@@ -2539,7 +2539,7 @@ class FinalizeOperation(EnumBaseSerialize, RustEnum, Serializable):
 FeeComponent = NamedTuple("FeeComponent", [
     ("storage_cost", int),
     ("namespace_cost", int),
-    ("finalize_cost", int),
+    ("finalize_costs", list[int]),
     ("priority_fee", int),
     ("burnt", int)
 ])
@@ -2572,7 +2572,7 @@ class ConfirmedTransaction(EnumBaseSerialize, RustEnum, Serializable):
 
     async def get_fee_breakdown(self, db: "Database"):
         """
-        Returns (storage_cost, namespace_cost, finalize_cost, priority_fee, burnt)
+        Returns (storage_cost, namespace_cost, finalize_costs, priority_fee, burnt)
         """
         tx = self.transaction
         # TODO: better way to express this?
@@ -2590,10 +2590,9 @@ class ConfirmedTransaction(EnumBaseSerialize, RustEnum, Serializable):
             else:
                 raise RuntimeError("bad transaction data")
             storage_cost, namespace_cost = deployment.cost
-            finalize_cost = 0
             base_fee, priority_fee = fee.amount
-            burnt = base_fee - storage_cost - namespace_cost - finalize_cost
-            return FeeComponent(storage_cost, namespace_cost, finalize_cost, priority_fee, burnt)
+            burnt = base_fee - storage_cost - namespace_cost
+            return FeeComponent(storage_cost, namespace_cost, [], priority_fee, burnt)
         elif isinstance(tx, ExecuteTransaction) or isinstance(self, RejectedExecute):
             if isinstance(tx, ExecuteTransaction):
                 execution = tx.execution
@@ -2608,13 +2607,13 @@ class ConfirmedTransaction(EnumBaseSerialize, RustEnum, Serializable):
             else:
                 raise RuntimeError("bad transaction data")
             storage_cost = execution.storage_cost
-            finalize_cost = await execution.finalize_cost(db)
+            finalize_costs = await execution.finalize_costs(db)
             if fee is not None:
                 base_fee, priority_fee = fee.amount
             else:
-                return FeeComponent(0, 0, 0, 0, 0)
-            burnt = base_fee - storage_cost - finalize_cost
-            return FeeComponent(storage_cost, 0, finalize_cost, priority_fee, burnt)
+                return FeeComponent(0, 0, [], 0, 0)
+            burnt = base_fee - storage_cost - sum(finalize_costs)
+            return FeeComponent(storage_cost, 0, finalize_costs, priority_fee, burnt)
         else:
             raise NotImplementedError
 

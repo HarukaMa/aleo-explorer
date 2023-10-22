@@ -47,6 +47,8 @@ def disasm_value_type(value: ValueType) -> str:
         return str(value.identifier) + ".record"
     elif isinstance(value, ExternalRecordValueType):
         return str(value.locator) + ".record"
+    elif isinstance(value, FutureValueType):
+        return str(value.locator) + ".future"
     else:
         raise TypeError("invalid value type")
 
@@ -74,6 +76,8 @@ def disasm_command(value: Command) -> str:
         return f"branch.neq {disasm_operand(value.first)} {disasm_operand(value.second)} to {value.position}"
     elif isinstance(value, PositionCommand):
         return f"position {value.position}"
+    elif isinstance(value, AwaitCommand):
+        return f"await {disasm_register(value.register)}"
     else:
         raise TypeError("invalid command type")
 
@@ -151,6 +155,9 @@ def disasm_hash(value: HashInstruction[Any]) -> str:
         operands.append(disasm_operand(operand))
     return f"{' '.join(operands)} into {disasm_register(value.destination)} as {value.destination_type}"
 
+def disasm_async(value: AsyncInstruction) -> str:
+    return f"{value.function_name} {' '.join(map(disasm_operand, value.operands))} into {disasm_register(value.destination)}"
+
 def disasm_instruction(value: Instruction) -> str:
     inst_str = f"{instruction_type_to_str(value.type)} "
     literals = value.literals
@@ -164,8 +171,12 @@ def disasm_instruction(value: Instruction) -> str:
         return inst_str + disasm_cast(literals)
     elif isinstance(literals, CommitInstruction):
         return inst_str + disasm_commit(literals)
-    else:
+    elif isinstance(literals, AsyncInstruction):
+        return inst_str + disasm_async(literals)
+    elif isinstance(literals, HashInstruction):
         return inst_str + disasm_hash(literals)
+    else:
+        raise ValueError("unknown instruction type")
 
 def disassemble_program(program: Program) -> str:
     res = disasm_str()
@@ -222,18 +233,14 @@ def disassemble_program(program: Program) -> str:
                 res.insert_line(f"{disasm_instruction(i)};")
             for o in f.outputs:
                 res.insert_line(f"output {disasm_operand(o.operand)} as {disasm_value_type(o.value_type)};")
+            res.unindent()
+            res.insert_line("")
             if f.finalize.value is not None:
-                finalize_command, finalize = f.finalize.value
-                if len(finalize_command.operands) > 0:
-                    res.insert_line(f"finalize {' '.join(map(disasm_operand, finalize_command.operands))};")
-                else:
-                    res.insert_line("finalize;")
-                res.unindent()
-                res.insert_line("")
+                finalize = f.finalize.value
                 res.insert_line(f"finalize {finalize.name}:")
                 res.indent()
                 for i in finalize.inputs:
-                    res.insert_line(f"input {disasm_register(i.register)} as {plaintext_type_to_str(i.plaintext_type)};")
+                    res.insert_line(f"input {disasm_register(i.register)} as {finalize_type_to_str(i.finalize_type)};")
                 for c in finalize.commands:
                     res.insert_line(f"{disasm_command(c)};")
             res.unindent()

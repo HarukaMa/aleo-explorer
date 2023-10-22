@@ -35,6 +35,14 @@ def plaintext_type_to_str(value: PlaintextType):
     else:
         raise NotImplementedError
 
+def finalize_type_to_str(value: FinalizeType):
+    if isinstance(value, PlaintextFinalizeType):
+        return plaintext_type_to_str(value.plaintext_type)
+    elif isinstance(value, FutureFinalizeType):
+        return str(value.locator)
+    else:
+        raise NotImplementedError
+
 
 def value_type_to_mode_type_str(value: ValueType):
     mode = value.type.name.lower()
@@ -63,8 +71,10 @@ _instruction_type_to_str_map = {
     Instruction.Type.And: "and",
     Instruction.Type.AssertEq: "assert_eq",
     Instruction.Type.AssertNeq: "assert_neq",
+    Instruction.Type.Async: "async",
     Instruction.Type.Call: "call",
     Instruction.Type.Cast: "cast",
+    Instruction.Type.CastLossy: "cast.lossy",
     Instruction.Type.CommitBHP256: "commit.bhp256",
     Instruction.Type.CommitBHP512: "commit.bhp512",
     Instruction.Type.CommitBHP768: "commit.bhp768",
@@ -80,11 +90,17 @@ _instruction_type_to_str_map = {
     Instruction.Type.HashBHP512: "hash.bhp512",
     Instruction.Type.HashBHP768: "hash.bhp768",
     Instruction.Type.HashBHP1024: "hash.bhp1024",
+    Instruction.Type.HashKeccak256: "hash.keccak256",
+    Instruction.Type.HashKeccak384: "hash.keccak384",
+    Instruction.Type.HashKeccak512: "hash.keccak512",
     Instruction.Type.HashPED64: "hash.ped64",
     Instruction.Type.HashPED128: "hash.ped128",
     Instruction.Type.HashPSD2: "hash.psd2",
     Instruction.Type.HashPSD4: "hash.psd4",
     Instruction.Type.HashPSD8: "hash.psd8",
+    Instruction.Type.HashSha3_256: "hash.sha3_256",
+    Instruction.Type.HashSha3_384: "hash.sha3_384",
+    Instruction.Type.HashSha3_512: "hash.sha3_512",
     Instruction.Type.HashManyPSD2: "hash_many.psd2",
     Instruction.Type.HashManyPSD4: "hash_many.psd4",
     Instruction.Type.HashManyPSD8: "hash_many.psd8",
@@ -109,6 +125,7 @@ _instruction_type_to_str_map = {
     Instruction.Type.ShlWrapped: "shl.w",
     Instruction.Type.Shr: "shr",
     Instruction.Type.ShrWrapped: "shr.w",
+    Instruction.Type.SignVerify: "sign_verify",
     Instruction.Type.Square: "square",
     Instruction.Type.SquareRoot: "square_root",
     Instruction.Type.Sub: "sub",

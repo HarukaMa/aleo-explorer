@@ -34,11 +34,11 @@
             {% if coinbase_reward %}{{ (coinbase_reward // 2) | format_aleo_credit | safe }}{% else %}-{% endif %}
         {% endcall %}
         {% call data_line("Total fee") %}
-            {{ total_fee | format_aleo_credit | safe }} Aleo credits
+            {{ (total_base_fee + total_priority_fee) | format_aleo_credit | safe }} Aleo credits ({{ total_base_fee | format_aleo_credit | safe }} base + {{ total_priority_fee | format_aleo_credit | safe }} priority)
         {% endcall %}
-        {% call data_line("Total supply") %}
-            {{ block.header.metadata.total_supply_in_microcredits | format_aleo_credit | safe }} Aleo credits
-        {% endcall %}
+{#        {% call data_line("Total supply") %}#}
+{#            {{ block.header.metadata.total_supply_in_microcredits | format_aleo_credit | safe }} Aleo credits#}
+{#        {% endcall %}#}
         {% call data_line("Block hash") %}
             <span class="mono">{{ block.block_hash }}</span>
         {% endcall %}
@@ -61,8 +61,8 @@
         {% call data_line("Ratifications root") %}
             <span class="mono">{{ block.header.ratifications_root }}</span>
         {% endcall %}
-        {% call data_line("Coinbase accumulator point") %}
-            <span class="mono">{{ block.header.coinbase_accumulator_point }}</span>
+        {% call data_line("Solutions root") %}
+            <span class="mono">{{ block.header.solutions_root }}</span>
         {% endcall %}
         </div>
 
@@ -87,7 +87,7 @@
                         <td>{{ tx.type }}</td>
                         <td>{{ state_label(tx.state) }}</td>
                         <td>{{ tx.transitions_count }}</td>
-                        <td>{{ tx.fee | format_aleo_credit | safe }} Aleo credits</td>
+                        <td>{{ tx.base_fee | format_aleo_credit | safe }} + {{ tx.priority_fee | format_aleo_credit | safe }} Aleo credits</td>
                     </tr>
                 {% endfor %}
                 </tbody>
@@ -97,14 +97,6 @@
     {% if coinbase_reward %}
         <div id="coinbase">
             <h4>Coinbase solutions</h4>
-            <div class="data-line grid-x grid-padding-x">
-                <div class="cell small-2 block-data-line-label">
-                    Puzzle proof
-                </div>
-                <div class="cell auto data-line-value">
-                    x: <span class="mono">{{ block.coinbase.value.proof.w.x }}</span><br>y: <span class="mono">Not implemented</span>
-                </div>
-            </div>
             <table id="coinbase-table" class="unstriped">
                 <thead>
                 <tr>
@@ -127,7 +119,7 @@
                 {% endfor %}
                 </tbody>
             </table>
-            {% if block.coinbase.value.partial_solutions | count > 100 %}
+            {% if block.solutions.value.solutions | count > 100 %}
             Showing 100 items. <a href="block_solutions?h={{ block.header.metadata.height }}">Show all</a>
             {% endif %}
         </div>
