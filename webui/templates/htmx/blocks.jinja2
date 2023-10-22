@@ -34,7 +34,7 @@
                         <td>{{ block.proof_target | format_number | safe }}</td>
                         <td>{{ block.coinbase_target | format_number | safe }}</td>
                         <td>{{ block.block_reward | format_aleo_credit | safe }}</td>
-                        <td>{{ ((block.coinbase_reward | int) // 2) | format_aleo_credit | safe }}</td>
+                        <td>{{ (block.coinbase_reward // 2) | format_aleo_credit | safe }}</td>
                         <td>{{ block.partial_solution_count }}</td>
                     </tr>
                 {% endfor %}
