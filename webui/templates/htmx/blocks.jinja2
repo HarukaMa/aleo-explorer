@@ -19,9 +19,9 @@
                     <th>Transactions</th>
                     <th>Proof target</th>
                     <th>Coinbase target</th>
-                    <th>Coinbase rewards</th>
-                    <th>Coinbase solutions</th>
-                    <th>Validator</th>
+                    <th>Block reward</th>
+                    <th>Puzzle reward</th>
+                    <th>Puzzle solutions</th>
                 </tr>
                 </thead>
                 <tbody hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
@@ -33,9 +33,9 @@
                         <td>{{ block.transaction_count }}</td>
                         <td>{{ block.proof_target | format_number | safe }}</td>
                         <td>{{ block.coinbase_target | format_number | safe }}</td>
-                        <td>{% if block.coinbase_reward %}{{ ((block.coinbase_reward | int) // 2) | format_aleo_credit | safe }}{% else %}-{% endif %}</td>
-                        <td>{% if block.coinbase_reward %}{{ block.partial_solution_count }}{% else %}-{% endif %}</td>
-                        <td>-</td>
+                        <td>{{ block.block_reward | format_aleo_credit | safe }}</td>
+                        <td>{{ ((block.coinbase_reward | int) // 2) | format_aleo_credit | safe }}</td>
+                        <td>{{ block.partial_solution_count }}</td>
                     </tr>
                 {% endfor %}
                 </tbody>
