@@ -102,10 +102,12 @@ def disasm_operand(value: Operand) -> str:
         return str(value.program_id)
     elif isinstance(value, CallerOperand):
         return "self.caller"
+    elif isinstance(value, SignerOperand):
+        return "self.signer"
     elif isinstance(value, BlockHeightOperand):
         return "block.height"
     else:
-        raise ValueError("unknown operand type")
+        raise ValueError(f"unknown operand type {type(value)}")
 
 def disasm_call_operator(value: CallOperator) -> str:
     if isinstance(value, LocatorCallOperator):
@@ -234,7 +236,6 @@ def disassemble_program(program: Program) -> str:
             for o in f.outputs:
                 res.insert_line(f"output {disasm_operand(o.operand)} as {disasm_value_type(o.value_type)};")
             res.unindent()
-            res.insert_line("")
             if f.finalize.value is not None:
                 finalize = f.finalize.value
                 res.insert_line(f"finalize {finalize.name}:")
@@ -243,7 +244,7 @@ def disassemble_program(program: Program) -> str:
                     res.insert_line(f"input {disasm_register(i.register)} as {finalize_type_to_str(i.finalize_type)};")
                 for c in finalize.commands:
                     res.insert_line(f"{disasm_command(c)};")
-            res.unindent()
+                res.unindent()
             res.insert_line("")
 
     return str(res)

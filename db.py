@@ -2511,16 +2511,23 @@ class Database:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
-                    await cur.execute(
-                        "SELECT value FROM mapping_value mv "
-                        "JOIN mapping m on mv.mapping_id = m.id "
-                        "WHERE m.program_id = %s AND m.mapping = %s AND mv.key_id = %s",
-                        (program_id, mapping, key_id)
-                    )
-                    res = await cur.fetchone()
-                    if res is None:
-                        return None
-                    return res['value']
+                    if program_id == "credits.aleo" and mapping in ["committee", "bonded"]:
+                        conn = self.redis
+                        data = await conn.hget(f"{program_id}:{mapping}", key_id)
+                        if data is None:
+                            return None
+                        return bytes.fromhex(json.loads(data)["value"])
+                    else:
+                        await cur.execute(
+                            "SELECT value FROM mapping_value mv "
+                            "JOIN mapping m on mv.mapping_id = m.id "
+                            "WHERE m.program_id = %s AND m.mapping = %s AND mv.key_id = %s",
+                            (program_id, mapping, key_id)
+                        )
+                        res = await cur.fetchone()
+                        if res is None:
+                            return None
+                        return res['value']
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise

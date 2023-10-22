@@ -47,8 +47,7 @@ async def mapping_route(request: Request, program_cache: dict[str, Program]):
         key = value
     else:
         return JSONResponse({"error": "Unknown key type"}, status_code=500)
-    mapping_id = aleo.get_mapping_id(program_id, mapping)
-    key_id = aleo.get_key_id(mapping_id, key.dump())
+    key_id = aleo.get_key_id(program_id, mapping, key.dump())
     value = await db.get_mapping_value(program_id, mapping, key_id)
     if value is None:
         return JSONResponse(None)
@@ -89,12 +88,10 @@ async def mapping_value_list_route(request: Request, program_cache: dict[str, Pr
     mappings = program.mappings
     if mapping not in mappings:
         return JSONResponse({"error": "Mapping not found"}, status_code=404)
-    mapping_id = aleo.get_mapping_id(program_id, mapping)
-    mapping_cache_db = await db.get_mapping_cache(mapping_id)
-    res: dict[str, Any] = []
+    mapping_cache = await db.get_mapping_cache(program_id, mapping)
+    res: dict[str, Any] = {}
     for item in mapping_cache:
-        res.append({
-            "index": item["index"],
+        res[item["key_id"]]({
             "key": str(Plaintext.load(BytesIO(item["key"]))),
             "value": str(Value.load(BytesIO(item["value"]))),
             "key_id": item["key_id"],
