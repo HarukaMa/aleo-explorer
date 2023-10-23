@@ -12,118 +12,133 @@
         {% call data_line("Height") %}
             {{ block.header.metadata.height | format_number | safe }}
         {% endcall %}
+        {% call data_line("Block hash") %}
+            <span class="mono">{{ block.block_hash }}</span>
+        {% endcall %}
         {% call data_line("Epoch") %}
             {{ block.header.metadata.height // 256 }} <span class="note">{{ block.header.metadata.height % 256 }} / 256</span>
         {% endcall %}
         {% call data_line("Timestamp") %}
             {{ block.header.metadata.timestamp | format_time | safe }}
         {% endcall %}
-        {% call data_line("Coinbase target") %}
-            {{ block.header.metadata.coinbase_target | format_number | safe }}
-        {% endcall %}
         {% call data_line("Proof target") %}
             {{ block.header.metadata.proof_target | format_number | safe }}
         {% endcall %}
-        {% call data_line("Cumulative weight") %}
-            {{ block.header.metadata.cumulative_weight | format_number | safe }}
+        {% call data_line("Coinbase target") %}
+            {{ block.header.metadata.coinbase_target | format_number | safe }}
         {% endcall %}
         {% call data_line("Cumulative proof target") %}
-            {{ block.header.metadata.cumulative_proof_target | format_number | safe }}
+            {{ block.header.metadata.cumulative_proof_target | format_number | safe }} ({{ (block.header.metadata.cumulative_proof_target / block.header.metadata.coinbase_target * 100) | format_number | safe }}% coinbase target reached)
         {% endcall %}
         {% call data_line("Coinbase reward") %}
             {% if coinbase_reward %}{{ (coinbase_reward // 2) | format_aleo_credit | safe }}{% else %}-{% endif %}
         {% endcall %}
         {% call data_line("Total fee") %}
-            {{ (total_base_fee + total_priority_fee) | format_aleo_credit | safe }} Aleo credits ({{ total_base_fee | format_aleo_credit | safe }} base + {{ total_priority_fee | format_aleo_credit | safe }} priority)
+            {{ (total_base_fee + total_priority_fee + total_burnt_fee) | format_aleo_credit | safe }} Aleo credits
+            ({{ total_base_fee | format_aleo_credit | safe }} base
+            {% if total_priority_fee > 0 %} + {{ total_priority_fee | format_aleo_credit | safe }} priority{% endif %}
+            {% if total_burnt_fee > 0 %} + {{ total_burnt_fee | format_aleo_credit | safe }} burnt{% endif %})
         {% endcall %}
 {#        {% call data_line("Total supply") %}#}
 {#            {{ block.header.metadata.total_supply_in_microcredits | format_aleo_credit | safe }} Aleo credits#}
 {#        {% endcall %}#}
-        {% call data_line("Block hash") %}
-            <span class="mono">{{ block.block_hash }}</span>
-        {% endcall %}
-        {% call data_line("Previous block hash") %}
-            {% if block.header.metadata.height == 0 %}
-                <span class="mono">{{ block.previous_hash }}</span>
-            {% else %}
-                <a href="/block?bh={{ block.previous_hash }}"><span class="mono">{{ block.previous_hash }}</span></a>
-            {% endif %}
-        {% endcall %}
-        {% call data_line("Previous state root") %}
-            <span class="mono">{{ block.header.previous_state_root }}</span>
-        {% endcall %}
-        {% call data_line("Transactions root") %}
-            <span class="mono">{{ block.header.transactions_root }}</span>
-        {% endcall %}
-        {% call data_line("Finalize root") %}
-            <span class="mono">{{ block.header.finalize_root }}</span>
-        {% endcall %}
-        {% call data_line("Ratifications root") %}
-            <span class="mono">{{ block.header.ratifications_root }}</span>
-        {% endcall %}
-        {% call data_line("Solutions root") %}
-            <span class="mono">{{ block.header.solutions_root }}</span>
-        {% endcall %}
         </div>
 
-        <div id="transactions">
-            <h4>Transactions</h4>
-            <table id="transactions-table" class="unstriped">
-                <thead>
-                <tr>
-                    <td>Index</td>
-                    <td>Transaction ID</td>
-                    <td>Type</td>
-                    <td>State</td>
-                    <td>Transitions</td>
-                    <td>Fee</td>
-                </tr>
-                </thead>
-                <tbody>
-                {% for tx in transactions %}
+        <ul class="tabs" data-tabs id="block-tabs">
+            <li class="tabs-title is-active"><a href="#info">Block info</a></li>
+            <li class="tabs-title"><a href="#transactions">Transactions</a></li>
+            <li class="tabs-title"><a href="#solutions">Puzzle solutions</a></li>
+        </ul>
+
+        <div class="tabs-content" data-tabs-content="block-tabs">
+            <div class="tabs-panel is-active" id="info">
+                {% call data_line("Cumulative weight") %}
+                    {{ block.header.metadata.cumulative_weight | format_number | safe }}
+                {% endcall %}
+                {% call data_line("Previous block hash") %}
+                    {% if block.header.metadata.height == 0 %}
+                        <span class="mono">{{ block.previous_hash }}</span>
+                    {% else %}
+                        <a href="/block?bh={{ block.previous_hash }}"><span class="mono">{{ block.previous_hash }}</span></a>
+                    {% endif %}
+                {% endcall %}
+                {% call data_line("Previous state root") %}
+                    <span class="mono">{{ block.header.previous_state_root }}</span>
+                {% endcall %}
+                {% call data_line("Transactions root") %}
+                    <span class="mono">{{ block.header.transactions_root }}</span>
+                {% endcall %}
+                {% call data_line("Finalize root") %}
+                    <span class="mono">{{ block.header.finalize_root }}</span>
+                {% endcall %}
+                {% call data_line("Ratifications root") %}
+                    <span class="mono">{{ block.header.ratifications_root }}</span>
+                {% endcall %}
+                {% call data_line("Solutions root") %}
+                    <span class="mono">{{ block.header.solutions_root }}</span>
+                {% endcall %}
+            </div>
+
+            <div class="tabs-panel" id="transactions">
+                <table id="transactions-table" class="unstriped">
+                    <thead>
                     <tr>
-                        <td>{{ tx.index }}</td>
-                        <td class="mono"><a href="/transaction?id={{ tx.tx_id }}">{{ tx.tx_id }}</a></td>
-                        <td>{{ tx.type }}</td>
-                        <td>{{ state_label(tx.state) }}</td>
-                        <td>{{ tx.transitions_count }}</td>
-                        <td>{{ tx.base_fee | format_aleo_credit | safe }} + {{ tx.priority_fee | format_aleo_credit | safe }} Aleo credits</td>
+                        <td>Index</td>
+                        <td>Transaction ID</td>
+                        <td>Type</td>
+                        <td>State</td>
+                        <td>Transitions</td>
+                        <td>Fee</td>
                     </tr>
-                {% endfor %}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                    {% for tx in transactions %}
+                        <tr>
+                            <td>{{ tx.index }}</td>
+                            <td class="mono"><a href="/transaction?id={{ tx.tx_id }}">{{ tx.tx_id }}</a></td>
+                            <td>{{ tx.type }}</td>
+                            <td>{{ state_label(tx.state) }}</td>
+                            <td>{{ tx.transitions_count }}</td>
+                            <td>
+                                {{ tx.base_fee | format_aleo_credit | safe }} base
+                                {% if tx.priority_fee > 0 %} + {{ tx.priority_fee | format_aleo_credit | safe }} priority{% endif %}
+                                {% if tx.burnt_fee > 0 %} + {{ tx.burnt_fee | format_aleo_credit | safe }} burnt{% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="tabs-panel" id="solutions">
+                <table id="coinbase-table" class="unstriped">
+                    <thead>
+                    <tr>
+                        <td>Address</td>
+                        <td>Nonce</td>
+                        <td>Commitment</td>
+                        <td>Target / Total</td>
+                        <td>Reward</td>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for partial_solution in coinbase_solutions %}
+                    <tr>
+                        <td><a href="/address?a={{ partial_solution.address }}"><span class="mono">{{ partial_solution.address_trunc }}</span></a></td>
+                        <td><span class="mono">{{ partial_solution.nonce }}</span></td>
+                        <td><span class="mono">{{ partial_solution.commitment }}</span></td>
+                        <td>{{ partial_solution.target | format_number | safe }}<span class="note"> / {{ target_sum | format_number | safe }}</span></td>
+                        <td>{{ partial_solution.reward | format_aleo_credit | safe }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% if block.solutions.value.solutions | count > 100 %}
+                Showing 100 items. <a href="block_solutions?h={{ block.header.metadata.height }}">Show all</a>
+                {% endif %}
+            </div>
         </div>
 
-    {% if coinbase_reward %}
-        <div id="coinbase">
-            <h4>Coinbase solutions</h4>
-            <table id="coinbase-table" class="unstriped">
-                <thead>
-                <tr>
-                    <td>Address</td>
-                    <td>Nonce</td>
-                    <td>Commitment</td>
-                    <td>Target / Total</td>
-                    <td>Reward</td>
-                </tr>
-                </thead>
-                <tbody>
-                {% for partial_solution in coinbase_solutions %}
-                <tr>
-                    <td><a href="/address?a={{ partial_solution.address }}"><span class="mono">{{ partial_solution.address_trunc }}</span></a></td>
-                    <td><span class="mono">{{ partial_solution.nonce }}</span></td>
-                    <td><span class="mono">{{ partial_solution.commitment }}</span></td>
-                    <td>{{ partial_solution.target | format_number | safe }}<span class="note"> / {{ target_sum | format_number | safe }}</span></td>
-                    <td>{{ partial_solution.reward | format_aleo_credit | safe }}</td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-            {% if block.solutions.value.solutions | count > 100 %}
-            Showing 100 items. <a href="block_solutions?h={{ block.header.metadata.height }}">Show all</a>
-            {% endif %}
-        </div>
-    {% endif %}
     </div>
 
 {{ htmx_title(request, "Block " ~ block.header.metadata.height) }}

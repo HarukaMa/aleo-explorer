@@ -52,13 +52,15 @@
                     {% for cost in finalize_costs %}
                         <span class="box-drawing">│{% if loop.revindex0 == 0 %}└{% else %}├{% endif %}</span> Transition #{{ loop.index0 }}: {{ cost | format_aleo_credit | safe }}<br>
                     {% endfor %}
-                    <span class="box-drawing">└</span> Priority fee: {{ priority_fee | format_aleo_credit | safe }}
+                    <span class="box-drawing">├</span> Priority fee: {{ priority_fee | format_aleo_credit | safe }}<br>
+                    <span class="box-drawing">└</span> Burnt fee: {{ burnt_fee | format_aleo_credit | safe }}
                 {% endcall %}
             {% elif type == "Deploy" %}
                 {% call sub_data_line("Breakdown") %}
                     <span class="box-drawing">├</span> Storage fee: {{ storage_cost | format_aleo_credit | safe }}<br>
                     <span class="box-drawing">├</span> Namespace fee: {{ namespace_cost | format_aleo_credit | safe }}<br>
-                    <span class="box-drawing">└</span> Priority fee: {{ priority_fee | format_aleo_credit | safe }}
+                    <span class="box-drawing">├</span> Priority fee: {{ priority_fee | format_aleo_credit | safe }}<br>
+                    <span class="box-drawing">└</span> Burnt fee: {{ burnt_fee | format_aleo_credit | safe }}
                 {% endcall %}
             {% endif %}
         </div>

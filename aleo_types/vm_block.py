@@ -2570,7 +2570,7 @@ class ConfirmedTransaction(EnumBaseSerialize, RustEnum, Serializable):
         else:
             raise ValueError("incorrect type")
 
-    async def get_fee_breakdown(self, db: "Database"):
+    async def get_fee_breakdown(self, db: "Database") -> FeeComponent:
         """
         Returns (storage_cost, namespace_cost, finalize_costs, priority_fee, burnt)
         """

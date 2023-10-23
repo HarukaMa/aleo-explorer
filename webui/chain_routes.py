@@ -60,13 +60,20 @@ async def block_route(request: Request):
     txs: DictList = []
     total_base_fee = 0
     total_priority_fee = 0
-    for ct in block.transactions:
+    total_burnt_fee = 0
+    for ct in block.transactions.transactions:
+        fee_breakdown = await ct.get_fee_breakdown(db)
+        base_fee = fee_breakdown.storage_cost + fee_breakdown.namespace_cost + sum(fee_breakdown.finalize_costs)
+        priority_fee = fee_breakdown.priority_fee
+        burnt_fee = fee_breakdown.burnt
+        total_base_fee += base_fee
+        total_priority_fee += priority_fee
+        total_burnt_fee += burnt_fee
         match ct:
             case AcceptedDeploy():
                 tx = ct.transaction
                 if not isinstance(tx, DeployTransaction):
                     raise HTTPException(status_code=550, detail="Invalid transaction type")
-                base_fee, priority_fee = tx.fee.amount
                 t = {
                     "tx_id": tx.id,
                     "index": ct.index,
@@ -75,10 +82,9 @@ async def block_route(request: Request):
                     "transitions_count": 1,
                     "base_fee": base_fee,
                     "priority_fee": priority_fee,
+                    "burnt_fee": burnt_fee,
                 }
                 txs.append(t)
-                total_base_fee += base_fee
-                total_priority_fee += priority_fee
             case AcceptedExecute():
                 tx = ct.transaction
                 if not isinstance(tx, ExecuteTransaction):
@@ -96,10 +102,9 @@ async def block_route(request: Request):
                     "transitions_count": len(tx.execution.transitions) + bool(tx.additional_fee.value is not None),
                     "base_fee": base_fee,
                     "priority_fee": priority_fee,
+                    "burnt_fee": burnt_fee,
                 }
                 txs.append(t)
-                total_base_fee += base_fee
-                total_priority_fee += priority_fee
             case RejectedExecute():
                 tx = ct.transaction
                 if not isinstance(tx, FeeTransaction):
@@ -113,10 +118,9 @@ async def block_route(request: Request):
                     "transitions_count": 1,
                     "base_fee": base_fee,
                     "priority_fee": priority_fee,
+                    "burnt_fee": burnt_fee,
                 }
                 txs.append(t)
-                total_base_fee += base_fee
-                total_priority_fee += priority_fee
             case _:
                 raise HTTPException(status_code=550, detail="Unsupported transaction type")
     ctx = {
@@ -130,6 +134,7 @@ async def block_route(request: Request):
         "target_sum": target_sum,
         "total_base_fee": total_base_fee,
         "total_priority_fee": total_priority_fee,
+        "total_burnt_fee": total_burnt_fee,
     }
     return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
 
