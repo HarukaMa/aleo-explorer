@@ -1,11 +1,10 @@
 from io import BytesIO
-from typing import Any
 
 import aleo
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from aleo_types import Program, Plaintext, Value, LiteralPlaintextType, LiteralPlaintext, \
+from aleo_types import Program, Value, LiteralPlaintextType, LiteralPlaintext, \
     Literal, StructPlaintextType, StructPlaintext
 from api.utils import async_check_sync, use_program_cache
 from db import Database
@@ -89,12 +88,11 @@ async def mapping_value_list_route(request: Request, program_cache: dict[str, Pr
     if mapping not in mappings:
         return JSONResponse({"error": "Mapping not found"}, status_code=404)
     mapping_cache = await db.get_mapping_cache(program_id, mapping)
-    res: dict[str, Any] = {}
-    for item in mapping_cache:
-        res[item["key_id"]]({
-            "key": str(Plaintext.load(BytesIO(item["key"]))),
-            "value": str(Value.load(BytesIO(item["value"]))),
-            "key_id": item["key_id"],
-            "value_id": item["value_id"],
-        })
+    res: dict[str, dict[str, str]] = {}
+    for key_id, item in mapping_cache.items():
+        res[str(key_id)] = {
+            "key": str(item["key"]),
+            "value": str(item["value"]),
+            "value_id": str(item["value_id"]),
+        }
     return JSONResponse(res)
