@@ -199,17 +199,11 @@
         }
     )
 </script>
-{% if maintenance is defined and maintenance != None %}
-    <div class="content">
+<div class="content">
     <div class="callout alert global-banner">
-        {% if maintenance %}
-            The explorer is resyncing with the network: {{ info }} The data below is not up-to-date. Please check back later.
-        {% else %}
-            It seems the explorer is out of sync - the last block was {{ info }}. The data below might not be up-to-date.
-        {% endif %}
+        This explorer is showing old data from testnet3 phase 2.
     </div>
-    </div>
-{% endif %}
+</div>
 <div class="container">
 {% block content %}{% endblock %}
 <div class="footer-container">
