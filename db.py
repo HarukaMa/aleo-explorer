@@ -249,6 +249,21 @@ class Database:
                         (transition_input_db_id, str(transition_input.plaintext_hash),
                         transition_input.plaintext.dump_nullable())
                     )
+                    if transition_input.plaintext.value is not None:
+                        plaintext = cast(Plaintext, transition_input.plaintext.value)
+                        if isinstance(plaintext, LiteralPlaintext) and plaintext.literal.type == Literal.Type.Address:
+                            address = str(plaintext.literal.primitive)
+                            await cur.execute(
+                                "INSERT INTO address_transition (address, transition_id) VALUES (%s, %s)",
+                                (address, transition_db_id)
+                            )
+                        elif isinstance(plaintext, StructPlaintext):
+                            addresses = Database._get_addresses_from_struct(plaintext)
+                            for address in addresses:
+                                await cur.execute(
+                                    "INSERT INTO address_transition (address, transition_id) VALUES (%s, %s)",
+                                    (address, transition_db_id)
+                                )
                 elif isinstance(transition_input, PrivateTransitionInput):
                     await cur.execute(
                         "INSERT INTO transition_input_private (transition_input_id, ciphertext_hash, ciphertext) "
@@ -2258,6 +2273,12 @@ class Database:
                         "SELECT DISTINCT owner FROM program WHERE owner LIKE %s", (f"{address}%",)
                     )
                     res.update(set(map(lambda x: x['owner'], await cur.fetchall())))
+                    _, data = await self.redis.hscan("address_transfer_in", match=f"{address}*", count=50)
+                    res.update(set(data.keys()))
+                    await cur.execute(
+                        "SELECT DISTINCT address FROM address_transition WHERE address LIKE %s", (f"{address}%",)
+                    )
+                    res.update(set(map(lambda x: x['address'], await cur.fetchall())))
                     return list(res)
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
