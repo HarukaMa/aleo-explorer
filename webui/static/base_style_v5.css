@@ -229,7 +229,7 @@ pre {
     font-family: monospace !important;
 }
 
-#transitions, #rejected-transitions {
+#rejected-transitions {
     margin-top: 20px;
 }
 

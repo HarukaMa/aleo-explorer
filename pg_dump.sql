@@ -2,8 +2,8 @@
 -- PostgreSQL database dump
 --
 
--- Dumped from database version 15.1
--- Dumped by pg_dump version 15.3
+-- Dumped from database version 15.4 (Debian 15.4-3)
+-- Dumped by pg_dump version 15.4
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -149,6 +149,16 @@ SET default_table_access_method = heap;
 
 CREATE TABLE explorer._migration (
     migrated_id integer NOT NULL
+);
+
+
+--
+-- Name: address_transition; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.address_transition (
+    address text NOT NULL,
+    transition_id integer NOT NULL
 );
 
 
@@ -1092,7 +1102,8 @@ CREATE TABLE explorer.program (
     feature_hash bytea NOT NULL,
     owner text,
     signature text,
-    leo_source text
+    leo_source text,
+    address text NOT NULL
 );
 
 
@@ -2374,6 +2385,20 @@ ALTER TABLE ONLY explorer.transition
 
 
 --
+-- Name: address_transition_address_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX address_transition_address_index ON explorer.address_transition USING btree (address);
+
+
+--
+-- Name: address_transition_transition_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX address_transition_transition_id_index ON explorer.address_transition USING btree (transition_id);
+
+
+--
 -- Name: authority_block_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -2952,6 +2977,14 @@ CREATE INDEX transition_transaction_execute_id_index ON explorer.transition USIN
 --
 
 CREATE UNIQUE INDEX transition_transition_id_uindex ON explorer.transition USING btree (transition_id text_pattern_ops);
+
+
+--
+-- Name: address_transition address_stats_transition_transition_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.address_transition
+    ADD CONSTRAINT address_stats_transition_transition_id_fk FOREIGN KEY (transition_id) REFERENCES explorer.transition(id);
 
 
 --

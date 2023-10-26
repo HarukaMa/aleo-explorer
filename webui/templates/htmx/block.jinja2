@@ -45,13 +45,13 @@
         </div>
 
         <ul class="tabs" data-tabs id="block-tabs">
-            <li class="tabs-title is-active"><a href="#info">Block info</a></li>
-            <li class="tabs-title"><a href="#transactions">Transactions</a></li>
+            <li class="tabs-title is-active"><a href="#transactions">Transactions</a></li>
+            <li class="tabs-title"><a href="#info">Block info</a></li>
             <li class="tabs-title"><a href="#solutions">Puzzle solutions</a></li>
         </ul>
 
         <div class="tabs-content" data-tabs-content="block-tabs">
-            <div class="tabs-panel is-active" id="info">
+            <div class="tabs-panel" id="info">
                 {% call data_line("Cumulative weight") %}
                     {{ block.header.metadata.cumulative_weight | format_number | safe }}
                 {% endcall %}
@@ -79,7 +79,7 @@
                 {% endcall %}
             </div>
 
-            <div class="tabs-panel" id="transactions">
+            <div class="tabs-panel is-active" id="transactions">
                 <table id="transactions-table" class="unstriped">
                     <thead>
                     <tr>

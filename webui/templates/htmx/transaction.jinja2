@@ -65,42 +65,15 @@
             {% endif %}
         </div>
 
-        <div id="transitions">
-            <h4>{% if type == "Deploy" %}Fee transition{% else %}Transitions{% endif %}</h4>
-            <table id="transitions-table" class="unstriped">
-                <thead>
-                <tr>
-                    <td>Index</td>
-                    <td>Transition ID</td>
-                    <td>Program / Function call</td>
-                </tr>
-                </thead>
-                <tbody>
-                {% for transition in transitions %}
-                    <tr>
-                        <td>{{ loop.index0 }}</td>
-                        <td>
-                            <span class="mono"><a href="/transition?id={{ transition.transition_id }}">{{ transition.transition_id }}</a></span>
-                        </td>
-                        <td><span class="mono">{{ transition.action }}</span></td>
-                    </tr>
-                {% endfor %}
-                {% if fee_transition %}
-                    <tr>
-                        <td>Fee</td>
-                        <td>
-                            <span class="mono"><a href="/transition?id={{ fee_transition.transition_id }}">{{ fee_transition.transition_id }}</a></span>
-                        </td>
-                        <td><span class="mono">{{ fee_transition.action }}</span></td>
-                    </tr>
-                {% endif %}
-                </tbody>
-            </table>
-        </div>
+        <ul class="tabs" data-tabs id="transaction-tabs">
+            <li class="tabs-title is-active"><a href="#transitions">Transitions</a></li>
+            <li class="tabs-title"><a href="#finalize-graph">Finalize call graph</a></li>
+            <li class="tabs-title"><a href="#mapping-operations">Mapping operations</a></li>
+        </ul>
 
-        {% if state == "Rejected" %}
-            <div id="rejected-transitions">
-                <h4>Rejected Transitions</h4>
+        <div class="tabs-content" data-tabs-content="transaction-tabs">
+            <div class="tabs-panel is-active" id="transitions">
+                {% if type == "Deploy" %}<h4>Fee transition</h4>{% endif %}
                 <table id="transitions-table" class="unstriped">
                     <thead>
                     <tr>
@@ -110,7 +83,7 @@
                     </tr>
                     </thead>
                     <tbody>
-                    {% for transition in rejected_transitions %}
+                    {% for transition in transitions %}
                         <tr>
                             <td>{{ loop.index0 }}</td>
                             <td>
@@ -119,11 +92,54 @@
                             <td><span class="mono">{{ transition.action }}</span></td>
                         </tr>
                     {% endfor %}
+                    {% if fee_transition %}
+                        <tr>
+                            <td>Fee</td>
+                            <td>
+                                <span class="mono"><a href="/transition?id={{ fee_transition.transition_id }}">{{ fee_transition.transition_id }}</a></span>
+                            </td>
+                            <td><span class="mono">{{ fee_transition.action }}</span></td>
+                        </tr>
+                    {% endif %}
                     </tbody>
                 </table>
-            </div>
-        {% endif %}
 
+                {% if state == "Rejected" %}
+                    <div id="rejected-transitions">
+                        <h4>Rejected Transitions</h4>
+                        <table id="transitions-table" class="unstriped">
+                            <thead>
+                            <tr>
+                                <td>Index</td>
+                                <td>Transition ID</td>
+                                <td>Program / Function call</td>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {% for transition in rejected_transitions %}
+                                <tr>
+                                    <td>{{ loop.index0 }}</td>
+                                    <td>
+                                        <span class="mono"><a href="/transition?id={{ transition.transition_id }}">{{ transition.transition_id }}</a></span>
+                                    </td>
+                                    <td><span class="mono">{{ transition.action }}</span></td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="tabs-panel" id="finalize-graph">
+                Coming soon
+            </div>
+
+            <div class="tabs-panel" id="mapping-operations">
+                Coming soon
+            </div>
+
+        </div>
 
     </div>
 

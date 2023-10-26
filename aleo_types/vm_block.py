@@ -2395,7 +2395,7 @@ class Execution(Serializable):
         return len(self.dump())
 
     async def finalize_costs(self, db: "Database"):
-        finalize_costs = []
+        finalize_costs: list[int] = []
         for transition in self.transitions:
             from util.global_cache import get_program
             program = await get_program(db, str(transition.program_id))
