@@ -116,6 +116,7 @@ async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]
                     await execute_finalizer(db, cur, finalize_state, transition.id, program, future.function_name, inputs, local_mapping_cache, allow_state_change)
                 )
             except ExecuteError as e:
+                # TODO: handle nested calls
                 reject_reason = f"execute error: {e}, at transition #{index}, instruction \"{e.instruction}\""
                 operations = []
                 break

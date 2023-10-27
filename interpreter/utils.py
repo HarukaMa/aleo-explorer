@@ -55,6 +55,9 @@ def load_future_from_operand(operand: Operand, registers: Registers, finalize_st
     if not isinstance(operand, RegisterOperand):
         raise ValueError("operand is not register")
     register = operand.register
+    return load_future_from_register(register, registers, finalize_state)
+
+def load_future_from_register(register: Register, registers: Registers, finalize_state: FinalizeState) -> Future:
     if not isinstance(register, LocatorRegister):
         raise ValueError("register is not locator")
     value = registers[int(register.locator)]
