@@ -67,8 +67,8 @@
 
         <ul class="tabs" data-tabs id="transaction-tabs">
             <li class="tabs-title is-active"><a href="#transitions">Transitions</a></li>
-            <li class="tabs-title"><a href="#finalize-graph">Finalize call graph</a></li>
             <li class="tabs-title"><a href="#mapping-operations">Mapping operations</a></li>
+            {% if type == "Execute" %}<li class="tabs-title"><a href="#finalize-graph">Finalize call graph</a></li>{% endif %}
         </ul>
 
         <div class="tabs-content" data-tabs-content="transaction-tabs">
@@ -131,12 +131,14 @@
                 {% endif %}
             </div>
 
+        {% if type == "Execute" %}
             <div class="tabs-panel" id="finalize-graph">
                 Coming soon
             </div>
+        {% endif %}
 
             <div class="tabs-panel" id="mapping-operations">
-                Coming soon
+                {{ mapping_operations }}
             </div>
 
         </div>

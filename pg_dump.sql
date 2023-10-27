@@ -938,7 +938,8 @@ CREATE TABLE explorer.mapping_history (
     mapping_id integer NOT NULL,
     height integer NOT NULL,
     key_id text NOT NULL,
-    value bytea
+    key text,
+    value text
 );
 
 
@@ -1129,7 +1130,7 @@ CREATE TABLE explorer.program_function (
     output text[] NOT NULL,
     output_mode text[] NOT NULL,
     finalize text[] NOT NULL,
-    called integer DEFAULT 0 NOT NULL
+    called bigint DEFAULT 0 NOT NULL
 );
 
 

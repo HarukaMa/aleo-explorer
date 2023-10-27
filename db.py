@@ -1988,10 +1988,10 @@ class Database:
                 # noinspection PyUnresolvedReferences,SqlResolve
                 return await conn.fetchval(
                     "SELECT owner "
-                    "FROM explorer.record r "
-                    "JOIN explorer.transition ts ON r.output_transition_id = ts.id "
-                    "JOIN explorer.transaction tx ON ts.transaction_id = tx.id "
-                    "JOIN explorer.block b ON tx.block_id = b.id "
+                    "FROM record r "
+                    "JOIN transition ts ON r.output_transition_id = ts.id "
+                    "JOIN transaction tx ON ts.transaction_id = tx.id "
+                    "JOIN block b ON tx.block_id = b.id "
                     "WHERE ts.value_balance < 0 AND r.value > 0 AND b.block_hash = %s",
                     str(block_hash)
                 )
@@ -2296,10 +2296,10 @@ class Database:
                     await cur.execute(
                         "SELECT DISTINCT t.transition_id, b.height, b.timestamp FROM address_transition at "
                         "JOIN transition t on at.transition_id = t.id "
-                        "JOIN explorer.transaction_execute te on te.id = t.transaction_execute_id "
-                        "JOIN explorer.transaction t2 on t2.id = te.transaction_id "
-                        "JOIN explorer.confirmed_transaction ct on ct.id = t2.confimed_transaction_id "
-                        "JOIN explorer.block b on b.id = ct.block_id "
+                        "JOIN transaction_execute te on te.id = t.transaction_execute_id "
+                        "JOIN transaction t2 on t2.id = te.transaction_id "
+                        "JOIN confirmed_transaction ct on ct.id = t2.confimed_transaction_id "
+                        "JOIN block b on b.id = ct.block_id "
                         "WHERE at.address = %s ORDER BY b.height DESC LIMIT 30",
                         (address,)
                     )
@@ -2823,16 +2823,15 @@ class Database:
                 )
 
                 await cur.execute(
-                    "INSERT INTO mapping_history (mapping_id, height, key_id, value) "
+                    "INSERT INTO mapping_history (mapping_id, height, key_id, key, value) "
                     "VALUES (%s, %s, %s, %s)",
-                    (mapping_id, height, key_id, value)
+                    (mapping_id, height, key_id, key, value)
                 )
 
         except Exception as e:
             await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
             raise
 
-    # noinspection SqlResolve
     async def remove_mapping_key_value(self, cur: psycopg.AsyncCursor[dict[str, Any]], program_name: str,
                                        mapping_name: str, mapping_id: str, key_id: str, height: int):
         try:
@@ -2851,14 +2850,93 @@ class Database:
                 )
 
                 await cur.execute(
-                    "INSERT INTO mapping_history (mapping_id, height, key_id, value) "
-                    "VALUES (%s, %s, %s, NULL)",
+                    "INSERT INTO mapping_history (mapping_id, height, key_id, key, value) "
+                    "VALUES (%s, %s, %s, NULL, NULL)",
                     (mapping_id, height, key_id)
                 )
 
         except Exception as e:
             await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
             raise
+
+    async def get_finalize_operations_by_height(self, height: int) -> list[FinalizeOperation]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT f.id, f.type FROM finalize_operation f "
+                        "JOIN confirmed_transaction ct on ct.id = f.confirmed_transaction_id "
+                        "JOIN block b on b.id = ct.block_id "
+                        "WHERE b.height = %s "
+                        "ORDER BY f.id",
+                        (height,)
+                    )
+                    data = await cur.fetchall()
+                    result: list[FinalizeOperation] = []
+                    for d in data:
+                        if d["type"] == "UpdateKeyValue":
+                            await cur.execute(
+                                "SELECT mapping_id, key_id, value_id FROM finalize_operation_update_kv fu "
+                                "JOIN explorer.finalize_operation fo on fo.id = fu.finalize_operation_id "
+                                "WHERE fo.id = %s",
+                                (d["id"],)
+                            )
+                            u = await cur.fetchone()
+                            result.append(UpdateKeyValue(
+                                mapping_id=Field.loads(u["mapping_id"]),
+                                key_id=Field.loads(u["key_id"]),
+                                value_id=Field.loads(u["value_id"]),
+                                index=u64(),
+                            ))
+                        elif d["type"] == "RemoveKeyValue":
+                            await cur.execute(
+                                "SELECT mapping_id FROM finalize_operation_remove_kv fu "
+                                "JOIN explorer.finalize_operation fo on fo.id = fu.finalize_operation_id "
+                                "WHERE fo.id = %s",
+                                (d["id"],)
+                            )
+                            u = await cur.fetchone()
+                            result.append(RemoveKeyValue(
+                                mapping_id=Field.loads(u["mapping_id"]),
+                                index=u64()
+                            ))
+                    return result
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def get_mapping_history_by_height(self, height: int) -> list[dict[str, Any]]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT mh.id, m.program_id, m.mapping, m.mapping_id, mh.key_id, mh.key, mh.value FROM mapping_history mh "
+                        "JOIN mapping m on mh.mapping_id = m.id "
+                        "WHERE mh.height = %s "
+                        "ORDER BY mh.id",
+                        (height,)
+                    )
+                    return await cur.fetchall()
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def get_mapping_history_previous_value(self, history_id: int, key_id: str) -> Optional[bytes]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT key, value FROM mapping_history WHERE id < %s AND key_id = %s ORDER BY id DESC LIMIT 1",
+                        (history_id, key_id)
+                    )
+                    res = await cur.fetchone()
+                    if res is None:
+                        return None
+                    return res['value']
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
                 
     async def get_program_leo_source_code(self, program_id: str) -> Optional[str]:
         async with self.pool.connection() as conn:

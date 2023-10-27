@@ -1,3 +1,4 @@
+from io import BytesIO
 from typing import Any, cast, Optional
 
 from starlette.exceptions import HTTPException
@@ -10,7 +11,7 @@ from aleo_types import u32, Transition, ExecuteTransaction, PrivateTransitionInp
     ExternalRecordTransitionOutput, AcceptedDeploy, AcceptedExecute, RejectedExecute, \
     FeeTransaction, RejectedDeploy, RejectedExecution, Identifier, Entry, ConfirmedTransaction, \
     Transaction, FutureTransitionOutput, Future, PlaintextArgument, FutureArgument, StructPlaintext, Finalize, \
-    PlaintextFinalizeType, StructPlaintextType
+    PlaintextFinalizeType, StructPlaintextType, UpdateKeyValue, Value, Plaintext, RemoveKeyValue
 from db import Database
 from util.global_cache import get_program
 from .template import templates
@@ -291,6 +292,53 @@ async def transaction_route(request: Request):
 
     else:
         raise HTTPException(status_code=550, detail="Unsupported transaction type")
+
+    fos = await db.get_finalize_operations_by_height(block.height)
+    mhs = await db.get_mapping_history_by_height(block.height)
+    mapping_operations: Optional[list[dict[str, Any]]] = []
+    if len(fos) != len(mhs):
+        mapping_operations = None
+    else:
+        for i in range(len(fos)):
+            fo = fos[i]
+            mh = mhs[i]
+            if str(fo.mapping_id) != str(mh["mapping_id"]):
+                mapping_operations = None
+                break
+            if isinstance(fo, UpdateKeyValue):
+                if mh["value"] is None:
+                    mapping_operations = None
+                    break
+                previous_value = await db.get_mapping_history_previous_value(mh["id"], mh["key_id"])
+                if previous_value is not None:
+                    previous_value = str(Value.load(BytesIO(previous_value)))
+                mapping_operations.append({
+                    "type": "Update",
+                    "program_id": mh["program_id"],
+                    "mapping_name": mh["mapping"],
+                    "key": str(Plaintext.load(BytesIO(mh["key"]))),
+                    "value": str(Value.load(BytesIO(mh["value"]))),
+                    "previous_value": previous_value,
+                })
+            elif isinstance(fo, RemoveKeyValue):
+                if mh["value"] is not None:
+                    mapping_operations = None
+                    break
+                previous_value = await db.get_mapping_history_previous_value(mh["id"], mh["key_id"])
+                if previous_value is not None:
+                    previous_value = str(Value.load(BytesIO(previous_value)))
+                else:
+                    mapping_operations = None
+                    break
+                mapping_operations.append({
+                    "type": "Remove",
+                    "program_id": mh["program_id"],
+                    "mapping_name": mh["mapping"],
+                    "key": str(Plaintext.load(BytesIO(mh["key"]))),
+                    "previous_value": previous_value,
+                })
+
+    ctx["mapping_operations"] = mapping_operations
 
     return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
 
