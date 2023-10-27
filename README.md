@@ -9,16 +9,11 @@ A blockchain explorer for Aleo.
 It contains a node that connects to another peer to fetch blockchain data. This node is NOT validating blocks. Only
 connect to peers that you trust.
 
-## Database update warning
-
-The database schema has been updated at the start of testnet 3 phase 3. It's recommended to start clean and import the
-database schema from `pg_dump.sql`.
-
-Further schema updates will be provided as database migrations.
-
 ## Prerequisites
 
+* Python 3.11.4+ (3.11.3 and before [won't work](https://github.com/python/cpython/pull/103514))
 * Postgres 12+
+* Redis not too old
 * Rust latest stable
 * [aleo-explorer-rust](https://github.com/HarukaMa/aleo-explorer-rust)
 
