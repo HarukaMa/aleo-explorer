@@ -801,13 +801,10 @@ class Database:
             for key in keys:
                 backup_key = f"{key}:rollback_backup:{height}"
                 if await redis_conn.exists(backup_key) == 0:
-                    backup_data = await redis_conn.hgetall(key)
-                    if backup_data:
-                        await redis_conn.hset(backup_key, mapping=backup_data)
+                    if await redis_conn.exists(key) == 1:
+                        redis_conn.copy(key, backup_key)
                 else:
-                    backup_data = await redis_conn.hgetall(backup_key)
-                    await redis_conn.delete(key)
-                    await redis_conn.hset(key, mapping=backup_data)
+                    await redis_conn.copy(backup_key, key, replace=True)
 
     @staticmethod
     async def _redis_cleanup(redis_conn: Redis[str], keys: list[str], height: int, rollback: bool):
@@ -815,10 +812,8 @@ class Database:
             for key in keys:
                 backup_key = f"{key}:rollback_backup:{height}"
                 if rollback:
-                    backup_data = await redis_conn.hgetall(backup_key)
-                    if backup_data:
-                        await redis_conn.delete(key)
-                        await redis_conn.hset(key, mapping=backup_data)
+                    if await redis_conn.exists(backup_key) == 1:
+                        await redis_conn.copy(backup_key, key, replace=True)
                 else:
                     await redis_conn.delete(backup_key)
 
@@ -2285,8 +2280,8 @@ class Database:
                         "SELECT DISTINCT owner FROM program WHERE owner LIKE %s", (f"{address}%",)
                     )
                     res.update(set(map(lambda x: x['owner'], await cur.fetchall())))
-                    _, data = await self.redis.hscan("address_transfer_in", match=f"{address}*", count=50)
-                    res.update(set(data.keys()))
+                    keys = await self.redis.hkeys("address_transfer_in")
+                    res.update(set(filter(lambda x: x.startswith(address), keys)))
                     await cur.execute(
                         "SELECT DISTINCT address FROM address_transition WHERE address LIKE %s", (f"{address}%",)
                     )
