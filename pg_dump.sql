@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
--- Dumped from database version 15.4 (Debian 15.4-3)
+-- Dumped from database version 15.3 (Debian 15.3-1.pgdg120+1)
 -- Dumped by pg_dump version 15.4
 
 SET statement_timeout = 0;
@@ -938,8 +938,8 @@ CREATE TABLE explorer.mapping_history (
     mapping_id integer NOT NULL,
     height integer NOT NULL,
     key_id text NOT NULL,
-    key text,
-    value text
+    key bytea,
+    value bytea
 );
 
 
