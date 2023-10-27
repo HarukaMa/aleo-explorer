@@ -2824,7 +2824,7 @@ class Database:
 
                 await cur.execute(
                     "INSERT INTO mapping_history (mapping_id, height, key_id, key, value) "
-                    "VALUES (%s, %s, %s, %s)",
+                    "VALUES (%s, %s, %s, %s, %s)",
                     (mapping_id, height, key_id, key, value)
                 )
 
