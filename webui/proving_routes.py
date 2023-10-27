@@ -6,7 +6,7 @@ import aleo
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
 
-from aleo_types import Transaction, AcceptedDeploy, DeployTransaction, PlaintextValue, LiteralPlaintext, Literal, \
+from aleo_types import PlaintextValue, LiteralPlaintext, Literal, \
     Address, Value, StructPlaintext
 from db import Database
 from .template import templates
@@ -154,23 +154,14 @@ async def address_route(request: Request):
         })
     recent_programs: list[dict[str, Any]] = []
     for program in programs:
-        program_tx: DeployTransaction | None = None
-        program_block = await db.get_block_by_program_id(program)
-        if program_block is None:
-            raise HTTPException(status_code=550, detail="Program block not found")
-        for ct in program_block.transactions.transactions:
-            if isinstance(ct, AcceptedDeploy):
-                tx = ct.transaction
-                if isinstance(tx, DeployTransaction) and tx.type == Transaction.Type.Deploy and str(tx.deployment.program.id) == program:
-                    program_tx = tx
-                    break
-        if program_tx is None:
-            raise HTTPException(status_code=550, detail="Program transaction not found")
+        deploy_info = await db.get_deploy_info_by_program_id(program)
+        if deploy_info is None:
+            raise HTTPException(status_code=550, detail="Deploy info not found")
         recent_programs.append({
             "program_id": program,
-            "height": program_block.header.metadata.height,
-            "timestamp": program_block.header.metadata.timestamp,
-            "transaction_id": program_tx.id,
+            "height": deploy_info["height"],
+            "timestamp": deploy_info["timestamp"],
+            "transaction_id": deploy_info["transaction_id"],
         })
     if public_balance_bytes is None:
         public_balance = 0

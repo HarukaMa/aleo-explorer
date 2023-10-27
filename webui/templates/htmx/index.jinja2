@@ -4,22 +4,7 @@
 
         {% if "BETA" | get_env %}
         <div id="beta">
-            <h4>This is the preview version of the explorer.</h4>
-            <p>
-                Currently, the preview version has an incomplete interpreter for Aleo instructions. All finalizers are
-                locally executed and the mapping values are independently calculated. Those values are checked with the
-                hashes on the blockchain.
-            </p>
-            <p>
-                As the interpreter still can't execute all instructions, the explorer will stop syncing when it
-                encounters a block with an instruction that it can't execute. Expect this to happen often.
-            </p>
-            {% if "DEBUG_SKIP_COINBASE" | get_env %}
-                <p>
-                    For performance reasons, this instance of the explorer won't track the puzzle solutions and the
-                    rewards of individual provers.
-                </p>
-            {% endif %}
+            <h4></h4>
         </div>
         {% endif %}
 

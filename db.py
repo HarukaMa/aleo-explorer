@@ -2554,6 +2554,27 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
+    async def get_deploy_info_by_program_id(self, program_id: str) -> dict[str, Any] | None:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT b.height, b.timestamp, t.transaction_id FROM block b "
+                        "JOIN confirmed_transaction ct on b.id = ct.block_id "
+                        "JOIN transaction t on ct.id = t.confimed_transaction_id "
+                        "JOIN transaction_deploy td on t.id = td.transaction_id "
+                        "JOIN program p on td.id = p.transaction_deploy_id "
+                        "WHERE p.program_id = %s",
+                        (program_id,)
+                    )
+                    data = await cur.fetchone()
+                    if data is None:
+                        return None
+                    return data
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
 
     async def get_program_called_times(self, program_id: str) -> int:
         async with self.pool.connection() as conn:
