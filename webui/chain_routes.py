@@ -370,91 +370,78 @@ async def transition_route(request: Request):
 
     inputs: DictList = []
     for input_ in transition.inputs:
-        match input_:
-            # TODO: report pycharm bug
-            case PublicTransitionInput():
-                # noinspection PyUnresolvedReferences
-                inputs.append({
-                    "type": "Public",
-                    "plaintext_hash": input_.plaintext_hash,
-                    "plaintext": input_.plaintext.value,
-                })
-            case PrivateTransitionInput():
-                # noinspection PyUnresolvedReferences
-                inputs.append({
-                    "type": "Private",
-                    "ciphertext_hash": input_.ciphertext_hash,
-                    "ciphertext": input_.ciphertext.value,
-                })
-            case RecordTransitionInput():
-                # noinspection PyUnresolvedReferences
-                inputs.append({
-                    "type": "Record",
-                    "serial_number": input_.serial_number,
-                    "tag": input_.tag,
-                })
-            case ExternalRecordTransitionInput():
-                # noinspection PyUnresolvedReferences
-                inputs.append({
-                    "type": "External record",
-                    "commitment": input_.input_commitment,
-                })
-            case _:
-                raise HTTPException(status_code=550, detail="Not implemented")
+        if isinstance(input_, PublicTransitionInput):
+            inputs.append({
+                "type": "Public",
+                "plaintext_hash": input_.plaintext_hash,
+                "plaintext": input_.plaintext.value,
+            })
+        elif isinstance(input_, PrivateTransitionInput):
+            inputs.append({
+                "type": "Private",
+                "ciphertext_hash": input_.ciphertext_hash,
+                "ciphertext": input_.ciphertext.value,
+            })
+        elif isinstance(input_, RecordTransitionInput):
+            inputs.append({
+                "type": "Record",
+                "serial_number": input_.serial_number,
+                "tag": input_.tag,
+            })
+        elif isinstance(input_, ExternalRecordTransitionInput):
+            inputs.append({
+                "type": "External record",
+                "commitment": input_.input_commitment,
+            })
+        else:
+            raise HTTPException(status_code=550, detail="Not implemented")
 
     outputs: DictList = []
     for output in transition.outputs:
         output: TransitionOutput
-        match output:
-            case PublicTransitionOutput():
-                # noinspection PyUnresolvedReferences
-                outputs.append({
-                    "type": "Public",
-                    "plaintext_hash": output.plaintext_hash,
-                    "plaintext": output.plaintext.value,
-                })
-            case PrivateTransitionOutput():
-                # noinspection PyUnresolvedReferences
-                outputs.append({
-                    "type": "Private",
-                    "ciphertext_hash": output.ciphertext_hash,
-                    "ciphertext": output.ciphertext.value,
-                })
-            case RecordTransitionOutput():
-                # noinspection PyUnresolvedReferences
-                output_data: dict[str, Any] = {
-                    "type": "Record",
-                    "commitment": output.commitment,
-                    "checksum": output.checksum,
-                    "record": output.record_ciphertext.value,
+        if isinstance(output, PublicTransitionOutput):
+            outputs.append({
+                "type": "Public",
+                "plaintext_hash": output.plaintext_hash,
+                "plaintext": output.plaintext.value,
+            })
+        elif isinstance(output, PrivateTransitionOutput):
+            outputs.append({
+                "type": "Private",
+                "ciphertext_hash": output.ciphertext_hash,
+                "ciphertext": output.ciphertext.value,
+            })
+        elif isinstance(output, RecordTransitionOutput):
+            output_data: dict[str, Any] = {
+                "type": "Record",
+                "commitment": output.commitment,
+                "checksum": output.checksum,
+                "record": output.record_ciphertext.value,
+            }
+            record = output.record_ciphertext.value
+            if record is not None:
+                record_data: dict[str, Any] = {
+                    "owner": record.owner,
                 }
-                # noinspection PyUnresolvedReferences
-                record = output.record_ciphertext.value
-                if record is not None:
-                    record_data: dict[str, Any] = {
-                        "owner": record.owner,
-                    }
-                    data: list[tuple[Identifier, Entry[Any]]] = []
-                    for identifier, entry in record.data:
-                        data.append((identifier, entry))
-                    record_data["data"] = data
-                    output_data["record_data"] = record_data
-                outputs.append(output_data)
-            case ExternalRecordTransitionOutput():
-                # noinspection PyUnresolvedReferences
-                outputs.append({
-                    "type": "External record",
-                    "commitment": output.commitment,
-                })
-            case FutureTransitionOutput():
-                # noinspection PyUnresolvedReferences
-                outputs.append({
-                    "type": "Future",
-                    "future_hash": output.future_hash,
-                    "future": output.future.value,
-                })
-            case _:
-                raise HTTPException(status_code=550, detail="Not implemented")
+                data: list[tuple[Identifier, Entry[Any]]] = []
+                for identifier, entry in record.data:
+                    data.append((identifier, entry))
+                record_data["data"] = data
+                output_data["record_data"] = record_data
+            outputs.append(output_data)
+        elif isinstance(output, ExternalRecordTransitionOutput):
+            outputs.append({
+                "type": "External record",
+                "commitment": output.commitment,
+            })
+        elif isinstance(output, FutureTransitionOutput):
+            outputs.append({
+                "type": "Future",
+                "future_hash": output.future_hash,
+                "future": output.future.value,
+            })
+        else:
+            raise HTTPException(status_code=550, detail="Not implemented")
 
     finalizes: list[str] = []
     # TODO: add futures

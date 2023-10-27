@@ -150,8 +150,6 @@
     <script id="content-script" hx-swap-oob="true" async>
         (() => {
             const button = document.getElementById("wallet-connect-button")
-            const safe_buffon = document.getElementById("wallet-connect-normal")
-            const unsafe_buffon = document.getElementById("wallet-connect-unsafe")
             const text = document.getElementById("wallet-connect-text")
             let wallet = null
             if (window.leoWallet !== undefined) {

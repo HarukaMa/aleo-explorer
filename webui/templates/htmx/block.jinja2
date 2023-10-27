@@ -15,9 +15,6 @@
         {% call data_line("Block hash") %}
             <span class="mono">{{ block.block_hash }}</span>
         {% endcall %}
-        {% call data_line("Epoch") %}
-            {{ block.header.metadata.height // 256 }} <span class="note">{{ block.header.metadata.height % 256 }} / 256</span>
-        {% endcall %}
         {% call data_line("Timestamp") %}
             {{ block.header.metadata.timestamp | format_time | safe }}
         {% endcall %}
@@ -52,6 +49,9 @@
 
         <div class="tabs-content" data-tabs-content="block-tabs">
             <div class="tabs-panel" id="info">
+                {% call data_line("Round") %}
+                {{ block.header.metadata.round | format_number | safe }}
+                {% endcall %}
                 {% call data_line("Cumulative weight") %}
                     {{ block.header.metadata.cumulative_weight | format_number | safe }}
                 {% endcall %}
