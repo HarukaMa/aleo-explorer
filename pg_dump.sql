@@ -2388,7 +2388,7 @@ ALTER TABLE ONLY explorer.transition
 -- Name: address_transition_address_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-CREATE INDEX address_transition_address_index ON explorer.address_transition USING btree (address);
+CREATE INDEX address_transition_address_index ON explorer.address_transition USING btree (address text_pattern_ops);
 
 
 --
