@@ -802,7 +802,7 @@ class Database:
                 backup_key = f"{key}:rollback_backup:{height}"
                 if await redis_conn.exists(backup_key) == 0:
                     if await redis_conn.exists(key) == 1:
-                        redis_conn.copy(key, backup_key)
+                        await redis_conn.copy(key, backup_key)
                 else:
                     await redis_conn.copy(backup_key, key, replace=True)
 
