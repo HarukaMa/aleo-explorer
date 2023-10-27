@@ -2280,8 +2280,6 @@ class Database:
                         "SELECT DISTINCT owner FROM program WHERE owner LIKE %s", (f"{address}%",)
                     )
                     res.update(set(map(lambda x: x['owner'], await cur.fetchall())))
-                    keys = await self.redis.hkeys("address_transfer_in")
-                    res.update(set(filter(lambda x: x.startswith(address), keys)))
                     await cur.execute(
                         "SELECT DISTINCT address FROM address_transition WHERE address LIKE %s", (f"{address}%",)
                     )
