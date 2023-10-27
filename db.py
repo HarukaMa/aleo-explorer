@@ -189,7 +189,7 @@ class Database:
             program_id = res["program_id"]
             function_name = res["function_name"]
             await cur.execute(
-                "SELECT type, plaintext FROM future_argument WHERE future_id = %s",
+                "SELECT id, type, plaintext FROM future_argument WHERE future_id = %s",
                 (future_db_id,)
             )
             arguments: list[Argument] = []
@@ -198,7 +198,7 @@ class Database:
                     arguments.append(PlaintextArgument(
                         plaintext=Plaintext.load(BytesIO(res["plaintext"]))
                     ))
-                elif res["type"] == "Argument":
+                elif res["type"] == "Future":
                     arguments.append(FutureArgument(
                         future=await Database._load_future(conn, None, res["id"]) # type: ignore
                     ))
