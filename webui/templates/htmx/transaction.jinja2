@@ -138,7 +138,29 @@
         {% endif %}
 
             <div class="tabs-panel" id="mapping-operations">
-                {{ mapping_operations }}
+                {% if not mapping_operations %}
+                    Server error occured when searching for mapping operations
+                {% else %}
+                    <table class="unstriped">
+                    <thead>
+                    <tr>
+                        <td>Program</td>
+                        <td>Mapping</td>
+                        <td>Before</td>
+                        <td>After</td>
+                    </thead>
+                    <tbody>
+                    {% for op in mapping_operations %}
+                        <tr>
+                            <td><a href="/program?id={{ op.program_id }}">{{ op.program_id }}</a></td>
+                            <td><span class="mono">{{ op.mapping_name }}[{{ op.key }}]</span></td>
+                            <td><span class="mono">{{ op.previous_value }}</span></td>
+                            <td><span class="mono">{{ op.value }}</span></td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                    </table>
+                {% endif %}
             </div>
 
         </div>

@@ -1,6 +1,7 @@
 from io import BytesIO
 from typing import Any, cast, Optional
 
+import aleo
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
@@ -11,7 +12,7 @@ from aleo_types import u32, Transition, ExecuteTransaction, PrivateTransitionInp
     ExternalRecordTransitionOutput, AcceptedDeploy, AcceptedExecute, RejectedExecute, \
     FeeTransaction, RejectedDeploy, RejectedExecution, Identifier, Entry, ConfirmedTransaction, \
     Transaction, FutureTransitionOutput, Future, PlaintextArgument, FutureArgument, StructPlaintext, Finalize, \
-    PlaintextFinalizeType, StructPlaintextType, UpdateKeyValue, Value, Plaintext, RemoveKeyValue
+    PlaintextFinalizeType, StructPlaintextType, UpdateKeyValue, Value, Plaintext, RemoveKeyValue, FinalizeOperation
 from db import Database
 from util.global_cache import get_program
 from .template import templates
@@ -293,13 +294,20 @@ async def transaction_route(request: Request):
     else:
         raise HTTPException(status_code=550, detail="Unsupported transaction type")
 
-    fos = await db.get_finalize_operations_by_height(block.height)
-    mhs = await db.get_mapping_history_by_height(block.height)
-    mapping_operations: Optional[list[dict[str, Any]]] = []
+    fos: list[FinalizeOperation] = []
+    for ct in block.transactions:
+        for fo in ct.finalize:
+            if isinstance(fo, (UpdateKeyValue, RemoveKeyValue)):
+                fos.append(fo)
+    mhs = await db.get_transaction_mapping_history_by_height(block.height)
     if len(fos) != len(mhs):
         mapping_operations = None
     else:
-        for i in range(len(fos)):
+        indices: list[int] = []
+        for fo in confirmed_transaction.finalize:
+            indices.append(fos.index(fo))
+        mapping_operations: Optional[list[dict[str, Any]]] = []
+        for i in indices:
             fo = fos[i]
             mh = mhs[i]
             if str(fo.mapping_id) != str(mh["mapping_id"]):
@@ -307,6 +315,11 @@ async def transaction_route(request: Request):
                 break
             if isinstance(fo, UpdateKeyValue):
                 if mh["value"] is None:
+                    mapping_operations = None
+                    break
+                key_id = aleo.get_key_id(mh["program_id"], mh["mapping"], mh["key"])
+                value_id = aleo.get_value_id(str(key_id), mh["value"])
+                if value_id != str(fo.value_id):
                     mapping_operations = None
                     break
                 previous_value = await db.get_mapping_history_previous_value(mh["id"], mh["key_id"])

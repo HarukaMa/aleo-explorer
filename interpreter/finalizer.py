@@ -166,6 +166,7 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
                     "key": key,
                     "value": value,
                     "height": finalize_state.block_height,
+                    "from_transaction": True,
                 })
 
             elif isinstance(c, RandChaChaCommand):
@@ -212,6 +213,7 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
                     "program_name": str(program.id),
                     "mapping_id": mapping_id,
                     "mapping_name": c.mapping,
+                    "from_transaction": True,
                 })
 
             elif isinstance(c, (BranchEqCommand, BranchNeqCommand)):

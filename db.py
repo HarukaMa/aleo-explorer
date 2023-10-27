@@ -585,6 +585,7 @@ class Database:
                 "height": 0,
                 "program_name": "credits.aleo",
                 "mapping_name": "account",
+                "from_transaction": False,
             })
         from interpreter.interpreter import execute_operations
         await execute_operations(self, cur, operations)
@@ -791,6 +792,7 @@ class Database:
                         "key": key,
                         "value": value,
                         "height": height,
+                        "from_transaction": False,
                     })
                 from interpreter.interpreter import execute_operations
                 await execute_operations(self, cur, operations)
@@ -2799,7 +2801,7 @@ class Database:
 
     async def update_mapping_key_value(self, cur: psycopg.AsyncCursor[dict[str, Any]], program_name: str,
                                        mapping_name: str, mapping_id: str, key_id: str, value_id: str,
-                                       key: bytes, value: bytes, height: int):
+                                       key: bytes, value: bytes, height: int, from_transaction: bool):
         try:
             if program_name == "credits.aleo" and mapping_name in ["committee", "bonded"]:
                 conn = self.redis
@@ -2823,9 +2825,9 @@ class Database:
                 )
 
                 await cur.execute(
-                    "INSERT INTO mapping_history (mapping_id, height, key_id, key, value) "
-                    "VALUES (%s, %s, %s, %s, %s)",
-                    (mapping_id, height, key_id, key, value)
+                    "INSERT INTO mapping_history (mapping_id, height, key_id, key, value, from_transaction) "
+                    "VALUES (%s, %s, %s, %s, %s, %s)",
+                    (mapping_id, height, key_id, key, value, from_transaction)
                 )
 
         except Exception as e:
@@ -2833,7 +2835,8 @@ class Database:
             raise
 
     async def remove_mapping_key_value(self, cur: psycopg.AsyncCursor[dict[str, Any]], program_name: str,
-                                       mapping_name: str, mapping_id: str, key_id: str, height: int):
+                                       mapping_name: str, mapping_id: str, key_id: str, height: int,
+                                       from_transaction: bool):
         try:
             if program_name == "credits.aleo" and mapping_name in ["committee", "bonded"]:
                 conn = self.redis
@@ -2850,9 +2853,9 @@ class Database:
                 )
 
                 await cur.execute(
-                    "INSERT INTO mapping_history (mapping_id, height, key_id, key, value) "
-                    "VALUES (%s, %s, %s, NULL, NULL)",
-                    (mapping_id, height, key_id)
+                    "INSERT INTO mapping_history (mapping_id, height, key_id, key, value, from_transaction) "
+                    "VALUES (%s, %s, %s, NULL, NULL, %s)",
+                    (mapping_id, height, key_id, from_transaction)
                 )
 
         except Exception as e:
@@ -2905,14 +2908,14 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_mapping_history_by_height(self, height: int) -> list[dict[str, Any]]:
+    async def get_transaction_mapping_history_by_height(self, height: int) -> list[dict[str, Any]]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
                         "SELECT mh.id, m.program_id, m.mapping, m.mapping_id, mh.key_id, mh.key, mh.value FROM mapping_history mh "
                         "JOIN mapping m on mh.mapping_id = m.id "
-                        "WHERE mh.height = %s "
+                        "WHERE mh.height = %s AND mh.from_transaction = TRUE "
                         "ORDER BY mh.id",
                         (height,)
                     )
