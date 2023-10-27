@@ -37,109 +37,97 @@
                 <span class="mono">{{ function_signature }}</span>
             {% endcall %}
             <br>
-        {% for input in inputs %}
-            <h5>Input #{{ loop.index }}</h5>
-            {% call data_line("Type") %}
-                {{ input.type }} <span class="mono">{{ function_definition["input"][loop.index0] }}</span>
-            {% endcall %}
-        {% if input.type == "Public" %}
-            {% call data_line("Plaintext hash") %}
-                <span class="mono">{{ input.plaintext_hash }}</span>
-            {% endcall %}
-            {% call data_line("Plaintext") %}
-                <span class="mono">{{ input.plaintext }}</span>
-            {% endcall %}
-        {% elif input.type == "Private" %}
-            {% call data_line("Ciphertext hash") %}
-                <span class="mono">{{ input.ciphertext_hash }}</span>
-            {% endcall %}
-            {% call data_line("Ciphertext") %}
-                <advanced-link scope="transition" object="{{ ts_id }}" type="input_private" index="{{ loop.index0 }}">
-                    <span class="mono ciphertext" data-index="{{ loop.index0 }}">{{ input.ciphertext }}</span>
-                </advanced-link>
-            {% endcall %}
-        {% elif input.type == "Record" %}
-            {% call data_line("Serial number") %}
-                <span class="mono">{{ input.serial_number }}</span>
-            {% endcall %}
-            {% call data_line("Tag") %}
-                <span class="mono">{{ input.tag }}</span>
-            {% endcall %}
-        {% elif input.type == "External record" %}
-            {% call data_line("Commitment") %}
-                <span class="mono">{{ input.commitment }}</span>
-            {% endcall %}
-        {% endif %}
-            <br>
-        {% endfor %}
-        {% set input_count = inputs | length %}
-        {% for output in outputs %}
-            {% set outer_loop = loop %}
-            <h5>Output #{{ loop.index }}</h5>
-            {% call data_line("Type") %}
-                {{ output.type }} <span class="mono">{{ function_definition["output"][loop.index0] }}</span>
-            {% endcall %}
-        {% if output.type == "Public" %}
-            {% call data_line("Plaintext hash") %}
-                <span class="mono">{{ output.plaintext_hash }}</span>
-            {% endcall %}
-            {% call data_line("Plaintext") %}
-                <span class="mono">{{ output.plaintext }}</span>
-            {% endcall %}
-        {% elif output.type == "Private" %}
-            {% call data_line("Ciphertext hash") %}
-                <span class="mono">{{ output.ciphertext_hash }}</span>
-            {% endcall %}
-            {% call data_line("Ciphertext") %}
-                <advanced-link scope="transition" object="{{ ts_id }}" type="output_private" index="{{ loop.index0 }}">
-                    <span class="mono ciphertext" data-index="{{ loop.index0 + input_count }}">{{ output.ciphertext }}</span>
-                </advanced-link>
-            {% endcall %}
-        {% elif output.type == "Record" %}
-            <span class="record">
-            {% call data_line("Commitment") %}
-                <span class="mono">{{ output.commitment }}</span>
-            {% endcall %}
-            {% call data_line("Checksum") %}
-                <span class="mono">{{ output.checksum }}</span>
-            {% endcall %}
-            {% call data_line("Record data") %}
-                <span class="mono record-data">{{ output.record }}</span>
-            {% endcall %}
-            {% call sub_data_line_safe('<span class="mono">owner</span>') %}
-                <advanced-link scope="transition" object="{{ ts_id }}" type="output_record" index="{{ loop.index0 }}" field="owner">
-                    <span class="mono record-field">{{ output.record_data.owner }}</span>
-                </advanced-link>
-            {% endcall %}
-            {% for identifier, entry in output.record_data.data %}
-                {% call sub_data_line_safe('<span class="mono">' + (identifier | string) + "</span>") %}
-                    <advanced-link scope="transition" object="{{ ts_id }}" type="output_record" index="{{ outer_loop.index0 }}" field="{{ identifier }}">
-                        <span class="mono record-field">{{ entry }}</span>
-                    </advanced-link>
-                {% endcall %}
-            {% endfor %}
-            </span>
-        {% elif output.type == "External record" %}
-            {% call data_line("Commitment") %}
-                <span class="mono">{{ output.commitment }}</span>
-            {% endcall %}
-        {% elif output.type == "Future" %}
-            {% call data_line("Future hash") %}
-                <span class="mono">{{ output.future_hash }}</span>
-            {% endcall %}
-            {% call data_line("Future") %}
-                <span class="mono">{{ output.future.program_id }}/{{ output.future.function_name }}(...)</span>
-            {% endcall %}
-        {% endif %}
-            <br>
-        {% endfor %}
+            <div class="grid-x grid-margin-x">
+                <div class="cell small-12 medium-6" id="inputs">
+                {% for input in inputs %}
+                    <h5>Input #{{ loop.index }}</h5>
+                    {% call data_line("Type") %}
+                        {{ input.type }} <span class="mono">{{ function_definition["input"][loop.index0] }}</span>
+                    {% endcall %}
+                    {% if input.type == "Public" %}
+                        {% call data_line("Plaintext") %}
+                            <span class="mono">{{ input.plaintext }}</span>
+                        {% endcall %}
+                    {% elif input.type == "Private" %}
+                        {% call data_line("Ciphertext") %}
+                            <advanced-link scope="transition" object="{{ ts_id }}" type="input_private" index="{{ loop.index0 }}">
+                                <span class="mono ciphertext" data-index="{{ loop.index0 }}">{{ input.ciphertext }}</span>
+                            </advanced-link>
+                        {% endcall %}
+                    {% elif input.type == "Record" %}
+                        {% call data_line("Serial number") %}
+                            <span class="mono">{{ input.serial_number }}</span>
+                        {% endcall %}
+                        {% call data_line("Tag") %}
+                            <span class="mono">{{ input.tag }}</span>
+                        {% endcall %}
+                    {% elif input.type == "External record" %}
+                        {% call data_line("Commitment") %}
+                            <span class="mono">{{ input.commitment }}</span>
+                        {% endcall %}
+                    {% endif %}
+                    <br>
+                {% endfor %}
+                {% set input_count = inputs | length %}
+                </div>
+                <div class="cell small-12 medium-6" id="outputs">
+                    {% for output in outputs %}
+                        {% set outer_loop = loop %}
+                        <h5>Output #{{ loop.index }}</h5>
+                        {% call data_line("Type") %}
+                            {{ output.type }} <span class="mono">{{ function_definition["output"][loop.index0] }}</span>
+                        {% endcall %}
+                        {% if output.type == "Public" %}
+                            {% call data_line("Plaintext") %}
+                                <span class="mono">{{ output.plaintext }}</span>
+                            {% endcall %}
+                        {% elif output.type == "Private" %}
+                            {% call data_line("Ciphertext") %}
+                                <advanced-link scope="transition" object="{{ ts_id }}" type="output_private" index="{{ loop.index0 }}">
+                                    <span class="mono ciphertext" data-index="{{ loop.index0 + input_count }}">{{ output.ciphertext }}</span>
+                                </advanced-link>
+                            {% endcall %}
+                        {% elif output.type == "Record" %}
+                            <span class="record">
+                                {% call data_line("Commitment") %}
+                                    <span class="mono">{{ output.commitment }}</span>
+                                {% endcall %}
+                                {% call data_line("Record data") %}
+                                    <span class="mono record-data">{{ output.record }}</span>
+                                {% endcall %}
+                                {% call sub_data_line_safe('<span class="mono">owner</span>') %}
+                                    <advanced-link scope="transition" object="{{ ts_id }}" type="output_record" index="{{ loop.index0 }}" field="owner">
+                                        <span class="mono record-field">{{ output.record_data.owner }}</span>
+                                    </advanced-link>
+                                {% endcall %}
+                                {% for identifier, entry in output.record_data.data %}
+                                    {% call sub_data_line_safe('<span class="mono">' + (identifier | string) + "</span>") %}
+                                        <advanced-link scope="transition" object="{{ ts_id }}" type="output_record" index="{{ outer_loop.index0 }}" field="{{ identifier }}">
+                                            <span class="mono record-field">{{ entry }}</span>
+                                        </advanced-link>
+                                    {% endcall %}
+                                {% endfor %}
+                            </span>
+                        {% elif output.type == "External record" %}
+                            {% call data_line("Commitment") %}
+                                <span class="mono">{{ output.commitment }}</span>
+                            {% endcall %}
+                        {% elif output.type == "Future" %}
+                            {% call data_line("Future") %}
+                                <span class="mono">{{ output.future.program_id }}/{{ output.future.function_name }}(...)</span>
+                            {% endcall %}
+                        {% endif %}
+                        <br>
+                    {% endfor %}
+                </div>
+            </div>
+
+
+
         {% for input in finalizes %}
             <h5>Finalize input #{{ loop.index }}</h5>
-            {% call data_line("Type") %}
-                <span class="mono">{{ function_definition["finalize"][loop.index0] }}</span>
-            {% endcall %}
-            {% call data_line("Plaintext") %}
-                <span class="mono">{{ input }}</span>
+            {% call data_line(input.type) %}
+                <span class="mono">{% if input.struct_type %}struct {{ input.struct_type }} {% endif %}{{ input.value }}</span>
             {% endcall %}
             <br>
         {% endfor %}

@@ -1,4 +1,4 @@
-from typing import Any, cast
+from typing import Any, cast, Optional
 
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
@@ -9,8 +9,10 @@ from aleo_types import u32, Transition, ExecuteTransaction, PrivateTransitionInp
     PublicTransitionOutput, PrivateTransitionOutput, ExternalRecordTransitionInput, \
     ExternalRecordTransitionOutput, AcceptedDeploy, AcceptedExecute, RejectedExecute, \
     FeeTransaction, RejectedDeploy, RejectedExecution, Identifier, Entry, ConfirmedTransaction, \
-    Transaction, FutureTransitionOutput
+    Transaction, FutureTransitionOutput, Future, PlaintextArgument, FutureArgument, StructPlaintext, Finalize, \
+    PlaintextFinalizeType, StructPlaintextType
 from db import Database
+from util.global_cache import get_program
 from .template import templates
 from .utils import function_signature, out_of_sync_check, function_definition
 
@@ -397,6 +399,7 @@ async def transition_route(request: Request):
             raise HTTPException(status_code=550, detail="Not implemented")
 
     outputs: DictList = []
+    self_future: Optional[Future] = None
     for output in transition.outputs:
         output: TransitionOutput
         if isinstance(output, PublicTransitionOutput):
@@ -440,11 +443,34 @@ async def transition_route(request: Request):
                 "future_hash": output.future_hash,
                 "future": output.future.value,
             })
+            if output.future.value is not None:
+                future = output.future.value
+                if future.program_id == program_id and future.function_name == function_name:
+                    self_future = future
         else:
             raise HTTPException(status_code=550, detail="Not implemented")
 
-    finalizes: list[str] = []
-    # TODO: add futures
+    finalizes: list[dict[str, str]] = []
+    if self_future is not None:
+        for i, argument in enumerate(self_future.arguments):
+            if isinstance(argument, PlaintextArgument):
+                struct_type = ""
+                if isinstance(argument.plaintext, StructPlaintext):
+                    program = await get_program(db, str(transition.program_id))
+                    finalize = cast(Finalize, program.functions[transition.function_name].finalize.value)
+                    finalize_type = cast(PlaintextFinalizeType, finalize.inputs[i].finalize_type)
+                    struct_type = str(cast(StructPlaintextType, finalize_type.plaintext_type).struct)
+                finalizes.append({
+                    "type": "Plaintext",
+                    "struct_type": struct_type,
+                    "value": str(argument.plaintext)
+                })
+            elif isinstance(argument, FutureArgument):
+                future = argument.future
+                finalizes.append({
+                    "type": "Future",
+                    "value": f"{future.program_id}/{future.function_name}(...)",
+                })
 
     ctx = {
         "request": request,
