@@ -228,7 +228,7 @@ async def transaction_route(request: Request):
             "program_id": str(program.id),
             "transitions": [{
                 "transition_id": transaction.fee.transition.id,
-                "action": await function_signature(db, str(fee_transition.program_id), str(fee_transition.function_name)),
+                "action": await function_signature(db, str(fee_transition.program_id), str(fee_transition.function_name), False),
             }],
         })
     elif isinstance(transaction, ExecuteTransaction):
@@ -239,14 +239,14 @@ async def transaction_route(request: Request):
         for transition in transaction.execution.transitions:
             transitions.append({
                 "transition_id": transition.id,
-                "action": await function_signature(db, str(transition.program_id), str(transition.function_name)),
+                "action": await function_signature(db, str(transition.program_id), str(transition.function_name),False),
             })
         if transaction.additional_fee.value is not None:
             additional_fee = transaction.additional_fee.value
-            transition = transaction.additional_fee.value.transition
+            transition = additional_fee.transition
             fee_transition = {
                 "transition_id": transition.id,
-                "action": await function_signature(db, str(transition.program_id), str(transition.function_name)),
+                "action": await function_signature(db, str(transition.program_id), str(transition.function_name), False),
             }
         else:
             fee_transition = None
@@ -265,7 +265,7 @@ async def transaction_route(request: Request):
         transition = transaction.fee.transition
         transitions.append({
             "transition_id": transition.id,
-            "action": await function_signature(db, str(transition.program_id), str(transition.function_name)),
+            "action": await function_signature(db, str(transition.program_id), str(transition.function_name), False),
         })
         if isinstance(confirmed_transaction, RejectedExecute):
             rejected = confirmed_transaction.rejected

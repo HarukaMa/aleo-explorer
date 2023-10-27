@@ -1,10 +1,13 @@
 import time
-from typing import Any
+from io import BytesIO
+from typing import Any, cast
 
+import aleo
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
 
-from aleo_types import Transaction, AcceptedDeploy, DeployTransaction
+from aleo_types import Transaction, AcceptedDeploy, DeployTransaction, PlaintextValue, LiteralPlaintext, Literal, \
+    Address, Value, StructPlaintext
 from db import Database
 from .template import templates
 from .utils import out_of_sync_check
@@ -85,7 +88,39 @@ async def address_route(request: Request):
         raise HTTPException(status_code=400, detail="Missing address")
     solutions = await db.get_recent_solutions_by_address(address)
     programs = await db.get_recent_programs_by_address(address)
-    if len(solutions) == 0 and len(programs) == 0:
+    transitions = await db.get_address_recent_transitions(address)
+    address_key = LiteralPlaintext(
+        literal=Literal(
+            type_=Literal.Type.Address,
+            primitive=Address.loads(address),
+        )
+    )
+    address_key_bytes = address_key.dump()
+    account_key_id = aleo.get_key_id("credits.aleo", "account", address_key_bytes)
+    bonded_key_id = aleo.get_key_id("credits.aleo", "bonded", address_key_bytes)
+    unbonded_key_id = aleo.get_key_id("credits.aleo", "unbonded", address_key_bytes)
+    committee_key_id = aleo.get_key_id("credits.aleo", "committee", address_key_bytes)
+    public_balance_bytes = await db.get_mapping_value("credits.aleo", "account", account_key_id)
+    bond_state_bytes = await db.get_mapping_value("credits.aleo", "bonded", bonded_key_id)
+    unbond_state_bytes = await db.get_mapping_value("credits.aleo", "unbonded", unbonded_key_id)
+    committee_state_bytes = await db.get_mapping_value("credits.aleo", "committee", committee_key_id)
+    stake_reward = await db.get_address_stake_reward(address)
+    transfer_in = await db.get_address_transfer_in(address)
+    transfer_out = await db.get_address_transfer_out(address)
+    fee = await db.get_address_total_fee(address)
+
+    if (len(solutions) == 0
+        and len(programs) == 0
+        and len(transitions) == 0
+        and public_balance_bytes is None
+        and bond_state_bytes is None
+        and unbond_state_bytes is None
+        and committee_state_bytes is None
+        and stake_reward is None
+        and transfer_in is None
+        and transfer_out is None
+        and fee is None
+    ):
         raise HTTPException(status_code=404, detail="Address not found")
     if len(solutions) > 0:
         solution_count = await db.get_solution_count_by_address(address)
@@ -137,6 +172,67 @@ async def address_route(request: Request):
             "timestamp": program_block.header.metadata.timestamp,
             "transaction_id": program_tx.id,
         })
+    if public_balance_bytes is None:
+        public_balance = 0
+    else:
+        value = cast(PlaintextValue, Value.load(BytesIO(public_balance_bytes)))
+        plaintext = cast(LiteralPlaintext, value.plaintext)
+        public_balance = int(plaintext.literal.primitive)
+    if bond_state_bytes is None:
+        bond_state = None
+    else:
+        value = cast(PlaintextValue, Value.load(BytesIO(bond_state_bytes)))
+        plaintext = cast(StructPlaintext, value.plaintext)
+        validator = cast(LiteralPlaintext, plaintext["validator"])
+        amount = cast(LiteralPlaintext, plaintext["microcredits"])
+        bond_state = {
+            "validator": str(validator.literal.primitive),
+            "amount": int(amount.literal.primitive),
+        }
+    if unbond_state_bytes is None:
+        unbond_state = None
+    else:
+        value = cast(PlaintextValue, Value.load(BytesIO(unbond_state_bytes)))
+        plaintext = cast(StructPlaintext, value.plaintext)
+        amount = cast(LiteralPlaintext, plaintext["microcredits"])
+        height = cast(LiteralPlaintext, plaintext["height"])
+        unbond_state = {
+            "amount": int(amount.literal.primitive),
+            "height": str(height.literal.primitive),
+        }
+    if committee_state_bytes is None:
+        committee_state = None
+    else:
+        value = cast(PlaintextValue, Value.load(BytesIO(committee_state_bytes)))
+        plaintext = cast(StructPlaintext, value.plaintext)
+        amount = cast(LiteralPlaintext, plaintext["microcredits"])
+        is_open = cast(LiteralPlaintext, plaintext["is_open"])
+        committee_state = {
+            "amount": int(amount.literal.primitive),
+            "is_open": bool(is_open.literal.primitive),
+        }
+    if stake_reward is None:
+        stake_reward = 0
+    if transfer_in is None:
+        transfer_in = 0
+    if transfer_out is None:
+        transfer_out = 0
+    if fee is None:
+        fee = 0
+
+    recent_transitions: list[dict[str, Any]] = []
+    for transition_data in transitions:
+        transition = await db.get_transition(transition_data["transition_id"])
+        if transition is None:
+            raise HTTPException(status_code=550, detail="Transition not found")
+        recent_transitions.append({
+            "transition_id": transition_data["transition_id"],
+            "height": transition_data["height"],
+            "timestamp": transition_data["timestamp"],
+            "program_id": transition.program_id,
+            "function_name": transition.function_name,
+        })
+
     sync_info = await out_of_sync_check(db)
     ctx = {
         "request": request,
@@ -150,6 +246,15 @@ async def address_route(request: Request):
         "total_programs": program_count,
         "speed": speed,
         "timespan": interval_text[interval],
+        "public_balance": public_balance,
+        "bond_state": bond_state,
+        "unbond_state": unbond_state,
+        "committee_state": committee_state,
+        "stake_reward": stake_reward,
+        "transfer_in": transfer_in,
+        "transfer_out": transfer_out,
+        "fee": fee,
+        "transitions": recent_transitions,
         "sync_info": sync_info,
     }
     return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore

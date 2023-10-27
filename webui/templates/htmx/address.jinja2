@@ -4,7 +4,7 @@
     <div class="content" hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
 
         <div id="header">
-            <h3>Address {{ address_trunc }}</h3>
+            <h3>{% if committee_state %}Validator{% else %}Address{% endif %} {{ address_trunc }}</h3>
         </div>
 
         <div id="data">
@@ -12,21 +12,51 @@
         {% call data_line("Address") %}
             <span class="mono">{{ address }}</span>
         {% endcall %}
-        {% if not "DEBUG_SKIP_COINBASE" | get_env %}
-            {% call data_line_safe("Total incentive reward (<span data-tooltip title=\"Testnet3 credits earned during incentive period (since block 130888). Divide by 5 to get converted mainnet reward amount.\">?</span>)") %}
-                {{ total_incentive | format_aleo_credit | safe }} (Mainnet reward: {{ (total_incentive // 5) | format_aleo_credit | safe }})
-            {% endcall %}
-            {% call data_line_safe("Total coinbase reward (<span data-tooltip title=\"Testnet3 credits earned since the start of the network.\">?</span>)") %}
-                {{ total_rewards | format_aleo_credit | safe }}
-            {% endcall %}
-            {% call data_line("Solutions found") %}
-                {{ total_solutions }}
+        {% call data_line("Public credits") %}
+            {{ public_balance | format_aleo_credit | safe }} Aleo credits
+        {% endcall %}
+        {% call data_line("Credits staked") %}
+            {% if bond_state %}
+                {{ bond_state.amount | format_aleo_credit | safe }} Aleo credits, voted to {% if bond_state.validator == address %}self{% else %}validator <span class="mono"><a href="/address?a={{ bond_state.validator }}">{{ bond_state.validator }}</a></span>{% endif %}
+            {% else %}
+                0 Aleo credits
+            {% endif %}
+        {% endcall %}
+        {% if unbond_state %}
+            {% call data_line("Credits unstaking") %}
+                {{ unbond_state.amount | format_aleo_credit | safe }} Aleo credits, withdrawable {% if unbond_state.height > sync_info.local_height %}in {{ unbond_state.height - sync_info.local_height }} blocks{% else %}now{% endif %}
             {% endcall %}
         {% endif %}
+        {% call data_line("Lifetime stake reward") %}
+            {{ stake_reward | format_aleo_credit | safe }} Aleo credits
+        {% endcall %}
+        {% if committee_state %}
+            {% call data_line("Credits voted") %}
+                {{ committee_state.amount | format_aleo_credit | safe }} Aleo credits
+            {% endcall %}
+            {% call data_line("Open for staking") %}
+                {% if committee_state.is_open %}Yes{% else %}No{% endif %}
+            {% endcall %}
+        {% endif %}
+        {% call data_line("Public credits received") %}
+            {{ transfer_in | format_aleo_credit | safe }} Aleo credits
+        {% endcall %}
+        {% call data_line("Public credits sent") %}
+            {{ transfer_out | format_aleo_credit | safe }} Aleo credits
+        {% endcall %}
+        {% call data_line("Total fee spent") %}
+            {{ fee | format_aleo_credit | safe }} Aleo credits
+        {% endcall %}
         {% call data_line("Programs deployed") %}
             {{ total_programs }}
         {% endcall %}
         {% if not "DEBUG_SKIP_COINBASE" | get_env %}
+            {% call data_line("Lifetime puzzle reward") %}
+                {{ total_rewards | format_aleo_credit | safe }}
+            {% endcall %}
+            {% call data_line("Accepted puzzle solutions") %}
+                {{ total_solutions }}
+            {% endcall %}
             {% call data_line("Estimated speed") %}
                 {% if speed != 0 %}
                 {{ "%.2f" % speed }} <span data-tooltip title='commitments per second, also known as "p/s" or "s/s"'>c/s</span> (last {{ timespan }})
@@ -65,7 +95,7 @@
                 </tbody>
             </table>
             {% if total_solutions > 30 %}
-            <a href="/address_solution?a={{ address }}">Show all accepted solutions</a>
+                <a href="/address_solution?a={{ address }}">Show all accepted solutions</a>
             {% endif %}
         </div>
         {% endif %}
@@ -89,6 +119,30 @@
                         <td>{{ program.timestamp | format_time | safe }}</td>
                         <td><a href="/transaction?id={{ program.transaction_id }}">{{ program.transaction_id }}</a></td>
                     </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div id="transitions">
+            <h4>Recent transitions</h4>
+            <table class="unstriped">
+                <thead>
+                <tr>
+                    <th>Block</th>
+                    <th>Timestamp</th>
+                    <th>Transition ID</th>
+                    <th>Program / Function call</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for transition in transitions %}
+                <tr>
+                    <td><a href="/block?h={{ transition.height }}">{{ transition.height | format_number | safe }}</a></td>
+                    <td>{{ transition.timestamp | format_time | safe }}</td>
+                    <td><span class="mono"><a href="/transition?id={{ transition.transition_id }}">{{ transition.transition_id }}</a></span></td>
+                    <td><span class="mono">{{ transition.program_id }}/{{ transition.function_name }}</span></td>
+                </tr>
                 {% endfor %}
                 </tbody>
             </table>

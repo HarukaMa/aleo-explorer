@@ -57,8 +57,7 @@ class Database:
                 max_size=16,
             )
             # noinspection PyArgumentList
-            self.redis = Redis(host=self.redis_server, port=self.redis_port, db=self.redis_db, protocol=3,
-                               decode_responses=True) # type: ignore
+            self.redis = Redis(host=self.redis_server, port=self.redis_port, db=self.redis_db, decode_responses=True) # type: ignore
         except Exception as e:
             await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseConnectError, e))
             return
@@ -2068,6 +2067,19 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
+    async def get_transition(self, transition_id: str) -> Optional[Transition]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute("SELECT * FROM transition WHERE transition_id = %s", (transition_id,))
+                    transition = await cur.fetchone()
+                    if transition is None:
+                        return None
+                    return await Database._get_transition(transition, conn)
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
     async def search_block_hash(self, block_hash: str) -> list[str]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -2283,6 +2295,55 @@ class Database:
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
+
+    async def get_address_recent_transitions(self, address: str) -> list[dict[str, Any]]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT DISTINCT t.transition_id, b.height, b.timestamp FROM address_transition at "
+                        "JOIN transition t on at.transition_id = t.id "
+                        "JOIN explorer.transaction_execute te on te.id = t.transaction_execute_id "
+                        "JOIN explorer.transaction t2 on t2.id = te.transaction_id "
+                        "JOIN explorer.confirmed_transaction ct on ct.id = t2.confimed_transaction_id "
+                        "JOIN explorer.block b on b.id = ct.block_id "
+                        "WHERE at.address = %s ORDER BY b.height DESC LIMIT 30",
+                        (address,)
+                    )
+                    def transform(x: dict[str, Any]):
+                        return {
+                            "transition_id": x["transition_id"],
+                            "height": x["height"],
+                            "timestamp": x["timestamp"]
+                        }
+                    return list(map(lambda x: transform(x), await cur.fetchall()))
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def get_address_stake_reward(self, address: str) -> Optional[int]:
+        data = await self.redis.hget("address_stake_reward", address)
+        if data is None:
+            return None
+        return int(data)
+
+    async def get_address_transfer_in(self, address: str) -> Optional[int]:
+        data = await self.redis.hget("address_transfer_in", address)
+        if data is None:
+            return None
+        return int(data)
+
+    async def get_address_transfer_out(self, address: str) -> Optional[int]:
+        data = await self.redis.hget("address_transfer_out", address)
+        if data is None:
+            return None
+        return int(data)
+
+    async def get_address_total_fee(self, address: str) -> Optional[int]:
+        data = await self.redis.hget("address_fee", address)
+        if data is None:
+            return None
+        return int(data)
 
     async def get_address_speed(self, address: str) -> tuple[float, int]: # (speed, interval)
         async with self.pool.connection() as conn:

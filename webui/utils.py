@@ -54,7 +54,7 @@ async def out_of_sync_check(db: Database):
     }
 
 
-async def function_signature(db: Database, program_id: str, function_name: str):
+async def function_signature(db: Database, program_id: str, function_name: str, with_params: bool = True):
     data = await function_definition(db, program_id, function_name)
     if isinstance(data, str):
         return data
@@ -75,6 +75,8 @@ async def function_signature(db: Database, program_id: str, function_name: str):
         else:
             outputs.append(f"{mode} {name}")
     finalizes = data["finalize"]
+    if not with_params:
+        return f"{program_id}/{function_name}"
     result = f"{program_id}/{function_name}({', '.join(inputs)})"
     if len(outputs) == 1:
         result += f" -> {outputs[0]}"
