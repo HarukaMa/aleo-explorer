@@ -765,7 +765,7 @@ class ArrayType(Serializable):
         return array
 
     def __str__(self):
-        return f"[{self.element_type}; {self.length}]"
+        return f"[{self.element_type}; {self.length}u32]"
 
 class ArrayPlaintextType(PlaintextType):
     type = PlaintextType.Type.Array
