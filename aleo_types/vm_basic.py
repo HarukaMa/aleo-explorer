@@ -26,7 +26,7 @@ class AleoID(AleoIDProtocol):
 
     @classmethod
     def loads(cls, data: str):
-        hrp, raw = aleo.bech32_decode(data)
+        hrp, raw = aleo_explorer_rust.bech32_decode(data)
         if hrp != cls._prefix:
             raise ValueError("incorrect hrp")
         if len(raw) != cls.size:
@@ -64,7 +64,7 @@ class AleoObject(AleoIDProtocol):
 
     @classmethod
     def loads(cls, data: str):
-        hrp, raw = aleo.bech32_decode(data)
+        hrp, raw = aleo_explorer_rust.bech32_decode(data)
         if hrp != cls._prefix:
             raise ValueError("incorrect hrp")
         if len(raw) != cls.size:
@@ -121,7 +121,7 @@ class Address(AleoObject, Cast):
         from .vm_instruction import LiteralType
         if not isinstance(destination_type, LiteralType):
             raise ValueError("invalid type")
-        return destination_type.primitive_type.load(BytesIO(aleo.address_cast(str(self), destination_type, lossy)))
+        return destination_type.primitive_type.load(BytesIO(aleo_explorer_rust.address_cast(str(self), destination_type, lossy)))
 
     def __hash__(self):
         return hash(self._data)
@@ -161,52 +161,52 @@ class Field(Serializable, Double, Sub, Square, Div, Sqrt, Compare, Pow, Inv, Neg
         return hash(self.data)
 
     def __add__(self, other: Self):
-        return Field.load(BytesIO(aleo.field_ops(self, other, "add")))
+        return Field.load(BytesIO(aleo_explorer_rust.field_ops(self, other, "add")))
 
     def double(self) -> Self:
-        return Field.load(BytesIO(aleo.field_ops(self, self, "double")))
+        return Field.load(BytesIO(aleo_explorer_rust.field_ops(self, self, "double")))
 
     def __sub__(self, other: Self):
-        return Field.load(BytesIO(aleo.field_ops(self, other, "sub")))
+        return Field.load(BytesIO(aleo_explorer_rust.field_ops(self, other, "sub")))
 
     def __mul__(self, other: Self):
-        return Field.load(BytesIO(aleo.field_ops(self, other, "mul")))
+        return Field.load(BytesIO(aleo_explorer_rust.field_ops(self, other, "mul")))
 
     def square(self) -> Self:
-        return Field.load(BytesIO(aleo.field_ops(self, self, "square")))
+        return Field.load(BytesIO(aleo_explorer_rust.field_ops(self, self, "square")))
 
     def sqrt(self) -> Self:
-        return Field.load(BytesIO(aleo.field_ops(self, self, "sqrt")))
+        return Field.load(BytesIO(aleo_explorer_rust.field_ops(self, self, "sqrt")))
 
     def __floordiv__(self, other: Self):
-        return Field.load(BytesIO(aleo.field_ops(self, other, "div")))
+        return Field.load(BytesIO(aleo_explorer_rust.field_ops(self, other, "div")))
 
     def __gt__(self, other: Self):
-        return bool_.load(BytesIO(aleo.field_ops(self, other, "gt"))).value
+        return bool_.load(BytesIO(aleo_explorer_rust.field_ops(self, other, "gt"))).value
 
     def __lt__(self, other: Self):
-        return bool_.load(BytesIO(aleo.field_ops(self, other, "lt"))).value
+        return bool_.load(BytesIO(aleo_explorer_rust.field_ops(self, other, "lt"))).value
 
     def __ge__(self, other: Self):
-        return bool_.load(BytesIO(aleo.field_ops(self, other, "gte"))).value
+        return bool_.load(BytesIO(aleo_explorer_rust.field_ops(self, other, "gte"))).value
 
     def __le__(self, other: Self):
-        return bool_.load(BytesIO(aleo.field_ops(self, other, "lte"))).value
+        return bool_.load(BytesIO(aleo_explorer_rust.field_ops(self, other, "lte"))).value
 
     def __pow__(self, power: Self):
-        return Field.load(BytesIO(aleo.field_ops(self, power, "pow")))
+        return Field.load(BytesIO(aleo_explorer_rust.field_ops(self, power, "pow")))
 
     def inv(self) -> Self:
-        return Field.load(BytesIO(aleo.field_ops(self, self, "inv")))
+        return Field.load(BytesIO(aleo_explorer_rust.field_ops(self, self, "inv")))
 
     def __neg__(self) -> Self:
-        return Field.load(BytesIO(aleo.field_ops(self, self, "neg")))
+        return Field.load(BytesIO(aleo_explorer_rust.field_ops(self, self, "neg")))
 
     def cast(self, destination_type: Any, *, lossy: bool) -> Any:
         from .vm_instruction import LiteralType
         if not isinstance(destination_type, LiteralType):
             raise ValueError("invalid type")
-        return destination_type.primitive_type.load(BytesIO(aleo.field_cast(self, destination_type, lossy)))
+        return destination_type.primitive_type.load(BytesIO(aleo_explorer_rust.field_cast(self, destination_type, lossy)))
 
 
 class Group(Serializable, Add, Sub, Mul, Neg, Cast):
@@ -233,25 +233,25 @@ class Group(Serializable, Add, Sub, Mul, Neg, Cast):
         return f"{self.__class__.__name__}({self.data})"
 
     def __add__(self, other: Self):
-        return Group.load(BytesIO(aleo.group_ops(self, other, "add")))
+        return Group.load(BytesIO(aleo_explorer_rust.group_ops(self, other, "add")))
 
     def double(self) -> Self:
-        return Group.load(BytesIO(aleo.group_ops(self, self, "double")))
+        return Group.load(BytesIO(aleo_explorer_rust.group_ops(self, self, "double")))
 
     def __sub__(self, other: Self):
-        return Group.load(BytesIO(aleo.group_ops(self, other, "sub")))
+        return Group.load(BytesIO(aleo_explorer_rust.group_ops(self, other, "sub")))
 
     def __mul__(self, other: "Scalar"):
-        return Group.load(BytesIO(aleo.group_ops(self, other, "mul")))
+        return Group.load(BytesIO(aleo_explorer_rust.group_ops(self, other, "mul")))
 
     def __neg__(self) -> Self:
-        return Group.load(BytesIO(aleo.group_ops(self, self, "neg")))
+        return Group.load(BytesIO(aleo_explorer_rust.group_ops(self, self, "neg")))
 
     def cast(self, destination_type: Any, *, lossy: bool) -> Any:
         from .vm_instruction import LiteralType
         if not isinstance(destination_type, LiteralType):
             raise ValueError("invalid type")
-        return destination_type.primitive_type.load(BytesIO(aleo.group_cast(self, destination_type, lossy)))
+        return destination_type.primitive_type.load(BytesIO(aleo_explorer_rust.group_cast(self, destination_type, lossy)))
 
 
 
@@ -279,31 +279,31 @@ class Scalar(Serializable, Add, Sub, Mul, Compare, Cast):
         return f"{self.__class__.__name__}({self.data})"
 
     def __add__(self, other: Self):
-        return Scalar.load(BytesIO(aleo.scalar_ops(self, other, "add")))
+        return Scalar.load(BytesIO(aleo_explorer_rust.scalar_ops(self, other, "add")))
 
     def __sub__(self, other: Self):
-        return Scalar.load(BytesIO(aleo.scalar_ops(self, other, "sub")))
+        return Scalar.load(BytesIO(aleo_explorer_rust.scalar_ops(self, other, "sub")))
 
     def __mul__(self, other: Group):
-        return Group.load(BytesIO(aleo.scalar_ops(self, other, "mul")))
+        return Group.load(BytesIO(aleo_explorer_rust.scalar_ops(self, other, "mul")))
 
     def __gt__(self, other: Self):
-        return bool_.load(BytesIO(aleo.scalar_ops(self, other, "gt"))).value
+        return bool_.load(BytesIO(aleo_explorer_rust.scalar_ops(self, other, "gt"))).value
 
     def __lt__(self, other: Self):
-        return bool_.load(BytesIO(aleo.scalar_ops(self, other, "lt"))).value
+        return bool_.load(BytesIO(aleo_explorer_rust.scalar_ops(self, other, "lt"))).value
 
     def __ge__(self, other: Self):
-        return bool_.load(BytesIO(aleo.scalar_ops(self, other, "gte"))).value
+        return bool_.load(BytesIO(aleo_explorer_rust.scalar_ops(self, other, "gte"))).value
 
     def __le__(self, other: Self):
-        return bool_.load(BytesIO(aleo.scalar_ops(self, other, "lte"))).value
+        return bool_.load(BytesIO(aleo_explorer_rust.scalar_ops(self, other, "lte"))).value
 
     def cast(self, destination_type: Any, *, lossy: bool) -> Any:
         from .vm_instruction import LiteralType
         if not isinstance(destination_type, LiteralType):
             raise ValueError("invalid type")
-        return destination_type.primitive_type.load(BytesIO(aleo.scalar_cast(self, destination_type, lossy)))
+        return destination_type.primitive_type.load(BytesIO(aleo_explorer_rust.scalar_cast(self, destination_type, lossy)))
 
 
 

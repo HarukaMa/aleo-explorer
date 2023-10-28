@@ -137,7 +137,7 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
                 key = load_plaintext_from_operand(c.key, registers, finalize_state)
                 value = PlaintextValue(plaintext=load_plaintext_from_operand(c.value, registers, finalize_state))
                 key_id = Field.loads(cached_get_key_id(str(program.id), str(c.mapping), key.dump()))
-                value_id = Field.loads(aleo.get_value_id(str(key_id), value.dump()))
+                value_id = Field.loads(aleo_explorer_rust.get_value_id(str(key_id), value.dump()))
                 if mapping_cache:
                     if key_id not in mapping_cache[mapping_id]:
                         mapping_cache[mapping_id][key_id] = {
@@ -171,7 +171,7 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
 
             elif isinstance(c, RandChaChaCommand):
                 additional_seeds = list(map(lambda x: PlaintextValue(plaintext=load_plaintext_from_operand(x, registers, finalize_state)).dump(), c.operands))
-                chacha_seed = aleo.chacha_random_seed(
+                chacha_seed = aleo_explorer_rust.chacha_random_seed(
                     finalize_state.random_seed,
                     transition_id.dump(),
                     program.id.dump(),
@@ -181,7 +181,7 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
                     additional_seeds,
                 )
                 primitive_type = c.destination_type.primitive_type
-                value = primitive_type.load(BytesIO(aleo.chacha_random_value(chacha_seed, c.destination_type)))
+                value = primitive_type.load(BytesIO(aleo_explorer_rust.chacha_random_value(chacha_seed, c.destination_type)))
                 res = LiteralPlaintext(
                     literal=Literal(
                         type_=Literal.Type(c.destination_type.value),

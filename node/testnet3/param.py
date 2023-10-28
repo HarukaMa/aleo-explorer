@@ -1,13 +1,13 @@
 import os
 from io import BytesIO
 
-import aleo
+import aleo_explorer_rust
 
 from aleo_types import u16, Block, u32, Program
 
 
 def load_program(program_id: str) -> Program:
-    return Program.load(BytesIO(aleo.parse_program(open(os.path.join(os.path.dirname(__file__), program_id)).read())))
+    return Program.load(BytesIO(aleo_explorer_rust.parse_program(open(os.path.join(os.path.dirname(__file__), program_id)).read())))
 
 class Testnet3:
     edition = u16()

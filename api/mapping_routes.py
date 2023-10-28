@@ -1,6 +1,6 @@
 from io import BytesIO
 
-import aleo
+import aleo_explorer_rust
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -46,7 +46,7 @@ async def mapping_route(request: Request, program_cache: dict[str, Program]):
         key = value
     else:
         return JSONResponse({"error": "Unknown key type"}, status_code=500)
-    key_id = aleo.get_key_id(program_id, mapping, key.dump())
+    key_id = aleo_explorer_rust.get_key_id(program_id, mapping, key.dump())
     value = await db.get_mapping_value(program_id, mapping, key_id)
     if value is None:
         return JSONResponse(None)

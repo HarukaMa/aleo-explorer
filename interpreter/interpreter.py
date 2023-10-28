@@ -49,7 +49,7 @@ async def finalize_deploy(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]]
         program = deployment.program
         expected_operations = confirmed_transaction.finalize
         for mapping in program.mappings.keys():
-            mapping_id = Field.loads(aleo.get_mapping_id(str(program.id), str(mapping)))
+            mapping_id = Field.loads(aleo_explorer_rust.get_mapping_id(str(program.id), str(mapping)))
             operations.append({
                 "type": FinalizeOperation.Type.InitializeMapping,
                 "mapping_id": mapping_id,
@@ -227,7 +227,7 @@ async def get_mapping_value(db: Database, program_id: str, mapping_name: str, ke
     if not isinstance(mapping_key_type, LiteralPlaintextType):
         raise TypeError("unsupported key type")
     key_plaintext = LiteralPlaintext(literal=Literal.loads(Literal.Type(mapping_key_type.literal_type.value), key))
-    key_id = Field.loads(aleo.get_key_id(program_id, mapping_name, key_plaintext.dump()))
+    key_id = Field.loads(aleo_explorer_rust.get_key_id(program_id, mapping_name, key_plaintext.dump()))
     if key_id not in global_mapping_cache[mapping_id]:
         raise ExecuteError(f"key {key} not found in mapping {mapping_id}", None, "")
     else:

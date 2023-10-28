@@ -4,7 +4,7 @@ from io import BytesIO
 # noinspection PyUnresolvedReferences,PyProtectedMember
 from typing import get_type_hints, _ProtocolMeta, Any  # type: ignore[reportPrivateUsage]
 
-import aleo
+import aleo_explorer_rust
 
 
 # Metaclass Helper
@@ -30,12 +30,12 @@ class ProtocolEnumMeta(_ProtocolMeta, EnumMeta):
 
 
 def bech32_to_bytes(s: str) -> BytesIO:
-    return BytesIO(aleo.bech32_decode(s)[1])
+    return BytesIO(aleo_explorer_rust.bech32_decode(s)[1])
 
 @lru_cache(maxsize=1024)
 def cached_get_key_id(program_id: str, mapping_name: str, key: bytes) -> str:
-    return aleo.get_key_id(program_id, mapping_name, key)
+    return aleo_explorer_rust.get_key_id(program_id, mapping_name, key)
 
 @lru_cache(maxsize=1024)
 def cached_get_mapping_id(program_id: str, mapping: str) -> str:
-    return aleo.get_mapping_id(program_id, mapping)
+    return aleo_explorer_rust.get_mapping_id(program_id, mapping)

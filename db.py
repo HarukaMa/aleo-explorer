@@ -408,7 +408,7 @@ class Database:
                 (deploy_transaction_db_id, str(program.id), imports, mappings, interfaces, records,
                  closures, functions, program.dump(), program.is_helloworld(), program.feature_hash(),
                  str(transaction.owner.address), str(transaction.owner.signature),
-                 aleo.program_id_to_address(str(program.id)))
+                 aleo_explorer_rust.program_id_to_address(str(program.id)))
             )
         else:
             await cur.execute(
@@ -418,7 +418,7 @@ class Database:
                 "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
                 (str(program.id), imports, mappings, interfaces, records,
                  closures, functions, program.dump(), program.is_helloworld(), program.feature_hash(),
-                 aleo.program_id_to_address(str(program.id)))
+                 aleo_explorer_rust.program_id_to_address(str(program.id)))
             )
         if (res := await cur.fetchone()) is None:
             raise Exception("failed to insert row into database")
@@ -478,7 +478,7 @@ class Database:
                     ])
                 )
             )
-            value_id = Field.loads(aleo.get_value_id(str(key_id), value.dump()))
+            value_id = Field.loads(aleo_explorer_rust.get_value_id(str(key_id), value.dump()))
             committee_mapping[str(key_id)] = {
                 "key": key.dump().hex(),
                 "value_id": str(value_id),
@@ -513,7 +513,7 @@ class Database:
                     ])
                 )
             )
-            value_id = Field.loads(aleo.get_value_id(str(key_id), value.dump()))
+            value_id = Field.loads(aleo_explorer_rust.get_value_id(str(key_id), value.dump()))
             bonded_mapping[str(key_id)] = {
                 "key": key.dump().hex(),
                 "value_id": str(value_id),
@@ -569,7 +569,7 @@ class Database:
             key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=address))
             key_id = Field.loads(cached_get_key_id("credits.aleo", "account", key.dump()))
             value = PlaintextValue(plaintext=LiteralPlaintext(literal=Literal(type_=Literal.Type.U64, primitive=balance)))
-            value_id = Field.loads(aleo.get_value_id(str(key_id), value.dump()))
+            value_id = Field.loads(aleo_explorer_rust.get_value_id(str(key_id), value.dump()))
             global_mapping_cache[account_mapping_id][key_id] = {
                 "key": key,
                 "value_id": value_id,
@@ -776,7 +776,7 @@ class Database:
                         current_balance = plaintext.literal.primitive
                     new_value = current_balance + u64(amount)
                     value = PlaintextValue(plaintext=LiteralPlaintext(literal=Literal(type_=Literal.Type.U64, primitive=new_value)))
-                    value_id = Field.loads(aleo.get_value_id(str(key_id), value.dump()))
+                    value_id = Field.loads(aleo_explorer_rust.get_value_id(str(key_id), value.dump()))
                     global_mapping_cache[account_mapping_id][key_id] = {
                         "key": key,
                         "value_id": value_id,

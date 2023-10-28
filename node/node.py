@@ -118,7 +118,7 @@ class Node:
                 genesis = Testnet3.genesis_block.header
             response = ChallengeResponse(
                 genesis_header=genesis,
-                signature=Data[Signature](Signature.load(BytesIO(aleo.sign_nonce("APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH", nonce.dump())))),
+                signature=Data[Signature](Signature.load(BytesIO(aleo_explorer_rust.sign_nonce("APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH", nonce.dump())))),
             )
             self.handshake_state = 1
             await self.send_message(response)

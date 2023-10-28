@@ -13,7 +13,7 @@ class Bech32m:
         self.prefix = prefix
 
     def __str__(self):
-        return aleo.bech32_encode(self.prefix, self.data)
+        return aleo_explorer_rust.bech32_encode(self.prefix, self.data)
 
     def __repr__(self):
         return str(self)

@@ -1,7 +1,7 @@
 from io import BytesIO
 from typing import Any, Optional
 
-import aleo
+import aleo_explorer_rust
 from starlette.datastructures import UploadFile
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
@@ -237,7 +237,7 @@ async def submit_source_route(request: Request):
             return RedirectResponse(url=f"/upload_source?id={program_id}&message=Invalid form data")
         import_data.append((i, p))
     try:
-        compiled = aleo.compile_program(source, program_id.split(".")[0], import_data)
+        compiled = aleo_explorer_rust.compile_program(source, program_id.split(".")[0], import_data)
     except RuntimeError as e:
         if len(str(e)) > 200:
             msg = str(e)[:200] + "[trimmed]"

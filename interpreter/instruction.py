@@ -200,7 +200,7 @@ def commit_op(operands: tuple[Operand, Operand], destination: Register, destinat
     if op2.literal.type != Literal.Type.Scalar:
         raise TypeError("invalid operand types")
     value_type = destination_type.primitive_type
-    value = value_type.load(BytesIO(aleo.commit_ops(PlaintextValue(plaintext=op1).dump(), op2.literal.primitive, commit_ops[commit_type], destination_type)))
+    value = value_type.load(BytesIO(aleo_explorer_rust.commit_ops(PlaintextValue(plaintext=op1).dump(), op2.literal.primitive, commit_ops[commit_type], destination_type)))
 
     res = LiteralPlaintext(
         literal=Literal(
@@ -304,7 +304,7 @@ def hash_op(operands: tuple[Operand, Optional[Operand]], destination: Register, 
     if not isinstance(destination_type, LiteralPlaintextType):
         raise TypeError("destination type must be literal")
     value_type = destination_type.literal_type.primitive_type
-    value = value_type.load(BytesIO(aleo.hash_ops(PlaintextValue(plaintext=op).dump(), hash_ops[hash_type], destination_type.literal_type)))
+    value = value_type.load(BytesIO(aleo_explorer_rust.hash_ops(PlaintextValue(plaintext=op).dump(), hash_ops[hash_type], destination_type.literal_type)))
     res = LiteralPlaintext(
         literal=Literal(
             type_=Literal.Type(destination_type.literal_type.value),

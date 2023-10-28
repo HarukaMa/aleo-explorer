@@ -2,7 +2,7 @@ import time
 from io import BytesIO
 from typing import Any, cast
 
-import aleo
+import aleo_explorer_rust
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
 
@@ -96,10 +96,10 @@ async def address_route(request: Request):
         )
     )
     address_key_bytes = address_key.dump()
-    account_key_id = aleo.get_key_id("credits.aleo", "account", address_key_bytes)
-    bonded_key_id = aleo.get_key_id("credits.aleo", "bonded", address_key_bytes)
-    unbonded_key_id = aleo.get_key_id("credits.aleo", "unbonded", address_key_bytes)
-    committee_key_id = aleo.get_key_id("credits.aleo", "committee", address_key_bytes)
+    account_key_id = aleo_explorer_rust.get_key_id("credits.aleo", "account", address_key_bytes)
+    bonded_key_id = aleo_explorer_rust.get_key_id("credits.aleo", "bonded", address_key_bytes)
+    unbonded_key_id = aleo_explorer_rust.get_key_id("credits.aleo", "unbonded", address_key_bytes)
+    committee_key_id = aleo_explorer_rust.get_key_id("credits.aleo", "committee", address_key_bytes)
     public_balance_bytes = await db.get_mapping_value("credits.aleo", "account", account_key_id)
     bond_state_bytes = await db.get_mapping_value("credits.aleo", "bonded", bonded_key_id)
     unbond_state_bytes = await db.get_mapping_value("credits.aleo", "unbonded", unbonded_key_id)

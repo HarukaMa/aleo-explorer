@@ -4,7 +4,7 @@ from .environment import Registers
 class FinalizeState:
     def __init__(self, block: Block):
         self.block_height = block.height
-        self.random_seed = aleo.finalize_random_seed(
+        self.random_seed = aleo_explorer_rust.finalize_random_seed(
             block.round,
             block.height,
             block.cumulative_weight,

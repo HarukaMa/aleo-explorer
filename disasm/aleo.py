@@ -87,7 +87,7 @@ def disasm_literal(value: Literal) -> str:
         case LT.I8 | LT.I16 | LT.I32 | LT.I64 | LT.I128 | LT.U8 | LT.U16 | LT.U32 | LT.U64 | LT.U128:
             return str(value.primitive) + value.type.name.lower()
         case LT.Address:
-            return aleo.bech32_encode("aleo", value.primitive.dump())
+            return aleo_explorer_rust.bech32_encode("aleo", value.primitive.dump())
         case LT.Field | LT.Group | LT.Scalar | LT.Boolean:
             return str(value.primitive)
         case _:

@@ -1,7 +1,7 @@
 from io import BytesIO
 from typing import Any, cast, Optional
 
-import aleo
+import aleo_explorer_rust
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
@@ -318,8 +318,8 @@ async def transaction_route(request: Request):
                 if mh["value"] is None:
                     mapping_operations = None
                     break
-                key_id = aleo.get_key_id(mh["program_id"], mh["mapping"], mh["key"])
-                value_id = aleo.get_value_id(str(key_id), mh["value"])
+                key_id = aleo_explorer_rust.get_key_id(mh["program_id"], mh["mapping"], mh["key"])
+                value_id = aleo_explorer_rust.get_value_id(str(key_id), mh["value"])
                 if value_id != str(fo.value_id):
                     mapping_operations = None
                     break
