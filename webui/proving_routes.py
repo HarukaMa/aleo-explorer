@@ -84,7 +84,7 @@ async def address_route(request: Request):
     else:
         template = "address.jinja2"
     address = request.query_params.get("a")
-    if address is None:
+    if not address:
         raise HTTPException(status_code=400, detail="Missing address")
     solutions = await db.get_recent_solutions_by_address(address)
     programs = await db.get_recent_programs_by_address(address)
