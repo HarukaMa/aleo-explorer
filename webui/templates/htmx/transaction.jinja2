@@ -138,8 +138,10 @@
         {% endif %}
 
             <div class="tabs-panel" id="mapping-operations">
-                {% if not mapping_operations %}
+                {% if mapping_operations == None %}
                     Server error occured when searching for mapping operations
+                {% elif not mapping_operations %}
+                    Transaction did not execute any mapping operations
                 {% else %}
                     <table class="unstriped">
                     <thead>
