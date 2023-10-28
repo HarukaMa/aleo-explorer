@@ -305,7 +305,8 @@ async def transaction_route(request: Request):
     else:
         indices: list[int] = []
         for fo in confirmed_transaction.finalize:
-            indices.append(fos.index(fo))
+            if isinstance(fo, (UpdateKeyValue, RemoveKeyValue)):
+                indices.append(fos.index(fo))
         mapping_operations: Optional[list[dict[str, Any]]] = []
         for i in indices:
             fo = fos[i]
