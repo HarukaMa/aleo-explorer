@@ -32,6 +32,8 @@ def plaintext_type_to_str(value: PlaintextType):
         return value.literal_type.name.lower()
     elif isinstance(value, StructPlaintextType):
         return str(value.struct)
+    elif isinstance(value, ArrayPlaintextType):
+        return str(value.array_type)
     else:
         raise NotImplementedError
 

@@ -764,6 +764,9 @@ class ArrayType(Serializable):
             pass
         return array
 
+    def __str__(self):
+        return f"[{self.element_type}; {self.length}]"
+
 class ArrayPlaintextType(PlaintextType):
     type = PlaintextType.Type.Array
 
@@ -777,6 +780,9 @@ class ArrayPlaintextType(PlaintextType):
     def load(cls, data: BytesIO):
         array_type = ArrayType.load(data)
         return cls(array_type=array_type)
+
+    def __str__(self):
+        return str(self.array_type)
 
 
 class RegisterType(EnumBaseSerialize, Serialize, RustEnum):
