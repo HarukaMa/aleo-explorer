@@ -17,6 +17,7 @@ from starlette.routing import Route
 from api.execute_routes import preview_finalize_route
 from api.mapping_routes import mapping_route, mapping_list_route, mapping_value_list_route
 from db import Database
+from middleware.api_filter import APIFilterMiddleware
 from middleware.api_quota import APIQuotaMiddleware
 from middleware.asgi_logger import AccessLoggerMiddleware
 from middleware.server_timing import ServerTimingMiddleware
@@ -78,7 +79,8 @@ app = Starlette(
         Middleware(AccessLoggerMiddleware, format=log_format),
         Middleware(CORSMiddleware, allow_origins=['*']),
         Middleware(ServerTimingMiddleware),
-        Middleware(APIQuotaMiddleware)
+        Middleware(APIQuotaMiddleware),
+        Middleware(APIFilterMiddleware),
     ]
 )
 
