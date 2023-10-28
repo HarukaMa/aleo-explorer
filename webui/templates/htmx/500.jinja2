@@ -6,28 +6,9 @@
         <pre>{{ exc.detail }}</pre>
     </div>
 
+{% if "PLAUSIBLE" | get_env %}
     <script>
-        function prepareUrl() {
-            const url = new URL(location.href)
-            const queryParams = new URLSearchParams(location.search)
-            let customUrl = url.protocol + "//" + url.hostname + url.pathname.replace(/\\/$/, '')
-            const campaign = ["ref", "source", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"]
-            let params = []
-            for (const param of queryParams) {
-                const name = param[0]
-                const value = param[1]
-                if (campaign.includes(name)) {
-                    params.push(name + "=" + value)
-                } else {
-                    customUrl += "/" + name + "/" + value
-                }
-            }
-            if (params.length > 0) {
-                customUrl += "?" + params.join("&")
-            }
-            return customUrl
-        }
         document.addEventListener('DOMContentLoaded', function () { plausible('500', { props: { path: prepareUrl() } }); });
     </script>
-
+{% endif %}
 {{ htmx_title(request, '500') }}
