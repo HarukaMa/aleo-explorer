@@ -6,6 +6,28 @@
         <pre>{{ exc.detail }}</pre>
     </div>
 
-    <script>document.addEventListener('DOMContentLoaded', function () { plausible('404', { props: { path: document.location } }); });</script>
+    <script>
+        function prepareUrl() {
+            const url = new URL(location.href)
+            const queryParams = new URLSearchParams(location.search)
+            let customUrl = url.protocol + "//" + url.hostname + url.pathname.replace(/\\/$/, '')
+            const campaign = ["ref", "source", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"]
+            let params = []
+            for (const param of queryParams) {
+                const name = param[0]
+                const value = param[1]
+                if (campaign.includes(name)) {
+                    params.push(name + "=" + value)
+                } else {
+                    customUrl += "/" + name + "/" + value
+                }
+            }
+            if (params.length > 0) {
+                customUrl += "?" + params.join("&")
+            }
+            return customUrl
+        }
+        document.addEventListener('DOMContentLoaded', function () { plausible('404', { props: { path: prepareUrl() } }); });
+    </script>
 
 {{ htmx_title(request, '404') }}
