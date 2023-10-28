@@ -754,11 +754,14 @@ class ArrayType(Serializable):
             element_type=plaintext_type,
             length=next(lengths),
         )
-        while lengths:
-            array = ArrayType(
-                element_type=ArrayPlaintextType(array_type=array),
-                length=next(lengths),
-            )
+        try:
+            while True:
+                array = ArrayType(
+                    element_type=ArrayPlaintextType(array_type=array),
+                    length=next(lengths),
+                )
+        except StopIteration:
+            pass
         return array
 
 class ArrayPlaintextType(PlaintextType):
