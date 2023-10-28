@@ -731,7 +731,7 @@ class ArrayType(Serializable):
         if isinstance(self.element_type, (LiteralPlaintextType, StructPlaintextType)):
             res += self.element_type.dump()
         e = self.element_type
-        lengths: list[u32] = []
+        lengths: list[u32] = [self.length]
         for _ in range(32):
             if isinstance(e, ArrayPlaintextType):
                 lengths.append(e.array_type.length)
