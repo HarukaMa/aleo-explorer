@@ -75,7 +75,7 @@
                         <td>{{ block.block_reward | format_aleo_credit | safe }}</td>
                         <td>{{ (block.coinbase_reward // 2) | format_aleo_credit | safe }}</td>
                         {% if not "DEBUG_SKIP_COINBASE" | get_env %}
-                            <td>{% if block.coinbase_reward %}{{ block.partial_solution_count }}{% else %}-{% endif %}</td>
+                            <td>{{ block.partial_solution_count }}</td>
                         {% endif %}
                     </tr>
                 {% endfor %}
