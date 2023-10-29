@@ -6,10 +6,10 @@ import psycopg
 from aleo_types import *
 from db import Database
 from disasm.aleo import disasm_instruction, disasm_command
-from util.global_cache import MappingCacheDict, get_program
+from util.global_cache import MappingCacheDict
 from .environment import Registers
 from .instruction import execute_instruction
-from .utils import load_plaintext_from_operand, store_plaintext_to_register, FinalizeState, load_future_from_register
+from .utils import load_plaintext_from_operand, store_plaintext_to_register, FinalizeState
 
 
 async def mapping_cache_read(db: Database, program_name: str, mapping_name: str) -> MappingCacheDict:
@@ -227,16 +227,7 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
                 pass
 
             elif isinstance(c, AwaitCommand):
-                call_future = load_future_from_register(c.register, registers, finalize_state)
-                call_program = await get_program(db, str(call_future.program_id))
-                if not call_program:
-                    raise RuntimeError("program not found")
-
-                from interpreter.interpreter import _load_input_from_arguments
-                call_inputs: list[Value] = _load_input_from_arguments(call_future.arguments)
-                operations.extend(
-                    await execute_finalizer(db, cur, finalize_state, transition_id, call_program, call_future.function_name, call_inputs, mapping_cache, allow_state_change)
-                )
+                pass
 
             else:
                 raise NotImplementedError
