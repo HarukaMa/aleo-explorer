@@ -1384,7 +1384,7 @@ class Database:
                         deploy_transaction = transaction
                         await cur.execute(
                             "SELECT raw_data, owner, signature FROM program WHERE transaction_deploy_id = %s",
-                            (deploy_transaction["id"],)
+                            (deploy_transaction["transaction_deploy_id"],)
                         )
                         program_data = await cur.fetchone()
                         if program_data is None:
