@@ -164,6 +164,7 @@ class Database:
                     raise NotImplementedError
 
     @staticmethod
+    @profile
     async def _load_future(conn: psycopg.AsyncConnection[dict[str, Any]], transition_output_db_id: Optional[int],
                            future_argument_db_id: Optional[int]) -> Optional[Future]:
         async with conn.cursor() as cur:
@@ -1242,162 +1243,89 @@ class Database:
         )
 
     @staticmethod
+    @profile
     async def _get_transition(transition: dict[str, Any], conn: psycopg.AsyncConnection[dict[str, Any]]):
         async with conn.cursor() as cur:
-            await cur.execute(
-                "SELECT * FROM transition_input WHERE transition_id = %s",
-                (transition["id"],)
-            )
+            await cur.execute("SELECT * FROM get_transition_inputs(%s)", (transition["id"],))
             transition_inputs = await cur.fetchall()
             tis: list[tuple[TransitionInput, int]] = []
             for transition_input in transition_inputs:
-                match transition_input["type"]:
-                    case TransitionInput.Type.Public.name:
-                        await cur.execute(
-                            "SELECT * FROM transition_input_public WHERE transition_input_id = %s",
-                            (transition_input["id"],)
-                        )
-                        transition_input_public = await cur.fetchone()
-                        if transition_input_public is None:
-                            raise RuntimeError("database inconsistent")
-                        if transition_input_public["plaintext"] is None:
-                            plaintext = None
-                        else:
-                            plaintext = Plaintext.load(BytesIO(transition_input_public["plaintext"]))
-                        tis.append((PublicTransitionInput(
-                            plaintext_hash=Field.loads(transition_input_public["plaintext_hash"]),
-                            plaintext=Option[Plaintext](plaintext)
-                        ), transition_input["index"]))
-
-                    case TransitionInput.Type.Private.name:
-                        await cur.execute(
-                            "SELECT * FROM transition_input_private WHERE transition_input_id = %s",
-                            (transition_input["id"],)
-                        )
-                        transition_input_private = await cur.fetchone()
-                        if transition_input_private is None:
-                            raise RuntimeError("database inconsistent")
-                        if transition_input_private["ciphertext"] is None:
-                            ciphertext = None
-                        else:
-                            ciphertext = Ciphertext.loads(transition_input_private["ciphertext"])
-                        tis.append((PrivateTransitionInput(
-                            ciphertext_hash=Field.loads(transition_input_private["ciphertext_hash"]),
-                            ciphertext=Option[Ciphertext](ciphertext)
-                        ), transition_input["index"]))
-
-                    case TransitionInput.Type.Record.name:
-                        await cur.execute(
-                            "SELECT * FROM transition_input_record WHERE transition_input_id = %s",
-                            (transition_input["id"],)
-                        )
-                        transition_input_record = await cur.fetchone()
-                        if transition_input_record is None:
-                            raise RuntimeError("database inconsistent")
-                        tis.append((RecordTransitionInput(
-                            serial_number=Field.loads(transition_input_record["serial_number"]),
-                            tag=Field.loads(transition_input_record["tag"])
-                        ), transition_input["index"]))
-
-                    case TransitionInput.Type.ExternalRecord.name:
-                        await cur.execute(
-                            "SELECT * FROM transition_input_external_record WHERE transition_input_id = %s",
-                            (transition_input["id"],)
-                        )
-                        transition_input_external_record = await cur.fetchone()
-                        if transition_input_external_record is None:
-                            raise RuntimeError("database inconsistent")
-                        tis.append((ExternalRecordTransitionInput(
-                            input_commitment=Field.loads(transition_input_external_record["commitment"]),
-                        ), transition_input["index"]))
-
-                    case _:
-                        raise NotImplementedError
+                if transition_input["type"] == TransitionInput.Type.Public.name:
+                    if transition_input["plaintext"] is None:
+                        plaintext = None
+                    else:
+                        plaintext = Plaintext.load(BytesIO(transition_input["plaintext"]))
+                    tis.append((PublicTransitionInput(
+                        plaintext_hash=Field.loads(transition_input["plaintext_hash"]),
+                        plaintext=Option[Plaintext](plaintext)
+                    ), transition_input["index"]))
+                elif transition_input["type"] == TransitionInput.Type.Private.name:
+                    if transition_input["ciphertext"] is None:
+                        ciphertext = None
+                    else:
+                        ciphertext = Ciphertext.loads(transition_input["ciphertext"])
+                    tis.append((PrivateTransitionInput(
+                        ciphertext_hash=Field.loads(transition_input["ciphertext_hash"]),
+                        ciphertext=Option[Ciphertext](ciphertext)
+                    ), transition_input["index"]))
+                elif transition_input["type"] == TransitionInput.Type.Record.name:
+                    tis.append((RecordTransitionInput(
+                        serial_number=Field.loads(transition_input["serial_number"]),
+                        tag=Field.loads(transition_input["tag"])
+                    ), transition_input["index"]))
+                elif transition_input["type"] == TransitionInput.Type.ExternalRecord.name:
+                    tis.append((ExternalRecordTransitionInput(
+                        input_commitment=Field.loads(transition_input["commitment"]),
+                    ), transition_input["index"]))
+                else:
+                    raise NotImplementedError
             tis.sort(key=lambda x: x[1])
             transition_inputs = [x[0] for x in tis]
 
-            await cur.execute(
-                "SELECT * FROM transition_output WHERE transition_id = %s",
-                (transition["id"],)
-            )
+            await cur.execute("SELECT * FROM get_transition_outputs(%s)", (transition["id"],))
             transition_outputs = await cur.fetchall()
             tos: list[tuple[TransitionOutput, int]] = []
             for transition_output in transition_outputs:
-                match transition_output["type"]:
-                    case TransitionOutput.Type.Public.name:
-                        await cur.execute(
-                            "SELECT * FROM transition_output_public WHERE transition_output_id = %s",
-                            (transition_output["id"],)
-                        )
-                        transition_output_public = await cur.fetchone()
-                        if transition_output_public is None:
-                            raise RuntimeError("database inconsistent")
-                        if transition_output_public["plaintext"] is None:
-                            plaintext = None
-                        else:
-                            plaintext = Plaintext.load(BytesIO(transition_output_public["plaintext"]))
-                        tos.append((PublicTransitionOutput(
-                            plaintext_hash=Field.loads(transition_output_public["plaintext_hash"]),
-                            plaintext=Option[Plaintext](plaintext)
-                        ), transition_output["index"]))
-                    case TransitionOutput.Type.Private.name:
-                        await cur.execute(
-                            "SELECT * FROM transition_output_private WHERE transition_output_id = %s",
-                            (transition_output["id"],)
-                        )
-                        transition_output_private = await cur.fetchone()
-                        if transition_output_private is None:
-                            raise RuntimeError("database inconsistent")
-                        if transition_output_private["ciphertext"] is None:
-                            ciphertext = None
-                        else:
-                            ciphertext = Ciphertext.loads(transition_output_private["ciphertext"])
-                        tos.append((PrivateTransitionOutput(
-                            ciphertext_hash=Field.loads(transition_output_private["ciphertext_hash"]),
-                            ciphertext=Option[Ciphertext](ciphertext)
-                        ), transition_output["index"]))
-                    case TransitionOutput.Type.Record.name:
-                        await cur.execute(
-                            "SELECT * FROM transition_output_record WHERE transition_output_id = %s",
-                            (transition_output["id"],)
-                        )
-                        transition_output_record = await cur.fetchone()
-                        if transition_output_record is None:
-                            raise RuntimeError("database inconsistent")
-                        if transition_output_record["record_ciphertext"] is None:
-                            record_ciphertext = None
-                        else:
-                            record_ciphertext = Record[Ciphertext].loads(transition_output_record["record_ciphertext"])
-                        tos.append((RecordTransitionOutput(
-                            commitment=Field.loads(transition_output_record["commitment"]),
-                            checksum=Field.loads(transition_output_record["checksum"]),
-                            record_ciphertext=Option[Record[Ciphertext]](record_ciphertext)
-                        ), transition_output["index"]))
-                    case TransitionOutput.Type.ExternalRecord.name:
-                        await cur.execute(
-                            "SELECT * FROM transition_output_external_record WHERE transition_output_id = %s",
-                            (transition_output["id"],)
-                        )
-                        transition_output_external_record = await cur.fetchone()
-                        if transition_output_external_record is None:
-                            raise RuntimeError("database inconsistent")
-                        tos.append((ExternalRecordTransitionOutput(
-                            commitment=Field.loads(transition_output_external_record["commitment"]),
-                        ), transition_output["index"]))
-                    case TransitionOutput.Type.Future.name:
-                        await cur.execute(
-                            "SELECT * FROM transition_output_future WHERE transition_output_id = %s",
-                            (transition_output["id"],)
-                        )
-                        transition_output_future = await cur.fetchone()
-                        if transition_output_future is None:
-                            raise RuntimeError("database inconsistent")
-                        tos.append((FutureTransitionOutput(
-                            future_hash=Field.loads(transition_output_future["future_hash"]),
-                            future=Option[Future](await Database._load_future(conn, transition_output_future["id"], None))
-                        ), transition_output["index"]))
-                    case _:
-                        raise NotImplementedError
+                if transition_output["type"] == TransitionOutput.Type.Public.name:
+                    if transition_output["plaintext"] is None:
+                        plaintext = None
+                    else:
+                        plaintext = Plaintext.load(BytesIO(transition_output["plaintext"]))
+                    tos.append((PublicTransitionOutput(
+                        plaintext_hash=Field.loads(transition_output["plaintext_hash"]),
+                        plaintext=Option[Plaintext](plaintext)
+                    ), transition_output["index"]))
+                elif transition_output["type"] == TransitionOutput.Type.Private.name:
+                    if transition_output["ciphertext"] is None:
+                        ciphertext = None
+                    else:
+                        ciphertext = Ciphertext.loads(transition_output["ciphertext"])
+                    tos.append((PrivateTransitionOutput(
+                        ciphertext_hash=Field.loads(transition_output["ciphertext_hash"]),
+                        ciphertext=Option[Ciphertext](ciphertext)
+                    ), transition_output["index"]))
+                elif transition_output["type"] == TransitionOutput.Type.Record.name:
+                    if transition_output["record_ciphertext"] is None:
+                        record_ciphertext = None
+                    else:
+                        record_ciphertext = Record[Ciphertext].loads(transition_output["record_ciphertext"])
+                    tos.append((RecordTransitionOutput(
+                        commitment=Field.loads(transition_output["record_commitment"]),
+                        checksum=Field.loads(transition_output["checksum"]),
+                        record_ciphertext=Option[Record[Ciphertext]](record_ciphertext)
+                    ), transition_output["index"]))
+                elif transition_output["type"] == TransitionOutput.Type.ExternalRecord.name:
+                    tos.append((ExternalRecordTransitionOutput(
+                        commitment=Field.loads(transition_output["external_record_commitment"]),
+                    ), transition_output["index"]))
+                elif transition_output["type"] == TransitionOutput.Type.Future.name:
+                    future = await Database._load_future(conn, transition_output["future_id"], None)
+                    tos.append((FutureTransitionOutput(
+                        future_hash=Field.loads(transition_output["future_hash"]),
+                        future=Option[Future](future)
+                    ), transition_output["index"]))
+                else:
+                    raise NotImplementedError
             tos.sort(key=lambda x: x[1])
             transition_outputs = [x[0] for x in tos]
 
@@ -1412,92 +1340,48 @@ class Database:
             )
 
     @staticmethod
+    @profile
     async def _get_full_block(block: dict[str, Any], conn: psycopg.AsyncConnection[dict[str, Any]]):
         async with conn.cursor() as cur:
-            await cur.execute("SELECT * FROM confirmed_transaction WHERE block_id = %s", (block['id'],))
+            await cur.execute("SELECT * FROM get_confirmed_transactions(%s)", (block["id"],))
             confirmed_transactions = await cur.fetchall()
             ctxs: list[ConfirmedTransaction] = []
             for confirmed_transaction in confirmed_transactions:
-                await cur.execute("SELECT * FROM finalize_operation WHERE confirmed_transaction_id = %s", (confirmed_transaction["id"],))
+                await cur.execute("SELECT * FROM get_finalize_operations(%s)", (confirmed_transaction["confirmed_transaction_id"],))
                 finalize_operations = await cur.fetchall()
                 f: list[FinalizeOperation] = []
                 for finalize_operation in finalize_operations:
-                    match finalize_operation["type"]:
-                        case FinalizeOperation.Type.InitializeMapping.name:
-                            await cur.execute(
-                                "SELECT * FROM finalize_operation_initialize_mapping WHERE finalize_operation_id = %s",
-                                (finalize_operation["id"],)
-                            )
-                            initialize_mapping = await cur.fetchone()
-                            if initialize_mapping is None:
-                                raise RuntimeError("database inconsistent")
-                            f.append(InitializeMapping(mapping_id=Field.loads(initialize_mapping["mapping_id"])))
-                        case FinalizeOperation.Type.InsertKeyValue.name:
-                            await cur.execute(
-                                "SELECT * FROM finalize_operation_insert_kv WHERE finalize_operation_id = %s",
-                                (finalize_operation["id"],)
-                            )
-                            insert_kv = await cur.fetchone()
-                            if insert_kv is None:
-                                raise RuntimeError("database inconsistent")
-                            f.append(InsertKeyValue(
-                                mapping_id=Field.loads(insert_kv["mapping_id"]),
-                                key_id=Field.loads(insert_kv["key_id"]),
-                                value_id=Field.loads(insert_kv["value_id"]),
-                            ))
-                        case FinalizeOperation.Type.UpdateKeyValue.name:
-                            await cur.execute(
-                                "SELECT * FROM finalize_operation_update_kv WHERE finalize_operation_id = %s",
-                                (finalize_operation["id"],)
-                            )
-                            update_kv = await cur.fetchone()
-                            if update_kv is None:
-                                raise RuntimeError("database inconsistent")
-                            f.append(UpdateKeyValue(
-                                mapping_id=Field.loads(update_kv["mapping_id"]),
-                                index=u64(),
-                                key_id=Field.loads(update_kv["key_id"]),
-                                value_id=Field.loads(update_kv["value_id"]),
-                            ))
-                        case FinalizeOperation.Type.RemoveKeyValue.name:
-                            await cur.execute(
-                                "SELECT * FROM finalize_operation_remove_kv WHERE finalize_operation_id = %s",
-                                (finalize_operation["id"],)
-                            )
-                            remove_kv = await cur.fetchone()
-                            if remove_kv is None:
-                                raise RuntimeError("database inconsistent")
-                            f.append(RemoveKeyValue(
-                                mapping_id=Field.loads(remove_kv["mapping_id"]),
-                                index=u64(),
-                            ))
-                        case FinalizeOperation.Type.RemoveMapping.name:
-                            await cur.execute(
-                                "SELECT * FROM finalize_operation_remove_mapping WHERE finalize_operation_id = %s",
-                                (finalize_operation["id"],)
-                            )
-                            remove_mapping = await cur.fetchone()
-                            if remove_mapping is None:
-                                raise RuntimeError("database inconsistent")
-                            f.append(RemoveMapping(mapping_id=Field.loads(remove_mapping["mapping_id"])))
-                        case _:
-                            raise NotImplementedError
+                    if finalize_operation["type"] == FinalizeOperation.Type.InitializeMapping.name:
+                        f.append(InitializeMapping(mapping_id=Field.loads(finalize_operation["mapping_id"])))
+                    elif finalize_operation["type"] == FinalizeOperation.Type.InsertKeyValue.name:
+                        f.append(InsertKeyValue(
+                            mapping_id=Field.loads(finalize_operation["mapping_id"]),
+                            key_id=Field.loads(finalize_operation["key_id"]),
+                            value_id=Field.loads(finalize_operation["value_id"]),
+                        ))
+                    elif finalize_operation["type"] == FinalizeOperation.Type.UpdateKeyValue.name:
+                        f.append(UpdateKeyValue(
+                            mapping_id=Field.loads(finalize_operation["mapping_id"]),
+                            index=u64(),
+                            key_id=Field.loads(finalize_operation["key_id"]),
+                            value_id=Field.loads(finalize_operation["value_id"]),
+                        ))
+                    elif finalize_operation["type"] == FinalizeOperation.Type.RemoveKeyValue.name:
+                        f.append(RemoveKeyValue(
+                            mapping_id=Field.loads(finalize_operation["mapping_id"]),
+                            index=u64(),
+                        ))
+                    elif finalize_operation["type"] == FinalizeOperation.Type.RemoveMapping.name:
+                        f.append(RemoveMapping(mapping_id=Field.loads(finalize_operation["mapping_id"])))
+                    else:
+                        raise NotImplementedError
 
-                await cur.execute("SELECT * FROM transaction WHERE confimed_transaction_id = %s", (confirmed_transaction["id"],))
-                transaction = await cur.fetchone()
-                if transaction is None:
-                    raise RuntimeError("database inconsistent")
-                match confirmed_transaction["type"]:
+                transaction = confirmed_transaction
+                match confirmed_transaction["confirmed_transaction_type"]:
                     case ConfirmedTransaction.Type.AcceptedDeploy.name | ConfirmedTransaction.Type.RejectedDeploy.name:
-                        if confirmed_transaction["type"] == ConfirmedTransaction.Type.RejectedDeploy.name:
+                        if confirmed_transaction["confirmed_transaction_type"] == ConfirmedTransaction.Type.RejectedDeploy.name:
                             raise NotImplementedError
-                        await cur.execute(
-                            "SELECT * FROM transaction_deploy WHERE transaction_id = %s",
-                            (transaction["id"],)
-                        )
-                        deploy_transaction = await cur.fetchone()
-                        if deploy_transaction is None:
-                            raise RuntimeError("database inconsistent")
+                        deploy_transaction = transaction
                         await cur.execute(
                             "SELECT raw_data, owner, signature FROM program WHERE transaction_deploy_id = %s",
                             (deploy_transaction["id"],)
@@ -1511,26 +1395,22 @@ class Database:
                             program=Program.load(BytesIO(program)),
                             verifying_keys=Vec[Tuple[Identifier, VerifyingKey, Certificate], u16].load(BytesIO(deploy_transaction["verifying_keys"])),
                         )
-                        await cur.execute(
-                            "SELECT * FROM fee WHERE transaction_id = %s",
-                            (transaction["id"],)
-                        )
-                        fee_dict = await cur.fetchone()
+                        fee_dict = transaction
                         if fee_dict is None:
                             raise RuntimeError("database inconsistent")
                         await cur.execute(
                             "SELECT * FROM transition WHERE fee_id = %s",
-                            (fee_dict["id"],)
+                            (fee_dict["fee_id"],)
                         )
                         fee_transition = await cur.fetchone()
                         if fee_transition is None:
                             raise ValueError("fee transition not found")
                         proof = None
-                        if fee_dict["proof"] is not None:
-                            proof = Proof.loads(fee_dict["proof"])
+                        if fee_dict["fee_proof"] is not None:
+                            proof = Proof.loads(fee_dict["fee_proof"])
                         fee = Fee(
                             transition=await Database._get_transition(fee_transition, conn),
-                            global_state_root=StateRoot.loads(fee_dict["global_state_root"]),
+                            global_state_root=StateRoot.loads(fee_dict["fee_global_state_root"]),
                             proof=Option[Proof](proof),
                         )
                         tx = DeployTransaction(
@@ -1548,49 +1428,39 @@ class Database:
                             finalize=Vec[FinalizeOperation, u16](f),
                         ))
                     case ConfirmedTransaction.Type.AcceptedExecute.name | ConfirmedTransaction.Type.RejectedExecute.name:
-                        await cur.execute(
-                            "SELECT * FROM transaction_execute WHERE transaction_id = %s",
-                            (transaction["id"],)
-                        )
-                        execute_transaction = await cur.fetchone()
-                        if execute_transaction is None:
-                            raise RuntimeError("database inconsistent")
+                        execute_transaction = transaction
                         await cur.execute(
                             "SELECT * FROM transition WHERE transaction_execute_id = %s",
-                            (execute_transaction["id"],)
+                            (execute_transaction["transaction_execute_id"],)
                         )
                         transitions = await cur.fetchall()
                         tss: list[Transition] = []
                         for transition in transitions:
                             tss.append(await Database._get_transition(transition, conn))
-                        await cur.execute(
-                            "SELECT * FROM fee WHERE transaction_id = %s",
-                            (transaction["id"],)
-                        )
-                        additional_fee = await cur.fetchone()
-                        if additional_fee is None:
+                        additional_fee = transaction
+                        if additional_fee["fee_id"] is None:
                             fee = None
                         else:
                             await cur.execute(
                                 "SELECT * FROM transition WHERE fee_id = %s",
-                                (additional_fee["id"],)
+                                (additional_fee["fee_id"],)
                             )
                             fee_transition = await cur.fetchone()
                             if fee_transition is None:
                                 raise ValueError("fee transition not found")
                             proof = None
-                            if additional_fee["proof"] is not None:
-                                proof = Proof.loads(additional_fee["proof"])
+                            if additional_fee["fee_proof"] is not None:
+                                proof = Proof.loads(additional_fee["fee_proof"])
                             fee = Fee(
                                 transition=await Database._get_transition(fee_transition, conn),
-                                global_state_root=StateRoot.loads(additional_fee["global_state_root"]),
+                                global_state_root=StateRoot.loads(additional_fee["fee_global_state_root"]),
                                 proof=Option[Proof](proof),
                             )
                         if execute_transaction["proof"] is None:
                             proof = None
                         else:
                             proof = Proof.loads(execute_transaction["proof"])
-                        if confirmed_transaction["type"] == ConfirmedTransaction.Type.AcceptedExecute.name:
+                        if confirmed_transaction["confirmed_transaction_type"] == ConfirmedTransaction.Type.AcceptedExecute.name:
                             ctxs.append(AcceptedExecute(
                                 index=u32(confirmed_transaction["index"]),
                                 transaction=ExecuteTransaction(
@@ -2977,6 +2847,8 @@ class Database:
     # migration methods
     async def migrate(self):
         migrations: list[tuple[int, Callable[[psycopg.AsyncConnection[dict[str, Any]]], Awaitable[None]]]] = [
+            (1, self.migrate_1_add_dag_vertex_adjacency_index),
+            (2, self.migrate_2_add_helper_functions),
         ]
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -2992,6 +2864,17 @@ class Database:
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
+
+    @staticmethod
+    async def migrate_1_add_dag_vertex_adjacency_index(conn: psycopg.AsyncConnection[dict[str, Any]]):
+        await conn.execute("""
+create index dag_vertex_adjacency_vertex_id_index
+ on explorer.dag_vertex_adjacency (vertex_id);
+         """)
+
+    @staticmethod
+    async def migrate_2_add_helper_functions(conn: psycopg.AsyncConnection[dict[str, Any]]):
+        await conn.execute(open("migration_2.sql", "r").read())
 
     # debug method
     async def clear_database(self):

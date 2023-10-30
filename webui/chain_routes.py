@@ -1,5 +1,5 @@
 from io import BytesIO
-from typing import Any, cast, Optional
+from typing import Any, cast, Optional, ParamSpec, TypeVar, Callable
 
 import aleo_explorer_rust
 from starlette.exceptions import HTTPException
@@ -18,8 +18,19 @@ from util.global_cache import get_program
 from .template import templates
 from .utils import function_signature, out_of_sync_check, function_definition
 
+try:
+    from line_profiler import profile
+except ImportError:
+    P = ParamSpec('P')
+    R = TypeVar('R')
+    def profile(func: Callable[P, R]) -> Callable[P, R]:
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+            return func(*args, **kwargs)
+        return wrapper
+
 DictList = list[dict[str, Any]]
 
+@profile
 async def block_route(request: Request):
     db: Database = request.app.state.db
     is_htmx = request.scope["htmx"].is_htmx()
