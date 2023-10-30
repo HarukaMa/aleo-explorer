@@ -27,7 +27,7 @@ begin
             elsif type = 'Record' then
                 select t.serial_number, t.tag from transition_input_record t where transition_input_id = transition_input_db_id into serial_number, tag;
                 return next;
-            elsif type = 'External' then
+            elsif type = 'ExternalRecord' then
                 select t.commitment from transition_input_external_record t where transition_input_id = transition_input_db_id into commitment;
                 return next;
             else
