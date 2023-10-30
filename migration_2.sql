@@ -61,19 +61,19 @@ begin
         select id, t.type, t.index from transition_output t where transition_id = transition_db_id
         loop
             if type = 'Public' then
-                select t.plaintext_hash, t.plaintext from transition_output_public t where id = transition_output_db_id into plaintext_hash, plaintext;
+                select t.plaintext_hash, t.plaintext from transition_output_public t where transition_output_id = transition_output_db_id into plaintext_hash, plaintext;
                 return next;
             elsif type = 'Private' then
-                select t.ciphertext_hash, t.ciphertext from transition_output_private t where id = transition_output_db_id into ciphertext_hash, ciphertext;
+                select t.ciphertext_hash, t.ciphertext from transition_output_private t where transition_output_id = transition_output_db_id into ciphertext_hash, ciphertext;
                 return next;
             elsif type = 'Record' then
-                select t.commitment, t.checksum, t.record_ciphertext from transition_output_record t where id = transition_output_db_id into record_commitment, checksum, record_ciphertext;
+                select t.commitment, t.checksum, t.record_ciphertext from transition_output_record t where transition_output_id = transition_output_db_id into record_commitment, checksum, record_ciphertext;
                 return next;
             elsif type = 'ExternalRecord' then
-                select t.commitment from transition_output_external_record t where id = transition_output_db_id into external_record_commitment;
+                select t.commitment from transition_output_external_record t where transition_output_id = transition_output_db_id into external_record_commitment;
                 return next;
             elsif type = 'Future' then
-                select t.id, t.future_hash from transition_output_future t where id = transition_output_db_id into future_id, future_hash;
+                select t.id, t.future_hash from transition_output_future t where transition_output_id = transition_output_db_id into future_id, future_hash;
                 return next;
             else
                 raise exception 'unsupported transition output type: %', type;
