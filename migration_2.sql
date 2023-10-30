@@ -129,6 +129,7 @@ create function get_confirmed_transactions(block_db_id block.id%type)
                       dag_vertex_id transaction.dag_vertex_id%type,
                       transaction_id transaction.transaction_id%type,
                       transaction_type transaction.type%type,
+                      transaction_deploy_id transaction_deploy.id%type,
                       edition transaction_deploy.edition%type,
                       verifying_keys transaction_deploy.verifying_keys%type,
                       transaction_execute_id transaction_execute.id%type,
@@ -151,7 +152,7 @@ begin
                 if confirmed_transaction_type = 'RejectedDeploy' then
                     raise exception 'rejected deploy not supported yet';
                 end if;
-                select t.edition, t.verifying_keys from transaction_deploy t where t.transaction_id = transaction_db_id into edition, verifying_keys;
+                select t.id, t.edition, t.verifying_keys from transaction_deploy t where t.transaction_id = transaction_db_id into transaction_deploy_id, edition, verifying_keys;
                 select t.id, t.global_state_root, t.proof from fee t where t.transaction_id = transaction_db_id into fee_id, fee_global_state_root, fee_proof;
                 return next;
             elsif confirmed_transaction_type = 'AcceptedExecute' or confirmed_transaction_type = 'RejectedExecute' then
