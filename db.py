@@ -22,9 +22,9 @@ try:
 except ImportError:
     P = ParamSpec('P')
     R = TypeVar('R')
-    def profile(func: Callable[P, R]) -> Callable[P, R]:
-        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-            return func(*args, **kwargs)
+    def profile(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
+        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+            return await func(*args, **kwargs)
         return wrapper
 
 
