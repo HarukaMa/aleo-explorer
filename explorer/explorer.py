@@ -68,6 +68,7 @@ class Explorer:
     async def main_loop(self):
         try:
             await self.db.connect()
+            await self.db.migrate()
             await self.check_dev_mode()
             await self.check_genesis()
             latest_height = await self.db.get_latest_height()
@@ -78,7 +79,6 @@ class Explorer:
             if latest_block_hash is None:
                 raise ValueError("no block in database")
             self.latest_block_hash = latest_block_hash
-            await self.db.migrate()
             print(f"latest height: {self.latest_height}")
             self.node = Node(explorer_message=self.message, explorer_request=self.node_request)
             await self.node.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4133")))
