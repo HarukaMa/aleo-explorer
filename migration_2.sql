@@ -151,11 +151,11 @@ begin
                 if confirmed_transaction_type = 'RejectedDeploy' then
                     raise exception 'rejected deploy not supported yet';
                 end if;
-                select t.edition, t.verifying_keys from transaction_deploy t where t.id = transaction_db_id into edition, verifying_keys;
+                select t.edition, t.verifying_keys from transaction_deploy t where t.transaction_id = transaction_db_id into edition, verifying_keys;
                 select t.id, t.global_state_root, t.proof from fee t where t.transaction_id = transaction_db_id into fee_id, fee_global_state_root, fee_proof;
                 return next;
             elsif confirmed_transaction_type = 'AcceptedExecute' or confirmed_transaction_type = 'RejectedExecute' then
-                select t.id, t.global_state_root, t.proof from transaction_execute t where t.id = transaction_db_id into transaction_execute_id, global_state_root, proof;
+                select t.id, t.global_state_root, t.proof from transaction_execute t where t.transaction_id = transaction_db_id into transaction_execute_id, global_state_root, proof;
                 select t.id, t.global_state_root, t.proof from fee t where t.transaction_id = transaction_db_id into fee_id, fee_global_state_root, fee_proof;
                 return next;
             end if;
