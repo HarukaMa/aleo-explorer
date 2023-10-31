@@ -203,10 +203,12 @@ async def execute_operations(db: Database, cur: psycopg.AsyncCursor[dict[str, An
             case FinalizeOperation.Type.RemoveKeyValue:
                 mapping_id = operation["mapping_id"]
                 key_id = operation["key_id"]
+                key = operation["key"]
                 program_name = operation["program_name"]
                 mapping_name = operation["mapping_name"]
                 from_transaction = operation["from_transaction"]
-                await db.remove_mapping_key_value(cur, program_name, mapping_name, str(mapping_id), str(key_id), operation["height"], from_transaction)
+                height = operation["height"]
+                await db.remove_mapping_key_value(cur, program_name, mapping_name, str(mapping_id), str(key_id), key.dump(), height, from_transaction)
             case _:
                 raise NotImplementedError
 

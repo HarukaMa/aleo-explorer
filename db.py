@@ -2705,7 +2705,7 @@ class Database:
             raise
 
     async def remove_mapping_key_value(self, cur: psycopg.AsyncCursor[dict[str, Any]], program_name: str,
-                                       mapping_name: str, mapping_id: str, key_id: str, height: int,
+                                       mapping_name: str, mapping_id: str, key_id: str, key: bytes, height: int,
                                        from_transaction: bool):
         try:
             if program_name == "credits.aleo" and mapping_name in ["committee", "bonded"]:
@@ -2724,8 +2724,8 @@ class Database:
 
                 await cur.execute(
                     "INSERT INTO mapping_history (mapping_id, height, key_id, key, value, from_transaction) "
-                    "VALUES (%s, %s, %s, NULL, NULL, %s)",
-                    (mapping_id, height, key_id, from_transaction)
+                    "VALUES (%s, %s, %s, %s, NULL, %s)",
+                    (mapping_id, height, key_id, key, from_transaction)
                 )
 
         except Exception as e:
@@ -2849,6 +2849,7 @@ class Database:
         migrations: list[tuple[int, Callable[[psycopg.AsyncConnection[dict[str, Any]]], Awaitable[None]]]] = [
             (1, self.migrate_1_add_dag_vertex_adjacency_index),
             (2, self.migrate_2_add_helper_functions),
+            (3, self.migrate_3_set_mapping_history_key_not_null),
         ]
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -2874,7 +2875,11 @@ create index dag_vertex_adjacency_vertex_id_index
 
     @staticmethod
     async def migrate_2_add_helper_functions(conn: psycopg.AsyncConnection[dict[str, Any]]):
-        await conn.execute(open("migration_2.sql", "r").read())
+        await conn.execute(open("migration_2.sql").read())
+
+    @staticmethod
+    async def migrate_3_set_mapping_history_key_not_null(conn: psycopg.AsyncConnection[dict[str, Any]]):
+        await conn.execute("alter table explorer.mapping_history alter column key set not null")
 
     # debug method
     async def clear_database(self):
