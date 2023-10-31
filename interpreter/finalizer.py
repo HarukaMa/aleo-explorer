@@ -213,6 +213,7 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
                     "program_name": str(program.id),
                     "mapping_id": mapping_id,
                     "mapping_name": c.mapping,
+                    "key_id": key_id,
                     "from_transaction": True,
                 })
 
