@@ -111,12 +111,12 @@ class Int(int, Serializable, IntProtocol):
     # this is actually __truncdiv__
     def __floordiv__(self, other: int | Self):
         if type(other) is int:
-            return self.__class__(int(self / other))
+            return self.__class__(int(Decimal(int(self)) // Decimal(other)))
         if type(other) is not type(self):
             raise TypeError("unsupported operand type(s) for //: '{}' and '{}'".format(type(self), type(other)))
         if other == 0:
             raise ZeroDivisionError("division by zero")
-        return self.__class__(int(self / other))
+        return self.__class__(int(Decimal(int(self)) // Decimal(other)))
 
     def div_wrapped(self, other: int | Self):
         if isinstance(other, Int):
