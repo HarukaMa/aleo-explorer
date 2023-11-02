@@ -994,7 +994,10 @@ class Database:
                                     raise RuntimeError("failed to insert row into database")
                                 deploy_transaction_db_id = res["id"]
 
-                                await self._save_program(cur, transaction.deployment.program, deploy_transaction_db_id, transaction)
+
+                                # TODO: remove bug workaround
+                                if str(confirmed_transaction.transaction.id) != "at12enkvgct4ssyp9ggq87q60748h3gx69hwe3s8cay5q2fnreatypsuyw9jw":
+                                    await self._save_program(cur, transaction.deployment.program, deploy_transaction_db_id, transaction)
 
                                 await cur.execute(
                                     "INSERT INTO fee (transaction_id, global_state_root, proof) "
