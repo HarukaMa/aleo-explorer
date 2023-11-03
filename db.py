@@ -1016,6 +1016,7 @@ class Database:
                                 # TODO: remove bug workaround
                                 if str(confirmed_transaction.transaction.id) not in [
                                     "at12enkvgct4ssyp9ggq87q60748h3gx69hwe3s8cay5q2fnreatypsuyw9jw",
+                                    "at1dpe2vvskn99avv0zknnu0chex9wyy4rq5ax2v39nk29sw38nauxsc2ra7z",
                                     "at1ak70x90pnwszdaxehwnt99ta2w4q8kn40tepau68r6yeaar77sxsaxwelu",
                                 ]:
                                     await self._save_program(cur, transaction.deployment.program, deploy_transaction_db_id, transaction)
@@ -1030,10 +1031,36 @@ class Database:
                                 fee_db_id = res["id"]
                                 await self._insert_transition(conn, self.redis, None, fee_db_id, transaction.fee.transition, 0)
 
+                            elif isinstance(confirmed_transaction, RejectedDeploy):
+                                if reject_reasons[ct_index] is None:
+                                    raise RuntimeError("expected a rejected reason for rejected deploy transaction")
+                                await cur.execute("UPDATE confirmed_transaction SET reject_reason = %s WHERE id = %s",
+                                            (reject_reasons[ct_index], confirmed_transaction_db_id))
+                                if not isinstance(transaction, FeeTransaction):
+                                    raise ValueError("expected fee transaction")
+                                fee = transaction.fee
+                                await cur.execute(
+                                    "INSERT INTO fee (transaction_id, global_state_root, proof) "
+                                    "VALUES (%s, %s, %s) RETURNING id",
+                                    (transaction_db_id, str(fee.global_state_root), fee.proof.dumps())
+                                )
+                                if (res := await cur.fetchone()) is None:
+                                    raise RuntimeError("failed to insert row into database")
+                                fee_db_id = res["id"]
+                                await self._insert_transition(conn, self.redis, None, fee_db_id, fee.transition, 0)
+                                rejected = confirmed_transaction.rejected
+                                if not isinstance(rejected, RejectedDeployment):
+                                    raise ValueError("expected rejected deployment")
+                                await cur.execute(
+                                    "INSERT INTO transaction_deploy (transaction_id, edition, verifying_keys) "
+                                    "VALUES (%s, %s, %s)",
+                                    (transaction_db_id, rejected.deploy.edition, rejected.deploy.verifying_keys.dump())
+                                )
+                                # TODO: consider saving rejected programs as well
+
                             elif isinstance(confirmed_transaction, AcceptedExecute):
                                 if reject_reasons[ct_index] is not None:
                                     raise RuntimeError("expected no rejected reason for accepted execute transaction")
-                                transaction = confirmed_transaction.transaction
                                 if not isinstance(transaction, ExecuteTransaction):
                                     raise ValueError("expected execute transaction")
                                 await cur.execute(
@@ -1061,15 +1088,11 @@ class Database:
                                     fee_db_id = res["id"]
                                     await self._insert_transition(conn, self.redis, None, fee_db_id, fee.transition, 0)
 
-                            elif isinstance(confirmed_transaction, RejectedDeploy):
-                                raise ValueError("transaction type not implemented")
-
                             elif isinstance(confirmed_transaction, RejectedExecute):
                                 if reject_reasons[ct_index] is None:
                                     raise RuntimeError("expected a rejected reason for rejected execute transaction")
                                 await cur.execute("UPDATE confirmed_transaction SET reject_reason = %s WHERE id = %s",
                                             (reject_reasons[ct_index], confirmed_transaction_db_id))
-                                transaction = confirmed_transaction.transaction
                                 if not isinstance(transaction, FeeTransaction):
                                     raise ValueError("expected fee transaction")
                                 fee = transaction.fee

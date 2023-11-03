@@ -36,9 +36,10 @@ async def finalize_deploy(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]]
                           confirmed_transaction: ConfirmedTransaction, mapping_cache: dict[Field, MappingCacheDict]
                           ) -> tuple[list[FinalizeOperation], list[dict[str, Any]], Optional[str]]:
     transaction = confirmed_transaction.transaction
-    if not isinstance(transaction, DeployTransaction):
-        raise TypeError("invalid deploy transaction")
-    transition = transaction.fee.transition
+    if isinstance(transaction, (DeployTransaction, FeeTransaction)):
+        transition = transaction.fee.transition
+    else:
+        raise NotImplementedError
     if transition.function_name == "fee_public":
         operations = await _execute_public_fee(db, cur, finalize_state, transition, mapping_cache, True)
     else:
@@ -56,9 +57,11 @@ async def finalize_deploy(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]]
                 "program_id": program.id,
                 "mapping": mapping,
             })
+        rejected_reason = None
     else:
-        raise NotImplementedError
-    return expected_operations, operations, None
+        expected_operations = confirmed_transaction.finalize
+        rejected_reason = "(detailed reason not available)"
+    return expected_operations, operations, rejected_reason
 
 def _load_input_from_arguments(arguments: list[Argument]) -> list[Value]:
     inputs: list[Value] = []
