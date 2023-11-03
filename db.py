@@ -1014,7 +1014,10 @@ class Database:
 
 
                                 # TODO: remove bug workaround
-                                if str(confirmed_transaction.transaction.id) != "at12enkvgct4ssyp9ggq87q60748h3gx69hwe3s8cay5q2fnreatypsuyw9jw":
+                                if str(confirmed_transaction.transaction.id) not in [
+                                    "at12enkvgct4ssyp9ggq87q60748h3gx69hwe3s8cay5q2fnreatypsuyw9jw",
+                                    "at1ak70x90pnwszdaxehwnt99ta2w4q8kn40tepau68r6yeaar77sxsaxwelu",
+                                ]:
                                     await self._save_program(cur, transaction.deployment.program, deploy_transaction_db_id, transaction)
 
                                 await cur.execute(
