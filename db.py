@@ -902,24 +902,42 @@ class Database:
                                 for index, certificate in enumerate(certificates):
                                     if round_ != certificate.batch_header.round:
                                         raise ValueError("invalid subdag round")
-                                    await cur.execute(
-                                        "INSERT INTO dag_vertex (authority_id, round, batch_certificate_id, batch_id, "
-                                        "author, timestamp, author_signature, index) "
-                                        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
-                                        (authority_db_id, round_, str(certificate.certificate_id), str(certificate.batch_header.batch_id),
-                                         str(certificate.batch_header.author), certificate.batch_header.timestamp,
-                                         str(certificate.batch_header.signature), index)
-                                    )
+                                    if isinstance(certificate, BatchCertificate1):
+                                        await cur.execute(
+                                            "INSERT INTO dag_vertex (authority_id, round, batch_certificate_id, batch_id, "
+                                            "author, timestamp, author_signature, index) "
+                                            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                                            (authority_db_id, round_, str(certificate.certificate_id), str(certificate.batch_header.batch_id),
+                                             str(certificate.batch_header.author), certificate.batch_header.timestamp,
+                                             str(certificate.batch_header.signature), index)
+                                        )
+                                    elif isinstance(certificate, BatchCertificate2):
+                                        await cur.execute(
+                                            "INSERT INTO dag_vertex (authority_id, round, batch_id, "
+                                            "author, timestamp, author_signature, index) "
+                                            "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                                            (authority_db_id, round_, str(certificate.batch_header.batch_id),
+                                             str(certificate.batch_header.author), certificate.batch_header.timestamp,
+                                             str(certificate.batch_header.signature), index)
+                                        )
                                     if (res := await cur.fetchone()) is None:
                                         raise RuntimeError("failed to insert row into database")
                                     vertex_db_id = res["id"]
 
-                                    for sig_index, (signature, timestamp) in enumerate(certificate.signatures):
-                                        await cur.execute(
-                                            "INSERT INTO dag_vertex_signature (vertex_id, signature, timestamp, index) "
-                                            "VALUES (%s, %s, %s, %s)",
-                                            (vertex_db_id, str(signature), timestamp, sig_index)
-                                        )
+                                    if isinstance(certificate, BatchCertificate1):
+                                        for sig_index, (signature, timestamp) in enumerate(certificate.signatures):
+                                            await cur.execute(
+                                                "INSERT INTO dag_vertex_signature (vertex_id, signature, timestamp, index) "
+                                                "VALUES (%s, %s, %s, %s)",
+                                                (vertex_db_id, str(signature), timestamp, sig_index)
+                                            )
+                                    elif isinstance(certificate, BatchCertificate2):
+                                        for sig_index, signature in enumerate(certificate.signatures):
+                                            await cur.execute(
+                                                "INSERT INTO dag_vertex_signature (vertex_id, signature, index) "
+                                                "VALUES (%s, %s, %s)",
+                                                (vertex_db_id, str(signature), sig_index)
+                                            )
 
                                     prev_cert_ids = certificate.batch_header.previous_certificate_ids
                                     await cur.execute(
@@ -1591,14 +1609,21 @@ class Database:
                         (dag_vertex["id"],)
                     )
                     dag_vertex_signatures = await cur.fetchall()
-                    signatures: list[Tuple[Signature, i64]] = []
-                    for signature in dag_vertex_signatures:
-                        signatures.append(
-                            Tuple[Signature, i64]((
-                                Signature.loads(signature["signature"]),
-                                i64(signature["timestamp"]),
-                            ))
-                        )
+
+                    if dag_vertex["batch_certificate_id"] is not None:
+                        signatures: list[Tuple[Signature, i64]] = []
+                        for signature in dag_vertex_signatures:
+                            signatures.append(
+                                Tuple[Signature, i64]((
+                                    Signature.loads(signature["signature"]),
+                                    i64(signature["timestamp"]),
+                                ))
+                            )
+                    else:
+                        signatures: list[Signature] = []
+                        for signature in dag_vertex_signatures:
+                            signatures.append(Signature.loads(signature["signature"]))
+
                     await cur.execute(
                         "SELECT previous_vertex_id FROM dag_vertex_adjacency WHERE vertex_id = %s ORDER BY index",
                         (dag_vertex["id"],)
@@ -1626,21 +1651,37 @@ class Database:
                         elif tid["type"] == TransmissionID.Type.Transaction:
                             tids.append(TransactionTransmissionID(id_=TransactionID.loads(tid["transaction_id"])))
 
-                    certificates.append(
-                        BatchCertificate(
-                            certificate_id=Field.loads(dag_vertex["batch_certificate_id"]),
-                            batch_header=BatchHeader(
-                                batch_id=Field.loads(dag_vertex["batch_id"]),
-                                author=Address.loads(dag_vertex["author"]),
-                                round_=u64(dag_vertex["round"]),
-                                timestamp=i64(dag_vertex["timestamp"]),
-                                transmission_ids=Vec[TransmissionID, u32](tids),
-                                previous_certificate_ids=Vec[Field, u32]([Field.loads(x) for x in previous_cert_ids]),
-                                signature=Signature.loads(dag_vertex["author_signature"]),
-                            ),
-                            signatures=Vec[Tuple[Signature, i64], u32](signatures),
+                    if dag_vertex["batch_certificate_id"] is not None:
+                        certificates.append(
+                            BatchCertificate1(
+                                certificate_id=Field.loads(dag_vertex["batch_certificate_id"]),
+                                batch_header=BatchHeader(
+                                    batch_id=Field.loads(dag_vertex["batch_id"]),
+                                    author=Address.loads(dag_vertex["author"]),
+                                    round_=u64(dag_vertex["round"]),
+                                    timestamp=i64(dag_vertex["timestamp"]),
+                                    transmission_ids=Vec[TransmissionID, u32](tids),
+                                    previous_certificate_ids=Vec[Field, u32]([Field.loads(x) for x in previous_cert_ids]),
+                                    signature=Signature.loads(dag_vertex["author_signature"]),
+                                ),
+                                signatures=Vec[Tuple[Signature, i64], u32](signatures),
+                            )
                         )
-                    )
+                    else:
+                        certificates.append(
+                            BatchCertificate2(
+                                batch_header=BatchHeader(
+                                    batch_id=Field.loads(dag_vertex["batch_id"]),
+                                    author=Address.loads(dag_vertex["author"]),
+                                    round_=u64(dag_vertex["round"]),
+                                    timestamp=i64(dag_vertex["timestamp"]),
+                                    transmission_ids=Vec[TransmissionID, u32](tids),
+                                    previous_certificate_ids=Vec[Field, u32]([Field.loads(x) for x in previous_cert_ids]),
+                                    signature=Signature.loads(dag_vertex["author_signature"]),
+                                ),
+                                signatures=Vec[Signature, u16](signatures),
+                            )
+                        )
                 subdags: dict[u64, Vec[BatchCertificate, u32]] = defaultdict(lambda: Vec[BatchCertificate, u32]([]))
                 for certificate in certificates:
                     subdags[certificate.batch_header.round].append(certificate)
@@ -2853,6 +2894,7 @@ class Database:
             (1, self.migrate_1_add_dag_vertex_adjacency_index),
             (2, self.migrate_2_add_helper_functions),
             (3, self.migrate_3_set_mapping_history_key_not_null),
+            (4, self.migrate_4_support_batch_certificate_v2),
         ]
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -2871,10 +2913,7 @@ class Database:
 
     @staticmethod
     async def migrate_1_add_dag_vertex_adjacency_index(conn: psycopg.AsyncConnection[dict[str, Any]]):
-        await conn.execute("""
-create index dag_vertex_adjacency_vertex_id_index
- on explorer.dag_vertex_adjacency (vertex_id);
-         """)
+        await conn.execute("create index dag_vertex_adjacency_vertex_id_index on explorer.dag_vertex_adjacency (vertex_id)")
 
     @staticmethod
     async def migrate_2_add_helper_functions(conn: psycopg.AsyncConnection[dict[str, Any]]):
@@ -2883,6 +2922,11 @@ create index dag_vertex_adjacency_vertex_id_index
     @staticmethod
     async def migrate_3_set_mapping_history_key_not_null(conn: psycopg.AsyncConnection[dict[str, Any]]):
         await conn.execute("alter table explorer.mapping_history alter column key set not null")
+
+    @staticmethod
+    async def migrate_4_support_batch_certificate_v2(conn: psycopg.AsyncConnection[dict[str, Any]]):
+        await conn.execute("alter table explorer.dag_vertex alter column batch_certificate_id drop not null")
+        await conn.execute("alter table explorer.dag_vertex_signature alter column timestamp drop not null")
 
     # debug method
     async def clear_database(self):

@@ -3251,7 +3251,20 @@ class BatchHeader(Serializable):
                    transmission_ids=transmission_ids, previous_certificate_ids=previous_certificate_ids,
                    signature=signature)
 
+
 class BatchCertificate(Serializable):
+
+    batch_header: BatchHeader
+
+    @classmethod
+    def load(cls, data: BytesIO) -> Self:
+        version = u8.load(data)
+        if version == BatchCertificate1.version:
+            return BatchCertificate1.load(data)
+        elif version == BatchCertificate2.version:
+            return BatchCertificate2.load(data)
+
+class BatchCertificate1(BatchCertificate):
     version = u8(1)
 
     def __init__(self, *, certificate_id: Field, batch_header: BatchHeader, signatures: Vec[Tuple[Signature, i64], u32]):
@@ -3264,13 +3277,27 @@ class BatchCertificate(Serializable):
 
     @classmethod
     def load(cls, data: BytesIO):
-        version = u8.load(data)
-        if version != cls.version:
-            raise ValueError("invalid batch certificate version")
         certificate_id = Field.load(data)
         batch_header = BatchHeader.load(data)
         signatures = Vec[Tuple[Signature, i64], u32].load(data)
         return cls(certificate_id=certificate_id, batch_header=batch_header, signatures=signatures)
+
+
+class BatchCertificate2(BatchCertificate):
+    version = u8(2)
+
+    def __init__(self, *, batch_header: BatchHeader, signatures: Vec[Signature, u16]):
+        self.batch_header = batch_header
+        self.signatures = signatures
+
+    def dump(self) -> bytes:
+        return self.version.dump() + self.batch_header.dump() + self.signatures.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        batch_header = BatchHeader.load(data)
+        signatures = Vec[Signature, u16].load(data)
+        return cls(batch_header=batch_header, signatures=signatures)
 
 
 class Subdag(Serializable):
