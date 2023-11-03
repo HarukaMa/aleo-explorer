@@ -26,3 +26,11 @@ class Testnet3:
     block_locator_checkpoint_interval = 10000
 
     deployment_fee_multiplier = 1000
+
+    ignore_deploy_txids = [
+        "at12enkvgct4ssyp9ggq87q60748h3gx69hwe3s8cay5q2fnreatypsuyw9jw",
+        "at1dpe2vvskn99avv0zknnu0chex9wyy4rq5ax2v39nk29sw38nauxsc2ra7z",
+        "at1ak70x90pnwszdaxehwnt99ta2w4q8kn40tepau68r6yeaar77sxsaxwelu",
+        "at1zevn9a9d7q5pfm7z3flfzkata4m93dg6v3chqd2km0vdtfcnqyqq8fzjez",
+        "at18s8ld4qpzkg5qp7hn2jluraj3ygjavjml440zj5tkcw2xqg6hcrq7havxh",
+    ]

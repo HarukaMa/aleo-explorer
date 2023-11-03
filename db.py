@@ -1014,11 +1014,8 @@ class Database:
 
 
                                 # TODO: remove bug workaround
-                                if str(confirmed_transaction.transaction.id) not in [
-                                    "at12enkvgct4ssyp9ggq87q60748h3gx69hwe3s8cay5q2fnreatypsuyw9jw",
-                                    "at1dpe2vvskn99avv0zknnu0chex9wyy4rq5ax2v39nk29sw38nauxsc2ra7z",
-                                    "at1ak70x90pnwszdaxehwnt99ta2w4q8kn40tepau68r6yeaar77sxsaxwelu",
-                                ]:
+                                from node.testnet3 import Testnet3
+                                if str(confirmed_transaction.transaction.id) not in Testnet3.ignore_deploy_txids:
                                     await self._save_program(cur, transaction.deployment.program, deploy_transaction_db_id, transaction)
 
                                 await cur.execute(
