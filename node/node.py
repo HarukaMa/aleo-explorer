@@ -11,7 +11,11 @@ from aleo_types import *  # too many types
 # from .light_node import LightNodeState
 from .testnet3.param import Testnet3
 
-PING_SLEEP_IN_SECS = 9
+# Do not open PR about this value.
+# The deviation from the node's behavior is for lower sync delays.
+# You are not supposed to connect this explorer to nodes that you don't control, anyway.
+# If you don't agree with this, change this on your own end.
+PING_SLEEP_IN_SECS = 3
 
 
 class Node:
