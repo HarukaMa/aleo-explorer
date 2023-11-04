@@ -1,6 +1,6 @@
 
-{% from "macros.jinja2" import data_line, state_label, htmx_title %}
-
+{% from "macros.jinja2" import data_line, state_label, htmx_title, sync_notice %}
+{{ sync_notice(sync_info) }}
 
     <div class="content" hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
 

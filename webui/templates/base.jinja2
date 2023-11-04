@@ -79,21 +79,6 @@
         </div>
     </div>
 </div>
-{% if sync_info is defined and sync_info.out_of_sync %}
-    <div class="content">
-    <div class="callout alert global-banner">
-        {% if sync_info.maintenance_info %}
-            The explorer is out of sync: {{ sync_info.maintenance_info }}
-        {% else %}
-            The explorer is out of sync. The last synced block is {{ sync_info.relative_time }}.
-        {% endif %}
-        Current block height: {{ sync_info.local_height }} / {{ sync_info.remote_height }}
-    </div>
-    </div>
-{% else %}
-    <!-- indicator for health check -->
-    <span style="display: none">in_sync</span>
-{% endif %}
 <div class="container">
 <div id="htmx-body" class="htmx-indicator">
 {% block content %}{% endblock %}

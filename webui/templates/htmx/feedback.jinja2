@@ -1,4 +1,5 @@
-{% from "macros.jinja2" import htmx_title %}
+{% from "macros.jinja2" import htmx_title, sync_notice %}
+{{ sync_notice(sync_info) }}
 
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=load_turnstile_widget" async defer></script>
 

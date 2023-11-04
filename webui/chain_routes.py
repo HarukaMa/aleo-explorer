@@ -138,6 +138,8 @@ async def block_route(request: Request):
                 txs.append(t)
             case _:
                 raise HTTPException(status_code=550, detail="Unsupported transaction type")
+
+    sync_info = await out_of_sync_check(db)
     ctx = {
         "request": request,
         "block": block,
@@ -150,6 +152,7 @@ async def block_route(request: Request):
         "total_base_fee": total_base_fee,
         "total_priority_fee": total_priority_fee,
         "total_burnt_fee": total_burnt_fee,
+        "sync_info": sync_info,
     }
     return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
 
@@ -216,6 +219,7 @@ async def transaction_route(request: Request):
 
     storage_cost, namespace_cost, finalize_costs, priority_fee, burnt = await confirmed_transaction.get_fee_breakdown(db)
 
+    sync_info = await out_of_sync_check(db)
     ctx: dict[str, Any] = {
         "request": request,
         "tx_id": tx_id,
@@ -232,6 +236,7 @@ async def transaction_route(request: Request):
         "priority_fee": priority_fee,
         "burnt_fee": burnt,
         "reject_reason": await db.get_transaction_reject_reason(tx_id) if transaction_state == "Rejected" else None,
+        "sync_info": sync_info,
     }
 
     if isinstance(transaction, DeployTransaction):
@@ -545,6 +550,7 @@ async def transition_route(request: Request):
                     "value": f"{future.program_id}/{future.function_name}(...)",
                 })
 
+    sync_info = await out_of_sync_check(db)
     ctx = {
         "request": request,
         "ts_id": ts_id,
@@ -561,6 +567,7 @@ async def transition_route(request: Request):
         "inputs": inputs,
         "outputs": outputs,
         "finalizes": finalizes,
+        "sync_info": sync_info,
     }
     return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
 

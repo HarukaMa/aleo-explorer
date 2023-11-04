@@ -40,16 +40,20 @@ async def out_of_sync_check(db: Database):
     now = int(time.time())
     maintenance_info = os.environ.get("MAINTENANCE_INFO")
     out_of_sync = now - last_timestamp > 120
-    remote_height = None
+    node_height = None
+    reference_height = None
     if out_of_sync:
         if rpc_root := os.environ.get("RPC_URL_ROOT"):
-            remote_height = await get_remote_height(rpc_root)
+            node_height = await get_remote_height(rpc_root)
+        if ref_rpc_root := os.environ.get("REF_RPC_URL_ROOT"):
+            reference_height = await get_remote_height(ref_rpc_root)
 
     return {
         "out_of_sync": out_of_sync,
         "maintenance_info": maintenance_info,
-        "local_height": last_height,
-        "remote_height": remote_height,
+        "explorer_height": last_height,
+        "node_height": node_height,
+        "reference_height": reference_height,
         "relative_time": get_relative_time(last_timestamp),
     }
 

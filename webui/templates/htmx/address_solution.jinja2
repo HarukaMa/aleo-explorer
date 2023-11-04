@@ -1,4 +1,5 @@
-{% from "macros.jinja2" import nav, htmx_title %}
+{% from "macros.jinja2" import nav, htmx_title, sync_notice %}
+{{ sync_notice(sync_info) }}
 
     <div class="content" hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
 

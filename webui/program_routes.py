@@ -101,6 +101,7 @@ async def program_route(request: Request):
             "key_type": str(mapping.key.plaintext_type),
             "value_type": str(mapping.value.plaintext_type)
         })
+    sync_info = await out_of_sync_check(db)
     ctx: dict[str, Any] = {
         "request": request,
         "program_id": str(program.id),
@@ -115,6 +116,7 @@ async def program_route(request: Request):
         "has_leo_source": has_leo_source,
         "recent_calls": await db.get_program_calls(program_id, 0, 30),
         "similar_count": await db.get_program_similar_count(program_id),
+        "sync_info": sync_info,
     }
     if transaction:
         ctx.update({
@@ -204,6 +206,7 @@ async def upload_source_route(request: Request):
             else:
                 import_programs.append(None)
     message = request.query_params.get("message")
+    sync_info = await out_of_sync_check(db)
     ctx = {
         "request": request,
         "program_id": program_id,
@@ -212,6 +215,7 @@ async def upload_source_route(request: Request):
         "has_leo_source": has_leo_source,
         "message": message,
         "source": source,
+        "sync_info": sync_info,
     }
     return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
 

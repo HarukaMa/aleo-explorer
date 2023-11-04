@@ -21,9 +21,11 @@ async def calc_route(request: Request):
     else:
         template = "calc.jinja2"
     proof_target = (await db.get_latest_block()).header.metadata.proof_target
+    sync_info = await out_of_sync_check(db)
     ctx = {
         "request": request,
         "proof_target": proof_target,
+        "sync_info": sync_info,
     }
     return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=60'}) # type: ignore
 

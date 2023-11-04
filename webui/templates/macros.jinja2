@@ -97,3 +97,21 @@
     {% endif %}
 </script>
 {% endmacro %}
+
+{% macro sync_notice(sync_info) %}
+{% if sync_info is defined and sync_info.out_of_sync %}
+    <div class="content">
+        <div class="callout alert global-banner">
+            {% if sync_info.maintenance_info %}
+                The explorer is out of sync: {{ sync_info.maintenance_info }}
+            {% else %}
+                The explorer is out of sync. The last synced block is {{ sync_info.relative_time }}.
+            {% endif %}
+            Current block height: explorer: {{ sync_info.explorer_height }} / node: {{ sync_info.node_height }} / ref: {{ sync_info.reference_height }}
+        </div>
+    </div>
+{% else %}
+    <!-- indicator for health check -->
+    <span style="display: none">in_sync</span>
+{% endif %}
+{% endmacro %}
