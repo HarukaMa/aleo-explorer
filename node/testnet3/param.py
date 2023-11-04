@@ -33,4 +33,5 @@ class Testnet3:
         "at1ak70x90pnwszdaxehwnt99ta2w4q8kn40tepau68r6yeaar77sxsaxwelu",
         "at1zevn9a9d7q5pfm7z3flfzkata4m93dg6v3chqd2km0vdtfcnqyqq8fzjez",
         "at18s8ld4qpzkg5qp7hn2jluraj3ygjavjml440zj5tkcw2xqg6hcrq7havxh",
+        "at1l4qkzhyk73vp2y2gk9rrg4ld7elgvy9r4a7u2rz3rtgcjrpuk5gq4denps",
     ]
