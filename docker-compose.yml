@@ -11,8 +11,12 @@ services:
     restart: unless-stopped
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.2-alpine
     restart: unless-stopped
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf","--daemonize","no"]
+    volumes:
+      - ./redis.conf.example:/usr/local/etc/redis/redis.conf
+      - redis_data:/data
 
   harukamaaleoexplorer:
     image: harukamaaleoexplorer
@@ -51,4 +55,6 @@ services:
 
 volumes:
   postgres_data:
+    driver: local
+  redis_data:
     driver: local
