@@ -1,0 +1,109 @@
+{% from "macros.jinja2" import htmx_title %}
+
+<div class="content">
+
+    <div class="header">
+        <h3>Tools</h3>
+        <p>
+            Some random tools. Feel free to send feedbacks. <br>
+            All operations are done in the browser, no data is sent to the server.
+        </p>
+    </div>
+
+    <div>
+        <ul class="tabs" data-tabs id="tools-tabs">
+            <li class="tabs-title is-active"><a href="#hash">Hash value</a></li>
+            <li class="tabs-title"><a href="#verify">Verify signature</a></li>
+            <li class="tabs-title"><a href="#sign">Sign message</a></li>
+        </ul>
+    </div>
+
+    <div class="tabs-content" data-tabs-content="tools-tabs">
+        <div class="tabs-panel is-active" id="hash">
+            <form id="hash_form">
+                <div class="grid-x grid-padding-x">
+                    <fieldset class="medium-4 cell">
+                        <legend><span>Value type</span></legend>
+                        <label>
+                            <input type="radio" name="value_type" value="value" checked>
+                            <span>Value</span>
+                        </label>
+                    </fieldset>
+                    <div class="medium-4 cell">
+                        <label>
+                            <span>Hash type</span>
+                            <select name="hash_type" id="hash_select" required>
+                                <option value=""></option>
+                                <option value="bhp256">BHP256</option>
+                                <option value="bhp512">BHP512</option>
+                                <option value="bhp768">BHP768</option>
+                                <option value="bhp1024">BHP1024</option>
+                                <option value="ped64">Pedersen64</option>
+                                <option value="ped128">Pedersen128</option>
+                                <option value="psd2">Poseidon2</option>
+                                <option value="psd4">Poseidon4</option>
+                                <option value="psd8">Poseidon8</option>
+                                <option value="Keccak256">Keccak256</option>
+                                <option value="Keccak384">Keccak384</option>
+                                <option value="Keccak512">Keccak512</option>
+                                <option value="sha3_256">SHA3-256</option>
+                                <option value="sha3_384">SHA3-384</option>
+                                <option value="sha3_512">SHA3-512</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div class="medium-4 cell">
+                        <label>
+                            <span>Destination type</span>
+                            <select name="destination_type" id="destination_select" required>
+                                <option value=""></option>
+                                <option value="address">Address</option>
+                                <option value="boolean">Boolean</option>
+                                <option value="field">Field</option>
+                                <option value="group">Group</option>
+                                <option value="i8">i8</option>
+                                <option value="i16">i16</option>
+                                <option value="i32">i32</option>
+                                <option value="i64">i64</option>
+                                <option value="u8">u8</option>
+                                <option value="u16">u16</option>
+                                <option value="u32">u32</option>
+                                <option value="u64">u64</option>
+                                <option value="scalar">Scalar</option>
+                            </select>
+                        </label>
+                    </div>
+                </div>
+                <label style="padding: 0 15px">
+                    <span>Value</span>
+                    <input type="text" name="value" id="value_input">
+                </label>
+                <div style="padding: 10px 15px">
+                    <button class="button" type="submit" id="hash_submit">Hash</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script type="module" async>
+        
+        import init, {hash_value, verify_signature, value_to_bytes} from '/static/rust.js'
+
+        await init()
+
+        const hash_form = document.getElementById('hash_form')
+        hash_form.addEventListener('submit', hash)
+
+        function hash(e) {
+            const data = new FormData(hash_form)
+            for (const pair of data.entries()) {
+                console.log(`${pair[0]}, ${pair[1]}`);
+            }
+            e.preventDefault()
+        }
+
+    </script>
+
+</div>
+
+{{ htmx_title(request, "Tools") }}
