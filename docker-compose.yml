@@ -10,6 +10,10 @@ services:
       - POSTGRES_PASSWORD=postgres
     restart: unless-stopped
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
   harukamaaleoexplorer:
     image: harukamaaleoexplorer
     build:
@@ -22,6 +26,9 @@ services:
       - DB_PASS=postgres
       - DB_DATABASE=postgres
       - DB_SCHEMA=explorer
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
       - HOST=0.0.0.0
       - PORT=8800
       - API_PORT=8801
@@ -37,6 +44,7 @@ services:
     restart: unless-stopped
     depends_on:
       - db
+      - redis
     ports:
       - 8800:8800
       - 8801:8801
