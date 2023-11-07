@@ -199,6 +199,7 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
                 if mapping_cache:
                     if key_id not in mapping_cache[mapping_id]:
                         print(f"Key {key} not found in mapping {c.mapping}")
+                        pc += 1
                         continue
                     mapping_cache[mapping_id].pop(key_id)
                     if debug:
