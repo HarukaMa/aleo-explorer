@@ -43,9 +43,9 @@
                                 <option value="psd2">Poseidon2</option>
                                 <option value="psd4">Poseidon4</option>
                                 <option value="psd8">Poseidon8</option>
-                                <option value="Keccak256">Keccak256</option>
-                                <option value="Keccak384">Keccak384</option>
-                                <option value="Keccak512">Keccak512</option>
+                                <option value="keccak256">Keccak256</option>
+                                <option value="keccak384">Keccak384</option>
+                                <option value="keccak512">Keccak512</option>
                                 <option value="sha3_256">SHA3-256</option>
                                 <option value="sha3_384">SHA3-384</option>
                                 <option value="sha3_512">SHA3-512</option>
@@ -82,6 +82,53 @@
                     <button class="button" type="submit" id="hash_submit">Hash</button>
                 </div>
             </form>
+            <span class="mono" id="hash_result" style="padding: 0 15px"></span>
+        </div>
+
+        <div class="tabs-panel" id="verify">
+            <form id="verify_form" style="padding: 0 15px">
+                <fieldset>
+                    <legend><span>Message type</span></legend>
+                    <input type="radio" name="message_type" value="value" id="verify_message_value" checked>
+                    <label for="verify_message_value">Value</label>
+                    <input type="radio" name="message_type" value="hex" id="verify_message_hex">
+                    <label for="verify_message_hex">Hex string</label>
+                </fieldset>
+                <label>
+                    <span>Address</span>
+                    <input type="text" name="address" id="address_input">
+                </label>
+                <label>
+                    <span>Message</span>
+                    <textarea name="message" id="message_input" style="height: 5rem"></textarea>
+                </label>
+                <label>
+                    <span>Signature</span>
+                    <textarea name="signature" id="signature_input" style="height: 5rem"></textarea>
+                </label>
+                <button class="button" type="submit" id="verify_submit">Verify</button>
+            </form>
+            <span class="mono" id="verify_result" style="padding: 0 15px"></span>
+        </div>
+
+        <div class="tabs-panel" id="sign">
+            <button data-open="wallet-method" class="button primary" id="wallet-connect-button" style="margin: 0 15px">Connect Wallet</button>
+            <span id="wallet-connect-text"></span>
+            <form id="sign_form" style="padding: 10px 15px">
+                <fieldset>
+                    <legend><span>Message type</span></legend>
+                    <input type="radio" name="message_type" value="value" id="sign_message_value" disabled>
+                    <label for="sign_message_value">Value</label>
+                    <input type="radio" name="message_type" value="hex" id="sign_message_hex" checked>
+                    <label for="sign_message_hex">Hex string</label>
+                </fieldset>
+                <label>
+                    <span>Message</span>
+                    <textarea name="message" id="sign_message_input" style="height: 5rem"></textarea>
+                </label>
+                <button class="button" type="submit" disabled id="sign_button">Sign</button>
+            </form>
+            <span class="mono" id="sign_result" style="margin: 0 15px; word-wrap: break-word; display: block; box-decoration-break: clone"></span>
         </div>
     </div>
 
@@ -95,12 +142,112 @@
         hash_form.addEventListener('submit', hash)
 
         function hash(e) {
-            const data = new FormData(hash_form)
-            for (const pair of data.entries()) {
-                console.log(`${pair[0]}, ${pair[1]}`);
-            }
             e.preventDefault()
+            const data = Object.fromEntries(new FormData(hash_form))
+            try {
+                document.getElementById('hash_result').innerText = hash_value(data.hash_type, data.value, data.destination_type)
+            } catch (e) {
+                document.getElementById('hash_result').innerText = e
+            }
         }
+
+        const verify_form = document.getElementById('verify_form')
+        verify_form.addEventListener('submit', verify)
+
+        function verify(e) {
+            e.preventDefault()
+            const data = Object.fromEntries(new FormData(verify_form))
+            const result_element = document.getElementById('verify_result')
+            try {
+                const result = verify_signature(data.signature, data.address, data.message, data.message_type)
+                if (result) {
+                    result_element.innerText = 'Signature is valid'
+                    result_element.style.color = 'green'
+                } else {
+                    result_element.innerText = 'Signature is invalid'
+                    result_element.style.color = 'red'
+                }
+            } catch (e) {
+                result_element.innerText = e
+                result_element.style.color = ""
+            }
+        }
+
+        const sign_form = document.getElementById('sign_form')
+        sign_form.addEventListener('submit', sign)
+        const sign_button = document.getElementById('sign_button')
+
+        async function sign(e) {
+            e.preventDefault()
+            const data = Object.fromEntries(new FormData(sign_form))
+            const result_element = document.getElementById('sign_result')
+            let message
+            try {
+                if (data.message_type === "value") {
+                    message = value_to_bytes(data.message)
+                } else if (data.message_type === 'hex') {
+                    const isHex = (maybeHex) =>
+                        maybeHex.length !== 0 && maybeHex.length % 2 === 0 && !/[^a-fA-F0-9]/u.test(maybeHex);
+                    if (!isHex(data.message)) {
+                        throw "Invalid hex string"
+                    } else {
+                        message = Uint8Array.from(data.message.match(/.{1,2}/g).map((byte) => parseInt(byte, 16)));
+                    }
+                } else {
+                    throw "Invalid message type"
+                }
+                try {
+                    result_element.innerText = new TextDecoder().decode((await window.leoWallet.signMessage(message.buffer)).signature)
+                } catch (e) {
+                    throw e.message
+                }
+            } catch (e) {
+                result_element.innerText = e
+            }
+        }
+
+        const button = document.getElementById("wallet-connect-button")
+        const text = document.getElementById("wallet-connect-text")
+        let wallet = null
+        if (window.leoWallet !== undefined) {
+            wallet = window.leoWallet
+        } else {
+            button.disabled = true
+            text.innerText = "Wallet not found"
+        }
+
+        button.addEventListener("click", connect)
+
+        let connected = false
+
+        async function connect(e) {
+            e.preventDefault()
+            if (connected) {
+                e.stopPropagation()
+                await wallet.disconnect()
+                button.className = "button primary"
+                button.innerText = "Connect Wallet"
+                text.innerText = ""
+                connected = false
+                sign_button.disabled = true
+                return
+            }
+            try {
+                await wallet.connect("AUTO_DECRYPT", "testnet3")
+            } catch (e) {
+                button.className = "button alert"
+                button.innerText = "Connect failed"
+                text.innerText = e
+            }
+            if (wallet.publicKey) {
+                connected = true
+                button.className = "button success"
+                const address = wallet.publicKey
+                button.innerHTML = `Connected to address <span class="mono">${address.substring(0, 9) + "..." + address.substring(address.length - 6)}</span>`
+                sign_button.disabled = false
+            }
+        }
+
 
     </script>
 
