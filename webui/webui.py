@@ -59,9 +59,9 @@ async def index_route(request: Request):
 async def tools_route(request: Request):
     is_htmx = request.scope["htmx"].is_htmx()
     if is_htmx:
-        template = "htmx/faq.jinja2"
+        template = "htmx/tools.jinja2"
     else:
-        template = "faq.jinja2"
+        template = "tools.jinja2"
     ctx = {
         "request": request,
     }
