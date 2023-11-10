@@ -57,10 +57,15 @@ async def index_route(request: Request):
     return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=10'}) # type: ignore
 
 async def tools_route(request: Request):
+    is_htmx = request.scope["htmx"].is_htmx()
+    if is_htmx:
+        template = "htmx/faq.jinja2"
+    else:
+        template = "faq.jinja2"
     ctx = {
         "request": request,
     }
-    return templates.TemplateResponse('tools.jinja2', ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
+    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
 
 async def faq_route(request: Request):
     is_htmx = request.scope["htmx"].is_htmx()
