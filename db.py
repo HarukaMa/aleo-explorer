@@ -2920,6 +2920,7 @@ class Database:
             (2, self.migrate_2_add_helper_functions),
             (3, self.migrate_3_set_mapping_history_key_not_null),
             (4, self.migrate_4_support_batch_certificate_v2),
+            (5, self.migrate_5_add_hint_plan),
         ]
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -2952,6 +2953,32 @@ class Database:
     async def migrate_4_support_batch_certificate_v2(conn: psycopg.AsyncConnection[dict[str, Any]]):
         await conn.execute("alter table explorer.dag_vertex alter column batch_certificate_id drop not null")
         await conn.execute("alter table explorer.dag_vertex_signature alter column timestamp drop not null")
+
+    @staticmethod
+    async def migrate_5_add_hint_plan(conn: psycopg.AsyncConnection[dict[str, Any]]):
+        try:
+            await conn.execute("create extension if not exists pg_hint_plan")
+        except:
+            raise PermissionError("Manually create the extension pg_hint_plan with superuser account")
+        await conn.execute(
+            "insert into hint_plan.hints(norm_query_string, application_name, hints) values (%s, %s, %s)",
+            (
+                "SELECT p.program_id, b.height, t.transaction_id, SUM(pf.called) as called "
+                "FROM program p "
+                "JOIN transaction_deploy td on p.transaction_deploy_id = td.id "
+                "JOIN transaction t on td.transaction_id = t.id "
+                "JOIN confirmed_transaction ct on t.confimed_transaction_id = ct.id "
+                "JOIN block b on ct.block_id = b.id "
+                "JOIN program_function pf on p.id = pf.program_id "
+                "WHERE feature_hash NOT IN (SELECT hash FROM program_filter_hash) "
+                "GROUP BY p.program_id, b.height, t.transaction_id "
+                "ORDER BY b.height DESC "
+                "LIMIT ? OFFSET ?",
+                "",
+                "Leading(fp td t ct b pf) IndexScan(t) BitmapScan(td) BitmapScan(pf)"
+            )
+        )
+
 
     # debug method
     async def clear_database(self):
