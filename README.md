@@ -13,7 +13,6 @@ connect to peers that you trust.
 
 * Python 3.11.4+ (3.11.3 and before [won't work](https://github.com/python/cpython/pull/103514))
 * Postgres 12+
-* **pg_hint_plan** extension (please help optimize the query to remove the depencency)
 * Redis not too old
 * Rust latest stable
 * [aleo-explorer-rust](https://github.com/HarukaMa/aleo-explorer-rust)
