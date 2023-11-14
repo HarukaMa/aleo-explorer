@@ -2416,7 +2416,7 @@ class Database:
                 try:
                     where = "WHERE feature_hash NOT IN (SELECT hash FROM program_filter_hash) " if no_helloworld else ""
                     await cur.execute(
-                        "/*+ Leading(p td t ct b pf) IndexScan(t) BitmapScan(td) BitmapScan(f) */ "
+                        "/*+ Leading(p td t ct b pf) IndexScan(t) BitmapScan(td) BitmapScan(pf) */ "
                         "SELECT p.program_id, b.height, t.transaction_id, SUM(pf.called) as called "
                         "FROM program p "
                         "JOIN transaction_deploy td on p.transaction_deploy_id = td.id "
