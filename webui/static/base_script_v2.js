@@ -45,6 +45,7 @@ function local_to_utc() {
         const text = time.innerText
         const date = new Date(text)
         time.innerText = `${date.getUTCFullYear()}-${(date.getUTCMonth() + 1).toString().padStart(2, '0')}-${date.getUTCDate().toString().padStart(2, '0')} ${date.getUTCHours().toString().padStart(2, '0')}:${date.getUTCMinutes().toString().padStart(2, '0')}:${date.getUTCSeconds().toString().padStart(2, '0')}`
+        delete time.dataset.is_local
     }
 }
 
