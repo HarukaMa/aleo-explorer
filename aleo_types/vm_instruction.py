@@ -645,7 +645,7 @@ class LiteralType(IntEnumu8):
     def __str__(self):
         return {
             self.Address: "address",
-            self.Boolean: "bool",
+            self.Boolean: "boolean",
             self.Field: "field",
             self.Group: "group",
             self.I8: "i8",
