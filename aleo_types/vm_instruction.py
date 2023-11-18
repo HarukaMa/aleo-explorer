@@ -728,8 +728,10 @@ class ArrayType(Serializable):
 
     def dump(self) -> bytes:
         res = b""
+        type_written = False
         if isinstance(self.element_type, (LiteralPlaintextType, StructPlaintextType)):
             res += self.element_type.dump()
+            type_written = True
         e = self.element_type
         lengths: list[u32] = [self.length]
         for _ in range(32):
@@ -737,6 +739,8 @@ class ArrayType(Serializable):
                 lengths.append(e.array_type.length)
                 e = e.array_type.element_type
             else:
+                if not type_written:
+                    res += e.dump()
                 break
         res += Vec[u32, u8](lengths).dump()
         return res
