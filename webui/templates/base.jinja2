@@ -128,7 +128,7 @@
     })
 
     {% if "PLAUSIBLE" | get_env %}
-        const el = document.getElementById('plausible-optout');
+        el = document.getElementById('plausible-optout');
         if (localStorage.getItem('plausible_ignore') === 'true') {
             el.innerHTML = 'Opt in';
         } else {
