@@ -738,37 +738,24 @@ class Database:
                 if ratification.amount == 0:
                     continue
                 account_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "account"))
-                await cur.execute(
-                    "SELECT id FROM mapping m WHERE m.mapping_id = %s",
-                    (str(account_mapping_id),)
-                )
-                data = await cur.fetchone()
-                if data is None:
-                    raise RuntimeError("missing current account data")
-                mapping_db_id = data["id"]
-                await cur.execute(
-                    "SELECT key_id, value FROM mapping_value WHERE mapping_id = %s",
-                    (mapping_db_id,)
-                )
-                data = await cur.fetchall()
-
-                current_balances: dict[str, dict[str, Any]] = {}
-                for d in data:
-                    current_balances[str(d["key_id"])] = {
-                        "value": d["value"],
-                    }
 
                 from interpreter.interpreter import global_mapping_cache
+
+                if account_mapping_id not in global_mapping_cache:
+                    from interpreter.finalizer import mapping_cache_read
+                    global_mapping_cache[account_mapping_id] = await mapping_cache_read(self, "credits.aleo", "account")
+
+                current_balances: dict[Field, dict[str, Any]] = global_mapping_cache[account_mapping_id]
 
                 operations: list[dict[str, Any]] = []
                 for address, amount in address_puzzle_rewards.items():
                     key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=Address.loads(address)))
                     key_id = Field.loads(cached_get_key_id("credits.aleo", "account", key.dump()))
-                    if str(key_id) not in current_balances:
+                    if key_id not in current_balances:
                         current_balance = u64()
                     else:
-                        current_balance_data = current_balances[str(key_id)]
-                        value = Value.load(BytesIO(current_balance_data["value"]))
+                        current_balance_data = current_balances[key_id]
+                        value = current_balance_data["value"]
                         if not isinstance(value, PlaintextValue):
                             raise RuntimeError("invalid account value")
                         plaintext = value.plaintext
