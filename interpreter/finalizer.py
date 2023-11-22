@@ -1,5 +1,6 @@
 import os
 import time
+from typing import ParamSpec, Awaitable
 
 import psycopg
 
@@ -10,6 +11,16 @@ from util.global_cache import MappingCacheDict
 from .environment import Registers
 from .instruction import execute_instruction
 from .utils import load_plaintext_from_operand, store_plaintext_to_register, FinalizeState
+
+try:
+    from line_profiler import profile
+except ImportError:
+    P = ParamSpec('P')
+    R = TypeVar('R')
+    def profile(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
+        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+            return await func(*args, **kwargs)
+        return wrapper
 
 
 async def mapping_cache_read(db: Database, program_name: str, mapping_name: str) -> MappingCacheDict:
@@ -26,6 +37,7 @@ class ExecuteError(Exception):
         self.instruction = instruction
 
 
+@profile
 async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]], finalize_state: FinalizeState,
                             transition_id: TransitionID, program: Program,
                             function_name: Identifier, inputs: list[Value],

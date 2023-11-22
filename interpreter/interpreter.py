@@ -1,10 +1,8 @@
-from copy import deepcopy
-
 import psycopg
 
 from aleo_types import *
 from db import Database
-from interpreter.finalizer import execute_finalizer, ExecuteError, mapping_cache_read
+from interpreter.finalizer import execute_finalizer, ExecuteError, mapping_cache_read, profile
 from interpreter.utils import FinalizeState
 from util.global_cache import global_mapping_cache, global_program_cache, MappingCacheDict, get_program
 
@@ -16,7 +14,7 @@ async def init_builtin_program(db: Database, program: Program):
         if await db.get_program(str(program.id)) is None:
             await db.save_builtin_program(program)
 
-async def _execute_public_fee(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]], finalize_state: FinalizeState, fee_transition: Transition, mapping_cache: dict[Field, MappingCacheDict], allow_state_change: bool) -> list[dict[str, Any]]:
+async def _execute_public_fee(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]], finalize_state: FinalizeState, fee_transition: Transition, mapping_cache: Optional[dict[Field, MappingCacheDict]], allow_state_change: bool) -> list[dict[str, Any]]:
     if fee_transition.program_id != "credits.aleo" or fee_transition.function_name != "fee_public":
         raise TypeError("not a fee transition")
     output = fee_transition.outputs[0]
@@ -74,6 +72,7 @@ def _load_input_from_arguments(arguments: list[Argument]) -> list[Value]:
             raise NotImplementedError
     return inputs
 
+@profile
 async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]], finalize_state: FinalizeState,
                            confirmed_transaction: ConfirmedTransaction, mapping_cache: dict[Field, MappingCacheDict]
                            ) -> tuple[list[FinalizeOperation], list[dict[str, Any]], Optional[str]]:
@@ -91,7 +90,7 @@ async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]
             raise TypeError("invalid rejected execute transaction")
         execution = confirmed_transaction.rejected.execution
         allow_state_change = False
-        local_mapping_cache = deepcopy(mapping_cache)
+        local_mapping_cache = None
         if not isinstance(confirmed_transaction.transaction, FeeTransaction):
             raise TypeError("invalid rejected execute transaction")
         fee = confirmed_transaction.transaction.fee
@@ -141,6 +140,7 @@ async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]
             operations.extend(await _execute_public_fee(db, cur, finalize_state, transition, mapping_cache, True))
     return expected_operations, operations, reject_reason
 
+@profile
 async def finalize_block(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]], block: Block) -> list[Optional[str]]:
     finalize_state = FinalizeState(block)
     reject_reasons: list[Optional[str]] = []
