@@ -249,6 +249,7 @@ async def preview_finalize_execution(db: Database, program: Program, function_na
     finalize_state = FinalizeState(block)
     return await execute_finalizer(
         db,
+        None,
         finalize_state,
         TransitionID.load(BytesIO(b"\x00" * 32)),
         program,

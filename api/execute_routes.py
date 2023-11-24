@@ -5,7 +5,8 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from aleo_types import Program, Identifier, Finalize, LiteralPlaintextType, \
-    LiteralPlaintext, Literal, StructPlaintextType, StructPlaintext, FinalizeOperation, Plaintext
+    LiteralPlaintext, Literal, StructPlaintextType, StructPlaintext, FinalizeOperation, Value, \
+    PlaintextFinalizeType, FutureFinalizeType, PlaintextValue
 from api.utils import use_program_cache
 from db import Database
 from interpreter.finalizer import ExecuteError
@@ -47,28 +48,32 @@ async def preview_finalize_route(request: Request, program_cache: dict[str, Prog
     function = program.functions[function_name]
     if function.finalize.value is None:
         return JSONResponse({"error": "Transition does not have a finalizer"}, status_code=400)
-    finalize: Finalize = function.finalize.value[1]
+    finalize: Finalize = function.finalize.value
     finalize_inputs = finalize.inputs
-    values: list[Plaintext] = []
+    values: list[Value] = []
     for index, finalize_input in enumerate(finalize_inputs):
-        plaintext_type = finalize_input.plaintext_type
-        if isinstance(plaintext_type, LiteralPlaintextType):
-            primitive_type = plaintext_type.literal_type.primitive_type
-            try:
-                value = primitive_type.loads(str(inputs[index]))
-            except:
-                return JSONResponse({"error": f"Invalid input for index {index}"}, status_code=400)
-            values.append(LiteralPlaintext(literal=Literal(type_=Literal.reverse_primitive_type_map[primitive_type], primitive=value)))
-        elif isinstance(plaintext_type, StructPlaintextType):
-            structs = program.structs
-            struct_type = structs[plaintext_type.struct]
-            try:
-                value = StructPlaintext.loads(inputs[index], struct_type, structs)
-            except Exception as e:
-                return JSONResponse({"error": f"Invalid input for index {index}: {e} (experimental feature, if you believe this is an error please submit a feedback)"}, status_code=400)
-            values.append(value)
-        else:
-            return JSONResponse({"error": "Unknown input type"}, status_code=500)
+        finalize_type = finalize_input.finalize_type
+        if isinstance(finalize_type, PlaintextFinalizeType):
+            plaintext_type = finalize_type.plaintext_type
+            if isinstance(plaintext_type, LiteralPlaintextType):
+                primitive_type = plaintext_type.literal_type.primitive_type
+                try:
+                    value = primitive_type.loads(str(inputs[index]))
+                except:
+                    return JSONResponse({"error": f"Invalid input for index {index}"}, status_code=400)
+                values.append(PlaintextValue(plaintext=LiteralPlaintext(literal=Literal(type_=Literal.reverse_primitive_type_map[primitive_type], primitive=value))))
+            elif isinstance(plaintext_type, StructPlaintextType):
+                structs = program.structs
+                struct_type = structs[plaintext_type.struct]
+                try:
+                    value = StructPlaintext.loads(inputs[index], struct_type, structs)
+                except Exception as e:
+                    return JSONResponse({"error": f"Invalid input for index {index}: {e} (experimental feature, if you believe this is an error please submit a feedback)"}, status_code=400)
+                values.append(PlaintextValue(plaintext=value))
+            else:
+                return JSONResponse({"error": "Unknown input type"}, status_code=500)
+        elif isinstance(finalize_type, FutureFinalizeType):
+            return JSONResponse({"error": "Future finalize type not supported"}, status_code=500)
     try:
         result = await preview_finalize_execution(db, program, function_name, values)
     except ExecuteError as e:
@@ -84,10 +89,9 @@ async def preview_finalize_route(request: Request, program_cache: dict[str, Prog
         elif operation_type == FinalizeOperation.Type.UpdateKeyValue:
             upd.update({
                 "mapping_id": str(operation["mapping_id"]),
-                "index": operation["index"],
                 "key_id": str(operation["key_id"]),
                 "value_id": str(operation["value_id"]),
-                "mapping": str(operation["mapping"]),
+                "mapping": str(operation["mapping_name"]),
                 "key": str(operation["key"]),
                 "value": str(operation["value"]),
             })

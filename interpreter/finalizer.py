@@ -38,7 +38,7 @@ class ExecuteError(Exception):
 
 
 @profile
-async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]], finalize_state: FinalizeState,
+async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict[str, Any]]], finalize_state: FinalizeState,
                             transition_id: TransitionID, program: Program,
                             function_name: Identifier, inputs: list[Value],
                             mapping_cache: Optional[dict[Field, MappingCacheDict]],
@@ -91,13 +91,16 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
             elif isinstance(c, ContainsCommand):
                 mapping_id = Field.loads(cached_get_mapping_id(str(program.id), str(c.mapping)))
                 if mapping_cache is not None and mapping_id not in mapping_cache:
-                    mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, str(program.id), str(c.mapping))
+                    if cur:
+                        mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, str(program.id), str(c.mapping))
+                    else:
+                        raise RuntimeError("unsupported execution configuration")
                 key = load_plaintext_from_operand(c.key, registers, finalize_state)
                 key_id = Field.loads(cached_get_key_id(str(program.id), str(c.mapping), key.dump()))
                 if mapping_cache:
                     contains = key_id in mapping_cache[mapping_id]
                 else:
-                    value = await db.get_mapping_value(str(program.id), str(mapping_id), str(key_id))
+                    value = await db.get_mapping_value(str(program.id), str(c.mapping), str(key_id))
                     contains = value is not None
                 value = PlaintextValue(
                     plaintext=LiteralPlaintext(
@@ -113,7 +116,10 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
             elif isinstance(c, GetCommand | GetOrUseCommand):
                 mapping_id = Field.loads(cached_get_mapping_id(str(program.id), str(c.mapping)))
                 if mapping_cache is not None and mapping_id not in mapping_cache:
-                    mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, str(program.id), str(c.mapping))
+                    if cur:
+                        mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, str(program.id), str(c.mapping))
+                    else:
+                        raise RuntimeError("unsupported execution configuration")
                 key = load_plaintext_from_operand(c.key, registers, finalize_state)
                 key_id = Field.loads(cached_get_key_id(str(program.id), str(c.mapping), key.dump()))
                 if mapping_cache:
@@ -129,7 +135,7 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
                         if not isinstance(value, PlaintextValue):
                             raise TypeError("invalid value type")
                 else:
-                    value = await db.get_mapping_value(str(program.id), str(mapping_id), str(key_id))
+                    value = await db.get_mapping_value(str(program.id), str(c.mapping), str(key_id))
                     if value is None:
                         if isinstance(c, GetCommand):
                             raise ExecuteError(f"key {key} not found in mapping {c.mapping}", None, disasm_command(c))
@@ -145,7 +151,10 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
             elif isinstance(c, SetCommand):
                 mapping_id = Field.loads(cached_get_mapping_id(str(program.id), str(c.mapping)))
                 if mapping_cache is not None and mapping_id not in mapping_cache:
-                    mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, str(program.id), str(c.mapping))
+                    if cur:
+                        mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, str(program.id), str(c.mapping))
+                    else:
+                        raise RuntimeError("unsupported execution configuration")
                 key = load_plaintext_from_operand(c.key, registers, finalize_state)
                 value = PlaintextValue(plaintext=load_plaintext_from_operand(c.value, registers, finalize_state))
                 key_id = Field.loads(cached_get_key_id(str(program.id), str(c.mapping), key.dump()))
@@ -205,7 +214,10 @@ async def execute_finalizer(db: Database, cur: psycopg.AsyncCursor[dict[str, Any
             elif isinstance(c, RemoveCommand):
                 mapping_id = Field.loads(cached_get_mapping_id(str(program.id), str(c.mapping)))
                 if mapping_cache is not None and mapping_id not in mapping_cache:
-                    mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, str(program.id), str(c.mapping))
+                    if cur:
+                        mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, str(program.id), str(c.mapping))
+                    else:
+                        raise RuntimeError("unsupported execution configuration")
                 key = load_plaintext_from_operand(c.key, registers, finalize_state)
                 key_id = Field.loads(cached_get_key_id(str(program.id), str(c.mapping), key.dump()))
                 if mapping_cache:
