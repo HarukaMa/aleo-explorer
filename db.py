@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import signal
 import time
 from collections import defaultdict
 from typing import Awaitable, ParamSpec, cast
@@ -811,6 +812,7 @@ class Database:
     @profile
     async def _save_block(self, block: Block):
         async with self.pool.connection() as conn:
+            signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT})
             async with conn.transaction():
                 async with conn.cursor() as cur:
                     height = block.height
@@ -824,6 +826,7 @@ class Database:
                         "address_fee",
                     ]
                     await self._backup_redis_hash_key(self.redis, redis_keys, height)
+                    signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGINT})
 
                     try:
                         if block.height != 0:
@@ -1239,13 +1242,17 @@ class Database:
 
                         await self._post_ratify(cur, self.redis, block.height, block.round, block.ratifications.ratifications, address_puzzle_rewards)
 
+                        signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT})
                         await self._redis_cleanup(self.redis, redis_keys, block.height, False)
 
                         await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseBlockAdded, block.header.metadata.height))
                     except Exception as e:
+                        signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT})
                         await self._redis_cleanup(self.redis, redis_keys, block.height, True)
+                        signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGINT})
                         await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                         raise
+            signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGINT})
 
     async def save_block(self, block: Block):
         await self._save_block(block)
