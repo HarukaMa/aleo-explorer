@@ -52,7 +52,7 @@ routes = [
     Route("/v{version:int}/mapping/get_value/{program_id}/{mapping}/{key}", mapping_route),
     Route("/v{version:int}/mapping/list_program_mappings/{program_id}", mapping_list_route),
     Route("/v{version:int}/mapping/list_program_mapping_values/{program_id}/{mapping}", mapping_value_list_route),
-    Route("/v{version:int}/preview_finalize_execution", preview_finalize_route, methods=["POST"]),
+    Route("/v{version:int}/simulate_execution/finalize", preview_finalize_route, methods=["POST"]),
 ]
 
 async def startup():

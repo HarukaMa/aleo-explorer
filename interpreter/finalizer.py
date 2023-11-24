@@ -97,7 +97,7 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
                     if cur:
                         mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, str(program.id), str(c.mapping))
                     else:
-                        raise RuntimeError("unsupported execution configuration")
+                        mapping_cache[mapping_id] = await mapping_cache_read(db, str(program.id), str(c.mapping))
                 key = load_plaintext_from_operand(c.key, registers, finalize_state)
                 key_id = Field.loads(cached_get_key_id(str(program.id), str(c.mapping), key.dump()))
                 if mapping_cache:
@@ -122,7 +122,7 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
                     if cur:
                         mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, str(program.id), str(c.mapping))
                     else:
-                        raise RuntimeError("unsupported execution configuration")
+                        mapping_cache[mapping_id] = await mapping_cache_read(db, str(program.id), str(c.mapping))
                 key = load_plaintext_from_operand(c.key, registers, finalize_state)
                 key_id = Field.loads(cached_get_key_id(str(program.id), str(c.mapping), key.dump()))
                 if mapping_cache:
@@ -157,7 +157,7 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
                     if cur:
                         mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, str(program.id), str(c.mapping))
                     else:
-                        raise RuntimeError("unsupported execution configuration")
+                        mapping_cache[mapping_id] = await mapping_cache_read(db, str(program.id), str(c.mapping))
                 key = load_plaintext_from_operand(c.key, registers, finalize_state)
                 value = PlaintextValue(plaintext=load_plaintext_from_operand(c.value, registers, finalize_state))
                 key_id = Field.loads(cached_get_key_id(str(program.id), str(c.mapping), key.dump()))
@@ -220,7 +220,7 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
                     if cur:
                         mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, str(program.id), str(c.mapping))
                     else:
-                        raise RuntimeError("unsupported execution configuration")
+                        mapping_cache[mapping_id] = await mapping_cache_read(db, str(program.id), str(c.mapping))
                 key = load_plaintext_from_operand(c.key, registers, finalize_state)
                 key_id = Field.loads(cached_get_key_id(str(program.id), str(c.mapping), key.dump()))
                 if mapping_cache:
