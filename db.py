@@ -221,7 +221,7 @@ class Database:
     @staticmethod
     async def _insert_transition(conn: psycopg.AsyncConnection[dict[str, Any]], redis_conn: Redis[str],
                                  exe_tx_db_id: Optional[int], fee_db_id: Optional[int],
-                                 transition: Transition, ts_index: int):
+                                 transition: Transition, ts_index: int, is_rejected: bool = False):
         async with conn.cursor() as cur:
             await cur.execute(
                 "INSERT INTO transition (transition_id, transaction_execute_id, fee_id, program_id, "
@@ -350,7 +350,7 @@ class Database:
                 (program_db_id, str(transition.function_name))
             )
 
-            if transition.program_id == "credits.aleo":
+            if not is_rejected and transition.program_id == "credits.aleo":
                 transfer_from = None
                 transfer_to = None
                 fee_from = None
@@ -1106,7 +1106,7 @@ class Database:
                                     raise RuntimeError("failed to insert row into database")
                                 execute_transaction_db_id = res["id"]
                                 for ts_index, transition in enumerate(rejected.execution.transitions):
-                                    await self._insert_transition(conn, self.redis, execute_transaction_db_id, None, transition, ts_index)
+                                    await self._insert_transition(conn, self.redis, execute_transaction_db_id, None, transition, ts_index, True)
 
                             update_copy_data: list[tuple[int, str, str, str]] = []
                             for index, finalize_operation in enumerate(confirmed_transaction.finalize):
