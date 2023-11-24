@@ -155,6 +155,9 @@ async def finalize_block(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]],
             raise NotImplementedError
 
         if len(expected_operations) != len(operations):
+            print("expected:", expected_operations)
+            print("actual:", operations)
+            print(reject_reason)
             raise TypeError("invalid finalize operation length")
 
         for e, o in zip(expected_operations, operations):

@@ -299,6 +299,9 @@ class Scalar(Serializable, Add, Sub, Mul, Compare, Cast):
     def __le__(self, other: Self):
         return bool_.load(BytesIO(aleo_explorer_rust.scalar_ops(self, other, "lte"))).value
 
+    def __eq__(self, other: Self):
+        return self.data == other.data
+
     def cast(self, destination_type: Any, *, lossy: bool) -> Any:
         from .vm_instruction import LiteralType
         if not isinstance(destination_type, LiteralType):
