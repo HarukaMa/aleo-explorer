@@ -90,7 +90,7 @@ async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]
             raise TypeError("invalid rejected execute transaction")
         execution = confirmed_transaction.rejected.execution
         allow_state_change = False
-        local_mapping_cache = None
+        local_mapping_cache = {}
         if not isinstance(confirmed_transaction.transaction, FeeTransaction):
             raise TypeError("invalid rejected execute transaction")
         fee = confirmed_transaction.transaction.fee
