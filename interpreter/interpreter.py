@@ -257,4 +257,5 @@ async def preview_finalize_execution(db: Database, program: Program, function_na
         inputs,
         mapping_cache=None,
         allow_state_change=False,
+        execute_await=True,
     )
