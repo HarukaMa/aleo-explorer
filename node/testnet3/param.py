@@ -51,4 +51,5 @@ class Testnet3:
         "at15rq5mg88ex6mwy4wjjcn2zv655r4qcp6gn30jfkf5nrmngfljuyskxvacl",
         "at1flfmj9pxkyz86zsezsdcjtc8pzr7uhx7skjzu7u7mzhkrmqh5gpqsf3gaf",
         "at10jxxtckj7n7fxs3thpdaxhn5l9v939agrjz7nvrtrturuxrg45xqtdqpku",
+        "at1jf37fyjlzg5tzazdaqqg734jx9sm0glktklsaw8m4hh5t6nlavpsveh88w",
     ]
