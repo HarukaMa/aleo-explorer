@@ -2915,6 +2915,7 @@ class Database:
             (2, self.migrate_2_add_helper_functions),
             (3, self.migrate_3_set_mapping_history_key_not_null),
             (4, self.migrate_4_support_batch_certificate_v2),
+            (5, self.migrate_5_fix_missing_program),
         ]
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -2947,6 +2948,22 @@ class Database:
     async def migrate_4_support_batch_certificate_v2(conn: psycopg.AsyncConnection[dict[str, Any]]):
         await conn.execute("alter table explorer.dag_vertex alter column batch_certificate_id drop not null")
         await conn.execute("alter table explorer.dag_vertex_signature alter column timestamp drop not null")
+
+    @staticmethod
+    async def migrate_5_fix_missing_program(conn: psycopg.AsyncConnection[dict[str, Any]]):
+        async with conn.cursor() as cur:
+            await cur.execute("select id from transaction where transaction_id = 'at1flfmj9pxkyz86zsezsdcjtc8pzr7uhx7skjzu7u7mzhkrmqh5gpqsf3gaf'")
+            transaction_id = (await cur.fetchone())["id"]
+            await cur.execute("select id from transaction_deploy where transaction_id = %s", (transaction_id,))
+            transaction_deploy_id = (await cur.fetchone())["id"]
+            program = Program.load(BytesIO(bytes.fromhex("010b76656c747a6c65656c6c3204616c656f000100040568656c6c6f0200000001000b000102000b0100000002000100000100010002010001000202000b00")))
+            class x:
+                owner = ProgramOwner(
+                    address=Address.loads("aleo1cgxwzfrwpucrvyxgf9muu49mqnw2gmktm24kf9uvchurhyp2jggs3z4xmt"),
+                    signature=Signature.loads("sign1t6szyjpa6mvqsm4uzr57zl0uzu6wnmdwasfuqpkp3ead9lvh0sphjtgadd77lp57g87mkzxep5wylye7ftxz8upgqv65wvqa5wq8wq5h6sn6z5gmu30xfgp3tk9u44kqcjalwv4fpsml3uxwdvy2larvq7tpjf0f27mlm5ckkewzzawllxhfglhgnjp6w5gyxp6ar82xjy3q66hqwt7")
+                )
+            await Database._save_program(None, cur, program, transaction_deploy_id, cast(DeployTransaction, x()))
+
 
     # debug method
     async def clear_database(self):
