@@ -965,6 +965,19 @@ class Database:
                                         for row in tid_copy_data:
                                             await copy.write_row(row)
 
+                        ignore_deploy_txids: list[str] = []
+                        program_name_seen: dict[str, str] = {}
+                        for confirmed_transaction in block.transactions:
+                            if isinstance(confirmed_transaction, AcceptedDeploy):
+                                transaction_id = str(confirmed_transaction.transaction.id)
+                                transaction = confirmed_transaction.transaction
+                                if isinstance(transaction, DeployTransaction):
+                                    program_name = str(transaction.deployment.program.id)
+                                    if program_name in program_name_seen:
+                                        ignore_deploy_txids.append(program_name_seen[program_name])
+                                    program_name_seen[program_name] = transaction_id
+                                else:
+                                    raise ValueError("expected deploy transaction")
 
                         for ct_index, confirmed_transaction in enumerate(block.transactions):
                             await cur.execute(
@@ -1004,8 +1017,7 @@ class Database:
 
 
                                 # TODO: remove bug workaround
-                                from node.testnet3 import Testnet3
-                                if str(confirmed_transaction.transaction.id) not in Testnet3.ignore_deploy_txids:
+                                if str(confirmed_transaction.transaction.id) not in ignore_deploy_txids:
                                     await self._save_program(cur, transaction.deployment.program, deploy_transaction_db_id, transaction)
 
                                 await cur.execute(
