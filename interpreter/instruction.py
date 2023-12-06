@@ -189,6 +189,11 @@ def cast_op(operands: list[Operand], destination: Register, cast_type: CastType,
         struct_plaintext = StructPlaintext(members=Vec[Tuple[Identifier, Plaintext], u8](members))
         verify_struct_type(struct_plaintext, struct_definition)
         store_plaintext_to_register(struct_plaintext, destination, registers)
+    elif isinstance(plaintext_type, ArrayPlaintextType):
+        array: list[Plaintext] = []
+        for operand in operands:
+            array.append(load_plaintext_from_operand(operand, registers, finalize_state))
+        store_plaintext_to_register(ArrayPlaintext(elements=Vec[Plaintext, u32](array)), destination, registers)
     else:
         raise NotImplementedError
 
