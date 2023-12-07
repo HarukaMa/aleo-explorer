@@ -1686,7 +1686,7 @@ class Database:
                         certificates.append(
                             BatchCertificate1(
                                 certificate_id=Field.loads(dag_vertex["batch_certificate_id"]),
-                                batch_header=BatchHeader(
+                                batch_header=BatchHeader1(
                                     batch_id=Field.loads(dag_vertex["batch_id"]),
                                     author=Address.loads(dag_vertex["author"]),
                                     round_=u64(dag_vertex["round"]),
@@ -1701,7 +1701,7 @@ class Database:
                     else:
                         certificates.append(
                             BatchCertificate2(
-                                batch_header=BatchHeader(
+                                batch_header=BatchHeader1(
                                     batch_id=Field.loads(dag_vertex["batch_id"]),
                                     author=Address.loads(dag_vertex["author"]),
                                     round_=u64(dag_vertex["round"]),
@@ -1716,7 +1716,7 @@ class Database:
                 subdags: dict[u64, Vec[BatchCertificate, u32]] = defaultdict(lambda: Vec[BatchCertificate, u32]([]))
                 for certificate in certificates:
                     subdags[certificate.batch_header.round].append(certificate)
-                subdag = Subdag(
+                subdag = Subdag1(
                     subdag=subdags
                 )
                 auth = QuorumAuthority(subdag=subdag)

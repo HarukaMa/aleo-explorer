@@ -3219,6 +3219,16 @@ class TransactionTransmissionID(TransmissionID):
 
 
 class BatchHeader(Serializable):
+
+    @classmethod
+    def load(cls, data: BytesIO) -> Self:
+        version = u8.load(data)
+        if BatchHeader1.version == version:
+            return BatchHeader1.load(data)
+        elif BatchHeader2.version == version:
+            return BatchHeader2.load(data)
+
+class BatchHeader1(BatchHeader):
     version = u8(1)
 
     def __init__(self, *, batch_id: Field, author: Address, round_: u64, timestamp: i64, transmission_ids: Vec[TransmissionID, u32],
@@ -3233,13 +3243,10 @@ class BatchHeader(Serializable):
 
     def dump(self) -> bytes:
         return self.version.dump() + self.batch_id.dump() + self.author.dump() + self.round.dump() + self.timestamp.dump() \
-               + self.transmission_ids.dump() + self.previous_certificate_ids.dump() + self.signature.dump()
+            + self.transmission_ids.dump() + self.previous_certificate_ids.dump() + self.signature.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
-        version = u8.load(data)
-        if version != cls.version:
-            raise ValueError("invalid batch header version")
         batch_id = Field.load(data)
         author = Address.load(data)
         round_ = u64.load(data)
@@ -3250,6 +3257,39 @@ class BatchHeader(Serializable):
         return cls(batch_id=batch_id, author=author, round_=round_, timestamp=timestamp,
                    transmission_ids=transmission_ids, previous_certificate_ids=previous_certificate_ids,
                    signature=signature)
+
+class BatchHeader2(BatchHeader):
+    version = u8(2)
+
+    def __init__(self, *, batch_id: Field, author: Address, round_: u64, timestamp: i64, transmission_ids: Vec[TransmissionID, u32],
+                 previous_certificate_ids: Vec[Field, u32], last_election_certificate_ids: Vec[Field, u16], signature: Signature):
+        self.batch_id = batch_id
+        self.author = author
+        self.round = round_
+        self.timestamp = timestamp
+        self.transmission_ids = transmission_ids
+        self.previous_certificate_ids = previous_certificate_ids
+        self.last_election_certificate_ids = last_election_certificate_ids
+        self.signature = signature
+
+    def dump(self) -> bytes:
+        return (self.version.dump() + self.batch_id.dump() + self.author.dump() + self.round.dump() + self.timestamp.dump()
+            + self.transmission_ids.dump() + self.previous_certificate_ids.dump() + self.last_election_certificate_ids.dump()
+            + self.signature.dump())
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        batch_id = Field.load(data)
+        author = Address.load(data)
+        round_ = u64.load(data)
+        timestamp = i64.load(data)
+        transmission_ids = Vec[TransmissionID, u32].load(data)
+        previous_certificate_ids = Vec[Field, u32].load(data)
+        last_election_certificate_ids = Vec[Field, u16].load(data)
+        signature = Signature.load(data)
+        return cls(batch_id=batch_id, author=author, round_=round_, timestamp=timestamp,
+                   transmission_ids=transmission_ids, previous_certificate_ids=previous_certificate_ids,
+                   last_election_certificate_ids=last_election_certificate_ids, signature=signature)
 
 
 class BatchCertificate(Serializable):
@@ -3301,6 +3341,18 @@ class BatchCertificate2(BatchCertificate):
 
 
 class Subdag(Serializable):
+
+    subdag: dict[u64, Vec[BatchCertificate, u32]]
+
+    @classmethod
+    def load(cls, data: BytesIO) -> Self:
+        version = u8.load(data)
+        if version == Subdag1.version:
+            return Subdag1.load(data)
+        elif version == Subdag2.version:
+            return Subdag2.load(data)
+
+class Subdag1(Serializable):
     version = u8(1)
 
     def __init__(self, *, subdag: dict[u64, Vec[BatchCertificate, u32]]):
@@ -3315,15 +3367,40 @@ class Subdag(Serializable):
 
     @classmethod
     def load(cls, data: BytesIO):
-        version = u8.load(data)
-        if version != cls.version:
-            raise ValueError("invalid subdag version")
         subdag = {}
         for _ in range(u32.load(data)):
             round_ = u64.load(data)
             certificates = Vec[BatchCertificate, u32].load(data)
             subdag[round_] = certificates
         return cls(subdag=subdag)
+
+
+class Subdag2(Serializable):
+    version = u8(2)
+
+    def __init__(self, *, subdag: dict[u64, Vec[BatchCertificate, u32]],
+                 election_certificate_ids: Vec[Field, u16]):
+        self.subdag = subdag
+        self.election_certificate_ids = election_certificate_ids
+
+    def dump(self) -> bytes:
+        res = self.version.dump()
+        res += u32(len(self.subdag)).dump()
+        for round_, certificates in self.subdag.items():
+            res += round_.dump() + certificates.dump()
+        res += self.election_certificate_ids.dump()
+        return res
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        subdag = {}
+        for _ in range(u32.load(data)):
+            round_ = u64.load(data)
+            certificates = Vec[BatchCertificate, u32].load(data)
+            subdag[round_] = certificates
+        election_certificate_ids = Vec[Field, u16].load(data)
+        return cls(subdag=subdag, election_certificate_ids=election_certificate_ids)
+
 
 class QuorumAuthority(Authority):
     type = Authority.Type.Quorum

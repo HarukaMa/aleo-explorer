@@ -12,7 +12,7 @@ def load_program(program_id: str) -> Program:
 class Testnet3:
     edition = u16()
     network_id = u16(3)
-    version = u32(11)
+    version = u32(12)
 
     genesis_block = Block.load(BytesIO(open(os.path.join(os.path.dirname(__file__), "block.genesis"), "rb").read()))
     dev_genesis_block = Block.load(BytesIO(open(os.path.join(os.path.dirname(__file__), "dev.genesis"), "rb").read()))
