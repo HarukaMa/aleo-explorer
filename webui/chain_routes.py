@@ -95,7 +95,7 @@ async def block_route(request: Request):
                     "type": "Deploy",
                     "state": "Accepted",
                     "transitions_count": 1,
-                    "base_fee": base_fee,
+                    "base_fee": base_fee - burnt_fee,
                     "priority_fee": priority_fee,
                     "burnt_fee": burnt_fee,
                 }
@@ -115,7 +115,7 @@ async def block_route(request: Request):
                     "type": "Execute",
                     "state": "Accepted",
                     "transitions_count": len(tx.execution.transitions) + bool(tx.additional_fee.value is not None),
-                    "base_fee": base_fee,
+                    "base_fee": base_fee - burnt_fee,
                     "priority_fee": priority_fee,
                     "burnt_fee": burnt_fee,
                 }
@@ -131,7 +131,7 @@ async def block_route(request: Request):
                     "type": "Execute",
                     "state": "Rejected",
                     "transitions_count": 1,
-                    "base_fee": base_fee,
+                    "base_fee": base_fee - burnt_fee,
                     "priority_fee": priority_fee,
                     "burnt_fee": burnt_fee,
                 }
