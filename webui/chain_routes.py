@@ -78,9 +78,9 @@ async def block_route(request: Request):
     total_burnt_fee = 0
     for ct in block.transactions.transactions:
         fee_breakdown = await ct.get_fee_breakdown(db)
-        base_fee = fee_breakdown.storage_cost + fee_breakdown.namespace_cost + sum(fee_breakdown.finalize_costs)
-        priority_fee = fee_breakdown.priority_fee
         burnt_fee = fee_breakdown.burnt
+        base_fee = fee_breakdown.storage_cost + fee_breakdown.namespace_cost + sum(fee_breakdown.finalize_costs) - burnt_fee
+        priority_fee = fee_breakdown.priority_fee
         total_base_fee += base_fee
         total_priority_fee += priority_fee
         total_burnt_fee += burnt_fee
