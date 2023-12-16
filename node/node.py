@@ -88,11 +88,14 @@ class Node:
         if isinstance(frame.message, BlockRequest):
             if self.handshake_state != 1:
                 raise Exception("handshake is not done")
-            msg = frame.message
-            for height in range(msg.start_height, msg.end_height):
-                block = [await self.explorer_request(explorer.Request.GetBlockByHeight(height))]
-                print("sending block", height)
-                await self.send_message(BlockResponse(request=msg, blocks=Data[Vec[Block, u8]](Vec[Block, u8](block))))
+
+            # We can't send blocks anymore as we don't want to track complete blocks for efficiency.
+
+            # msg = frame.message
+            # for height in range(msg.start_height, msg.end_height):
+            #     block = [await self.explorer_request(explorer.Request.GetBlockByHeight(height))]
+            #     print("sending block", height)
+            #     await self.send_message(BlockResponse(request=msg, blocks=Data[Vec[Block, u8]](Vec[Block, u8](block))))
 
         elif isinstance(frame.message, BlockResponse):
             if self.handshake_state != 1:
