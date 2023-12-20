@@ -807,11 +807,17 @@ hash_ops = {
     HT.HashBHP512: "bhp512",
     HT.HashBHP768: "bhp768",
     HT.HashBHP1024: "bhp1024",
+    HT.HashKeccak256: "keccak256",
+    HT.HashKeccak384: "keccak384",
+    HT.HashKeccak512: "keccak512",
     HT.HashPED64: "ped64",
     HT.HashPED128: "ped128",
     HT.HashPSD2: "psd2",
     HT.HashPSD4: "psd4",
     HT.HashPSD8: "psd8",
+    HT.HashSha3_256: "sha3_256",
+    HT.HashSha3_384: "sha3_384",
+    HT.HashSha3_512: "sha3_512",
 }
 
 commit_ops = {
