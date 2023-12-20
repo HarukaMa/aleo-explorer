@@ -9,7 +9,6 @@ from typing import Awaitable, ParamSpec, cast
 import psycopg
 import psycopg.sql
 from psycopg.rows import dict_row
-from psycopg.types.json import Jsonb
 from psycopg_pool import AsyncConnectionPool
 from redis.asyncio import Redis
 
@@ -498,6 +497,7 @@ class Database:
 
         global_mapping_cache[bonded_mapping_id] = {}
         bonded_mapping: dict[str, dict[str, Any]] = {}
+        value_id_batch: dict[str, bytes] = {}
         for address, (validator, amount) in stakers.items():
             key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=address))
             key_id = Field.loads(cached_get_key_id("credits.aleo", "bonded", key.dump()))
@@ -515,25 +515,30 @@ class Database:
                     ])
                 )
             )
-            value_id = Field.loads(aleo_explorer_rust.get_value_id(str(key_id), value.dump()))
+            value_id_batch[str(key_id)] = value.dump()
             bonded_mapping[str(key_id)] = {
                 "key": key.dump().hex(),
-                "value_id": str(value_id),
                 "value": value.dump().hex(),
             }
             global_mapping_cache[bonded_mapping_id][key_id] = {
                 "key": key,
-                "value_id": value_id,
                 "value": value,
             }
+        value_ids = aleo_explorer_rust.get_value_id_batch(value_id_batch)
+        for key_id, value_id in value_ids.items():
+            value_id_check = aleo_explorer_rust.get_value_id(str(key_id), value_id_batch[key_id])
+            if value_id != value_id_check:
+                raise RuntimeError("value id mismatch")
+            bonded_mapping[key_id]["value_id"] = value_id
+            global_mapping_cache[bonded_mapping_id][Field.loads(key_id)]["value_id"] = Field.loads(value_id)
         await redis_conn.execute_command("MULTI")
         await redis_conn.delete("credits.aleo:bonded")
         await redis_conn.hset("credits.aleo:bonded", mapping={k: json.dumps(v) for k, v in bonded_mapping.items()})
         await redis_conn.execute_command("EXEC")
-        await cur.execute(
-            "INSERT INTO mapping_bonded_history (height, content) VALUES (%s, %s)",
-            (height, Jsonb(bonded_mapping))
-        )
+        # await cur.execute(
+        #     "INSERT INTO mapping_bonded_history (height, content) VALUES (%s, %s)",
+        #     (height, Jsonb(bonded_mapping))
+        # )
 
     @staticmethod
     async def _save_committee_history(cur: psycopg.AsyncCursor[dict[str, Any]], height: int, committee: Committee):
