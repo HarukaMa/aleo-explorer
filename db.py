@@ -479,15 +479,12 @@ class Database:
                     ])
                 )
             )
-            value_id = Field.loads(aleo_explorer_rust.get_value_id(str(key_id), value.dump()))
             committee_mapping[str(key_id)] = {
                 "key": key.dump().hex(),
-                "value_id": str(value_id),
                 "value": value.dump().hex(),
             }
             global_mapping_cache[committee_mapping_id][key_id] = {
                 "key": key,
-                "value_id": value_id,
                 "value": value,
             }
         await redis_conn.execute_command("MULTI")
@@ -497,7 +494,6 @@ class Database:
 
         global_mapping_cache[bonded_mapping_id] = {}
         bonded_mapping: dict[str, dict[str, Any]] = {}
-        value_id_batch: dict[str, bytes] = {}
         for address, (validator, amount) in stakers.items():
             key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=address))
             key_id = Field.loads(cached_get_key_id("credits.aleo", "bonded", key.dump()))
@@ -515,7 +511,6 @@ class Database:
                     ])
                 )
             )
-            value_id_batch[str(key_id)] = value.dump()
             bonded_mapping[str(key_id)] = {
                 "key": key.dump().hex(),
                 "value": value.dump().hex(),
@@ -524,13 +519,6 @@ class Database:
                 "key": key,
                 "value": value,
             }
-        value_ids = aleo_explorer_rust.get_value_id_batch(value_id_batch)
-        for key_id, value_id in value_ids.items():
-            value_id_check = aleo_explorer_rust.get_value_id(str(key_id), value_id_batch[key_id])
-            if value_id != value_id_check:
-                raise RuntimeError("value id mismatch")
-            bonded_mapping[key_id]["value_id"] = value_id
-            global_mapping_cache[bonded_mapping_id][Field.loads(key_id)]["value_id"] = Field.loads(value_id)
         await redis_conn.execute_command("MULTI")
         await redis_conn.delete("credits.aleo:bonded")
         await redis_conn.hset("credits.aleo:bonded", mapping={k: json.dumps(v) for k, v in bonded_mapping.items()})
@@ -579,7 +567,6 @@ class Database:
             value_id = Field.loads(aleo_explorer_rust.get_value_id(str(key_id), value.dump()))
             global_mapping_cache[account_mapping_id][key_id] = {
                 "key": key,
-                "value_id": value_id,
                 "value": value,
             }
             operations.append({
@@ -773,7 +760,6 @@ class Database:
                     value_id = Field.loads(aleo_explorer_rust.get_value_id(str(key_id), value.dump()))
                     global_mapping_cache[account_mapping_id][key_id] = {
                         "key": key,
-                        "value_id": value_id,
                         "value": value,
                     }
                     operations.append({
@@ -2653,7 +2639,6 @@ class Database:
         if program_name == "credits.aleo" and mapping_name in ["committee", "bonded"]:
             def transform(d: dict[str, Any]):
                 return {
-                    "value_id": Field.loads(d["value_id"]),
                     "key": Plaintext.load(BytesIO(bytes.fromhex(d["key"]))),
                     "value": Value.load(BytesIO(bytes.fromhex(d["value"]))),
                 }
@@ -2671,7 +2656,6 @@ class Database:
                 data = await cur.fetchall()
                 def transform(d: dict[str, Any]):
                     return {
-                        "value_id": Field.loads(d["value_id"]),
                         "key": Plaintext.load(BytesIO(d["key"])),
                         "value": Value.load(BytesIO(d["value"])),
                     }
@@ -2758,7 +2742,6 @@ class Database:
                 conn = self.redis
                 data = {
                     "key": key.hex(),
-                    "value_id": value_id,
                     "value": value.hex(),
                 }
                 await conn.hset(f"{program_name}:{mapping_name}", key_id, json.dumps(data))

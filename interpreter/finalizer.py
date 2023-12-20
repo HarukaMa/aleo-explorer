@@ -165,12 +165,10 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
                 if mapping_cache:
                     if key_id not in mapping_cache[mapping_id]:
                         mapping_cache[mapping_id][key_id] = {
-                            "value_id": value_id,
                             "key": key,
                             "value": value,
                         }
                     else:
-                        mapping_cache[mapping_id][key_id]["value_id"] = value_id
                         mapping_cache[mapping_id][key_id]["value"] = value
                     if debug:
                         print(f"set {c.mapping}[{key}] = {value}")

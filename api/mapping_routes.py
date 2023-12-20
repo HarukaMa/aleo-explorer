@@ -93,6 +93,5 @@ async def mapping_value_list_route(request: Request, program_cache: dict[str, Pr
         res[str(key_id)] = {
             "key": str(item["key"]),
             "value": str(item["value"]),
-            "value_id": str(item["value_id"]),
         }
     return JSONResponse(res)
