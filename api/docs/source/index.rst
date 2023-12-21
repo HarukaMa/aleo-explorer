@@ -9,6 +9,7 @@ Explorer API
 .. toctree::
    :maxdepth: 2
 
+   version
    quota
    mapping
    execute
