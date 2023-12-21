@@ -104,12 +104,9 @@ async def mapping_value_list_route(request: Request, program_cache: dict[str, Pr
             count = 100
         cursor = int(request.query_params.get("cursor", 0))
         mapping_data = await db.get_mapping_key_value(program_id, mapping, count, cursor)
-        res: dict[str, dict[str, str]] = {}
+        res: dict[str, str] = {}
         for key_id, item in mapping_data[0].items():
-            res[str(key_id)] = {
-                "key": str(item["key"]),
-                "value": str(item["value"]),
-            }
+            res[str(item["key"])] = str(item["value"])
 
         return JSONResponse({"result": res, "cursor": mapping_data[1]})
 
