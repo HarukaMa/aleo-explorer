@@ -73,7 +73,7 @@ async def mapping_list_route(request: Request, program_cache: dict[str, Program]
 @use_program_cache
 async def mapping_value_list_route(request: Request, program_cache: dict[str, Program]):
     db: Database = request.app.state.db
-    _ = request.path_params["version"]
+    version = request.path_params["version"]
     program_id = request.path_params["program_id"]
     mapping = request.path_params["mapping"]
     try:
@@ -87,11 +87,28 @@ async def mapping_value_list_route(request: Request, program_cache: dict[str, Pr
     mappings = program.mappings
     if mapping not in mappings:
         return JSONResponse({"error": "Mapping not found"}, status_code=404)
-    mapping_cache = await db.get_mapping_cache(program_id, mapping)
-    res: dict[str, dict[str, str]] = {}
-    for key_id, item in mapping_cache.items():
-        res[str(key_id)] = {
-            "key": str(item["key"]),
-            "value": str(item["value"]),
-        }
-    return JSONResponse(res)
+
+    if version <= 1:
+        mapping_cache = await db.get_mapping_cache(program_id, mapping)
+        res: dict[str, dict[str, str]] = {}
+        for key_id, item in mapping_cache.items():
+            res[str(key_id)] = {
+                "key": str(item["key"]),
+                "value": str(item["value"]),
+            }
+        return JSONResponse(res)
+
+    else:
+        count = int(request.query_params.get("count", 50))
+        if count > 100:
+            count = 100
+        cursor = int(request.query_params.get("cursor", 0))
+        mapping_data = await db.get_mapping_key_value(program_id, mapping, count, cursor)
+        res: dict[str, dict[str, str]] = {}
+        for key_id, item in mapping_data[0].items():
+            res[str(key_id)] = {
+                "key": str(item["key"]),
+                "value": str(item["value"]),
+            }
+
+        return JSONResponse({"result": res, "cursor": mapping_data[1]})

@@ -502,7 +502,7 @@ class Database:
                     members=Vec[Tuple[Identifier, Plaintext], u8]([
                         Tuple[Identifier, Plaintext]((
                             Identifier.loads("validator"),
-                             LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=validator))
+                            LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=validator))
                         )),
                         Tuple[Identifier, Plaintext]((
                             Identifier.loads("microcredits"),
@@ -2648,7 +2648,7 @@ class Database:
             mapping_id = Field.loads(cached_get_mapping_id(program_name, mapping_name))
             try:
                 await cur.execute(
-                    "SELECT key_id, value_id, key, value FROM mapping_value mv "
+                    "SELECT key_id, key, value FROM mapping_value mv "
                     "JOIN mapping m on mv.mapping_id = m.id "
                     "WHERE m.mapping_id = %s ",
                     (str(mapping_id),)
@@ -2707,6 +2707,48 @@ class Database:
                     if (res := await cur.fetchone()) is None:
                         return 0
                     return res['count']
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def get_mapping_key_value(self, program_id: str, mapping: str, count: int, cursor: int = 0) -> tuple[dict[Field, Any], int]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    if program_id == "credits.aleo" and mapping in ["committee", "bonded"]:
+                        def transform(d: dict[str, Any]):
+                            return {
+                                "key": Plaintext.load(BytesIO(bytes.fromhex(d["key"]))),
+                                "value": Value.load(BytesIO(bytes.fromhex(d["value"]))),
+                            }
+                        conn = self.redis
+                        data = await conn.hscan(f"{program_id}:{mapping}", cursor, count=count)
+                        return {Field.loads(k): transform(json.loads(v)) for k, v in data[1].items()}, data[0]
+                    else:
+                        cursor_clause = psycopg.sql.SQL("AND mv.id < {} ").format(psycopg.sql.Literal(cursor)) if cursor > 0 else psycopg.sql.SQL("")
+                        await cur.execute(
+                            psycopg.sql.Composed([
+                                psycopg.sql.SQL(
+                                    "SELECT mv.id, key_id, key, value FROM mapping_value mv "
+                                    "JOIN mapping m on mv.mapping_id = m.id "
+                                    "WHERE m.program_id = %s AND m.mapping = %s "
+                                ),
+                                cursor_clause,
+                                psycopg.sql.SQL(
+                                    "ORDER BY mv.id DESC "
+                                    "LIMIT %s"
+                                )
+                            ]),
+                            (program_id, mapping, count)
+                        )
+                        data = await cur.fetchall()
+                        def transform(d: dict[str, Any]):
+                            return {
+                                "key": Plaintext.load(BytesIO(d["key"])),
+                                "value": Value.load(BytesIO(d["value"])),
+                            }
+                        cursor = data[-1]["id"] if len(data) > 0 else 0
+                        return {Field.loads(x["key_id"]): transform(x) for x in data}, cursor
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
