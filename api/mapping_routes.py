@@ -112,3 +112,25 @@ async def mapping_value_list_route(request: Request, program_cache: dict[str, Pr
             }
 
         return JSONResponse({"result": res, "cursor": mapping_data[1]})
+
+@async_check_sync
+@use_program_cache
+async def mapping_key_count_route(request: Request, program_cache: dict[str, Program]):
+    db: Database = request.app.state.db
+    version = request.path_params["version"]
+    if version <= 1:
+        return JSONResponse({"error": "This endpoint is not supported in this version"}, status_code=400)
+    program_id = request.path_params["program_id"]
+    mapping = request.path_params["mapping"]
+    try:
+        program = program_cache[program_id]
+    except KeyError:
+        program = await db.get_program(program_id)
+        if not program:
+            return JSONResponse({"error": "Program not found"}, status_code=404)
+        program = Program.load(BytesIO(program))
+        program_cache[program_id] = program
+    mappings = program.mappings
+    if mapping not in mappings:
+        return JSONResponse({"error": "Mapping not found"}, status_code=404)
+    return JSONResponse(await db.get_mapping_key_count(program_id, mapping))

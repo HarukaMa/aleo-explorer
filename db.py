@@ -2753,6 +2753,27 @@ class Database:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
+    async def get_mapping_key_count(self, program_id: str, mapping: str) -> int:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    if program_id == "credits.aleo" and mapping in ["committee", "bonded"]:
+                        conn = self.redis
+                        return await conn.hlen(f"{program_id}:{mapping}")
+                    else:
+                        await cur.execute(
+                            "SELECT COUNT(*) FROM mapping_value mv "
+                            "JOIN mapping m on mv.mapping_id = m.id "
+                            "WHERE m.program_id = %s AND m.mapping = %s",
+                            (program_id, mapping)
+                        )
+                        if (res := await cur.fetchone()) is None:
+                            return 0
+                        return res['count']
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
     async def initialize_mapping(self, cur: psycopg.AsyncCursor[dict[str, Any]], mapping_id: str, program_id: str, mapping: str):
         try:
             await cur.execute(

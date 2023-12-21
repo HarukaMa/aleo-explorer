@@ -15,7 +15,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 from api.execute_routes import preview_finalize_route
-from api.mapping_routes import mapping_route, mapping_list_route, mapping_value_list_route
+from api.mapping_routes import mapping_route, mapping_list_route, mapping_value_list_route, mapping_key_count_route
 from db import Database
 from middleware.api_filter import APIFilterMiddleware
 from middleware.api_quota import APIQuotaMiddleware
@@ -52,6 +52,7 @@ routes = [
     Route("/v{version:int}/mapping/get_value/{program_id}/{mapping}/{key}", mapping_route),
     Route("/v{version:int}/mapping/list_program_mappings/{program_id}", mapping_list_route),
     Route("/v{version:int}/mapping/list_program_mapping_values/{program_id}/{mapping}", mapping_value_list_route),
+    Route("/v{version:int}/mapping/get_key_count/{program_id}/{mapping}", mapping_key_count_route),
     Route("/v{version:int}/simulate_execution/finalize", preview_finalize_route, methods=["POST"]),
 ]
 
