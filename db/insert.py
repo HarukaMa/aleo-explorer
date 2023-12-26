@@ -507,37 +507,6 @@ class DatabaseInsert(DatabaseBase):
         return committee_members
 
     @staticmethod
-    async def _get_bonded_mapping(redis_conn: Redis[str]) -> dict[Address, tuple[Address, u64]]:
-        data = await redis_conn.hgetall("credits.aleo:bonded")
-
-        stakers: dict[Address, tuple[Address, u64]] = {}
-        for d in data.values():
-            d = json.loads(d)
-            key = Plaintext.load(BytesIO(bytes.fromhex(d["key"])))
-            if not isinstance(key, LiteralPlaintext):
-                raise RuntimeError("invalid bonded key")
-            if not isinstance(key.literal.primitive, Address):
-                raise RuntimeError("invalid bonded key")
-            value = Value.load(BytesIO(bytes.fromhex(d["value"])))
-            if not isinstance(value, PlaintextValue):
-                raise RuntimeError("invalid bonded value")
-            plaintext = value.plaintext
-            if not isinstance(plaintext, StructPlaintext):
-                raise RuntimeError("invalid bonded value")
-            validator = plaintext["validator"]
-            if not isinstance(validator, LiteralPlaintext):
-                raise RuntimeError("invalid bonded value")
-            if not isinstance(validator.literal.primitive, Address):
-                raise RuntimeError("invalid bonded value")
-            amount = plaintext["microcredits"]
-            if not isinstance(amount, LiteralPlaintext):
-                raise RuntimeError("invalid bonded value")
-            if not isinstance(amount.literal.primitive, u64):
-                raise RuntimeError("invalid bonded value")
-            stakers[key.literal.primitive] = validator.literal.primitive, amount.literal.primitive
-        return stakers
-
-    @staticmethod
     def _check_committee_staker_match(committee_members: dict[Address, tuple[u64, bool_]],
                                       stakers: dict[Address, tuple[Address, u64]]):
         address_stakes: dict[Address, u64] = defaultdict(lambda: u64())
@@ -601,7 +570,7 @@ class DatabaseInsert(DatabaseBase):
         for ratification in ratifications:
             if isinstance(ratification, BlockRewardRatify):
                 committee_members = await DatabaseInsert._get_committee_mapping(redis_conn)
-                stakers = await DatabaseInsert._get_bonded_mapping(redis_conn)
+                stakers = await self.get_bonded_mapping()
 
                 DatabaseInsert._check_committee_staker_match(committee_members, stakers)
 

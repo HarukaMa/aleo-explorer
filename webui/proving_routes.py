@@ -7,7 +7,7 @@ from starlette.exceptions import HTTPException
 from starlette.requests import Request
 
 from aleo_types import PlaintextValue, LiteralPlaintext, Literal, \
-    Address, Value, StructPlaintext
+    Address, Value, StructPlaintext, Int
 from db import Database
 from .template import templates
 from .utils import out_of_sync_check
@@ -170,7 +170,7 @@ async def address_route(request: Request):
     else:
         value = cast(PlaintextValue, Value.load(BytesIO(public_balance_bytes)))
         plaintext = cast(LiteralPlaintext, value.plaintext)
-        public_balance = int(plaintext.literal.primitive)
+        public_balance = int(cast(Int, plaintext.literal.primitive))
     if bond_state_bytes is None:
         bond_state = None
     else:
@@ -180,7 +180,7 @@ async def address_route(request: Request):
         amount = cast(LiteralPlaintext, plaintext["microcredits"])
         bond_state = {
             "validator": str(validator.literal.primitive),
-            "amount": int(amount.literal.primitive),
+            "amount": int(cast(Int, amount.literal.primitive)),
         }
     if unbond_state_bytes is None:
         unbond_state = None
@@ -190,20 +190,32 @@ async def address_route(request: Request):
         amount = cast(LiteralPlaintext, plaintext["microcredits"])
         height = cast(LiteralPlaintext, plaintext["height"])
         unbond_state = {
-            "amount": int(amount.literal.primitive),
+            "amount": int(cast(Int, amount.literal.primitive)),
             "height": str(height.literal.primitive),
         }
     if committee_state_bytes is None:
         committee_state = None
+        address_stakes = None
+        uptime = None
     else:
         value = cast(PlaintextValue, Value.load(BytesIO(committee_state_bytes)))
         plaintext = cast(StructPlaintext, value.plaintext)
         amount = cast(LiteralPlaintext, plaintext["microcredits"])
         is_open = cast(LiteralPlaintext, plaintext["is_open"])
         committee_state = {
-            "amount": int(amount.literal.primitive),
+            "amount": int(cast(Int, amount.literal.primitive)),
             "is_open": bool(is_open.literal.primitive),
         }
+        bonded_mapping = await db.get_bonded_mapping()
+        bonded_mapping = sorted(bonded_mapping.items(), key=lambda x: x[1][1], reverse=True)
+        address_stakes = {}
+        for staker_addr, (validator_addr, stake_amount) in bonded_mapping:
+            if str(validator_addr) == address:
+                address_stakes[str(staker_addr)] = int(stake_amount)
+                if len(address_stakes) >= 50:
+                    break
+        uptime = await db.get_validator_uptime(address)
+
     if stake_reward is None:
         stake_reward = 0
     if transfer_in is None:
@@ -243,6 +255,8 @@ async def address_route(request: Request):
         "bond_state": bond_state,
         "unbond_state": unbond_state,
         "committee_state": committee_state,
+        "address_stakes": address_stakes,
+        "uptime": uptime,
         "stake_reward": stake_reward,
         "transfer_in": transfer_in,
         "transfer_out": transfer_out,

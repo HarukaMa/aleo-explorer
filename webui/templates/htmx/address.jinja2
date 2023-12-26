@@ -16,137 +16,178 @@
         {% call data_line("Public credits") %}
             {{ public_balance | format_aleo_credit | safe }} Aleo credits
         {% endcall %}
-        {% call data_line("Credits staked") %}
-            {% if bond_state %}
-                {{ bond_state.amount | format_aleo_credit | safe }} Aleo credits, voted to {% if bond_state.validator == address %}self{% else %}validator <span class="mono"><a href="/address?a={{ bond_state.validator }}">{{ bond_state.validator }}</a></span>{% endif %}
-            {% else %}
-                0 Aleo credits
+        </div>
+
+        <ul class="tabs" data-tabs id="address-tabs">
+            <li class="tabs-title is-active"><a href="#stats">Address stats</a></li>
+            {% if committee_state %}
+            <li class="tabs-title"><a href="#validator">Validator stats</a></li>
             {% endif %}
-        {% endcall %}
-        {% if unbond_state %}
-            {% call data_line("Credits unstaking") %}
-                {{ unbond_state.amount | format_aleo_credit | safe }} Aleo credits, withdrawable {% if unbond_state.height > sync_info.local_height %}in {{ unbond_state.height - sync_info.local_height }} blocks{% else %}now{% endif %}
-            {% endcall %}
-        {% endif %}
-        {% call data_line("Lifetime stake reward") %}
-            {{ stake_reward | format_aleo_credit | safe }} Aleo credits
-        {% endcall %}
-        {% if committee_state %}
-            {% call data_line("Credits voted") %}
-                {{ committee_state.amount | format_aleo_credit | safe }} Aleo credits
-            {% endcall %}
-            {% call data_line("Open for staking") %}
-                {% if committee_state.is_open %}Yes{% else %}No{% endif %}
-            {% endcall %}
-        {% endif %}
-        {% call data_line("Public credits received") %}
-            {{ transfer_in | format_aleo_credit | safe }} Aleo credits
-        {% endcall %}
-        {% call data_line("Public credits sent") %}
-            {{ transfer_out | format_aleo_credit | safe }} Aleo credits
-        {% endcall %}
-        {% call data_line("Total fee spent") %}
-            {{ fee | format_aleo_credit | safe }} Aleo credits
-        {% endcall %}
-        {% call data_line("Programs deployed") %}
-            {{ total_programs }}
-        {% endcall %}
-        {% if not "DEBUG_SKIP_COINBASE" | get_env %}
-            {% call data_line("Lifetime puzzle reward") %}
-                {{ total_rewards | format_aleo_credit | safe }}
-            {% endcall %}
-            {% call data_line("Accepted puzzle solutions") %}
-                {{ total_solutions }}
-            {% endcall %}
-            {% call data_line("Estimated speed") %}
-                {% if speed != 0 %}
-                {{ "%.2f" % speed }} <span data-tooltip title='commitments per second, also known as "p/s" or "s/s"'>c/s</span> (last {{ timespan }})
-                {% else %}
-                Not enough solutions during last day
+            {% if not "DEBUG_SKIP_COINBASE" | get_env %}
+            <li class="tabs-title"><a href="#solutions">Accepted solutions</a></li>
+            {% endif %}
+            <li class="tabs-title"><a href="#programs">Deployed programs</a></li>
+            <li class="tabs-title"><a href="#transitions">Recent transitions</a></li>
+        </ul>
+
+
+        <div class="tabs-content" data-tabs-content="address-tabs">
+
+            <div class="tabs-panel is-active" id="stats">
+                {% call data_line("Credits staked") %}
+                    {% if bond_state %}
+                        {{ bond_state.amount | format_aleo_credit | safe }} Aleo credits, voted to {% if bond_state.validator == address %}self{% else %}validator <span class="mono"><a href="/address?a={{ bond_state.validator }}">{{ bond_state.validator }}</a></span>{% endif %}
+                    {% else %}
+                        0 Aleo credits
+                    {% endif %}
+                {% endcall %}
+                {% if unbond_state %}
+                    {% call data_line("Credits unstaking") %}
+                        {{ unbond_state.amount | format_aleo_credit | safe }} Aleo credits, withdrawable {% if unbond_state.height > sync_info.local_height %}in {{ unbond_state.height - sync_info.local_height }} blocks{% else %}now{% endif %}
+                    {% endcall %}
                 {% endif %}
-            {% endcall %}
-        {% endif %}
-        </div>
+                {% call data_line("Lifetime stake reward") %}
+                    {{ stake_reward | format_aleo_credit | safe }} Aleo credits
+                {% endcall %}
+                {% call data_line("Public credits received") %}
+                    {{ transfer_in | format_aleo_credit | safe }} Aleo credits
+                {% endcall %}
+                {% call data_line("Public credits sent") %}
+                    {{ transfer_out | format_aleo_credit | safe }} Aleo credits
+                {% endcall %}
+                {% call data_line("Total fee spent") %}
+                    {{ fee | format_aleo_credit | safe }} Aleo credits
+                {% endcall %}
+                {% call data_line("Programs deployed") %}
+                    {{ total_programs }}
+                {% endcall %}
+                {% if not "DEBUG_SKIP_COINBASE" | get_env %}
+                    {% call data_line("Lifetime puzzle reward") %}
+                        {{ total_rewards | format_aleo_credit | safe }}
+                    {% endcall %}
+                    {% call data_line("Accepted puzzle solutions") %}
+                        {{ total_solutions }}
+                    {% endcall %}
+                    {% call data_line("Estimated speed") %}
+                        {% if speed != 0 %}
+                            {{ "%.2f" % speed }} <span data-tooltip title='commitments per second, also known as "p/s" or "s/s"'>c/s</span> (last {{ timespan }})
+                        {% else %}
+                            Not enough solutions during last day
+                        {% endif %}
+                    {% endcall %}
+                {% endif %}
+            </div>
 
-        {% if not "DEBUG_SKIP_COINBASE" | get_env %}
-        <div id="solutions">
-            <h4>Accepted solutions</h4>
-            <table class="unstriped">
-                <thead>
-                <tr>
-                    <th>Block</th>
-                    <th>Epoch</th>
-                    <th>Timestamp</th>
-                    <th>Nonce</th>
-                    <th>Target / Total</th>
-                    <th>Reward</th>
-                </tr>
-                </thead>
-                <tbody>
-                {% for solution in solutions %}
+            {% if committee_state %}
+            <div class="tabs-panel" id="validator">
+                {% call data_line("Credits voted") %}
+                    {{ committee_state.amount | format_aleo_credit | safe }} Aleo credits
+                {% endcall %}
+                {% call data_line("Open for staking") %}
+                    {% if committee_state.is_open %}Yes{% else %}No{% endif %}
+                {% endcall %}
+                {% call data_line("Uptime in last 24 hours") %}
+                    {{ "%0.2f" | format(uptime * 100) }}%
+                {% endcall %}
+                <br>
+                <h4>Top stakers</h4>
+                <table class="unstriped">
+                    <thead>
                     <tr>
-                        <td><a href="/block?h={{ solution.height }}">{{ solution.height | format_number | safe }}</a></td>
-                        <td>{{ solution.height // 256 }}</td>
-                        <td>{{ solution.timestamp | format_time | safe }}</td>
-                        <td>{{ solution.nonce }}</td>
-                        <td>{{ solution.target | format_number | safe }}<span class="note"> / {{ solution.target_sum | format_number | safe }}</span></td>
-                        <td>{{ solution.reward | format_aleo_credit | safe }}</td>
+                        <th>Address</th>
+                        <th>Staked</th>
                     </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-            {% if total_solutions > 30 %}
-                <a href="/address_solution?a={{ address }}">Show all accepted solutions</a>
+                    </thead>
+                    <tbody>
+                    {% for address, amount in address_stakes.items() %}
+                        <tr>
+                            <td><span class="mono"><a href="/address?a={{ address }}">{{ address }}</a></span></td>
+                            <td>{{ amount | format_aleo_credit | safe }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+
+            </div>
+        {% endif %}
+
+            {% if not "DEBUG_SKIP_COINBASE" | get_env %}
+            <div class="tabs-panel" id="solutions">
+                <table class="unstriped">
+                    <thead>
+                    <tr>
+                        <th>Block</th>
+                        <th>Epoch</th>
+                        <th>Timestamp</th>
+                        <th>Nonce</th>
+                        <th>Target / Total</th>
+                        <th>Reward</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for solution in solutions %}
+                        <tr>
+                            <td><a href="/block?h={{ solution.height }}">{{ solution.height | format_number | safe }}</a></td>
+                            <td>{{ solution.height // 256 }}</td>
+                            <td>{{ solution.timestamp | format_time | safe }}</td>
+                            <td>{{ solution.nonce }}</td>
+                            <td>{{ solution.target | format_number | safe }}<span class="note"> / {{ solution.target_sum | format_number | safe }}</span></td>
+                            <td>{{ solution.reward | format_aleo_credit | safe }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% if total_solutions > 30 %}
+                    <a href="/address_solution?a={{ address }}">Show all accepted solutions</a>
+                {% endif %}
+            </div>
             {% endif %}
-        </div>
-        {% endif %}
 
-        <div id="programs">
-            <h4>Deployed programs</h4>
-            <table class="unstriped">
-                <thead>
-                <tr>
-                    <th>Program</th>
-                    <th>Block</th>
-                    <th>Timestamp</th>
-                    <th>Transaction ID</th>
-                </tr>
-                </thead>
-                <tbody>
-                {% for program in programs %}
+            <div class="tabs-panel" id="programs">
+                <table class="unstriped">
+                    <thead>
                     <tr>
-                        <td><a href="/program?id={{ program.program_id }}">{{ program.program_id }}</a></td>
-                        <td><a href="/block?h={{ program.height }}">{{ program.height | format_number | safe }}</a></td>
-                        <td>{{ program.timestamp | format_time | safe }}</td>
-                        <td><a href="/transaction?id={{ program.transaction_id }}">{{ program.transaction_id }}</a></td>
+                        <th>Program</th>
+                        <th>Block</th>
+                        <th>Timestamp</th>
+                        <th>Transaction ID</th>
                     </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </div>
+                    </thead>
+                    <tbody>
+                    {% for program in programs %}
+                        <tr>
+                            <td><a href="/program?id={{ program.program_id }}">{{ program.program_id }}</a></td>
+                            <td><a href="/block?h={{ program.height }}">{{ program.height | format_number | safe }}</a></td>
+                            <td>{{ program.timestamp | format_time | safe }}</td>
+                            <td><a href="/transaction?id={{ program.transaction_id }}">{{ program.transaction_id }}</a></td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
 
-        <div id="transitions">
-            <h4>Recent transitions</h4>
-            <table class="unstriped">
-                <thead>
-                <tr>
-                    <th>Block</th>
-                    <th>Timestamp</th>
-                    <th>Transition ID</th>
-                    <th>Program / Function call</th>
-                </tr>
-                </thead>
-                <tbody>
-                {% for transition in transitions %}
-                <tr>
-                    <td><a href="/block?h={{ transition.height }}">{{ transition.height | format_number | safe }}</a></td>
-                    <td>{{ transition.timestamp | format_time | safe }}</td>
-                    <td><span class="mono"><a href="/transition?id={{ transition.transition_id }}">{{ transition.transition_id }}</a></span></td>
-                    <td><span class="mono">{{ transition.program_id }}/{{ transition.function_name }}</span></td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
+            <div class="tabs-panel" id="transitions">
+                <table class="unstriped">
+                    <thead>
+                    <tr>
+                        <th>Block</th>
+                        <th>Timestamp</th>
+                        <th>Transition ID</th>
+                        <th>Program / Function call</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for transition in transitions %}
+                    <tr>
+                        <td><a href="/block?h={{ transition.height }}">{{ transition.height | format_number | safe }}</a></td>
+                        <td>{{ transition.timestamp | format_time | safe }}</td>
+                        <td><span class="mono"><a href="/transition?id={{ transition.transition_id }}">{{ transition.transition_id }}</a></span></td>
+                        <td><span class="mono">{{ transition.program_id }}/{{ transition.function_name }}</span></td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
 
     </div>

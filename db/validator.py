@@ -77,4 +77,57 @@ class DatabaseValidator(DatabaseBase):
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
+    async def get_validator_uptime(self, address: str) -> Optional[float]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute("SELECT timestamp FROM block ORDER BY height DESC LIMIT 1")
+                    res = await cur.fetchone()
+                    if res:
+                        timestamp = res["timestamp"]
+                    else:
+                        return None
+                    await cur.execute(
+                        "WITH va AS "
+                        "    (SELECT unnest(array_agg(DISTINCT d.author)) AS author "
+                        "     FROM BLOCK b "
+                        "     JOIN authority a ON a.block_id = b.id "
+                        "     JOIN dag_vertex d ON d.authority_id = a.id "
+                        "     WHERE b.timestamp > %s "
+                        "     GROUP BY d.authority_id) "
+                        "SELECT author, count(author) FROM va "
+                        "GROUP BY author",
+                        (timestamp - 86400,)
+                    )
+                    res = await cur.fetchall()
+                    validator_counts = {v["author"]: v["count"] for v in res}
+                    if address not in validator_counts:
+                        return 0
+                    await cur.execute(
+                        "SELECT count(*) FROM block WHERE timestamp > %s",
+                        (timestamp - 86400,)
+                    )
+                    res = await cur.fetchone()
+                    if res:
+                        block_count = res["count"]
+                    else:
+                        return None
+                    return validator_counts[address] / block_count
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+
+    async def get_address_stakers(self, address: str) -> list[dict[str, Any]]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT address, stake FROM staker WHERE validator = %s",
+                        (address,)
+                    )
+                    return await cur.fetchall()
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
 
