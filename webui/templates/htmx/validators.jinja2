@@ -1,0 +1,40 @@
+{% from "macros.jinja2" import nav, htmx_title, sync_notice %}
+{{ sync_notice(sync_info) }}
+
+    <div class="content">
+
+        <div id="header">
+            <h3>Validators</h3>
+        </div>
+
+        <div id="blocks">
+
+            {{ nav(page, total_pages, "/validators?") }}
+
+            <table class="unstriped">
+                <thead>
+                <tr>
+                    <th>Rank</th>
+                    <th>Validator</th>
+                    <th>Total vote</th>
+                    <th>Uptime (last 24 hours)</th>
+                </tr>
+                </thead>
+                <tbody hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
+                {% for validator in validators %}
+                    <tr>
+                        <td>{{ loop.index + (page - 1) * 50 }}</td>
+                        <td><span class="mono"><a href="/address?a={{ validator.address }}">{{ validator.address }}</a></span></td>
+                        <td>{{ validator.stake | format_aleo_credit | safe }}</td>
+                        <td>{{ "%0.2f" | format(validator.uptime) }}%</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+
+            {{ nav(page, total_pages, "/validators?") }}
+
+        </div>
+    </div>
+
+{{ htmx_title(request, "Validators") }}

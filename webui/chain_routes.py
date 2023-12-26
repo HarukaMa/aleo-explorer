@@ -726,3 +726,46 @@ async def blocks_route(request: Request):
         "sync_info": sync_info,
     }
     return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
+
+async def validators_route(request: Request):
+    db: Database = request.app.state.db
+    is_htmx = request.scope["htmx"].is_htmx()
+    if is_htmx:
+        template = "htmx/validators.jinja2"
+    else:
+        template = "validators.jinja2"
+    try:
+        page = request.query_params.get("p")
+        if page is None:
+            page = 1
+        else:
+            page = int(page)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid page")
+    latest_height = await db.get_latest_height()
+    total_validators = await db.get_validator_count_at_height(latest_height)
+    if not total_validators:
+        raise HTTPException(status_code=550, detail="No validators found")
+    total_pages = (total_validators // 50) + 1
+    if page < 1 or page > total_pages:
+        raise HTTPException(status_code=400, detail="Invalid page")
+    start = 50 * (page - 1)
+    validators_data = await db.get_validators_range_at_height(latest_height, start, start + 50)
+    validators: list[dict[str, Any]] = []
+    for validator in validators_data:
+        validators.append({
+            "address": validator["address"],
+            "stake": validator["stake"],
+            "uptime": validator["uptime"] * 100,
+        })
+
+
+    sync_info = await out_of_sync_check(db)
+    ctx = {
+        "request": request,
+        "validators": validators,
+        "page": page,
+        "total_pages": total_pages,
+        "sync_info": sync_info,
+    }
+    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore

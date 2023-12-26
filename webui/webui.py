@@ -148,6 +148,7 @@ routes = [
     Route("/", index_route),
     # Blockchain
     Route("/block", block_route),
+    Route("/validators", validators_route),
     Route("/transaction", transaction_route),
     Route("/transition", transition_route),
     Route("/search", search_route),
