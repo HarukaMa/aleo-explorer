@@ -73,7 +73,7 @@ class DatabaseBlock(DatabaseBase):
                     ))
                 elif res["type"] == "Future":
                     arguments.append(FutureArgument(
-                        future=await DatabaseInsert._load_future(conn, None, res["id"]) # type: ignore
+                        future=await DatabaseBlock._load_future(conn, None, res["id"]) # type: ignore
                     ))
                 else:
                     raise NotImplementedError
