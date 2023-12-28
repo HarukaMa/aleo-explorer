@@ -15,6 +15,7 @@
             <li class="tabs-title is-active"><a href="#hash">Hash value</a></li>
             <li class="tabs-title"><a href="#verify">Verify signature</a></li>
             <li class="tabs-title"><a href="#sign">Sign message</a></li>
+            <li class="tabs-title"><a href="#estimate">Estimate fee</a></li>
         </ul>
     </div>
 
@@ -130,11 +131,42 @@
             </form>
             <span class="mono" id="sign_result" style="margin: 0 15px; word-wrap: break-word; display: block; box-decoration-break: clone"></span>
         </div>
+
+        <div class="tabs-panel" id="estimate">
+            <fieldset style="padding: 0 15px">
+                <legend><span>Transaction type</span></legend>
+                <input type="radio" name="tx_type" value="deploy" id="tx_type_deploy" checked>
+                <label for="tx_type_deploy">Deploy</label>
+                <input type="radio" name="tx_type" value="execute" id="tx_type_execute" disabled>
+                <label for="tx_type_execute">Execute</label>
+            </fieldset>
+            <form id="estimate_deploy_form" style="padding: 10px 15px">
+                <fieldset>
+                    <legend>Code language</legend>
+                    <input type="radio" name="code_lang" value="aleo" id="code_lang_aleo" checked>
+                    <label for="code_lang_aleo">Aleo instructions</label>
+                    <input type="radio" name="code_lang" value="leo" id="code_lang_leo" disabled>
+                    <label for="code_lang_leo">Leo</label>
+                </fieldset>
+                <label>
+                    <span>Program code</span>
+                    <textarea name="code" id="estimate_deploy_code" style="height: 15rem"></textarea>
+                </label>
+                <button class="button" type="submit">Estimate</button>
+            </form>
+            <form id="estimate_execute_form" hidden="hidden">
+                <label>
+                    <span>Program ID</span>
+                    <input type="text" name="program_id" id="program_id_input">
+                </label>
+            </form>
+            <span id="estimate_result" style="padding: 0 15px"></span>
+        </div>
     </div>
 
     <script type="module" async>
         
-        import init, {hash_value, verify_signature, value_to_bytes} from '/static/rust.js'
+        import init, {hash_value, verify_signature, value_to_bytes, estimate_deployment_fee} from '/static/rust.js'
 
         await init()
 
@@ -201,6 +233,23 @@
                 } catch (e) {
                     throw e.message
                 }
+            } catch (e) {
+                result_element.innerText = e
+            }
+        }
+
+        const estimate_deploy_form = document.getElementById('estimate_deploy_form')
+        estimate_deploy_form.addEventListener('submit', estimate_deployment)
+
+        async function estimate_deployment(e) {
+            e.preventDefault()
+            const data = Object.fromEntries(new FormData(estimate_deploy_form))
+            const result_element = document.getElementById('estimate_result')
+            try {
+                const fee = estimate_deployment_fee(data.code)
+                const integer_part = (fee / BigInt(1000000)).toString()
+                const decimal_part = (fee % BigInt(1000000)).toString().padStart(6, '0').replace(/0+$/u, '')
+                result_element.innerText = `${integer_part}.${decimal_part} Aleo credits`
             } catch (e) {
                 result_element.innerText = e
             }
