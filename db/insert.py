@@ -577,8 +577,10 @@ class DatabaseInsert(DatabaseBase):
                 stakers, stake_rewards = DatabaseInsert._stake_rewards(committee_members, stakers, ratification.amount)
                 committee_members = DatabaseInsert._next_committee_members(committee_members, stakers)
 
+                pipe = self.redis.pipeline()
                 for address, amount in stake_rewards.items():
-                    await self.redis.hincrby("address_stake_reward", str(address), amount)
+                    pipe.hincrby("address_stake_reward", str(address), amount)
+                await pipe.execute()
 
                 await DatabaseInsert._update_committee_bonded_map(cur, self.redis, committee_members, stakers, height)
                 await DatabaseInsert._save_committee_history(cur, height, Committee(
