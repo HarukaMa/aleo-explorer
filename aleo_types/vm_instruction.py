@@ -130,15 +130,6 @@ class Literal(Serializable): # enum
 class Identifier(Serializable):
 
     def __init__(self, *, value: str):
-        if value == "":
-            raise ValueError("identifier cannot be empty")
-        if not all(map(lambda c: 0x30 <= c <= 0x39 or 0x41 <= c <= 0x5a or 0x61 <= 0x7a, map(ord, value))):
-            raise ValueError(f"identifier '{value}' must consist of letters, digits, and underscores")
-        if value[0].isdigit():
-            raise ValueError("identifier must start with a letter")
-        max_bytes = 31 # 253 - 1 bits
-        if len(value) > max_bytes:
-            raise ValueError(f"identifier '{value}' must be at most {max_bytes} bytes")
         self.data = value
 
     def dump(self) -> bytes:

@@ -311,34 +311,3 @@ class DatabaseMapping(DatabaseBase):
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
-
-
-    async def get_bonded_mapping(self) -> dict[Address, tuple[Address, u64]]:
-        data = await self.redis.hgetall("credits.aleo:bonded")
-
-        stakers: dict[Address, tuple[Address, u64]] = {}
-        for d in data.values():
-            d = json.loads(d)
-            key = Plaintext.load(BytesIO(bytes.fromhex(d["key"])))
-            if not isinstance(key, LiteralPlaintext):
-                raise RuntimeError("invalid bonded key")
-            if not isinstance(key.literal.primitive, Address):
-                raise RuntimeError("invalid bonded key")
-            value = Value.load(BytesIO(bytes.fromhex(d["value"])))
-            if not isinstance(value, PlaintextValue):
-                raise RuntimeError("invalid bonded value")
-            plaintext = value.plaintext
-            if not isinstance(plaintext, StructPlaintext):
-                raise RuntimeError("invalid bonded value")
-            validator = plaintext["validator"]
-            if not isinstance(validator, LiteralPlaintext):
-                raise RuntimeError("invalid bonded value")
-            if not isinstance(validator.literal.primitive, Address):
-                raise RuntimeError("invalid bonded value")
-            amount = plaintext["microcredits"]
-            if not isinstance(amount, LiteralPlaintext):
-                raise RuntimeError("invalid bonded value")
-            if not isinstance(amount.literal.primitive, u64):
-                raise RuntimeError("invalid bonded value")
-            stakers[key.literal.primitive] = validator.literal.primitive, amount.literal.primitive
-        return stakers

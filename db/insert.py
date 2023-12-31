@@ -506,6 +506,36 @@ class DatabaseInsert(DatabaseBase):
             committee_members[key.literal.primitive] = amount.literal.primitive, is_open.literal.primitive
         return committee_members
 
+    async def get_bonded_mapping(self) -> dict[Address, tuple[Address, u64]]:
+        data = await self.redis.hgetall("credits.aleo:bonded")
+
+        stakers: dict[Address, tuple[Address, u64]] = {}
+        for d in data.values():
+            d = json.loads(d)
+            key = Plaintext.load(BytesIO(bytes.fromhex(d["key"])))
+            if not isinstance(key, LiteralPlaintext):
+                raise RuntimeError("invalid bonded key")
+            if not isinstance(key.literal.primitive, Address):
+                raise RuntimeError("invalid bonded key")
+            value = Value.load(BytesIO(bytes.fromhex(d["value"])))
+            if not isinstance(value, PlaintextValue):
+                raise RuntimeError("invalid bonded value")
+            plaintext = value.plaintext
+            if not isinstance(plaintext, StructPlaintext):
+                raise RuntimeError("invalid bonded value")
+            validator = plaintext["validator"]
+            if not isinstance(validator, LiteralPlaintext):
+                raise RuntimeError("invalid bonded value")
+            if not isinstance(validator.literal.primitive, Address):
+                raise RuntimeError("invalid bonded value")
+            amount = plaintext["microcredits"]
+            if not isinstance(amount, LiteralPlaintext):
+                raise RuntimeError("invalid bonded value")
+            if not isinstance(amount.literal.primitive, u64):
+                raise RuntimeError("invalid bonded value")
+            stakers[key.literal.primitive] = validator.literal.primitive, amount.literal.primitive
+        return stakers
+
     @staticmethod
     def _check_committee_staker_match(committee_members: dict[Address, tuple[u64, bool_]],
                                       stakers: dict[Address, tuple[Address, u64]]):
@@ -518,6 +548,7 @@ class DatabaseInsert(DatabaseBase):
         committee_total_stake = sum(amount for amount, _ in committee_members.values())
         stakers_total_stake = sum(address_stakes.values())
         if committee_total_stake != stakers_total_stake:
+            print(committee_total_stake, stakers_total_stake)
             raise RuntimeError("total stake mismatch between stakers and committee members")
 
         for address, amount in address_stakes.items():
@@ -567,10 +598,25 @@ class DatabaseInsert(DatabaseBase):
     @profile
     async def _post_ratify(self, cur: psycopg.AsyncCursor[dict[str, Any]], redis_conn: Redis[str], height: int, round_: int,
                            ratifications: list[Ratify], address_puzzle_rewards: dict[str, int]):
+        from interpreter.interpreter import global_mapping_cache
+
         for ratification in ratifications:
             if isinstance(ratification, BlockRewardRatify):
                 committee_members = await DatabaseInsert._get_committee_mapping(redis_conn)
-                stakers = await self.get_bonded_mapping()
+                mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "bonded"))
+                if mapping_id in global_mapping_cache:
+                    data = global_mapping_cache[mapping_id]
+                    stakers: dict[Address, tuple[Address, u64]] = {}
+                    for v in data.values():
+                        key = cast(LiteralPlaintext, v["key"])
+                        value = v["value"]
+                        address = cast(Address, key.literal.primitive)
+                        bond_state = cast(StructPlaintext, cast(PlaintextValue, value).plaintext)
+                        validator = cast(Address, cast(LiteralPlaintext, bond_state["validator"]).literal.primitive)
+                        amount = cast(u64, cast(LiteralPlaintext, bond_state["microcredits"]).literal.primitive)
+                        stakers[address] = validator, amount
+                else:
+                    stakers = await self.get_bonded_mapping()
 
                 DatabaseInsert._check_committee_staker_match(committee_members, stakers)
 
@@ -594,8 +640,6 @@ class DatabaseInsert(DatabaseBase):
                 if ratification.amount == 0:
                     continue
                 account_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "account"))
-
-                from interpreter.interpreter import global_mapping_cache
 
                 if account_mapping_id not in global_mapping_cache:
                     from interpreter.finalizer import mapping_cache_read
