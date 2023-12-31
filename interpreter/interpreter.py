@@ -1,3 +1,5 @@
+from typing import cast
+
 import psycopg
 
 from aleo_types import *
@@ -14,7 +16,10 @@ async def init_builtin_program(db: Database, program: Program):
         if await db.get_program(str(program.id)) is None:
             await db.save_builtin_program(program)
 
-async def _execute_public_fee(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]], finalize_state: FinalizeState, fee_transition: Transition, mapping_cache: Optional[dict[Field, MappingCacheDict]], allow_state_change: bool) -> list[dict[str, Any]]:
+async def _execute_public_fee(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]], finalize_state: FinalizeState,
+                              fee_transition: Transition, mapping_cache: dict[Field, MappingCacheDict],
+                              local_mapping_cache: dict[Field, MappingCacheDict], allow_state_change: bool
+                              ) -> list[dict[str, Any]]:
     if fee_transition.program_id != "credits.aleo" or fee_transition.function_name != "fee_public":
         raise TypeError("not a fee transition")
     output = fee_transition.outputs[0]
@@ -28,7 +33,8 @@ async def _execute_public_fee(db: Database, cur: psycopg.AsyncCursor[dict[str, A
         raise RuntimeError("program not found")
 
     inputs: list[Value] = _load_input_from_arguments(future.arguments)
-    return await execute_finalizer(db, cur, finalize_state, fee_transition.id, program, future.function_name, inputs, mapping_cache, allow_state_change)
+    return await execute_finalizer(db, cur, finalize_state, fee_transition.id, program, future.function_name, inputs,
+                                   mapping_cache, local_mapping_cache, allow_state_change)
 
 async def finalize_deploy(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]], finalize_state: FinalizeState,
                           confirmed_transaction: ConfirmedTransaction, mapping_cache: dict[Field, MappingCacheDict]
@@ -39,12 +45,12 @@ async def finalize_deploy(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]]
     else:
         raise NotImplementedError
     if transition.function_name == "fee_public":
-        operations = await _execute_public_fee(db, cur, finalize_state, transition, mapping_cache, True)
+        operations = await _execute_public_fee(db, cur, finalize_state, transition, mapping_cache, {}, True)
     else:
         operations: list[dict[str, Any]] = []
 
     if isinstance(confirmed_transaction, AcceptedDeploy):
-        deployment = transaction.deployment
+        deployment = cast(DeployTransaction, transaction).deployment
         program = deployment.program
         expected_operations = confirmed_transaction.finalize
         for mapping in program.mappings.keys():
@@ -115,7 +121,7 @@ async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]
             inputs: list[Value] = _load_input_from_arguments(future.arguments)
             try:
                 operations.extend(
-                    await execute_finalizer(db, cur, finalize_state, transition.id, program, future.function_name, inputs, local_mapping_cache, allow_state_change)
+                    await execute_finalizer(db, cur, finalize_state, transition.id, program, future.function_name, inputs, mapping_cache, local_mapping_cache, allow_state_change)
                 )
             except ExecuteError as e:
                 # TODO: handle nested calls
@@ -124,10 +130,10 @@ async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]
                 break
     if isinstance(confirmed_transaction, RejectedExecute) and reject_reason is None:
         # execute fee as part of rejected execute as it failed here
-        transition = fee.transition
+        transition = cast(Fee, fee).transition
         if transition.function_name == "fee_public":
             try:
-                operations.extend(await _execute_public_fee(db, cur, finalize_state, transition, local_mapping_cache, allow_state_change))
+                operations.extend(await _execute_public_fee(db, cur, finalize_state, transition, mapping_cache, local_mapping_cache, allow_state_change))
             except ExecuteError as e:
                 reject_reason = f"execute error: {e}, at fee transition, instruction \"{e.instruction}\""
                 operations = []
@@ -137,7 +143,7 @@ async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]
     if fee:
         transition = fee.transition
         if transition.function_name == "fee_public":
-            operations.extend(await _execute_public_fee(db, cur, finalize_state, transition, mapping_cache, True))
+            operations.extend(await _execute_public_fee(db, cur, finalize_state, transition, mapping_cache, local_mapping_cache, True))
     return expected_operations, operations, reject_reason
 
 @profile
@@ -256,6 +262,7 @@ async def preview_finalize_execution(db: Database, program: Program, function_na
         function_name,
         inputs,
         mapping_cache={},
+        local_mapping_cache={},
         allow_state_change=False,
         execute_await=True,
     )

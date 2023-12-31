@@ -31,7 +31,7 @@ async def mapping_cache_read_with_cur(db: Database, cur: psycopg.AsyncCursor[dic
     return await db.get_mapping_cache_with_cur(cur, program_name, mapping_name)
 
 class ExecuteError(Exception):
-    def __init__(self, message: str, exception: Optional[Exception], instruction: str, program: str = None, function_name: str = None):
+    def __init__(self, message: str, exception: Optional[Exception], instruction: str, program: Optional[str] = None, function_name: Optional[str] = None):
         super().__init__(message)
         self.original_exception = exception
         self.instruction = instruction
@@ -43,7 +43,8 @@ class ExecuteError(Exception):
 async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict[str, Any]]], finalize_state: FinalizeState,
                             transition_id: TransitionID, program: Program,
                             function_name: Identifier, inputs: list[Value],
-                            mapping_cache: Optional[dict[Field, MappingCacheDict]],
+                            mapping_cache: dict[Field, MappingCacheDict],
+                            local_mapping_cache: dict[Field, MappingCacheDict],
                             allow_state_change: bool,
                             execute_await: bool = False) -> list[dict[str, Any]]:
     registers = Registers()
@@ -71,6 +72,16 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
 
     pc = 0
 
+    async def load_mapping_cache_id(mapping: Identifier):
+        mapping_id = Field.loads(cached_get_mapping_id(str(program.id), str(mapping)))
+        if mapping_id not in mapping_cache:
+            if cur:
+                mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, str(program.id), str(mapping))
+            else:
+                mapping_cache[mapping_id] = await mapping_cache_read(db, str(program.id), str(mapping))
+        if not allow_state_change and mapping_id not in local_mapping_cache:
+            local_mapping_cache[mapping_id] = {}
+        return mapping_id
 
     while pc < len(finalize.commands):
         c = finalize.commands[pc]
@@ -92,19 +103,14 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
                     raise
 
             elif isinstance(c, ContainsCommand):
-                mapping_id = Field.loads(cached_get_mapping_id(str(program.id), str(c.mapping)))
-                if mapping_cache is not None and mapping_id not in mapping_cache:
-                    if cur:
-                        mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, str(program.id), str(c.mapping))
-                    else:
-                        mapping_cache[mapping_id] = await mapping_cache_read(db, str(program.id), str(c.mapping))
+                mapping_id = await load_mapping_cache_id(c.mapping)
                 key = load_plaintext_from_operand(c.key, registers, finalize_state)
                 key_id = Field.loads(cached_get_key_id(str(program.id), str(c.mapping), key.dump()))
-                if mapping_cache:
-                    contains = key_id in mapping_cache[mapping_id]
+                if not allow_state_change and key_id in local_mapping_cache[mapping_id]:
+                    contains = local_mapping_cache[mapping_id][key_id]["value"] is not None
                 else:
-                    value = await db.get_mapping_value(str(program.id), str(c.mapping), str(key_id))
-                    contains = value is not None
+                    contains = key_id in mapping_cache[mapping_id]
+
                 value = PlaintextValue(
                     plaintext=LiteralPlaintext(
                         literal=Literal(
@@ -117,15 +123,18 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
                 store_plaintext_to_register(value.plaintext, destination, registers)
 
             elif isinstance(c, GetCommand | GetOrUseCommand):
-                mapping_id = Field.loads(cached_get_mapping_id(str(program.id), str(c.mapping)))
-                if mapping_cache is not None and mapping_id not in mapping_cache:
-                    if cur:
-                        mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, str(program.id), str(c.mapping))
-                    else:
-                        mapping_cache[mapping_id] = await mapping_cache_read(db, str(program.id), str(c.mapping))
+                mapping_id = await load_mapping_cache_id(c.mapping)
                 key = load_plaintext_from_operand(c.key, registers, finalize_state)
                 key_id = Field.loads(cached_get_key_id(str(program.id), str(c.mapping), key.dump()))
-                if mapping_cache:
+                if not allow_state_change and key_id in local_mapping_cache[mapping_id]:
+                    if local_mapping_cache[mapping_id][key_id]["value"] is None:
+                        if isinstance(c, GetCommand):
+                            raise ExecuteError(f"key {key} not found in mapping {c.mapping}", None, disasm_command(c), str(program.id), str(function_name))
+                        default = load_plaintext_from_operand(c.default, registers, finalize_state)
+                        value = PlaintextValue(plaintext=default)
+                    else:
+                        value = local_mapping_cache[mapping_id][key_id]["value"]
+                else:
                     if key_id not in mapping_cache[mapping_id]:
                         if isinstance(c, GetCommand):
                             raise ExecuteError(f"key {key} not found in mapping {c.mapping}", None, disasm_command(c), str(program.id), str(function_name))
@@ -133,51 +142,30 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
                         value = PlaintextValue(plaintext=default)
                     else:
                         value = mapping_cache[mapping_id][key_id]["value"]
-                        if debug:
-                            print(f"get {c.mapping}[{key}] = {value}")
-                        if not isinstance(value, PlaintextValue):
-                            raise TypeError("invalid value type")
-                else:
-                    value = await db.get_mapping_value(str(program.id), str(c.mapping), str(key_id))
-                    if value is None:
-                        if isinstance(c, GetCommand):
-                            raise ExecuteError(f"key {key} not found in mapping {c.mapping}", None, disasm_command(c), str(program.id), str(function_name))
-                        default = load_plaintext_from_operand(c.default, registers, finalize_state)
-                        value = PlaintextValue(plaintext=default)
-                    else:
-                        value = Value.load(BytesIO(value))
-                        if not isinstance(value, PlaintextValue):
-                            raise TypeError("invalid value type")
+                if debug:
+                    print(f"get {c.mapping}[{key}] = {value}")
+                if not isinstance(value, PlaintextValue):
+                    raise TypeError("invalid value type")
                 destination = c.destination
                 store_plaintext_to_register(value.plaintext, destination, registers)
 
             elif isinstance(c, SetCommand):
-                mapping_id = Field.loads(cached_get_mapping_id(str(program.id), str(c.mapping)))
-                if mapping_cache is not None and mapping_id not in mapping_cache:
-                    if cur:
-                        mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, str(program.id), str(c.mapping))
-                    else:
-                        mapping_cache[mapping_id] = await mapping_cache_read(db, str(program.id), str(c.mapping))
+                mapping_id = await load_mapping_cache_id(c.mapping)
                 key = load_plaintext_from_operand(c.key, registers, finalize_state)
                 value = PlaintextValue(plaintext=load_plaintext_from_operand(c.value, registers, finalize_state))
                 key_id = Field.loads(cached_get_key_id(str(program.id), str(c.mapping), key.dump()))
                 value_id = Field.loads(aleo_explorer_rust.get_value_id(str(key_id), value.dump()))
-                if mapping_cache:
-                    if key_id not in mapping_cache[mapping_id]:
-                        mapping_cache[mapping_id][key_id] = {
-                            "key": key,
-                            "value": value,
-                        }
-                    else:
-                        mapping_cache[mapping_id][key_id]["value"] = value
-                    if debug:
-                        print(f"set {c.mapping}[{key}] = {value}")
+                effective_mapping_cache = local_mapping_cache if not allow_state_change else mapping_cache
+                if key_id not in effective_mapping_cache[mapping_id]:
+                    effective_mapping_cache[mapping_id][key_id] = {
+                        "key": key,
+                        "value": value,
+                    }
                 else:
-                    if allow_state_change:
-                        raise RuntimeError("unsupported execution configuration")
-                    else:
-                        print("Not updating database because allow_state_change is False")
-
+                    effective_mapping_cache[mapping_id][key_id]["value"] = value
+                if debug:
+                    print(f"set {c.mapping}[{key}] = {value}")
+                del effective_mapping_cache
                 operations.append({
                     "type": FinalizeOperation.Type.UpdateKeyValue,
                     "program_name": str(program.id),
@@ -213,27 +201,20 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
                 store_plaintext_to_register(res, c.destination, registers)
 
             elif isinstance(c, RemoveCommand):
-                mapping_id = Field.loads(cached_get_mapping_id(str(program.id), str(c.mapping)))
-                if mapping_cache is not None and mapping_id not in mapping_cache:
-                    if cur:
-                        mapping_cache[mapping_id] = await mapping_cache_read_with_cur(db, cur, str(program.id), str(c.mapping))
-                    else:
-                        mapping_cache[mapping_id] = await mapping_cache_read(db, str(program.id), str(c.mapping))
+                mapping_id = await load_mapping_cache_id(c.mapping)
                 key = load_plaintext_from_operand(c.key, registers, finalize_state)
                 key_id = Field.loads(cached_get_key_id(str(program.id), str(c.mapping), key.dump()))
-                if mapping_cache:
-                    if key_id not in mapping_cache[mapping_id]:
-                        print(f"Key {key} not found in mapping {c.mapping}")
-                        pc += 1
-                        continue
-                    mapping_cache[mapping_id].pop(key_id)
-                    if debug:
-                        print(f"del {c.mapping}[{key}]")
+                effective_mapping_cache = local_mapping_cache if not allow_state_change else mapping_cache
+                if key_id not in effective_mapping_cache[mapping_id]:
+                    print(f"Key {key} not found in mapping {c.mapping}")
+                    pc += 1
+                    continue
+                if allow_state_change:
+                    effective_mapping_cache[mapping_id].pop(key_id)
                 else:
-                    if allow_state_change:
-                        raise RuntimeError("unsupported execution configuration")
-                    else:
-                        print("Not updating database because allow_state_change is False")
+                    effective_mapping_cache[mapping_id][key_id]["value"] = None
+                if debug:
+                    print(f"del {c.mapping}[{key}]")
                 operations.append({
                     "type": FinalizeOperation.Type.RemoveKeyValue,
                     "program_name": str(program.id),
@@ -265,7 +246,7 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
                     from interpreter.interpreter import _load_input_from_arguments
                     call_inputs: list[Value] = _load_input_from_arguments(call_future.arguments)
                     operations.extend(
-                        await execute_finalizer(db, cur, finalize_state, transition_id, call_program, call_future.function_name, call_inputs, mapping_cache, allow_state_change)
+                        await execute_finalizer(db, cur, finalize_state, transition_id, call_program, call_future.function_name, call_inputs, mapping_cache, local_mapping_cache, allow_state_change)
                     )
 
             else:
