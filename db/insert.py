@@ -770,7 +770,7 @@ class DatabaseInsert(DatabaseBase):
                             raise RuntimeError("failed to insert row into database")
                         block_db_id = res["id"]
 
-                        dag_transmission_ids: tuple[dict[str, int], dict[str, int]] = {}, {}
+                        # dag_transmission_ids: tuple[dict[str, int], dict[str, int]] = {}, {}
 
                         if isinstance(block.authority, BeaconAuthority):
                             await cur.execute(
@@ -786,31 +786,43 @@ class DatabaseInsert(DatabaseBase):
                                 raise RuntimeError("failed to insert row into database")
                             authority_db_id = res["id"]
                             subdag = block.authority.subdag
+                            subdag_copy_data: list[tuple[int, int, Optional[str], str, str, int, str, int]] = []
                             for round_, certificates in subdag.subdag.items():
                                 for index, certificate in enumerate(certificates):
                                     if round_ != certificate.batch_header.round:
                                         raise ValueError("invalid subdag round")
                                     if isinstance(certificate, BatchCertificate1):
-                                        await cur.execute(
-                                            "INSERT INTO dag_vertex (authority_id, round, batch_certificate_id, batch_id, "
-                                            "author, timestamp, author_signature, index) "
-                                            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
-                                            (authority_db_id, round_, str(certificate.certificate_id), str(certificate.batch_header.batch_id),
-                                             str(certificate.batch_header.author), certificate.batch_header.timestamp,
-                                             str(certificate.batch_header.signature), index)
-                                        )
+                                        subdag_copy_data.append((
+                                            authority_db_id, round_, str(certificate.certificate_id), str(certificate.batch_header.batch_id),
+                                            str(certificate.batch_header.author), certificate.batch_header.timestamp,
+                                            str(certificate.batch_header.signature), index
+                                        ))
+                                        # await cur.execute(
+                                        #     "INSERT INTO dag_vertex (authority_id, round, batch_certificate_id, batch_id, "
+                                        #     "author, timestamp, author_signature, index) "
+                                        #     "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                                        #     (authority_db_id, round_, str(certificate.certificate_id), str(certificate.batch_header.batch_id),
+                                        #      str(certificate.batch_header.author), certificate.batch_header.timestamp,
+                                        #      str(certificate.batch_header.signature), index)
+                                        # )
                                     elif isinstance(certificate, BatchCertificate2):
-                                        await cur.execute(
-                                            "INSERT INTO dag_vertex (authority_id, round, batch_id, "
-                                            "author, timestamp, author_signature, index) "
-                                            "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
-                                            (authority_db_id, round_, str(certificate.batch_header.batch_id),
-                                             str(certificate.batch_header.author), certificate.batch_header.timestamp,
-                                             str(certificate.batch_header.signature), index)
-                                        )
-                                    if (res := await cur.fetchone()) is None:
-                                        raise RuntimeError("failed to insert row into database")
-                                    vertex_db_id = res["id"]
+                                        subdag_copy_data.append((
+                                            authority_db_id, round_, None, str(certificate.batch_header.batch_id),
+                                            str(certificate.batch_header.author), certificate.batch_header.timestamp,
+                                            str(certificate.batch_header.signature), index
+                                        ))
+                                        # await cur.execute(
+                                        #     "INSERT INTO dag_vertex (authority_id, round, batch_id, "
+                                        #     "author, timestamp, author_signature, index) "
+                                        #     "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                                        #     (authority_db_id, round_, str(certificate.batch_header.batch_id),
+                                        #      str(certificate.batch_header.author), certificate.batch_header.timestamp,
+                                        #      str(certificate.batch_header.signature), index)
+                                        # )
+
+                                    # if (res := await cur.fetchone()) is None:
+                                    #     raise RuntimeError("failed to insert row into database")
+                                    # vertex_db_id = res["id"]
 
                                     # if isinstance(certificate, BatchCertificate1):
                                     #     for sig_index, (signature, timestamp) in enumerate(certificate.signatures):
@@ -847,21 +859,28 @@ class DatabaseInsert(DatabaseBase):
                                     #     for row in adj_copy_data:
                                     #         await copy.write_row(row)
 
-                                    tid_copy_data: list[tuple[int, str, int, Optional[str], Optional[str]]] = []
-                                    for tid_index, transmission_id in enumerate(certificate.batch_header.transmission_ids):
-                                        if isinstance(transmission_id, SolutionTransmissionID):
-                                            tid_copy_data.append((vertex_db_id, transmission_id.type.name, tid_index, str(transmission_id.id), None))
-                                            dag_transmission_ids[0][str(transmission_id.id)] = vertex_db_id
-                                        elif isinstance(transmission_id, TransactionTransmissionID):
-                                            tid_copy_data.append((vertex_db_id, transmission_id.type.name, tid_index, None, str(transmission_id.id)))
-                                            dag_transmission_ids[1][str(transmission_id.id)] = vertex_db_id
-                                        elif isinstance(transmission_id, RatificationTransmissionID):
-                                            tid_copy_data.append((vertex_db_id, transmission_id.type.name, tid_index, None, None))
-                                        else:
-                                            raise NotImplementedError
-                                    async with cur.copy("COPY dag_vertex_transmission_id (vertex_id, type, index, commitment, transaction_id) FROM STDIN") as copy:
-                                        for row in tid_copy_data:
-                                            await copy.write_row(row)
+                                    # tid_copy_data: list[tuple[int, str, int, Optional[str], Optional[str]]] = []
+                                    # for tid_index, transmission_id in enumerate(certificate.batch_header.transmission_ids):
+                                    #     if isinstance(transmission_id, SolutionTransmissionID):
+                                    #         tid_copy_data.append((vertex_db_id, transmission_id.type.name, tid_index, str(transmission_id.id), None))
+                                    #         dag_transmission_ids[0][str(transmission_id.id)] = vertex_db_id
+                                    #     elif isinstance(transmission_id, TransactionTransmissionID):
+                                    #         tid_copy_data.append((vertex_db_id, transmission_id.type.name, tid_index, None, str(transmission_id.id)))
+                                    #         dag_transmission_ids[1][str(transmission_id.id)] = vertex_db_id
+                                    #     elif isinstance(transmission_id, RatificationTransmissionID):
+                                    #         tid_copy_data.append((vertex_db_id, transmission_id.type.name, tid_index, None, None))
+                                    #     else:
+                                    #         raise NotImplementedError
+                                    # async with cur.copy("COPY dag_vertex_transmission_id (vertex_id, type, index, commitment, transaction_id) FROM STDIN") as copy:
+                                    #     for row in tid_copy_data:
+                                    #         await copy.write_row(row)
+
+                        async with cur.copy(
+                            "COPY dag_vertex (authority_id, round, batch_certificate_id, batch_id, "
+                            "author, timestamp, author_signature, index) FROM STDIN"
+                        ) as copy:
+                            for row in subdag_copy_data:
+                                await copy.write_row(row)
 
                         ignore_deploy_txids: list[str] = []
                         program_name_seen: dict[str, str] = {}
@@ -887,14 +906,14 @@ class DatabaseInsert(DatabaseBase):
                             confirmed_transaction_db_id = res["id"]
                             transaction = confirmed_transaction.transaction
                             transaction_id = transaction.id
-                            if block.height != 0 and isinstance(confirmed_transaction, (AcceptedDeploy, AcceptedExecute)):
-                                dag_vertex_db_id = dag_transmission_ids[1][str(transaction_id)]
-                            else:
-                                dag_vertex_db_id = None
+                            # if block.height != 0 and isinstance(confirmed_transaction, (AcceptedDeploy, AcceptedExecute)):
+                            #     dag_vertex_db_id = dag_transmission_ids[1][str(transaction_id)]
+                            # else:
+                            #     dag_vertex_db_id = None
                             await cur.execute(
-                                "INSERT INTO transaction (dag_vertex_id, confimed_transaction_id, transaction_id, type) "
-                                "VALUES (%s, %s, %s, %s) RETURNING id",
-                                (dag_vertex_db_id, confirmed_transaction_db_id, str(transaction_id), transaction.type.name)
+                                "INSERT INTO transaction (confimed_transaction_id, transaction_id, type) "
+                                "VALUES (%s, %s, %s) RETURNING id",
+                                (confirmed_transaction_db_id, str(transaction_id), transaction.type.name)
                             )
                             if (res := await cur.fetchone()) is None:
                                 raise RuntimeError("failed to insert row into database")
@@ -1112,12 +1131,12 @@ class DatabaseInsert(DatabaseBase):
                                 current_total_credit = 0
                             else:
                                 current_total_credit = current_total_credit["total_credit"]
-                            copy_data: list[tuple[int, int, str, u64, str, int, int, str, bool]] = []
+                            copy_data: list[tuple[None, int, str, u64, str, int, int, str, bool]] = []
                             for prover_solution, target, reward in solutions:
                                 partial_solution = prover_solution.partial_solution
-                                dag_vertex_db_id = dag_transmission_ids[0][str(partial_solution.commitment)]
+                                # dag_vertex_db_id = dag_transmission_ids[0][str(partial_solution.commitment)]
                                 copy_data.append(
-                                    (dag_vertex_db_id, coinbase_solution_db_id, str(partial_solution.address), partial_solution.nonce,
+                                    (None, coinbase_solution_db_id, str(partial_solution.address), partial_solution.nonce,
                                      str(partial_solution.commitment), partial_solution.commitment.to_target(), reward,
                                      str(prover_solution.proof.w.x), prover_solution.proof.w.y_is_positive)
                                 )
