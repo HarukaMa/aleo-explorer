@@ -346,9 +346,9 @@ class DatabaseInsert(DatabaseBase):
             )
             if (await cur.fetchone()) is None: # first seen
                 await cur.execute(
-                    "INSERT INTO transaction (confimed_transaction_id, transaction_id, type) "
-                    "VALUES (%s, %s, %s) RETURNING id",
-                    (confirmed_transaction_db_id, str(transaction.id), transaction.type.name)
+                    "INSERT INTO transaction (transaction_id, type) "
+                    "VALUES (%s, %s) RETURNING id",
+                    (str(transaction.id), transaction.type.name)
                 )
                 if (res := await cur.fetchone()) is None:
                     raise RuntimeError("failed to insert row into database")
@@ -373,6 +373,10 @@ class DatabaseInsert(DatabaseBase):
 
             # confirming tx
             if confirmed_transaction is not None:
+                await cur.execute(
+                    "UPDATE transaction SET confimed_transaction_id = %s WHERE transaction_id = %s",
+                    (confirmed_transaction_db_id, str(transaction.id))
+                )
                 reject_reasons = cast(list[Optional[str]], reject_reasons)
                 ct_index = cast(int, ct_index)
                 ignore_deploy_txids = cast(list[str], ignore_deploy_txids)
