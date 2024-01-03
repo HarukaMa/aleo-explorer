@@ -276,15 +276,140 @@ class DatabaseInsert(DatabaseBase):
                 if fee_from is not None:
                     await redis_conn.hincrby("address_fee", fee_from, amount) # type: ignore
 
+    @staticmethod
+    async def _insert_deploy_transaction(conn: psycopg.AsyncConnection[dict[str, Any]], redis: Redis[str],
+                                         deployment: Deployment, fee: Fee, transaction_db_id: int):
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "INSERT INTO transaction_deploy (transaction_id, edition, verifying_keys) "
+                "VALUES (%s, %s, %s) RETURNING id",
+                (transaction_db_id, deployment.edition, deployment.verifying_keys.dump())
+            )
+            if await cur.fetchone() is None:
+                raise RuntimeError("failed to insert row into database")
 
+            await cur.execute(
+                "INSERT INTO fee (transaction_id, global_state_root, proof) "
+                "VALUES (%s, %s, %s) RETURNING id",
+                (transaction_db_id, str(fee.global_state_root), fee.proof.dumps())
+            )
+            if (res := await cur.fetchone()) is None:
+                raise RuntimeError("failed to insert row into database")
+            fee_db_id = res["id"]
+
+            await DatabaseInsert._insert_transition(conn, redis, None, fee_db_id, fee.transition, 0)
+
+    @staticmethod
+    async def _insert_execute_transaction(conn: psycopg.AsyncConnection[dict[str, Any]], redis: Redis[str],
+                                          execution: Execution, fee: Optional[Fee], transaction_db_id: int,
+                                          is_rejected: bool = False):
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "INSERT INTO transaction_execute (transaction_id, global_state_root, proof) "
+                "VALUES (%s, %s, %s) RETURNING id",
+                (transaction_db_id, str(execution.global_state_root),
+                 execution.proof.dumps())
+            )
+            if (res := await cur.fetchone()) is None:
+                raise RuntimeError("failed to insert row into database")
+            execute_transaction_db_id = res["id"]
+
+            for ts_index, transition in enumerate(execution.transitions):
+                await DatabaseInsert._insert_transition(conn, redis, execute_transaction_db_id, None, transition, ts_index, is_rejected)
+
+            if fee:
+                await cur.execute(
+                    "INSERT INTO fee (transaction_id, global_state_root, proof) "
+                    "VALUES (%s, %s, %s) RETURNING id",
+                    (transaction_db_id, str(fee.global_state_root), fee.proof.dumps())
+                )
+                if (res := await cur.fetchone()) is None:
+                    raise RuntimeError("failed to insert row into database")
+                fee_db_id = res["id"]
+                await DatabaseInsert._insert_transition(conn, redis, None, fee_db_id, fee.transition, 0)
+
+
+
+    @staticmethod
+    async def _insert_transaction(conn: psycopg.AsyncConnection[dict[str, Any]], redis: Redis[str], transaction: Transaction,
+                                  confirmed_transaction: Optional[ConfirmedTransaction] = None, ct_index: Optional[int] = None,
+                                  ignore_deploy_txids: Optional[list[str]] = None, confirmed_transaction_db_id: Optional[int] = None,
+                                  reject_reasons: Optional[list[Optional[str]]] = None):
+        async with conn.cursor() as cur:
+            optionals = (confirmed_transaction, ct_index, confirmed_transaction_db_id, reject_reasons)
+            if not (all(x is None for x in optionals) or all(x is not None for x in optionals)):
+                raise ValueError("expected all or none of confirmed_transaction, ct_index, confirmed_transaction_db_id, reject_reasons to be set")
+
+            await cur.execute(
+                "SELECT transaction_id FROM transaction WHERE transaction_id = %s",
+                (str(transaction.id),)
+            )
+            if (await cur.fetchone()) is None: # first seen
+                await cur.execute(
+                    "INSERT INTO transaction (confimed_transaction_id, transaction_id, type) "
+                    "VALUES (%s, %s, %s) RETURNING id",
+                    (confirmed_transaction_db_id, str(transaction.id), transaction.type.name)
+                )
+                if (res := await cur.fetchone()) is None:
+                    raise RuntimeError("failed to insert row into database")
+                transaction_db_id = res["id"]
+                if isinstance(transaction, DeployTransaction): # accepted deploy / unconfirmed
+                    await DatabaseInsert._insert_deploy_transaction(conn, redis, transaction.deployment, transaction.fee, transaction_db_id)
+
+                elif isinstance(transaction, ExecuteTransaction): # accepted execute / unconfirmed
+                    await DatabaseInsert._insert_execute_transaction(conn, redis, transaction.execution, transaction.additional_fee.value, transaction_db_id)
+
+                elif isinstance(transaction, FeeTransaction): # rejected execute / rejected deploy
+                    if confirmed_transaction is None:
+                        raise RuntimeError("expected a confirmed transaction for rejected transaction")
+
+                    if isinstance(confirmed_transaction, RejectedDeploy):
+                        rejected_deployment = cast(RejectedDeployment, confirmed_transaction.rejected)
+                        await DatabaseInsert._insert_deploy_transaction(conn, redis, rejected_deployment.deploy, transaction.fee, transaction_db_id)
+
+                    elif isinstance(confirmed_transaction, RejectedExecute):
+                        rejected_execution = cast(RejectedExecution, confirmed_transaction.rejected)
+                        await DatabaseInsert._insert_execute_transaction(conn, redis, rejected_execution.execution, transaction.fee, transaction_db_id, True)
+
+            # confirming tx
+            if confirmed_transaction is not None:
+                reject_reasons = cast(list[Optional[str]], reject_reasons)
+                ct_index = cast(int, ct_index)
+                ignore_deploy_txids = cast(list[str], ignore_deploy_txids)
+                if isinstance(confirmed_transaction, AcceptedDeploy):
+                    transaction = cast(DeployTransaction, transaction)
+                    if reject_reasons[ct_index] is not None:
+                        raise RuntimeError("expected no rejected reason for accepted deploy transaction")
+                    # TODO: remove bug workaround
+                    if str(transaction.id) not in ignore_deploy_txids:
+                        await cur.execute(
+                            "SELECT td.id FROM transaction_deploy td "
+                            "JOIN transaction t on td.transaction_id = t.id "
+                            "WHERE t.transaction_id = %s",
+                            (str(transaction.id),)
+                        )
+                        if (res := await cur.fetchone()) is None:
+                            raise RuntimeError("database inconsistent")
+                        deploy_transaction_db_id = res["id"]
+                        await DatabaseInsert._save_program(cur, transaction.deployment.program, deploy_transaction_db_id, transaction)
+
+                elif isinstance(confirmed_transaction, AcceptedExecute):
+                    if reject_reasons[ct_index] is not None:
+                        raise RuntimeError("expected no rejected reason for accepted execute transaction")
+
+                elif isinstance(confirmed_transaction, (RejectedDeploy, RejectedExecute)):
+                    if reject_reasons[ct_index] is None:
+                        raise RuntimeError("expected a rejected reason for rejected transaction")
+                    await cur.execute("UPDATE confirmed_transaction SET reject_reason = %s WHERE id = %s",
+                                      (reject_reasons[ct_index], confirmed_transaction_db_id))
 
     async def save_builtin_program(self, program: Program):
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 await self._save_program(cur, program, None, None)
 
-    # noinspection PyMethodMayBeStatic
-    async def _save_program(self, cur: psycopg.AsyncCursor[dict[str, Any]], program: Program,
+    @staticmethod
+    async def _save_program(cur: psycopg.AsyncCursor[dict[str, Any]], program: Program,
                             deploy_transaction_db_id: Optional[int], transaction: Optional[DeployTransaction]) -> None:
         imports = [str(x.program_id) for x in program.imports]
         mappings = list(map(str, program.mappings.keys()))
@@ -904,138 +1029,11 @@ class DatabaseInsert(DatabaseBase):
                             if (res := await cur.fetchone()) is None:
                                 raise RuntimeError("failed to insert row into database")
                             confirmed_transaction_db_id = res["id"]
+
                             transaction = confirmed_transaction.transaction
-                            transaction_id = transaction.id
-                            # if block.height != 0 and isinstance(confirmed_transaction, (AcceptedDeploy, AcceptedExecute)):
-                            #     dag_vertex_db_id = dag_transmission_ids[1][str(transaction_id)]
-                            # else:
-                            #     dag_vertex_db_id = None
-                            await cur.execute(
-                                "INSERT INTO transaction (confimed_transaction_id, transaction_id, type) "
-                                "VALUES (%s, %s, %s) RETURNING id",
-                                (confirmed_transaction_db_id, str(transaction_id), transaction.type.name)
-                            )
-                            if (res := await cur.fetchone()) is None:
-                                raise RuntimeError("failed to insert row into database")
-                            transaction_db_id = res["id"]
-                            if isinstance(confirmed_transaction, AcceptedDeploy):
-                                if reject_reasons[ct_index] is not None:
-                                    raise RuntimeError("expected no rejected reason for accepted deploy transaction")
-                                if not isinstance(transaction, DeployTransaction):
-                                    raise ValueError("expected deploy transaction")
-                                await cur.execute(
-                                    "INSERT INTO transaction_deploy (transaction_id, edition, verifying_keys) "
-                                    "VALUES (%s, %s, %s) RETURNING id",
-                                    (transaction_db_id, transaction.deployment.edition, transaction.deployment.verifying_keys.dump())
-                                )
-                                if (res := await cur.fetchone()) is None:
-                                    raise RuntimeError("failed to insert row into database")
-                                deploy_transaction_db_id = res["id"]
 
-
-                                # TODO: remove bug workaround
-                                if str(confirmed_transaction.transaction.id) not in ignore_deploy_txids:
-                                    await self._save_program(cur, transaction.deployment.program, deploy_transaction_db_id, transaction)
-
-                                await cur.execute(
-                                    "INSERT INTO fee (transaction_id, global_state_root, proof) "
-                                    "VALUES (%s, %s, %s) RETURNING id",
-                                    (transaction_db_id, str(transaction.fee.global_state_root), transaction.fee.proof.dumps())
-                                )
-                                if (res := await cur.fetchone()) is None:
-                                    raise RuntimeError("failed to insert row into database")
-                                fee_db_id = res["id"]
-                                await self._insert_transition(conn, self.redis, None, fee_db_id, transaction.fee.transition, 0)
-
-                            elif isinstance(confirmed_transaction, RejectedDeploy):
-                                if reject_reasons[ct_index] is None:
-                                    raise RuntimeError("expected a rejected reason for rejected deploy transaction")
-                                await cur.execute("UPDATE confirmed_transaction SET reject_reason = %s WHERE id = %s",
-                                                  (reject_reasons[ct_index], confirmed_transaction_db_id))
-                                if not isinstance(transaction, FeeTransaction):
-                                    raise ValueError("expected fee transaction")
-                                fee = transaction.fee
-                                await cur.execute(
-                                    "INSERT INTO fee (transaction_id, global_state_root, proof) "
-                                    "VALUES (%s, %s, %s) RETURNING id",
-                                    (transaction_db_id, str(fee.global_state_root), fee.proof.dumps())
-                                )
-                                if (res := await cur.fetchone()) is None:
-                                    raise RuntimeError("failed to insert row into database")
-                                fee_db_id = res["id"]
-                                await self._insert_transition(conn, self.redis, None, fee_db_id, fee.transition, 0)
-                                rejected = confirmed_transaction.rejected
-                                if not isinstance(rejected, RejectedDeployment):
-                                    raise ValueError("expected rejected deployment")
-                                await cur.execute(
-                                    "INSERT INTO transaction_deploy (transaction_id, edition, verifying_keys) "
-                                    "VALUES (%s, %s, %s)",
-                                    (transaction_db_id, rejected.deploy.edition, rejected.deploy.verifying_keys.dump())
-                                )
-                                # TODO: consider saving rejected programs as well
-
-                            elif isinstance(confirmed_transaction, AcceptedExecute):
-                                if reject_reasons[ct_index] is not None:
-                                    raise RuntimeError("expected no rejected reason for accepted execute transaction")
-                                if not isinstance(transaction, ExecuteTransaction):
-                                    raise ValueError("expected execute transaction")
-                                await cur.execute(
-                                    "INSERT INTO transaction_execute (transaction_id, global_state_root, proof) "
-                                    "VALUES (%s, %s, %s) RETURNING id",
-                                    (transaction_db_id, str(transaction.execution.global_state_root),
-                                     transaction.execution.proof.dumps())
-                                )
-                                if (res := await cur.fetchone()) is None:
-                                    raise RuntimeError("failed to insert row into database")
-                                execute_transaction_db_id = res["id"]
-
-                                for ts_index, transition in enumerate(transaction.execution.transitions):
-                                    await self._insert_transition(conn, self.redis, execute_transaction_db_id, None, transition, ts_index)
-
-                                if transaction.additional_fee.value is not None:
-                                    fee = transaction.additional_fee.value
-                                    await cur.execute(
-                                        "INSERT INTO fee (transaction_id, global_state_root, proof) "
-                                        "VALUES (%s, %s, %s) RETURNING id",
-                                        (transaction_db_id, str(fee.global_state_root), fee.proof.dumps())
-                                    )
-                                    if (res := await cur.fetchone()) is None:
-                                        raise RuntimeError("failed to insert row into database")
-                                    fee_db_id = res["id"]
-                                    await self._insert_transition(conn, self.redis, None, fee_db_id, fee.transition, 0)
-
-                            elif isinstance(confirmed_transaction, RejectedExecute):
-                                if reject_reasons[ct_index] is None:
-                                    raise RuntimeError("expected a rejected reason for rejected execute transaction")
-                                await cur.execute("UPDATE confirmed_transaction SET reject_reason = %s WHERE id = %s",
-                                                  (reject_reasons[ct_index], confirmed_transaction_db_id))
-                                if not isinstance(transaction, FeeTransaction):
-                                    raise ValueError("expected fee transaction")
-                                fee = transaction.fee
-                                await cur.execute(
-                                    "INSERT INTO fee (transaction_id, global_state_root, proof) "
-                                    "VALUES (%s, %s, %s) RETURNING id",
-                                    (transaction_db_id, str(fee.global_state_root), fee.proof.dumps())
-                                )
-                                if (res := await cur.fetchone()) is None:
-                                    raise RuntimeError("failed to insert row into database")
-                                fee_db_id = res["id"]
-                                await self._insert_transition(conn, self.redis, None, fee_db_id, fee.transition, 0)
-
-                                rejected = confirmed_transaction.rejected
-                                if not isinstance(rejected, RejectedExecution):
-                                    raise ValueError("expected rejected execution")
-                                await cur.execute(
-                                    "INSERT INTO transaction_execute (transaction_id, global_state_root, proof) "
-                                    "VALUES (%s, %s, %s) RETURNING id",
-                                    (transaction_db_id, str(rejected.execution.global_state_root),
-                                     rejected.execution.proof.dumps())
-                                )
-                                if (res := await cur.fetchone()) is None:
-                                    raise RuntimeError("failed to insert row into database")
-                                execute_transaction_db_id = res["id"]
-                                for ts_index, transition in enumerate(rejected.execution.transitions):
-                                    await self._insert_transition(conn, self.redis, execute_transaction_db_id, None, transition, ts_index, True)
+                            await self._insert_transaction(conn, self.redis, transaction, confirmed_transaction, ct_index, ignore_deploy_txids,
+                                                           confirmed_transaction_db_id, reject_reasons)
 
                             update_copy_data: list[tuple[int, str, str, str]] = []
                             for index, finalize_operation in enumerate(confirmed_transaction.finalize):

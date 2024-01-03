@@ -70,9 +70,16 @@ class DatabaseMigrate(DatabaseBase):
                     address=Address.loads("aleo1cgxwzfrwpucrvyxgf9muu49mqnw2gmktm24kf9uvchurhyp2jggs3z4xmt"),
                     signature=Signature.loads("sign1t6szyjpa6mvqsm4uzr57zl0uzu6wnmdwasfuqpkp3ead9lvh0sphjtgadd77lp57g87mkzxep5wylye7ftxz8upgqv65wvqa5wq8wq5h6sn6z5gmu30xfgp3tk9u44kqcjalwv4fpsml3uxwdvy2larvq7tpjf0f27mlm5ckkewzzawllxhfglhgnjp6w5gyxp6ar82xjy3q66hqwt7")
                 )
-            await Database._save_program(None, cur, program, transaction_deploy_id, cast(DeployTransaction, x()))
+
+            from db.insert import DatabaseInsert
+            await DatabaseInsert._save_program(cur, program, transaction_deploy_id, cast(DeployTransaction, x()))
 
     @staticmethod
     async def migrate_6_nullable_dag_vertex_id(conn: psycopg.AsyncConnection[dict[str, Any]]):
         async with conn.cursor() as cur:
             await cur.execute("alter table explorer.prover_solution alter column dag_vertex_id drop not null")
+
+    @staticmethod
+    async def migrate_7_nullable_confirmed_transaction(conn: psycopg.AsyncConnection[dict[str, Any]]):
+        async with conn.cursor() as cur:
+            await cur.execute("alter table explorer.transaction alter column confimed_transaction_id drop not null")
