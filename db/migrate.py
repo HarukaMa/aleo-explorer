@@ -24,6 +24,7 @@ class DatabaseMigrate(DatabaseBase):
             (4, self.migrate_4_support_batch_certificate_v2),
             (5, self.migrate_5_fix_missing_program),
             (6, self.migrate_6_nullable_dag_vertex_id),
+            (7, self.migrate_7_nullable_confirmed_transaction),
         ]
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
