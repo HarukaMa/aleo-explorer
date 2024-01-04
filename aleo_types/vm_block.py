@@ -2404,6 +2404,13 @@ class Execution(Serializable):
             finalize_costs.append(program.functions[transition.function_name].finalize_cost)
         return finalize_costs
 
+FeeComponent = NamedTuple("FeeComponent", [
+    ("storage_cost", int),
+    ("namespace_cost", int),
+    ("finalize_costs", list[int]),
+    ("priority_fee", int),
+    ("burnt", int)
+])
 
 class Transaction(EnumBaseSerialize, RustEnum, Serializable):
     version = u8(1)
@@ -2430,6 +2437,31 @@ class Transaction(EnumBaseSerialize, RustEnum, Serializable):
             return FeeTransaction.load(data)
         else:
             raise ValueError("incorrect type")
+
+    async def get_fee_breakdown(self, db: "Database") -> FeeComponent:
+        if isinstance(self, DeployTransaction):
+            fee = self.fee
+            deployment = self.deployment
+            storage_cost, namespace_cost = deployment.cost
+            base_fee, priority_fee = fee.amount
+            burnt = base_fee - storage_cost - namespace_cost
+            return FeeComponent(storage_cost, namespace_cost, [], priority_fee, burnt)
+        elif isinstance(self, ExecuteTransaction):
+            execution = self.execution
+            fee = self.additional_fee.value
+            storage_cost = execution.storage_cost
+            finalize_costs = await execution.finalize_costs(db)
+            if fee is not None:
+                base_fee, priority_fee = fee.amount
+            else:
+                return FeeComponent(0, 0, [], 0, 0)
+            burnt = base_fee - storage_cost - sum(finalize_costs)
+            return FeeComponent(storage_cost, 0, finalize_costs, priority_fee, burnt)
+        elif isinstance(self, FeeTransaction):
+            raise TypeError("use ConfirmedTransaction to get fee breakdown")
+        else:
+            raise NotImplementedError
+
 
 class ProgramOwner(Serializable):
     version = u8(1)
@@ -2535,14 +2567,6 @@ class FinalizeOperation(EnumBaseSerialize, RustEnum, Serializable):
             return RemoveMapping.load(data)
         else:
             raise ValueError("incorrect type")
-
-FeeComponent = NamedTuple("FeeComponent", [
-    ("storage_cost", int),
-    ("namespace_cost", int),
-    ("finalize_costs", list[int]),
-    ("priority_fee", int),
-    ("burnt", int)
-])
 
 class ConfirmedTransaction(EnumBaseSerialize, RustEnum, Serializable):
     class Type(IntEnumu8):

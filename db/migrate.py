@@ -26,7 +26,8 @@ class DatabaseMigrate(DatabaseBase):
             (6, self.migrate_6_nullable_dag_vertex_id),
             (7, self.migrate_7_nullable_confirmed_transaction),
             (8, self.migrate_8_add_transaction_first_seen),
-            (9, self.migrate_9_add_transaction_original_id)
+            (9, self.migrate_9_add_transaction_original_id),
+            (10, self.migrate_10_add_deploy_unconfirmed_program_info),
         ]
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -95,3 +96,7 @@ class DatabaseMigrate(DatabaseBase):
     @staticmethod
     async def migrate_9_add_transaction_original_id(conn: psycopg.AsyncConnection[dict[str, Any]]):
         await conn.execute("alter table transaction add column original_transaction_id text")
+
+    @staticmethod
+    async def migrate_10_add_deploy_unconfirmed_program_info(conn: psycopg.AsyncConnection[dict[str, Any]]):
+        await conn.execute("alter table transaction_deploy add column program_id text, add column owner text")

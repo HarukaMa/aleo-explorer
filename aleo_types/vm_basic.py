@@ -414,20 +414,20 @@ class ComputeKey(Serializable):
 
 class Signature(Serializable):
 
-    def __init__(self, *, challange: Scalar, response: Scalar, compute_key: ComputeKey):
-        self.challange = challange
+    def __init__(self, *, challenge: Scalar, response: Scalar, compute_key: ComputeKey):
+        self.challenge = challenge
         self.response = response
         self.compute_key = compute_key
 
     def dump(self) -> bytes:
-        return self.challange.dump() + self.response.dump() + self.compute_key.dump()
+        return self.challenge.dump() + self.response.dump() + self.compute_key.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
         challange = Scalar.load(data)
         response = Scalar.load(data)
         compute_key = ComputeKey.load(data)
-        return cls(challange=challange, response=response, compute_key=compute_key)
+        return cls(challenge=challange, response=response, compute_key=compute_key)
 
     @classmethod
     def loads(cls, data: str):

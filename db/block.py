@@ -85,7 +85,7 @@ class DatabaseBlock(DatabaseBase):
 
     @staticmethod
     @profile
-    async def _get_transition(transition: dict[str, Any], conn: psycopg.AsyncConnection[dict[str, Any]]):
+    async def _get_transition_from_dict(transition: dict[str, Any], conn: psycopg.AsyncConnection[dict[str, Any]]):
         async with conn.cursor() as cur:
             await cur.execute("SELECT * FROM get_transition_inputs(%s)", (transition["id"],))
             transition_inputs = await cur.fetchall()
@@ -251,11 +251,347 @@ class DatabaseBlock(DatabaseBase):
                     transition = await cur.fetchone()
                     if transition is None:
                         return None
-                    return await DatabaseBlock._get_transition(transition, conn)
+                    return await DatabaseBlock._get_transition_from_dict(transition, conn)
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
+    async def is_transaction_confirmed(self, transaction_id: str) -> Optional[bool]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT confimed_transaction_id FROM transaction WHERE transaction_id = %s",
+                        (transaction_id,)
+                    )
+                    res = await cur.fetchone()
+                    if res is None:
+                        return None
+                    return res["confimed_transaction_id"] is not None
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def get_unconfirmed_transaction(self, transaction_id: str) -> Optional[Transaction]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT id, transaction_id, type, confimed_transaction_id FROM transaction "
+                        "WHERE transaction_id = %s",
+                        (transaction_id,)
+                    )
+                    transaction = await cur.fetchone()
+                    if transaction is None:
+                        return None
+                    if transaction["confimed_transaction_id"] is not None:
+                        raise ValueError("transaction is confirmed")
+                    if transaction["type"] == Transaction.Type.Deploy.name:
+                        await cur.execute(
+                            "SELECT id, edition, verifying_keys, program_id, owner FROM transaction_deploy WHERE transaction_id = %s",
+                            (transaction["id"],)
+                        )
+                        deploy = await cur.fetchone()
+                        if deploy is None:
+                            raise RuntimeError("database inconsistent")
+                        await cur.execute(
+                            "SELECT global_state_root, proof FROM fee WHERE transaction_id = %s",
+                            (transaction["id"],)
+                        )
+                        fee = await cur.fetchone()
+                        if fee is None:
+                            raise RuntimeError("database inconsistent")
+                        cur.execute("SELECT * FROM transition WHERE fee_id = %s", (fee["id"],))
+                        fee_transition = await cur.fetchone()
+                        if fee_transition is None:
+                            raise ValueError("fee transition not found")
+                        tx = DeployTransaction(
+                            id_=TransactionID.loads(transaction["transaction_id"]),
+                            deployment=Deployment(
+                                edition=u16(deploy["edition"]),
+                                program=Program(
+                                    id_=ProgramID.loads(deploy["program_id"]),
+                                    imports=Vec[Import, u8]([]),
+                                    mappings={},
+                                    structs={},
+                                    records={},
+                                    closures={},
+                                    functions={},
+                                    identifiers=[],
+                                ),
+                                verifying_keys=Vec[Tuple[Identifier, VerifyingKey, Certificate], u16].load(BytesIO(deploy["verifying_keys"])),
+                            ),
+                            fee=Fee(
+                                transition=await self._get_transition_from_dict(fee_transition, conn),
+                                global_state_root=StateRoot.loads(fee["global_state_root"]),
+                                proof=Option[Proof](Proof.loads(fee["proof"])),
+                            ),
+                            owner=ProgramOwner(
+                                address=Address.loads(deploy["owner"]),
+                                signature=Signature(
+                                    challenge=Scalar(0),
+                                    response=Scalar(0),
+                                    compute_key=ComputeKey(
+                                        pk_sig=Group(0),
+                                        pr_sig=Group(0),
+                                    )
+                                )
+                            )
+                        )
+                    elif transaction["type"] == Transaction.Type.Execute.name:
+                        await cur.execute(
+                            "SELECT id, global_state_root, proof FROM transaction_execute WHERE transaction_id = %s",
+                            (transaction["id"],)
+                        )
+                        execute = await cur.fetchone()
+                        if execute is None:
+                            raise RuntimeError("database inconsistent")
+                        await cur.execute(
+                            "SELECT id, program_id, function_name FROM transition WHERE transaction_execute_id = %s",
+                            (execute["id"],)
+                        )
+                        transitions = await cur.fetchall()
+                        tss: list[Transition] = []
+                        for transition in transitions:
+                            tss.append(await self._get_transition_from_dict(transition, conn))
+                        await cur.execute(
+                            "SELECT id, global_state_root, proof FROM fee WHERE transaction_id = %s",
+                            (transaction["id"],)
+                        )
+                        fee = await cur.fetchone()
+                        if fee is None:
+                            additional_fee = None
+                        else:
+                            cur.execute("SELECT * FROM transition WHERE fee_id = %s", (fee["id"],))
+                            fee_transition = await cur.fetchone()
+                            additional_fee = Fee(
+                                transition=await self._get_transition_from_dict(fee_transition, conn),
+                                global_state_root=StateRoot.loads(fee["global_state_root"]),
+                                proof=Option[Proof](Proof.loads(fee["proof"])),
+                            )
+                        cur.execute("SELECT * FROM transition WHERE fee_id = %s", (fee["id"],))
+                        fee_transition = await cur.fetchone()
+                        if fee_transition is None:
+                            raise ValueError("fee transition not found")
+                        tx = ExecuteTransaction(
+                            id_=TransactionID.loads(transaction["transaction_id"]),
+                            execution=Execution(
+                                transitions=Vec[Transition, u8](tss),
+                                global_state_root=StateRoot.loads(execute["global_state_root"]),
+                                proof=Option[Proof](Proof.loads(execute["proof"])),
+                            ),
+                            additional_fee=Option[Fee](additional_fee),
+                        )
+                    elif transaction["type"] == Transaction.Type.Fee.name:
+                        raise ValueError("transaction is confirmed")
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    @staticmethod
+    async def _get_confirmed_transaction_from_dict(conn: psycopg.AsyncConnection[dict[str, Any]], confirmed_transaction: dict[str, Any]) -> ConfirmedTransaction:
+        async with conn.cursor() as cur:
+            await cur.execute("SELECT * FROM get_finalize_operations(%s)", (confirmed_transaction["confirmed_transaction_id"],))
+            finalize_operations = await cur.fetchall()
+            f: list[FinalizeOperation] = []
+            for finalize_operation in finalize_operations:
+                if finalize_operation["type"] == FinalizeOperation.Type.InitializeMapping.name:
+                    f.append(InitializeMapping(mapping_id=Field.loads(finalize_operation["mapping_id"])))
+                elif finalize_operation["type"] == FinalizeOperation.Type.InsertKeyValue.name:
+                    f.append(InsertKeyValue(
+                        mapping_id=Field.loads(finalize_operation["mapping_id"]),
+                        key_id=Field.loads(finalize_operation["key_id"]),
+                        value_id=Field.loads(finalize_operation["value_id"]),
+                    ))
+                elif finalize_operation["type"] == FinalizeOperation.Type.UpdateKeyValue.name:
+                    f.append(UpdateKeyValue(
+                        mapping_id=Field.loads(finalize_operation["mapping_id"]),
+                        index=u64(),
+                        key_id=Field.loads(finalize_operation["key_id"]),
+                        value_id=Field.loads(finalize_operation["value_id"]),
+                    ))
+                elif finalize_operation["type"] == FinalizeOperation.Type.RemoveKeyValue.name:
+                    f.append(RemoveKeyValue(
+                        mapping_id=Field.loads(finalize_operation["mapping_id"]),
+                        index=u64(),
+                    ))
+                elif finalize_operation["type"] == FinalizeOperation.Type.RemoveMapping.name:
+                    f.append(RemoveMapping(mapping_id=Field.loads(finalize_operation["mapping_id"])))
+                else:
+                    raise NotImplementedError
+
+            transaction = confirmed_transaction
+            match confirmed_transaction["confirmed_transaction_type"]:
+                case ConfirmedTransaction.Type.AcceptedDeploy.name | ConfirmedTransaction.Type.RejectedDeploy.name:
+                    if confirmed_transaction["confirmed_transaction_type"] == ConfirmedTransaction.Type.RejectedDeploy.name:
+                        raise NotImplementedError
+                    deploy_transaction = transaction
+                    await cur.execute(
+                        "SELECT raw_data, owner, signature FROM program WHERE transaction_deploy_id = %s",
+                        (deploy_transaction["transaction_deploy_id"],)
+                    )
+                    program_data = await cur.fetchone()
+                    if program_data is None:
+                        raise RuntimeError("database inconsistent")
+                    program = program_data["raw_data"]
+                    deployment = Deployment(
+                        edition=u16(deploy_transaction["edition"]),
+                        program=Program.load(BytesIO(program)),
+                        verifying_keys=Vec[Tuple[Identifier, VerifyingKey, Certificate], u16].load(BytesIO(deploy_transaction["verifying_keys"])),
+                    )
+                    fee_dict = transaction
+                    if fee_dict is None:
+                        raise RuntimeError("database inconsistent")
+                    await cur.execute(
+                        "SELECT * FROM transition WHERE fee_id = %s",
+                        (fee_dict["fee_id"],)
+                    )
+                    fee_transition = await cur.fetchone()
+                    if fee_transition is None:
+                        raise ValueError("fee transition not found")
+                    proof = None
+                    if fee_dict["fee_proof"] is not None:
+                        proof = Proof.loads(fee_dict["fee_proof"])
+                    fee = Fee(
+                        transition=await DatabaseBlock._get_transition_from_dict(fee_transition, conn),
+                        global_state_root=StateRoot.loads(fee_dict["fee_global_state_root"]),
+                        proof=Option[Proof](proof),
+                    )
+                    tx = DeployTransaction(
+                        id_=TransactionID.loads(transaction["transaction_id"]),
+                        deployment=deployment,
+                        fee=fee,
+                        owner=ProgramOwner(
+                            address=Address.loads(program_data["owner"]),
+                            signature=Signature.loads(program_data["signature"])
+                        )
+                    )
+                    ctx = AcceptedDeploy(
+                        index=u32(confirmed_transaction["index"]),
+                        transaction=tx,
+                        finalize=Vec[FinalizeOperation, u16](f),
+                    )
+                case ConfirmedTransaction.Type.AcceptedExecute.name | ConfirmedTransaction.Type.RejectedExecute.name:
+                    execute_transaction = transaction
+                    await cur.execute(
+                        "SELECT * FROM transition WHERE transaction_execute_id = %s",
+                        (execute_transaction["transaction_execute_id"],)
+                    )
+                    transitions = await cur.fetchall()
+                    tss: list[Transition] = []
+                    for transition in transitions:
+                        tss.append(await DatabaseBlock._get_transition_from_dict(transition, conn))
+                    additional_fee = transaction
+                    if additional_fee["fee_id"] is None:
+                        fee = None
+                    else:
+                        await cur.execute(
+                            "SELECT * FROM transition WHERE fee_id = %s",
+                            (additional_fee["fee_id"],)
+                        )
+                        fee_transition = await cur.fetchone()
+                        if fee_transition is None:
+                            raise ValueError("fee transition not found")
+                        proof = None
+                        if additional_fee["fee_proof"] is not None:
+                            proof = Proof.loads(additional_fee["fee_proof"])
+                        fee = Fee(
+                            transition=await DatabaseBlock._get_transition_from_dict(fee_transition, conn),
+                            global_state_root=StateRoot.loads(additional_fee["fee_global_state_root"]),
+                            proof=Option[Proof](proof),
+                        )
+                    if execute_transaction["proof"] is None:
+                        proof = None
+                    else:
+                        proof = Proof.loads(execute_transaction["proof"])
+                    if confirmed_transaction["confirmed_transaction_type"] == ConfirmedTransaction.Type.AcceptedExecute.name:
+                        ctx = AcceptedExecute(
+                            index=u32(confirmed_transaction["index"]),
+                            transaction=ExecuteTransaction(
+                                id_=TransactionID.loads(transaction["transaction_id"]),
+                                execution=Execution(
+                                    transitions=Vec[Transition, u8](tss),
+                                    global_state_root=StateRoot.loads(execute_transaction["global_state_root"]),
+                                    proof=Option[Proof](proof),
+                                ),
+                                additional_fee=Option[Fee](fee),
+                            ),
+                            finalize=Vec[FinalizeOperation, u16](f),
+                        )
+                    else:
+                        if fee is None:
+                            raise ValueError("fee is None")
+                        ctx = RejectedExecute(
+                            index=u32(confirmed_transaction["index"]),
+                            transaction=FeeTransaction(
+                                id_=TransactionID.loads(transaction["transaction_id"]),
+                                fee=fee,
+                            ),
+                            rejected=RejectedExecution(
+                                execution=Execution(
+                                    transitions=Vec[Transition, u8](tss),
+                                    global_state_root=StateRoot.loads(execute_transaction["global_state_root"]),
+                                    proof=Option[Proof](proof),
+                                )
+                            ),
+                            finalize=Vec[FinalizeOperation, u16](f),
+                        )
+                case _:
+                    raise NotImplementedError
+            return ctx
+
+    async def get_confirmed_transaction(self, transaction_id: str) -> Optional[ConfirmedTransaction]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT t.id as transaction_db_id,  t.transaction_id, t.type as transaction_type, "
+                        "ct.type as confirmed_transaction_type, ct.index, ct.reject_reason "
+                        "FROM transaction t "
+                        "JOIN confirmed_transaction ct ON t.confimed_transaction_id = ct.id "
+                        "WHERE transaction_id = %s", (transaction_id,))
+                    confirmed_transaction = await cur.fetchone()
+                    if confirmed_transaction is None:
+                        return None
+                    confirmed_transaction_type = confirmed_transaction["confirmed_transaction_type"]
+                    if confirmed_transaction_type == ConfirmedTransaction.Type.AcceptedDeploy.name or \
+                        confirmed_transaction_type == ConfirmedTransaction.Type.RejectedDeploy.name:
+                        if confirmed_transaction_type == ConfirmedTransaction.Type.RejectedDeploy.name:
+                            raise NotImplementedError
+                        await cur.execute(
+                            "SELECT edition, verifying_keys FROM transaction_deploy WHERE transaction_id = %s",
+                            (confirmed_transaction["transaction_db_id"],)
+                        )
+                        deploy = await cur.fetchone()
+                        if deploy is None:
+                            raise RuntimeError("database inconsistent")
+                        confirmed_transaction.update(deploy)
+                    elif confirmed_transaction_type == ConfirmedTransaction.Type.AcceptedExecute.name or \
+                        confirmed_transaction_type == ConfirmedTransaction.Type.RejectedExecute.name:
+                        await cur.execute(
+                            "SELECT global_state_root, proof FROM transaction_execute WHERE transaction_id = %s",
+                            (confirmed_transaction["transaction_db_id"],)
+                        )
+                        execute = await cur.fetchone()
+                        if execute is None:
+                            raise RuntimeError("database inconsistent")
+                        confirmed_transaction.update(execute)
+                    else:
+                        raise NotImplementedError
+                    await cur.execute(
+                        "SELECT id as fee_id, global_state_root as fee_global_state_root, proof as fee_proof "
+                        "FROM fee WHERE transaction_id = %s",
+                        (confirmed_transaction["transaction_db_id"],)
+                    )
+                    fee = await cur.fetchone()
+                    if fee is None:
+                        confirmed_transaction.update({"fee_id": None, "fee_global_state_root": None, "fee_proof": None})
+                    else:
+                        confirmed_transaction.update(fee)
+                    return await DatabaseBlock._get_confirmed_transaction_from_dict(conn, confirmed_transaction)
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
 
     @staticmethod
     @profile
@@ -265,154 +601,7 @@ class DatabaseBlock(DatabaseBase):
             confirmed_transactions = await cur.fetchall()
             ctxs: list[ConfirmedTransaction] = []
             for confirmed_transaction in confirmed_transactions:
-                await cur.execute("SELECT * FROM get_finalize_operations(%s)", (confirmed_transaction["confirmed_transaction_id"],))
-                finalize_operations = await cur.fetchall()
-                f: list[FinalizeOperation] = []
-                for finalize_operation in finalize_operations:
-                    if finalize_operation["type"] == FinalizeOperation.Type.InitializeMapping.name:
-                        f.append(InitializeMapping(mapping_id=Field.loads(finalize_operation["mapping_id"])))
-                    elif finalize_operation["type"] == FinalizeOperation.Type.InsertKeyValue.name:
-                        f.append(InsertKeyValue(
-                            mapping_id=Field.loads(finalize_operation["mapping_id"]),
-                            key_id=Field.loads(finalize_operation["key_id"]),
-                            value_id=Field.loads(finalize_operation["value_id"]),
-                        ))
-                    elif finalize_operation["type"] == FinalizeOperation.Type.UpdateKeyValue.name:
-                        f.append(UpdateKeyValue(
-                            mapping_id=Field.loads(finalize_operation["mapping_id"]),
-                            index=u64(),
-                            key_id=Field.loads(finalize_operation["key_id"]),
-                            value_id=Field.loads(finalize_operation["value_id"]),
-                        ))
-                    elif finalize_operation["type"] == FinalizeOperation.Type.RemoveKeyValue.name:
-                        f.append(RemoveKeyValue(
-                            mapping_id=Field.loads(finalize_operation["mapping_id"]),
-                            index=u64(),
-                        ))
-                    elif finalize_operation["type"] == FinalizeOperation.Type.RemoveMapping.name:
-                        f.append(RemoveMapping(mapping_id=Field.loads(finalize_operation["mapping_id"])))
-                    else:
-                        raise NotImplementedError
-
-                transaction = confirmed_transaction
-                match confirmed_transaction["confirmed_transaction_type"]:
-                    case ConfirmedTransaction.Type.AcceptedDeploy.name | ConfirmedTransaction.Type.RejectedDeploy.name:
-                        if confirmed_transaction["confirmed_transaction_type"] == ConfirmedTransaction.Type.RejectedDeploy.name:
-                            raise NotImplementedError
-                        deploy_transaction = transaction
-                        await cur.execute(
-                            "SELECT raw_data, owner, signature FROM program WHERE transaction_deploy_id = %s",
-                            (deploy_transaction["transaction_deploy_id"],)
-                        )
-                        program_data = await cur.fetchone()
-                        if program_data is None:
-                            raise RuntimeError("database inconsistent")
-                        program = program_data["raw_data"]
-                        deployment = Deployment(
-                            edition=u16(deploy_transaction["edition"]),
-                            program=Program.load(BytesIO(program)),
-                            verifying_keys=Vec[Tuple[Identifier, VerifyingKey, Certificate], u16].load(BytesIO(deploy_transaction["verifying_keys"])),
-                        )
-                        fee_dict = transaction
-                        if fee_dict is None:
-                            raise RuntimeError("database inconsistent")
-                        await cur.execute(
-                            "SELECT * FROM transition WHERE fee_id = %s",
-                            (fee_dict["fee_id"],)
-                        )
-                        fee_transition = await cur.fetchone()
-                        if fee_transition is None:
-                            raise ValueError("fee transition not found")
-                        proof = None
-                        if fee_dict["fee_proof"] is not None:
-                            proof = Proof.loads(fee_dict["fee_proof"])
-                        fee = Fee(
-                            transition=await DatabaseBlock._get_transition(fee_transition, conn),
-                            global_state_root=StateRoot.loads(fee_dict["fee_global_state_root"]),
-                            proof=Option[Proof](proof),
-                        )
-                        tx = DeployTransaction(
-                            id_=TransactionID.loads(transaction["transaction_id"]),
-                            deployment=deployment,
-                            fee=fee,
-                            owner=ProgramOwner(
-                                address=Address.loads(program_data["owner"]),
-                                signature=Signature.loads(program_data["signature"])
-                            )
-                        )
-                        ctxs.append(AcceptedDeploy(
-                            index=u32(confirmed_transaction["index"]),
-                            transaction=tx,
-                            finalize=Vec[FinalizeOperation, u16](f),
-                        ))
-                    case ConfirmedTransaction.Type.AcceptedExecute.name | ConfirmedTransaction.Type.RejectedExecute.name:
-                        execute_transaction = transaction
-                        await cur.execute(
-                            "SELECT * FROM transition WHERE transaction_execute_id = %s",
-                            (execute_transaction["transaction_execute_id"],)
-                        )
-                        transitions = await cur.fetchall()
-                        tss: list[Transition] = []
-                        for transition in transitions:
-                            tss.append(await DatabaseBlock._get_transition(transition, conn))
-                        additional_fee = transaction
-                        if additional_fee["fee_id"] is None:
-                            fee = None
-                        else:
-                            await cur.execute(
-                                "SELECT * FROM transition WHERE fee_id = %s",
-                                (additional_fee["fee_id"],)
-                            )
-                            fee_transition = await cur.fetchone()
-                            if fee_transition is None:
-                                raise ValueError("fee transition not found")
-                            proof = None
-                            if additional_fee["fee_proof"] is not None:
-                                proof = Proof.loads(additional_fee["fee_proof"])
-                            fee = Fee(
-                                transition=await DatabaseBlock._get_transition(fee_transition, conn),
-                                global_state_root=StateRoot.loads(additional_fee["fee_global_state_root"]),
-                                proof=Option[Proof](proof),
-                            )
-                        if execute_transaction["proof"] is None:
-                            proof = None
-                        else:
-                            proof = Proof.loads(execute_transaction["proof"])
-                        if confirmed_transaction["confirmed_transaction_type"] == ConfirmedTransaction.Type.AcceptedExecute.name:
-                            ctxs.append(AcceptedExecute(
-                                index=u32(confirmed_transaction["index"]),
-                                transaction=ExecuteTransaction(
-                                    id_=TransactionID.loads(transaction["transaction_id"]),
-                                    execution=Execution(
-                                        transitions=Vec[Transition, u8](tss),
-                                        global_state_root=StateRoot.loads(execute_transaction["global_state_root"]),
-                                        proof=Option[Proof](proof),
-                                    ),
-                                    additional_fee=Option[Fee](fee),
-                                ),
-                                finalize=Vec[FinalizeOperation, u16](f),
-                            ))
-                        else:
-                            if fee is None:
-                                raise ValueError("fee is None")
-                            ctxs.append(RejectedExecute(
-                                index=u32(confirmed_transaction["index"]),
-                                transaction=FeeTransaction(
-                                    id_=TransactionID.loads(transaction["transaction_id"]),
-                                    fee=fee,
-                                ),
-                                rejected=RejectedExecution(
-                                    execution=Execution(
-                                        transitions=Vec[Transition, u8](tss),
-                                        global_state_root=StateRoot.loads(execute_transaction["global_state_root"]),
-                                        proof=Option[Proof](proof),
-                                    )
-                                ),
-                                finalize=Vec[FinalizeOperation, u16](f),
-                            ))
-                    case _:
-                        raise NotImplementedError
-
+                ctxs.append(await DatabaseBlock._get_confirmed_transaction_from_dict(conn, confirmed_transaction))
             await cur.execute("SELECT * FROM ratification WHERE block_id = %s ORDER BY index", (block["id"],))
             ratifications = await cur.fetchall()
             rs: list[Ratify] = []
