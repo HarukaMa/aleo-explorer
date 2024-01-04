@@ -40,6 +40,8 @@ class Explorer:
     async def node_request(self, request: ExplorerRequest):
         if isinstance(request, Request.GetLatestHeight):
             return self.latest_height
+        elif isinstance(request, Request.ProcessUnconfirmedTransaction):
+            await self.db.save_unconfirmed_transaction(request.tx)
         elif isinstance(request, Request.ProcessBlock):
             await self.add_block(request.block)
         elif isinstance(request, Request.GetBlockByHeight):

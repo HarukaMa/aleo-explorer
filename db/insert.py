@@ -112,8 +112,16 @@ class DatabaseInsert(DatabaseBase):
     @staticmethod
     async def _insert_transition(conn: psycopg.AsyncConnection[dict[str, Any]], redis_conn: Redis[str],
                                  exe_tx_db_id: Optional[int], fee_db_id: Optional[int],
-                                 transition: Transition, ts_index: int, is_rejected: bool = False):
+                                 transition: Transition, ts_index: int, is_rejected: bool = False, should_exist: bool = False):
         async with conn.cursor() as cur:
+            await cur.execute(
+                "SELECT id FROM transition WHERE transition_id = %s", (str(transition.id),)
+            )
+            if await cur.fetchone() is not None:
+                if not is_rejected or not should_exist:
+                    raise RuntimeError("transition already exists in database")
+                else:
+                    return
             await cur.execute(
                 "INSERT INTO transition (transition_id, transaction_execute_id, fee_id, program_id, "
                 "function_name, tpk, tcm, index) "
@@ -278,7 +286,7 @@ class DatabaseInsert(DatabaseBase):
 
     @staticmethod
     async def _insert_deploy_transaction(conn: psycopg.AsyncConnection[dict[str, Any]], redis: Redis[str],
-                                         deployment: Deployment, fee: Fee, transaction_db_id: int):
+                                         deployment: Deployment, fee: Fee, transaction_db_id: int, is_rejected: bool = False):
         async with conn.cursor() as cur:
             await cur.execute(
                 "INSERT INTO transaction_deploy (transaction_id, edition, verifying_keys) "
@@ -302,7 +310,7 @@ class DatabaseInsert(DatabaseBase):
     @staticmethod
     async def _insert_execute_transaction(conn: psycopg.AsyncConnection[dict[str, Any]], redis: Redis[str],
                                           execution: Execution, fee: Optional[Fee], transaction_db_id: int,
-                                          is_rejected: bool = False):
+                                          is_rejected: bool = False, ts_should_exist: bool = False):
         async with conn.cursor() as cur:
             await cur.execute(
                 "INSERT INTO transaction_execute (transaction_id, global_state_root, proof) "
@@ -315,7 +323,8 @@ class DatabaseInsert(DatabaseBase):
             execute_transaction_db_id = res["id"]
 
             for ts_index, transition in enumerate(execution.transitions):
-                await DatabaseInsert._insert_transition(conn, redis, execute_transaction_db_id, None, transition, ts_index, is_rejected)
+                await DatabaseInsert._insert_transition(conn, redis, execute_transaction_db_id, None, transition, ts_index, is_rejected, ts_should_exist)
+
 
             if fee:
                 await cur.execute(
@@ -326,9 +335,7 @@ class DatabaseInsert(DatabaseBase):
                 if (res := await cur.fetchone()) is None:
                     raise RuntimeError("failed to insert row into database")
                 fee_db_id = res["id"]
-                await DatabaseInsert._insert_transition(conn, redis, None, fee_db_id, fee.transition, 0)
-
-
+                await DatabaseInsert._insert_transition(conn, redis, None, fee_db_id, fee.transition, 0, is_rejected, ts_should_exist)
 
     @staticmethod
     async def _insert_transaction(conn: psycopg.AsyncConnection[dict[str, Any]], redis: Redis[str], transaction: Transaction,
@@ -345,14 +352,45 @@ class DatabaseInsert(DatabaseBase):
                 (str(transaction.id),)
             )
             if (await cur.fetchone()) is None: # first seen
-                await cur.execute(
-                    "INSERT INTO transaction (transaction_id, type) "
-                    "VALUES (%s, %s) RETURNING id",
-                    (str(transaction.id), transaction.type.name)
-                )
-                if (res := await cur.fetchone()) is None:
-                    raise RuntimeError("failed to insert row into database")
-                transaction_db_id = res["id"]
+                prior_tx = False
+                transaction_db_id: int = -1
+                if isinstance(transaction, FeeTransaction): # check probable rejected unconfirmed transaction
+                    if confirmed_transaction is None:
+                        raise RuntimeError("expected a confirmed transaction for fee transaction")
+                    if isinstance(confirmed_transaction, RejectedDeploy):
+                        raise NotImplementedError("update transaction id")
+                    elif isinstance(confirmed_transaction, RejectedExecute):
+                        rejected_execution = cast(RejectedExecution, confirmed_transaction.rejected)
+                        ref_transition_id = rejected_execution.execution.transitions[0].id
+                        await cur.execute(
+                            "SELECT tx.id, tx.transaction_id FROM transaction tx "
+                            "JOIN transaction_execute te on tx.id = te.transaction_id "
+                            "JOIN transition t on te.id = t.transaction_execute_id "
+                            "WHERE t.transition_id = %s",
+                            (str(ref_transition_id),)
+                        )
+                        if (res := await cur.fetchone()) is not None:
+                            prior_tx = True
+                            transaction_db_id = res["id"]
+                            original_transaction_id = res["transaction_id"]
+                            await cur.execute(
+                                "UPDATE transaction SET transaction_id = %s, original_transaction_id = %s WHERE id = %s",
+                                (str(transaction.id), original_transaction_id, transaction_db_id)
+                            )
+                            await DatabaseInsert._insert_execute_transaction(conn, redis, rejected_execution.execution, transaction.fee, transaction_db_id, True, True)
+
+                if not prior_tx:
+                    await cur.execute(
+                        "INSERT INTO transaction (transaction_id, type) "
+                        "VALUES (%s, %s) RETURNING id",
+                        (str(transaction.id), transaction.type.name)
+                    )
+                    if (res := await cur.fetchone()) is None:
+                        raise RuntimeError("failed to insert row into database")
+                    transaction_db_id = res["id"]
+                if transaction_db_id == -1:
+                    raise RuntimeError("failed to get transaction id")
+
                 if isinstance(transaction, DeployTransaction): # accepted deploy / unconfirmed
                     await DatabaseInsert._insert_deploy_transaction(conn, redis, transaction.deployment, transaction.fee, transaction_db_id)
 
@@ -366,10 +404,7 @@ class DatabaseInsert(DatabaseBase):
                     if isinstance(confirmed_transaction, RejectedDeploy):
                         rejected_deployment = cast(RejectedDeployment, confirmed_transaction.rejected)
                         await DatabaseInsert._insert_deploy_transaction(conn, redis, rejected_deployment.deploy, transaction.fee, transaction_db_id)
-
-                    elif isinstance(confirmed_transaction, RejectedExecute):
-                        rejected_execution = cast(RejectedExecution, confirmed_transaction.rejected)
-                        await DatabaseInsert._insert_execute_transaction(conn, redis, rejected_execution.execution, transaction.fee, transaction_db_id, True)
+                        raise NotImplementedError("update transaction id")
 
             # confirming tx
             if confirmed_transaction is not None:
@@ -1188,6 +1223,12 @@ class DatabaseInsert(DatabaseBase):
     async def save_block(self, block: Block):
         await self._save_block(block)
 
+    async def save_unconfirmed_transaction(self, transaction: Transaction):
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                if isinstance(transaction, FeeTransaction):
+                    raise RuntimeError("rejected transaction cannot be unconfirmed")
+                await self._insert_transaction(conn, self.redis, transaction)
 
     async def save_feedback(self, contact: str, content: str):
         async with self.pool.connection() as conn:

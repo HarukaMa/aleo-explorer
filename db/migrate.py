@@ -25,6 +25,8 @@ class DatabaseMigrate(DatabaseBase):
             (5, self.migrate_5_fix_missing_program),
             (6, self.migrate_6_nullable_dag_vertex_id),
             (7, self.migrate_7_nullable_confirmed_transaction),
+            (8, self.migrate_8_add_transaction_first_seen),
+            (9, self.migrate_9_add_transaction_original_id)
         ]
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -43,7 +45,7 @@ class DatabaseMigrate(DatabaseBase):
 
     @staticmethod
     async def migrate_1_add_dag_vertex_adjacency_index(conn: psycopg.AsyncConnection[dict[str, Any]]):
-        await conn.execute("create index dag_vertex_adjacency_vertex_id_index on explorer.dag_vertex_adjacency (vertex_id)")
+        await conn.execute("create index dag_vertex_adjacency_vertex_id_index on dag_vertex_adjacency (vertex_id)")
 
     @staticmethod
     async def migrate_2_add_helper_functions(conn: psycopg.AsyncConnection[dict[str, Any]]):
@@ -51,12 +53,12 @@ class DatabaseMigrate(DatabaseBase):
 
     @staticmethod
     async def migrate_3_set_mapping_history_key_not_null(conn: psycopg.AsyncConnection[dict[str, Any]]):
-        await conn.execute("alter table explorer.mapping_history alter column key set not null")
+        await conn.execute("alter table mapping_history alter column key set not null")
 
     @staticmethod
     async def migrate_4_support_batch_certificate_v2(conn: psycopg.AsyncConnection[dict[str, Any]]):
-        await conn.execute("alter table explorer.dag_vertex alter column batch_certificate_id drop not null")
-        await conn.execute("alter table explorer.dag_vertex_signature alter column timestamp drop not null")
+        await conn.execute("alter table dag_vertex alter column batch_certificate_id drop not null")
+        await conn.execute("alter table dag_vertex_signature alter column timestamp drop not null")
 
     @staticmethod
     async def migrate_5_fix_missing_program(conn: psycopg.AsyncConnection[dict[str, Any]]):
@@ -78,9 +80,18 @@ class DatabaseMigrate(DatabaseBase):
     @staticmethod
     async def migrate_6_nullable_dag_vertex_id(conn: psycopg.AsyncConnection[dict[str, Any]]):
         async with conn.cursor() as cur:
-            await cur.execute("alter table explorer.prover_solution alter column dag_vertex_id drop not null")
+            await cur.execute("alter table prover_solution alter column dag_vertex_id drop not null")
 
     @staticmethod
     async def migrate_7_nullable_confirmed_transaction(conn: psycopg.AsyncConnection[dict[str, Any]]):
         async with conn.cursor() as cur:
-            await cur.execute("alter table explorer.transaction alter column confimed_transaction_id drop not null")
+            await cur.execute("alter table transaction alter column confimed_transaction_id drop not null")
+
+    @staticmethod
+    async def migrate_8_add_transaction_first_seen(conn: psycopg.AsyncConnection[dict[str, Any]]):
+        await conn.execute("alter table transaction add column first_seen bigint")
+        await conn.execute("alter table transaction alter column first_seen set default extract(epoch from now())")
+
+    @staticmethod
+    async def migrate_9_add_transaction_original_id(conn: psycopg.AsyncConnection[dict[str, Any]]):
+        await conn.execute("alter table transaction add column original_transaction_id text")

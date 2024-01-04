@@ -219,6 +219,12 @@ class Node:
                 if msg.is_fork.value:
                     raise ValueError("peer think we are on fork")
 
+        elif isinstance(frame.message, UnconfirmedTransaction):
+            if self.handshake_state != 1:
+                raise Exception("handshake is not done")
+            msg = frame.message
+            await self.explorer_request(explorer.Request.ProcessUnconfirmedTransaction(msg.transaction.value))
+
         elif isinstance(frame.message, Disconnect):
             msg = frame.message
             print("Disconnected:", msg.reason.name)

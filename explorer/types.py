@@ -1,7 +1,7 @@
 from enum import IntEnum
 from typing import Any
 
-from aleo_types import Block
+from aleo_types import Block, Transaction
 
 
 class Message:
@@ -28,6 +28,10 @@ class Request:
     class ProcessBlock(ExplorerRequest):
         def __init__(self, block: Block):
             self.block = block
+
+    class ProcessUnconfirmedTransaction(ExplorerRequest):
+        def __init__(self, tx: Transaction):
+            self.tx = tx
 
     class GetLatestHeight(ExplorerRequest):
         pass
