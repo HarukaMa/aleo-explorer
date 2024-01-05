@@ -20,7 +20,7 @@
                 </tr>
                 </thead>
                 <tbody hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
-                {% for block in blocks %}
+                {% for transaction in transactions %}
                     <tr>
                         <td><a href="/transaction?h={{ transaction.id }}">{{ transaction_id }}</a></td>
                         <td>{{ transaction.first_seen | format_time }}</td>

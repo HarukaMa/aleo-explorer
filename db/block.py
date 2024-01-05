@@ -478,7 +478,6 @@ class DatabaseBlock(DatabaseBase):
                         raise RuntimeError("database inconsistent")
                     txs: list[Transaction] = []
                     for transaction_id in transaction_ids:
-                        print(transaction_id["transaction_id"])
                         tx = await self.get_unconfirmed_transaction(transaction_id["transaction_id"])
                         if tx is None:
                             raise RuntimeError("database inconsistent")
