@@ -22,7 +22,7 @@
                 <tbody hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
                 {% for transaction in transactions %}
                     <tr>
-                        <td><span class="mono"><a href="/transaction?h={{ transaction.tx_id }}">{{ transaction.tx_id }}</a></span></td>
+                        <td><span class="mono"><a href="/transaction?id={{ transaction.tx_id }}">{{ transaction.tx_id }}</a></span></td>
                         <td>{{ transaction.first_seen | format_time | safe }}</td>
                         <td>{{ transaction.type }}</td>
                     </tr>
