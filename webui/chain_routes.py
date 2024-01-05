@@ -817,4 +817,4 @@ async def unconfirmed_transactions_route(request: Request):
         "total_pages": total_pages,
         "sync_info": sync_info,
     }
-    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
+    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=5'}) # type: ignore
