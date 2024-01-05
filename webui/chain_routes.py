@@ -805,7 +805,7 @@ async def unconfirmed_transactions_route(request: Request):
     for tx in data:
         transactions.append({
             "tx_id": tx.id,
-            "type": tx.type,
+            "type": tx.type.name,
             "first_seen": await db.get_transaction_first_seen(str(tx.id)),
         })
 
