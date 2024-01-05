@@ -2696,6 +2696,11 @@ class UpdateKeyValue(FinalizeOperation):
         value_id = Field.load(data)
         return cls(mapping_id=mapping_id, index=index, key_id=key_id, value_id=value_id)
 
+    def __eq__(self, other):
+        if not isinstance(other, UpdateKeyValue):
+            return False
+        return self.mapping_id == other.mapping_id and self.index == other.index and self.key_id == other.key_id and self.value_id == other.value_id
+
 
 class RemoveKeyValue(FinalizeOperation):
     type = FinalizeOperation.Type.RemoveKeyValue
@@ -2712,6 +2717,11 @@ class RemoveKeyValue(FinalizeOperation):
         mapping_id = Field.load(data)
         index = u64.load(data)
         return cls(mapping_id=mapping_id, index=index)
+
+    def __eq__(self, other):
+        if not isinstance(other, RemoveKeyValue):
+            return False
+        return self.mapping_id == other.mapping_id and self.index == other.index
 
 
 class RemoveMapping(FinalizeOperation):

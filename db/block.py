@@ -256,6 +256,22 @@ class DatabaseBlock(DatabaseBase):
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
+    async def get_updated_transaction_id(self, transaction_id: str) -> str:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT transaction_id FROM transaction WHERE original_transaction_id = %s",
+                        (transaction_id,)
+                    )
+                    res = await cur.fetchone()
+                    if res is None:
+                        return transaction_id
+                    return res["transaction_id"]
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
     async def is_transaction_confirmed(self, transaction_id: str) -> Optional[bool]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -295,13 +311,13 @@ class DatabaseBlock(DatabaseBase):
                         if deploy is None:
                             raise RuntimeError("database inconsistent")
                         await cur.execute(
-                            "SELECT global_state_root, proof FROM fee WHERE transaction_id = %s",
+                            "SELECT id, global_state_root, proof FROM fee WHERE transaction_id = %s",
                             (transaction["id"],)
                         )
                         fee = await cur.fetchone()
                         if fee is None:
                             raise RuntimeError("database inconsistent")
-                        cur.execute("SELECT * FROM transition WHERE fee_id = %s", (fee["id"],))
+                        await cur.execute("SELECT * FROM transition WHERE fee_id = %s", (fee["id"],))
                         fee_transition = await cur.fetchone()
                         if fee_transition is None:
                             raise ValueError("fee transition not found")
@@ -347,7 +363,7 @@ class DatabaseBlock(DatabaseBase):
                         if execute is None:
                             raise RuntimeError("database inconsistent")
                         await cur.execute(
-                            "SELECT id, program_id, function_name FROM transition WHERE transaction_execute_id = %s",
+                            "SELECT * FROM transition WHERE transaction_execute_id = %s",
                             (execute["id"],)
                         )
                         transitions = await cur.fetchall()
@@ -362,17 +378,13 @@ class DatabaseBlock(DatabaseBase):
                         if fee is None:
                             additional_fee = None
                         else:
-                            cur.execute("SELECT * FROM transition WHERE fee_id = %s", (fee["id"],))
+                            await cur.execute("SELECT * FROM transition WHERE fee_id = %s", (fee["id"],))
                             fee_transition = await cur.fetchone()
                             additional_fee = Fee(
                                 transition=await self._get_transition_from_dict(fee_transition, conn),
                                 global_state_root=StateRoot.loads(fee["global_state_root"]),
                                 proof=Option[Proof](Proof.loads(fee["proof"])),
                             )
-                        cur.execute("SELECT * FROM transition WHERE fee_id = %s", (fee["id"],))
-                        fee_transition = await cur.fetchone()
-                        if fee_transition is None:
-                            raise ValueError("fee transition not found")
                         tx = ExecuteTransaction(
                             id_=TransactionID.loads(transaction["transaction_id"]),
                             execution=Execution(
@@ -384,6 +396,94 @@ class DatabaseBlock(DatabaseBase):
                         )
                     elif transaction["type"] == Transaction.Type.Fee.name:
                         raise ValueError("transaction is confirmed")
+                    return tx
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def get_rejected_transaction_original_id(self, transaction_id: str) -> Optional[str]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT original_transaction_id FROM transaction WHERE transaction_id = %s",
+                        (transaction_id,)
+                    )
+                    res = await cur.fetchone()
+                    if res is None:
+                        return None
+                    return res["original_transaction_id"]
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def get_deploy_transaction_program_info(self, transaction_id: str) -> Optional[dict[str, Optional[str]]]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT program_id, owner FROM transaction_deploy td "
+                        "JOIN transaction t ON td.transaction_id = t.id "
+                        "WHERE t.transaction_id = %s",
+                        (transaction_id,)
+                    )
+                    deploy = await cur.fetchone()
+                    if deploy is None:
+                        return None
+                    return deploy
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def get_transaction_first_seen(self, transaction_id: str) -> Optional[int]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT first_seen FROM transaction WHERE transaction_id = %s",
+                        (transaction_id,)
+                    )
+                    res = await cur.fetchone()
+                    if res is None:
+                        return None
+                    return res["first_seen"]
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def get_unconfirmed_transaction_count(self) -> int:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute("SELECT COUNT(*) FROM transaction WHERE confimed_transaction_id IS NULL")
+                    res = await cur.fetchone()
+                    if res is None:
+                        raise RuntimeError("database inconsistent")
+                    return res["count"]
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def get_unconfirmed_transactions_range(self, start: int, end: int) -> list[Transaction]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT transaction_id FROM transaction WHERE confimed_transaction_id IS NULL "
+                        "ORDER BY first_seen DESC LIMIT %s OFFSET %s",
+                        (end - start, start)
+                    )
+                    transaction_ids = await cur.fetchall()
+                    if transaction_ids is None:
+                        raise RuntimeError("database inconsistent")
+                    txs: list[Transaction] = []
+                    for transaction_id in transaction_ids:
+                        print(transaction_id["transaction_id"])
+                        tx = await self.get_unconfirmed_transaction(transaction_id["transaction_id"])
+                        if tx is None:
+                            raise RuntimeError("database inconsistent")
+                        txs.append(tx)
+                    return txs
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
@@ -546,7 +646,7 @@ class DatabaseBlock(DatabaseBase):
                 try:
                     await cur.execute(
                         "SELECT t.id as transaction_db_id,  t.transaction_id, t.type as transaction_type, "
-                        "ct.type as confirmed_transaction_type, ct.index, ct.reject_reason "
+                        "ct.id as confirmed_transaction_id, ct.type as confirmed_transaction_type, ct.index, ct.reject_reason "
                         "FROM transaction t "
                         "JOIN confirmed_transaction ct ON t.confimed_transaction_id = ct.id "
                         "WHERE transaction_id = %s", (transaction_id,))
@@ -559,7 +659,7 @@ class DatabaseBlock(DatabaseBase):
                         if confirmed_transaction_type == ConfirmedTransaction.Type.RejectedDeploy.name:
                             raise NotImplementedError
                         await cur.execute(
-                            "SELECT edition, verifying_keys FROM transaction_deploy WHERE transaction_id = %s",
+                            "SELECT id as transaction_deploy_id, edition, verifying_keys FROM transaction_deploy WHERE transaction_id = %s",
                             (confirmed_transaction["transaction_db_id"],)
                         )
                         deploy = await cur.fetchone()
@@ -569,7 +669,7 @@ class DatabaseBlock(DatabaseBase):
                     elif confirmed_transaction_type == ConfirmedTransaction.Type.AcceptedExecute.name or \
                         confirmed_transaction_type == ConfirmedTransaction.Type.RejectedExecute.name:
                         await cur.execute(
-                            "SELECT global_state_root, proof FROM transaction_execute WHERE transaction_id = %s",
+                            "SELECT id as transaction_execute_id, global_state_root, proof FROM transaction_execute WHERE transaction_id = %s",
                             (confirmed_transaction["transaction_db_id"],)
                         )
                         execute = await cur.fetchone()

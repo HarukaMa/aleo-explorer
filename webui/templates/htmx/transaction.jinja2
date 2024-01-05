@@ -10,12 +10,29 @@
             {% call data_line("Transaction ID") %}
                 <span class="mono">{{ tx_id }}</span>
             {% endcall %}
-            {% call data_line("Block") %}
-                <a href="/block?h={{ block.header.metadata.height }}">{{ block.header.metadata.height | format_number | safe }}</a>
-            {% endcall %}
-            {% call data_line("Index") %}
-                {{ index }}
-            {% endcall %}
+            {% if state == "Rejected" %}
+                {% call data_line("Original transaction ID") %}
+                    <span class="mono">{{ original_txid }}</span>
+                {% endcall %}
+            {% endif %}
+            {% if state == "Unconfirmed" %}
+                {% call data_line("First seen") %}
+                    {% if not first_seen %}
+                        <em>Unknown</em>
+                    {% else %}
+                        {{ first_seen | format_time | safe }}
+                    {% endif %}
+                {% endcall %}
+            {% else %}
+                {% set delta = block.header.metadata.timestamp - first_seen %}
+                {% call data_line("Confirmed at block") %}
+                    <a href="/block?h={{ block.header.metadata.height }}">{{ block.header.metadata.height | format_number | safe }}</a>
+                    ({{ block.header.metadata.timestamp | format_time | safe }}{% if delta > 0 %}, confirmed in {{ delta | format_time_delta }}{% endif %})
+                {% endcall %}
+                {% call data_line("Index") %}
+                    {{ index }}
+                {% endcall %}
+            {% endif %}
             {% call data_line("Type") %}
                 {{ type }}
             {% endcall %}
@@ -36,12 +53,29 @@
                     {% endif %}
                 {% endcall %}
             {% elif type == "Deploy" %}
-                {% call data_line("Edition") %}
-                    {{ edition }}
-                {% endcall %}
-                {% call data_line("Deployed program ID") %}
-                    <a href="/program?id={{ program_id }}"><span class="mono">{{ program_id }}</span></a>
-                {% endcall %}
+                {% if state == "Accepted" %}
+                    {% call data_line("Edition") %}
+                        {{ edition }}
+                    {% endcall %}
+                    {% call data_line("Deployed program ID") %}
+                        <a href="/program?id={{ program_id }}"><span class="mono">{{ program_id }}</span></a>
+                    {% endcall %}
+                {% else %}
+                    {% call data_line("Program ID") %}
+                        {% if program_info.program_id %}
+                            <span class="mono">{{ program_info.program_id }}</span>
+                        {% else %}
+                            <em>Unknown</em>
+                        {% endif %}
+                    {% endcall %}
+                    {% call data_line("Owner") %}
+                        {% if program_info.owner %}
+                            <span class="mono">{{ program_info.owner }}</span>
+                        {% else %}
+                            <em>Unknown</em>
+                        {% endif %}
+                    {% endcall %}
+                {% endif %}
             {% endif %}
             {% call data_line("Total fee") %}
                 {{ total_fee | format_aleo_credit | safe }} Aleo credits
@@ -68,8 +102,10 @@
 
         <ul class="tabs" data-tabs id="transaction-tabs">
             <li class="tabs-title is-active"><a href="#transitions">Transitions</a></li>
+        {% if state != "Unconfirmed" %}
             <li class="tabs-title"><a href="#mapping-operations">Mapping operations</a></li>
             {% if type == "Execute" %}<li class="tabs-title"><a href="#finalize-graph">Finalize call graph</a></li>{% endif %}
+        {% endif %}
         </ul>
 
         <div class="tabs-content" data-tabs-content="transaction-tabs">
@@ -132,6 +168,8 @@
                 {% endif %}
             </div>
 
+        {% if state != "Unconfirmed" %}
+
         {% if type == "Execute" %}
             <div class="tabs-panel" id="finalize-graph">
                 Coming soon
@@ -165,6 +203,7 @@
                     </table>
                 {% endif %}
             </div>
+        {% endif %}
 
         </div>
 

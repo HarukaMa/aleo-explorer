@@ -1,0 +1,38 @@
+{% from "macros.jinja2" import nav, htmx_title, sync_notice %}
+{{ sync_notice(sync_info) }}
+
+    <div class="content">
+
+        <div id="header">
+            <h3>Unconfirmed Transactions</h3>
+        </div>
+
+        <div id="transactions">
+
+            {{ nav(page, total_pages, "/unconfirmed_transactions?") }}
+
+            <table class="unstriped">
+                <thead>
+                <tr>
+                    <th>Transaction ID</th>
+                    <th>First seen</th>
+                    <th>Type</th>
+                </tr>
+                </thead>
+                <tbody hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
+                {% for block in blocks %}
+                    <tr>
+                        <td><a href="/transaction?h={{ transaction.id }}">{{ transaction_id }}</a></td>
+                        <td>{{ transaction.first_seen | format_time }}</td>
+                        <td>{{ transaction.type }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+
+            {{ nav(page, total_pages, "/unconfirmed_transactions?") }}
+
+        </div>
+    </div>
+
+{{ htmx_title(request, "Unconfirmed Transactions") }}

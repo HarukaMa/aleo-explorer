@@ -289,7 +289,7 @@ class DatabaseInsert(DatabaseBase):
                                          deployment: Deployment, owner: ProgramOwner, fee: Fee, transaction_db_id: int,
                                          is_unconfirmed: bool = False, is_rejected: bool = False, fee_should_exist: bool = False):
         async with conn.cursor() as cur:
-            if is_unconfirmed:
+            if is_unconfirmed or is_rejected:
                 program_id = str(deployment.program.id)
                 owner = str(owner.address)
             else:

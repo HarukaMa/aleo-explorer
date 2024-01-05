@@ -13,6 +13,18 @@ def format_time(epoch: int):
     time_str = datetime.datetime.fromtimestamp(epoch, tz=datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     return f"""<span class="time">{time_str}</span>"""
 
+def format_time_delta(delta: int):
+    minutes, seconds = divmod(delta, 60)
+    hours, minutes = divmod(minutes, 60)
+    days, hours = divmod(hours, 24)
+    if days > 0:
+        return f"{days} days, {hours} hours, {minutes} minutes, {seconds} seconds"
+    if hours > 0:
+        return f"{hours} hours, {minutes} minutes, {seconds} seconds"
+    if minutes > 0:
+        return f"{minutes} minutes, {seconds} seconds"
+    return f"{seconds} seconds"
+
 def format_number(number: int | Decimal, decimal_places: int = 2):
     if not isinstance(number, Decimal):
         number = Decimal(number)
@@ -50,5 +62,6 @@ def format_aleo_credit(mc: int | Decimal):
 
 templates.env.filters["get_env"] = get_env # type: ignore
 templates.env.filters["format_time"] = format_time # type: ignore
+templates.env.filters["format_time_delta"] = format_time_delta # type: ignore
 templates.env.filters["format_aleo_credit"] = format_aleo_credit # type: ignore
 templates.env.filters["format_number"] = format_number # type: ignore

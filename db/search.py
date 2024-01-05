@@ -23,7 +23,11 @@ class DatabaseSearch(DatabaseBase):
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
-                    await cur.execute("SELECT transaction_id FROM transaction WHERE transaction_id LIKE %s", (f"{transaction_id}%",))
+                    await cur.execute(
+                        "SELECT transaction_id FROM transaction "
+                        "WHERE transaction_id LIKE %s OR original_transaction_id LIKE %s",
+                        (f"{transaction_id}%", f"{transaction_id}%")
+                    )
                     result = await cur.fetchall()
                     return list(map(lambda x: x['transaction_id'], result))
                 except Exception as e:

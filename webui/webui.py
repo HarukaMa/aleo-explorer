@@ -155,6 +155,7 @@ routes = [
     Route("/transition", transition_route),
     Route("/search", search_route),
     Route("/blocks", blocks_route),
+    Route("/unconfirmed_transactions", unconfirmed_transactions_route),
     # Programs
     Route("/programs", programs_route),
     Route("/program", program_route),
