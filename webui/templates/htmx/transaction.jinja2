@@ -24,6 +24,9 @@
                     {% endif %}
                 {% endcall %}
             {% else %}
+                {% if not first_seen %}
+                    {% set first_seen = block.header.metadata.timestamp %}
+                {% endif %}
                 {% set delta = block.header.metadata.timestamp - first_seen %}
                 {% call data_line("Confirmed at block") %}
                     <a href="/block?h={{ block.header.metadata.height }}">{{ block.header.metadata.height | format_number | safe }}</a>
