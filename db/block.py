@@ -324,9 +324,9 @@ class DatabaseBlock(DatabaseBase):
                         tx = DeployTransaction(
                             id_=TransactionID.loads(transaction["transaction_id"]),
                             deployment=Deployment(
-                                edition=u16(deploy["edition"]),
+                                edition=u16(),
                                 program=Program(
-                                    id_=ProgramID.loads(deploy["program_id"]),
+                                    id_=ProgramID.loads("placeholder.aleo"),
                                     imports=Vec[Import, u8]([]),
                                     mappings={},
                                     structs={},
@@ -343,7 +343,7 @@ class DatabaseBlock(DatabaseBase):
                                 proof=Option[Proof](Proof.loads(fee["proof"])),
                             ),
                             owner=ProgramOwner(
-                                address=Address.loads(deploy["owner"]),
+                                address=Address.loads("aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc"),
                                 signature=Signature(
                                     challenge=Scalar(0),
                                     response=Scalar(0),
