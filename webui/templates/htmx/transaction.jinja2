@@ -25,12 +25,12 @@
                 {% endcall %}
             {% else %}
                 {% if not first_seen %}
-                    {% set first_seen = block.header.metadata.timestamp %}
+                    {% set first_seen = block_confirm_time %}
                 {% endif %}
-                {% set delta = block.header.metadata.timestamp - first_seen %}
+                {% set delta = block_confirm_time - first_seen %}
                 {% call data_line("Confirmed at block") %}
                     <a href="/block?h={{ block.header.metadata.height }}">{{ block.header.metadata.height | format_number | safe }}</a>
-                    ({{ block.header.metadata.timestamp | format_time | safe }}{% if delta > 0 %}, confirmed in {{ delta | format_time_delta }}{% endif %})
+                    ({{ block_confirm_time | format_time | safe }}{% if delta > 0 %}, confirmed in {{ delta | format_time_delta }}{% endif %})
                 {% endcall %}
                 {% call data_line("Index") %}
                     {{ index }}

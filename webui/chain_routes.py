@@ -222,9 +222,11 @@ async def transaction_route(request: Request):
     if confirmed_transaction is None:
         storage_cost, namespace_cost, finalize_costs, priority_fee, burnt = await transaction.get_fee_breakdown(db)
         block = None
+        block_confirm_time = None
     else:
         storage_cost, namespace_cost, finalize_costs, priority_fee, burnt = await confirmed_transaction.get_fee_breakdown(db)
         block = await db.get_block_from_transaction_id(tx_id)
+        block_confirm_time = await db.get_block_confirm_time(block.height)
 
     sync_info = await out_of_sync_check(db)
     ctx: dict[str, Any] = {
@@ -232,6 +234,7 @@ async def transaction_route(request: Request):
         "tx_id": tx_id,
         "tx_id_trunc": str(tx_id)[:12] + "..." + str(tx_id)[-6:],
         "block": block,
+        "block_confirm_time": block_confirm_time,
         "index": index,
         "transaction": transaction,
         "type": transaction_type,

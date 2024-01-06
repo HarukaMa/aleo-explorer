@@ -243,6 +243,25 @@ class DatabaseBlock(DatabaseBase):
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
+    async def get_block_confirm_time(self, height: int) -> Optional[int]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT max(dv.timestamp) FROM dag_vertex dv "
+                        "JOIN authority a on dv.authority_id = a.id "
+                        "JOIN block b on a.block_id = b.id "
+                        "WHERE b.height = %s",
+                        (height,)
+                    )
+                    res = await cur.fetchone()
+                    if not res:
+                        return None
+                    return res["max"]
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
     async def get_transition(self, transition_id: str) -> Optional[Transition]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
