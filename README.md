@@ -17,6 +17,7 @@ connect to peers that you trust.
 * Rust latest stable
 * [aleo-explorer-rust](https://github.com/HarukaMa/aleo-explorer-rust)
 * [aleo-explorer-wasm](https://github.com/HarukaMa/aleo-explorer-wasm)
+* (optional) [`setproctitle`](https://pypi.org/project/setproctitle/) for custom process names
 
 ## Usage
 

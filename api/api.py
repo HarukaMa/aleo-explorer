@@ -22,6 +22,7 @@ from middleware.api_quota import APIQuotaMiddleware
 from middleware.asgi_logger import AccessLoggerMiddleware
 from middleware.server_timing import ServerTimingMiddleware
 from util.cache import Cache
+from util.set_proc_title import set_proc_title
 
 
 class UvicornServer(multiprocessing.Process):
@@ -68,7 +69,7 @@ async def startup():
     await db.connect()
     app.state.db = db
     app.state.program_cache = Cache()
-
+    set_proc_title("aleo-explorer: api")
 
 log_format = '\033[92mAPI\033[0m: \033[94m%(client_addr)s\033[0m - - %(t)s \033[96m"%(request_line)s"\033[0m \033[93m%(s)s\033[0m %(B)s "%(f)s" "%(a)s" %(L)s'
 # noinspection PyTypeChecker
