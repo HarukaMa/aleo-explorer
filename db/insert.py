@@ -968,6 +968,7 @@ class DatabaseInsert(DatabaseBase):
                                 "INSERT INTO authority (block_id, type, signature) VALUES (%s, %s, %s)",
                                 (block_db_id, block.authority.type.name, str(block.authority.signature))
                             )
+                            subdag_copy_data = None
                         elif isinstance(block.authority, QuorumAuthority):
                             await cur.execute(
                                 "INSERT INTO authority (block_id, type) VALUES (%s, %s) RETURNING id",
@@ -1066,12 +1067,13 @@ class DatabaseInsert(DatabaseBase):
                                     #     for row in tid_copy_data:
                                     #         await copy.write_row(row)
 
-                        async with cur.copy(
-                            "COPY dag_vertex (authority_id, round, batch_certificate_id, batch_id, "
-                            "author, timestamp, author_signature, index) FROM STDIN"
-                        ) as copy:
-                            for row in subdag_copy_data:
-                                await copy.write_row(row)
+                        if subdag_copy_data:
+                            async with cur.copy(
+                                "COPY dag_vertex (authority_id, round, batch_certificate_id, batch_id, "
+                                "author, timestamp, author_signature, index) FROM STDIN"
+                            ) as copy:
+                                for row in subdag_copy_data:
+                                    await copy.write_row(row)
 
                         ignore_deploy_txids: list[str] = []
                         program_name_seen: dict[str, str] = {}
