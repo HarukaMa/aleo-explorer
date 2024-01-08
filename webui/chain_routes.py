@@ -828,9 +828,9 @@ async def nodes_route(request: Request):
     lns: LightNodeState = request.app.state.lns
     is_htmx = request.scope["htmx"].is_htmx()
     if is_htmx:
-        template = "htmx/unconfirmed_transactions.jinja2"
+        template = "htmx/nodes.jinja2"
     else:
-        template = "unconfirmed_transactions.jinja2"
+        template = "nodes.jinja2"
     nodes = lns.states
     res = {}
     for k, v in nodes.items():
