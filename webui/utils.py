@@ -9,7 +9,7 @@ from db import Database
 
 def get_relative_time(timestamp: int):
     now = time.time()
-    delta = now - timestamp
+    delta = int(now - timestamp)
     if delta == 0:
         return "just now"
     elif delta == 1:
