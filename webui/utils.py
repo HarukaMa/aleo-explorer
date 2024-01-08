@@ -10,12 +10,20 @@ from db import Database
 def get_relative_time(timestamp: int):
     now = time.time()
     delta = now - timestamp
-    if delta < 60:
+    if delta == 0:
+        return "just now"
+    elif delta == 1:
+        return "1 second ago"
+    elif delta < 60:
         return f"{int(delta)} seconds ago"
     delta = delta // 60
-    if delta < 60:
+    if delta == 1:
+        return "1 minute ago"
+    elif delta < 60:
         return f"{int(delta)} minutes ago"
     delta = delta // 60
+    if delta == 1:
+        return "1 hour ago"
     return f"{int(delta)} hours ago"
 
 
