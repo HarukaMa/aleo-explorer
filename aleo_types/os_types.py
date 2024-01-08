@@ -217,7 +217,7 @@ class PeerRequest(Message):
 class PeerResponse(Message):
     type = Message.Type.PeerResponse
 
-    def __init__(self, *, peers: Vec[SocketAddr, u64]):
+    def __init__(self, *, peers: Vec[SocketAddr, u8]):
         self.peers = peers
 
     def dump(self) -> bytes:
@@ -225,7 +225,7 @@ class PeerResponse(Message):
 
     @classmethod
     def load(cls, data: BytesIO):
-        peers = Vec[SocketAddr, u64].load(data)
+        peers = Vec[SocketAddr, u8].load(data)
         return cls(peers=peers)
 
 class BlockLocators(Serializable):

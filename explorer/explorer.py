@@ -9,6 +9,7 @@ from aleo_types import Block, BlockHash
 from db import Database
 from interpreter.interpreter import init_builtin_program
 from node import Node
+# from node.light_node import LightNodeState
 from node.testnet3 import Testnet3
 from .types import Request, Message, ExplorerRequest
 
@@ -29,7 +30,6 @@ class Explorer:
         self.dev_mode = False
         self.latest_height = 0
         self.latest_block_hash: BlockHash = Testnet3.genesis_block.block_hash
-        #self.light_node_state = LightNodeState()
 
     def start(self):
         self.task = asyncio.create_task(self.main_loop())

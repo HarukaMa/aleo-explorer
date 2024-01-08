@@ -1,3 +1,4 @@
+import copy
 from io import BytesIO
 from typing import Any, cast, Optional, ParamSpec, TypeVar, Callable, Awaitable
 
@@ -14,9 +15,10 @@ from aleo_types import u32, Transition, ExecuteTransaction, PrivateTransitionInp
     PlaintextArgument, FutureArgument, StructPlaintext, Finalize, \
     PlaintextFinalizeType, StructPlaintextType, UpdateKeyValue, Value, Plaintext, RemoveKeyValue, FinalizeOperation
 from db import Database
+from node.light_node import LightNodeState
 from util.global_cache import get_program
 from .template import templates
-from .utils import function_signature, out_of_sync_check, function_definition
+from .utils import function_signature, out_of_sync_check, function_definition, get_relative_time
 
 try:
     from line_profiler import profile
@@ -821,3 +823,22 @@ async def unconfirmed_transactions_route(request: Request):
         "sync_info": sync_info,
     }
     return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=5'}) # type: ignore
+
+async def nodes_route(request: Request):
+    lns: LightNodeState = request.app.state.lns
+    is_htmx = request.scope["htmx"].is_htmx()
+    if is_htmx:
+        template = "htmx/unconfirmed_transactions.jinja2"
+    else:
+        template = "unconfirmed_transactions.jinja2"
+    nodes = lns.states
+    res = {}
+    for k, v in nodes.items():
+        if "address" in v:
+            res[k] = copy.deepcopy(v)
+            res[k]["last_ping"] = get_relative_time(v["last_ping"])
+    ctx = {
+        "request": request,
+        "nodes": res,
+    }
+    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'no-cache'})

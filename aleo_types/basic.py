@@ -1,7 +1,7 @@
 import math
-import socket
 import struct
 from decimal import Decimal
+from ipaddress import IPv4Address, IPv6Address
 
 from .traits import *
 
@@ -507,9 +507,7 @@ class bool_(Sized, Serializable, And, Or, Not, Xor, Nand, Nor):
 
 
 class SocketAddr(Serializable):
-    def __init__(self, *, ip: int, port: int):
-        if ip < 0 or ip > 4294967295:
-            raise ValueError("ip must be between 0 and 4294967295")
+    def __init__(self, *, ip: IPv4Address | IPv6Address, port: int):
         if port < 0 or port > 65535:
             raise ValueError("port must be between 0 and 65535")
         self.ip = ip
@@ -520,8 +518,13 @@ class SocketAddr(Serializable):
 
     @classmethod
     def load(cls, data: BytesIO):
-        data.read(4)
-        ip = u32.load(data)
+        family = u8.load(data)
+        if family == 0:
+            ip = IPv4Address(bytes(reversed(data.read(4))))
+        elif family == 1:
+            ip = IPv6Address(bytes(reversed(data.read(16))))
+        else:
+            raise ValueError("invalid ip family")
         port = u16.load(data)
         return cls(ip=ip, port=port)
 
@@ -529,4 +532,4 @@ class SocketAddr(Serializable):
         return ":".join(self.ip_port())
 
     def ip_port(self):
-        return socket.inet_ntoa(struct.pack('<L', self.ip)), str(self.port)
+        return str(self.ip), str(self.port)

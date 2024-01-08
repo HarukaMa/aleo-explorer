@@ -1,0 +1,34 @@
+{% from "macros.jinja2" import htmx_title, sync_notice %}
+{{ sync_notice(sync_info) }}
+
+<div class="content" hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
+    <div class="header">
+        <h3>Connected nodes: {{ nodes | length }}</h3>
+        <em>Note: only contains nodes that accept incoming connections</em>
+    </div>
+
+    <table class="unstriped">
+        <thead>
+        <tr>
+            <th>IP address</th>
+            <th>Type</th>
+            <th>Address</th>
+            <th>Height</th>
+            <th>Last update</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for address, node in nodes.items() %}
+            <tr>
+                <td>{{ address }}</td>
+                <td>{{ node.node_type }}</td>
+                <td><span class="mono">{{ node.address }}</span></td>
+                <td>{% if node.height is not none %}{{ node.height }}{% else %}-{% endif %}</td>
+                <td>{{ node.last_ping }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{{ htmx_title(request, "Nodes") }}
