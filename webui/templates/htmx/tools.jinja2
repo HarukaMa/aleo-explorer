@@ -152,7 +152,9 @@
                     <span>Program code</span>
                     <textarea name="code" id="estimate_deploy_code" style="height: 15rem"></textarea>
                 </label>
-                <button class="button" type="submit">Estimate</button>
+                <button class="button" type="submit" id="estimate_deploy_submit">Estimate</button>
+                <button class="button" type="submit" id="constraint_submit" disabled style="margin-left: 8px">Calculate constraint count</button>
+
             </form>
             <form id="estimate_execute_form" hidden="hidden">
                 <label>
@@ -160,7 +162,8 @@
                     <input type="text" name="program_id" id="program_id_input">
                 </label>
             </form>
-            <span id="estimate_result" style="padding: 0 15px"></span>
+            <span id="estimate_result" style="padding: 0 15px"></span><br>
+            <span id="constraint_result" style="padding: 0 15px"></span>
         </div>
     </div>
 
@@ -244,14 +247,45 @@
         async function estimate_deployment(e) {
             e.preventDefault()
             const data = Object.fromEntries(new FormData(estimate_deploy_form))
-            const result_element = document.getElementById('estimate_result')
-            try {
-                const fee = estimate_deployment_fee(data.code)
-                const integer_part = (fee / BigInt(1000000)).toString()
-                const decimal_part = (fee % BigInt(1000000)).toString().padStart(6, '0').replace(/0+$/u, '')
-                result_element.innerText = `${integer_part}.${decimal_part} Aleo credits`
-            } catch (e) {
-                result_element.innerText = e
+            const constraint_button = document.getElementById('constraint_submit')
+            if (e.submitter.id === "estimate_deploy_submit") {
+                const result_element = document.getElementById('estimate_result')
+                try {
+                    const fee = estimate_deployment_fee(data.code)
+                    const integer_part = (fee / BigInt(1000000)).toString()
+                    const decimal_part = (fee % BigInt(1000000)).toString().padStart(6, '0').replace(/0+$/u, '')
+                    result_element.innerText = `${integer_part}.${decimal_part} Aleo credits`
+                    constraint_button.disabled = false
+                } catch (e) {
+                    result_element.innerText = e
+                    constraint_button.disabled = true
+                }
+            } else if (e.submitter.id === "constraint_submit") {
+                const worker = new Worker('/static/constraint_worker.js', {type: 'module'})
+                const result_element = document.getElementById('constraint_result')
+                worker.addEventListener('message', (e) => {
+                    const result = e.data
+                    if (result.ready) {
+                        worker.postMessage(data.code)
+                        return
+                    }
+                    worker.terminate()
+                    console.log(result)
+                    if (result.error) {
+                        result_element.innerText = result.error
+                    } else {
+                        let text = "";
+                        let total = 0;
+                        for (const f of result) {
+                            text += `${f.function_name}: ${f.constraint_number}<br>`
+                            total += Number(f.constraint_number)
+                        }
+                        text += `Total: ${total}`
+                        result_element.innerHTML = text
+                    }
+                })
+                result_element.innerText = "Executing..."
+                constraint_button.disabled = true
             }
         }
 
