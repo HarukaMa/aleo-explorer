@@ -39,9 +39,9 @@ def plaintext_type_to_str(value: PlaintextType):
 
 def finalize_type_to_str(value: FinalizeType):
     if isinstance(value, PlaintextFinalizeType):
-        return plaintext_type_to_str(value.plaintext_type)
+        return f"{plaintext_type_to_str(value.plaintext_type)}.public"
     elif isinstance(value, FutureFinalizeType):
-        return str(value.locator)
+        return f"{str(value.locator)}.future"
     else:
         raise NotImplementedError
 
