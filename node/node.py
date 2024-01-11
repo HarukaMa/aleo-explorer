@@ -223,7 +223,10 @@ class Node:
             if self.handshake_state != 1:
                 raise Exception("handshake is not done")
             msg = frame.message
-            await self.explorer_request(explorer.Request.ProcessUnconfirmedTransaction(msg.transaction.value))
+            try:
+                await self.explorer_request(explorer.Request.ProcessUnconfirmedTransaction(msg.transaction.value))
+            except:
+                print("Failed to process unconfirmed transaction - ignoring")
 
         elif isinstance(frame.message, Disconnect):
             msg = frame.message
