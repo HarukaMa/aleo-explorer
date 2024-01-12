@@ -1,4 +1,5 @@
 import copy
+from collections import OrderedDict
 from io import BytesIO
 from typing import Any, cast, Optional, ParamSpec, TypeVar, Callable, Awaitable
 
@@ -837,6 +838,11 @@ async def nodes_route(request: Request):
         if "address" in v:
             res[k] = copy.deepcopy(v)
             res[k]["last_ping"] = get_relative_time(v["last_ping"])
+    def sort_key(item: tuple[str, dict[str, Any]]) -> int:
+        if (x := item[1].get("height", 0)) is None:
+            return 0
+        return x
+    res = OrderedDict(sorted(res.items(), key=sort_key, reverse=True))
     ctx = {
         "request": request,
         "nodes": res,
