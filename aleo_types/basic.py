@@ -19,7 +19,7 @@ class Bech32m:
         return str(self)
 
 
-class IntProtocol(Sized, Compare, AddWrapped, SubWrapped, MulWrapped, DivWrapped, And, Or, Xor, Not, ShlWrapped, ShrWrapped, RemWrapped, PowWrapped, Protocol):
+class IntProtocol(Sized, Compare, AddWrapped, SubWrapped, MulWrapped, DivWrapped, And, Or, Xor, Not, ShlWrapped, ShrWrapped, RemWrapped, PowWrapped, Cast, Protocol):
     min: int
     max: int
 
@@ -198,6 +198,26 @@ class Int(int, Serializable, IntProtocol):
             if self < 0 and other % 2 == 0:
                 return self.__class__(int.__pow__(self, other, self.max + 1))
             return self.__class__(int.__pow__(self, other, (self.max + 1) * 2) + (self.min * 2))
+
+    def cast(self, destination_type: Any, *, lossy: bool) -> Any:
+        from .vm_instruction import LiteralType
+        if not isinstance(destination_type, LiteralType):
+            raise ValueError("invalid type")
+
+        reverse_primitive_type_map = {
+            i8: LiteralType.I8,
+            i16: LiteralType.I16,
+            i32: LiteralType.I32,
+            i64: LiteralType.I64,
+            i128: LiteralType.I128,
+            u8: LiteralType.U8,
+            u16: LiteralType.U16,
+            u32: LiteralType.U32,
+            u64: LiteralType.U64,
+            u128: LiteralType.U128,
+        }
+        return destination_type.primitive_type.load(BytesIO(aleo_explorer_rust.cast(str(self) + str(self.__class__.__name__), reverse_primitive_type_map[self.__class__], destination_type, lossy)))
+
 
     def dump(self) -> bytes:
         raise TypeError("cannot deserialize Int base class")

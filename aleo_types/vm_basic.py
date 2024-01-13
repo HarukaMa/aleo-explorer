@@ -121,7 +121,7 @@ class Address(AleoObject, Cast):
         from .vm_instruction import LiteralType
         if not isinstance(destination_type, LiteralType):
             raise ValueError("invalid type")
-        return destination_type.primitive_type.load(BytesIO(aleo_explorer_rust.address_cast(str(self), destination_type, lossy)))
+        return destination_type.primitive_type.load(BytesIO(aleo_explorer_rust.cast(str(self), LiteralType.Address, destination_type, lossy)))
 
     def __hash__(self):
         return hash(self._data)
@@ -206,7 +206,7 @@ class Field(Serializable, Double, Sub, Square, Div, Sqrt, Compare, Pow, Inv, Neg
         from .vm_instruction import LiteralType
         if not isinstance(destination_type, LiteralType):
             raise ValueError("invalid type")
-        return destination_type.primitive_type.load(BytesIO(aleo_explorer_rust.field_cast(self, destination_type, lossy)))
+        return destination_type.primitive_type.load(BytesIO(aleo_explorer_rust.cast(str(self), LiteralType.Field, destination_type, lossy)))
 
 
 class Group(Serializable, Add, Sub, Mul, Neg, Cast):
@@ -251,7 +251,7 @@ class Group(Serializable, Add, Sub, Mul, Neg, Cast):
         from .vm_instruction import LiteralType
         if not isinstance(destination_type, LiteralType):
             raise ValueError("invalid type")
-        return destination_type.primitive_type.load(BytesIO(aleo_explorer_rust.group_cast(self, destination_type, lossy)))
+        return destination_type.primitive_type.load(BytesIO(aleo_explorer_rust.cast(str(self), LiteralType.Group, destination_type, lossy)))
 
 
 
@@ -306,7 +306,7 @@ class Scalar(Serializable, Add, Sub, Mul, Compare, Cast):
         from .vm_instruction import LiteralType
         if not isinstance(destination_type, LiteralType):
             raise ValueError("invalid type")
-        return destination_type.primitive_type.load(BytesIO(aleo_explorer_rust.scalar_cast(self, destination_type, lossy)))
+        return destination_type.primitive_type.load(BytesIO(aleo_explorer_rust.cast(str(self), LiteralType.Scalar, destination_type, lossy)))
 
 
 

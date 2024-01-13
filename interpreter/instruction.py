@@ -164,8 +164,6 @@ def cast_op(operands: list[Operand], destination: Register, cast_type: CastType,
         plaintext = load_plaintext_from_operand(operands[0], registers, finalize_state)
         if not isinstance(plaintext, LiteralPlaintext):
             raise TypeError("operand must be a literal")
-        if not plaintext.literal.type in [Literal.Type.Address, Literal.Type.Field, Literal.Type.Group]:
-            raise AssertionError("snarkOS doesn't support casting from this type yet")
         primitive = plaintext.literal.primitive
         if not isinstance(primitive, Cast):
             raise TypeError("operand must be castable")

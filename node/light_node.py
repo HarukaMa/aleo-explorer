@@ -7,7 +7,7 @@ import aleo_explorer_rust
 import requests
 
 from aleo_types import ChallengeRequest, NodeType, u16, u64, Frame, Message, ChallengeResponse, \
-    PeerRequest, Ping, PeerResponse, SocketAddr, Pong, bool_, BlockLocators, Address, Signature, Option, Data
+    PeerRequest, Ping, PeerResponse, Pong, bool_, BlockLocators, Address, Signature, Option, Data
 from .testnet3 import Testnet3
 
 
@@ -154,7 +154,6 @@ class LightNode:
         elif isinstance(frame.message, PeerResponse):
             msg = frame.message
             for peer in msg.peers:
-                peer: SocketAddr
                 self.state.connect(*peer.ip_port())
 
         else:
