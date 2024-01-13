@@ -19,6 +19,7 @@ class LightNodeState:
         # prevent infinite self connection loop
         r = requests.get("https://api.ipify.org/?format=json")
         self.self_ip = r.json()["ip"]
+        print(f"self ip: {self.self_ip}")
 
     def connect(self, ip: str, port: int):
         if ip == self.self_ip and port == 14133:
