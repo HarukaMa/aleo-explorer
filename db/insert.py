@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import signal
+import time
 from collections import defaultdict
 from typing import cast
 
@@ -18,6 +19,10 @@ from .util import DatabaseUtil
 
 
 class DatabaseInsert(DatabaseBase):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.redis_last_history_time = time.monotonic() - 3600
 
     @staticmethod
     async def _insert_future(conn: psycopg.AsyncConnection[dict[str, Any]], future: Future,
@@ -886,17 +891,25 @@ class DatabaseInsert(DatabaseBase):
                 else:
                     await redis_conn.copy(backup_key, key, replace=True)
 
-    @staticmethod
-    async def _redis_cleanup(redis_conn: Redis[str], keys: list[str], height: int, rollback: bool):
+    async def _redis_cleanup(self, redis_conn: Redis[str], keys: list[str], height: int, rollback: bool):
         if height != 0:
+            now = time.monotonic()
+            history = False
+            if self.redis_last_history_time + 3600 < now:
+                self.redis_last_history_time = now
+                history = True
             for key in keys:
                 backup_key = f"{key}:rollback_backup:{height}"
                 if rollback:
                     if await redis_conn.exists(backup_key) == 1:
                         await redis_conn.copy(backup_key, key, replace=True)
                 else:
-                    await redis_conn.delete(backup_key)
-
+                    if history:
+                        history_key = f"{key}:history:{height - 1}"
+                        await redis_conn.rename(backup_key, history_key)
+                        await redis_conn.expire(history_key, 60 * 60 * 24 * 3)
+                    else:
+                        await redis_conn.delete(backup_key)
 
     @profile
     async def _save_block(self, block: Block):
