@@ -206,7 +206,7 @@ async def address_route(request: Request):
             "amount": int(cast(Int, amount.literal.primitive)),
             "is_open": bool(is_open.literal.primitive),
         }
-        bonded_mapping = await db.get_bonded_mapping()
+        bonded_mapping = await db.get_bonded_mapping_unchecked()
         bonded_mapping = sorted(bonded_mapping.items(), key=lambda x: x[1][1], reverse=True)
         address_stakes = {}
         for staker_addr, (validator_addr, stake_amount) in bonded_mapping:

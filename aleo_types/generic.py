@@ -83,9 +83,6 @@ class Tuple(tuple[*TP], Serializable):
     def __new__(cls, value: tuple[*TP]) -> Self:
         return tuple.__new__(cls, value)
 
-    def __init__(self, _): # type: ignore[reportInconsistentConstructor]
-        pass
-
     def dump(self) -> bytes:
         return b"".join(t.dump() for t in self if is_serializable(t))
 

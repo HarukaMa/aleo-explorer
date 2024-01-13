@@ -126,6 +126,11 @@ class Address(AleoObject, Cast):
     def __hash__(self):
         return hash(self._data)
 
+    def __eq__(self, other: object):
+        if not isinstance(other, Address):
+            return False
+        return self._data == other._data
+
 
 class Field(Serializable, Double, Sub, Square, Div, Sqrt, Compare, Pow, Inv, Neg, Cast):
     # Fr, Fp256

@@ -585,18 +585,17 @@ class DatabaseInsert(DatabaseBase):
         for address, (validator, amount) in stakers.items():
             key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=address))
             key_id = Field.loads(cached_get_key_id("credits.aleo", "bonded", key.dump()))
+            k = Tuple[Identifier, Plaintext]((
+                Identifier.loads("validator"),
+                LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=validator))
+            ))
+            v = Tuple[Identifier, Plaintext]((
+                Identifier.loads("microcredits"),
+                LiteralPlaintext(literal=Literal(type_=Literal.Type.U64, primitive=amount))
+            ))
             value = PlaintextValue(
                 plaintext=StructPlaintext(
-                    members=Vec[Tuple[Identifier, Plaintext], u8]([
-                        Tuple[Identifier, Plaintext]((
-                            Identifier.loads("validator"),
-                            LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=validator))
-                        )),
-                        Tuple[Identifier, Plaintext]((
-                            Identifier.loads("microcredits"),
-                            LiteralPlaintext(literal=Literal(type_=Literal.Type.U64, primitive=amount))
-                        ))
-                    ])
+                    members=Vec[Tuple[Identifier, Plaintext], u8]([k, v])
                 )
             )
             bonded_mapping[str(key_id)] = {
@@ -702,34 +701,21 @@ class DatabaseInsert(DatabaseBase):
             committee_members[key.literal.primitive] = amount.literal.primitive, is_open.literal.primitive
         return committee_members
 
-    async def get_bonded_mapping(self) -> dict[Address, tuple[Address, u64]]:
+    async def get_bonded_mapping_unchecked(self) -> dict[Address, tuple[Address, u64]]:
         data = await self.redis.hgetall("credits.aleo:bonded")
 
         stakers: dict[Address, tuple[Address, u64]] = {}
         for d in data.values():
             d = json.loads(d)
             key = Plaintext.load(BytesIO(bytes.fromhex(d["key"])))
-            if not isinstance(key, LiteralPlaintext):
-                raise RuntimeError("invalid bonded key")
-            if not isinstance(key.literal.primitive, Address):
-                raise RuntimeError("invalid bonded key")
             value = Value.load(BytesIO(bytes.fromhex(d["value"])))
-            if not isinstance(value, PlaintextValue):
-                raise RuntimeError("invalid bonded value")
-            plaintext = value.plaintext
-            if not isinstance(plaintext, StructPlaintext):
-                raise RuntimeError("invalid bonded value")
-            validator = plaintext["validator"]
-            if not isinstance(validator, LiteralPlaintext):
-                raise RuntimeError("invalid bonded value")
-            if not isinstance(validator.literal.primitive, Address):
-                raise RuntimeError("invalid bonded value")
-            amount = plaintext["microcredits"]
-            if not isinstance(amount, LiteralPlaintext):
-                raise RuntimeError("invalid bonded value")
-            if not isinstance(amount.literal.primitive, u64):
-                raise RuntimeError("invalid bonded value")
-            stakers[key.literal.primitive] = validator.literal.primitive, amount.literal.primitive
+            plaintext = cast(PlaintextValue, value).plaintext
+            validator = cast(StructPlaintext, plaintext)["validator"]
+            amount = cast(StructPlaintext, plaintext)["microcredits"]
+            stakers[cast(Address, cast(LiteralPlaintext, key).literal.primitive)] = (
+                cast(Address, cast(LiteralPlaintext, validator).literal.primitive),
+                cast(u64, cast(LiteralPlaintext, amount).literal.primitive)
+            )
         return stakers
 
     @staticmethod
@@ -812,7 +798,7 @@ class DatabaseInsert(DatabaseBase):
                         amount = cast(u64, cast(LiteralPlaintext, bond_state["microcredits"]).literal.primitive)
                         stakers[address] = validator, amount
                 else:
-                    stakers = await self.get_bonded_mapping()
+                    stakers = await self.get_bonded_mapping_unchecked()
 
                 DatabaseInsert._check_committee_staker_match(committee_members, stakers)
 
