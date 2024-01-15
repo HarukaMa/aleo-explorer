@@ -446,25 +446,33 @@ class Signature(Serializable):
 
 
 
-@access_generic_type
 class Data(Serializable, Generic[T]):
-    types: tuple[TType[T]]
+    types: TType[T]
     version = u8(1)
 
     def __init__(self, value: T):
         self.value = value
+
+    @tp_cache
+    def __class_getitem__(cls, key) -> GenericAlias:
+        param_type = type(
+            f"Data[{key.__name__}]",
+            (Data,),
+            {"types": key},
+        )
+        return GenericAlias(param_type, key)
 
     def dump(self) -> bytes:
         data = self.value.dump()
         return self.version.dump() + u32(len(data)).dump() + data
 
     @classmethod
-    def load(cls, data: BytesIO, *, types: Optional[tuple[TType[T]]] = None) -> Self:
-        if types is None:
+    def load(cls, data: BytesIO) -> Self:
+        if cls.types is None:
             raise TypeError("expected types")
         version = u8.load(data)
         if version != cls.version:
             raise ValueError(f"expected version {cls.version}, got {version}")
         size = u32.load(data)
-        value = types[0].load(BytesIO(data.read(size)))
+        value = cls.types[0].load(BytesIO(data.read(size)))
         return cls(value)

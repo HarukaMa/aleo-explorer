@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import re
 from hashlib import sha256, md5
@@ -1660,32 +1662,33 @@ class ArrayPlaintext(Plaintext):
         return True
 
 
-@access_generic_type
 class Owner(EnumBaseSerialize, RustEnum, Serializable, Generic[T]):
-    types: tuple[TType[T]]
+    Private: TType[T]
 
-    def __init__(self):
-        self.Private = self.types[0]
+    @tp_cache
+    def __class_getitem__(cls, item) -> GenericAlias:
+        param_type = type(
+            f"Owner[{item.__name__}]",
+            (Owner,),
+            {"Private": item}
+        )
+        return GenericAlias(param_type, item)
 
     class Type(IntEnumu8):
         Public = 0
         Private = 1
 
     @classmethod
-    def load(cls, data: BytesIO, *, types: Optional[tuple[TType[T]]] = None):
-        if types is None:
-            raise ValueError("expected types")
+    def load(cls, data: BytesIO):
         type_ = Owner.Type.load(data)
         if type_ == Owner.Type.Public:
             return PublicOwner[T].load(data)
         elif type_ == Owner.Type.Private:
-            t = types[0]
-            return PrivateOwner[t].load(data)
+            return PrivateOwner[cls.Private].load(data)
         else:
             raise ValueError("invalid type")
 
 
-@access_generic_type
 class PublicOwner(Owner[T]):
     type = Owner.Type.Public
 
@@ -1698,7 +1701,7 @@ class PublicOwner(Owner[T]):
         return self.type.dump() + self.owner.dump()
 
     @classmethod
-    def load(cls, data: BytesIO, *, types: Optional[tuple[TType[T]]] = None):
+    def load(cls, data: BytesIO):
         owner = Address.load(data)
         return cls(owner=owner)
 
@@ -1706,35 +1709,45 @@ class PublicOwner(Owner[T]):
         return str(self.owner)
 
 
-@access_generic_type
 class PrivateOwner(Owner[T]):
-    types: tuple[TType[T]]
+    Private: TType[T]
     type = Owner.Type.Private
 
     # noinspection PyMissingConstructor
     def __init__(self, *, owner: T):
         self.owner = owner
 
+    @tp_cache
+    def __class_getitem__(cls, item) -> GenericAlias:
+        param_type = type(
+            f"PrivateOwner[{item.__name__}]",
+            (PrivateOwner,),
+            {"Private": item}
+        )
+        return GenericAlias(param_type, item)
+
     def dump(self) -> bytes:
         return self.type.dump() + self.owner.dump()
 
     @classmethod
-    def load(cls, data: BytesIO, *, types: Optional[tuple[TType[T]]] = None):
-        if types is None:
-            raise ValueError("expected types")
-        owner = types[0].load(data)
+    def load(cls, data: BytesIO):
+        owner = cls.Private.load(data)
         return cls(owner=owner)
 
     def __str__(self):
         return str(self.owner)
 
-
-@access_generic_type
 class Entry(EnumBaseSerialize, RustEnum, Serializable, Generic[T]):
-    types: tuple[TType[T]]
+    Private: TType[T]
 
-    def __init__(self):
-        self.Private = self.types[0]
+    @tp_cache
+    def __class_getitem__(cls, item) -> GenericAlias:
+        param_type = type(
+            f"Entry[{item.__name__}]",
+            (Entry,),
+            {"Private": item}
+        )
+        return GenericAlias(param_type, item)
 
     class Type(IntEnumu8):
         Constant = 0
@@ -1742,22 +1755,18 @@ class Entry(EnumBaseSerialize, RustEnum, Serializable, Generic[T]):
         Private = 2
 
     @classmethod
-    def load(cls, data: BytesIO, *, types: Optional[tuple[TType[T]]] = None):
-        if types is None:
-            raise ValueError("expected types")
+    def load(cls, data: BytesIO):
         type_ = Entry.Type.load(data)
         if type_ == Entry.Type.Constant:
             return ConstantEntry[T].load(data)
         elif type_ == Entry.Type.Public:
             return PublicEntry[T].load(data)
         elif type_ == Entry.Type.Private:
-            t = types[0]
-            return PrivateEntry[t].load(data)
+            return PrivateEntry[cls.Private].load(data)
         else:
             raise ValueError("invalid type")
 
 
-@access_generic_type
 class ConstantEntry(Entry[T]):
     type = Entry.Type.Constant
 
@@ -1769,7 +1778,7 @@ class ConstantEntry(Entry[T]):
         return self.type.dump() + self.plaintext.dump()
 
     @classmethod
-    def load(cls, data: BytesIO, *, types: Optional[tuple[TType[T]]] = None):
+    def load(cls, data: BytesIO):
         plaintext = Plaintext.load(data)
         return cls(plaintext=plaintext)
 
@@ -1777,7 +1786,6 @@ class ConstantEntry(Entry[T]):
         return str(self.plaintext)
 
 
-@access_generic_type
 class PublicEntry(Entry[T]):
     type = Entry.Type.Public
 
@@ -1789,7 +1797,7 @@ class PublicEntry(Entry[T]):
         return self.type.dump() + self.plaintext.dump()
 
     @classmethod
-    def load(cls, data: BytesIO, *, types: Optional[tuple[TType[T]]] = None):
+    def load(cls, data: BytesIO):
         plaintext = Plaintext.load(data)
         return cls(plaintext=plaintext)
 
@@ -1797,39 +1805,51 @@ class PublicEntry(Entry[T]):
         return str(self.plaintext)
 
 
-@access_generic_type
 class PrivateEntry(Entry[T]):
-    types: tuple[TType[T]]
+    Private: TType[T]
     type = Entry.Type.Private
 
     # noinspection PyMissingConstructor
     def __init__(self, *, plaintext: T):
         self.plaintext = plaintext
 
+    @tp_cache
+    def __class_getitem__(cls, item) -> GenericAlias:
+        param_type = type(
+            f"PrivateEntry[{item.__name__}]",
+            (PrivateEntry,),
+            {"Private": item}
+        )
+        return GenericAlias(param_type, item)
+
     def dump(self) -> bytes:
         return self.type.dump() + self.plaintext.dump()
 
     @classmethod
-    def load(cls, data: BytesIO, *, types: Optional[tuple[TType[T]]] = None):
-        if types is None:
-            raise ValueError("expected types")
-        plaintext = types[0].load(data)
+    def load(cls, data: BytesIO):
+        plaintext = cls.Private.load(data)
         return cls(plaintext=plaintext)
 
     def __str__(self):
         return str(self.plaintext)
 
 
-@access_generic_type
 class Record(Serializable, Generic[T]):
-    types: tuple[TType[T]]
     Private: TType[T]
 
     def __init__(self, *, owner: Owner[T], data: Vec[Tuple[Identifier, Entry[T]], u8], nonce: Group):
         self.owner = owner
         self.data = data
         self.nonce = nonce
-        self.Private = self.types[0]
+
+    @tp_cache
+    def __class_getitem__(cls, item) -> GenericAlias:
+        param_type = type(
+            f"Record[{item.__name__}]",
+            (Record,),
+            {"Private": item}
+        )
+        return GenericAlias(param_type, item)
 
     def dump(self) -> bytes:
         res = b""
@@ -1844,10 +1864,8 @@ class Record(Serializable, Generic[T]):
         return res
 
     @classmethod
-    def load(cls, data: BytesIO, *, types: Optional[tuple[TType[T]]] = None):
-        if types is None:
-            raise ValueError("expected types")
-        Private = types[0]
+    def load(cls, data: BytesIO):
+        Private = cls.Private
         owner = Owner[Private].load(data)
         data_len = u8.load(data)
         d: list[Tuple[Identifier, Entry[T]]] = []
@@ -1861,9 +1879,7 @@ class Record(Serializable, Generic[T]):
         return cls(owner=owner, data=data_, nonce=nonce)
 
     @classmethod
-    def loads(cls, data: str, *, types: Optional[tuple[TType[T]]] = None):
-        if types is None:
-            raise ValueError("expected types")
+    def loads(cls, data: str):
         return cls.load(bech32_to_bytes(data))
 
     def __str__(self):
@@ -1929,7 +1945,7 @@ class RecordValue(Value):
 
 class Future(Serializable):
 
-    def __init__(self, *, program_id: ProgramID, function_name: Identifier, arguments: Vec["Argument", u8]):
+    def __init__(self, *, program_id: ProgramID, function_name: Identifier, arguments: Vec[Argument, u8]):
         self.program_id = program_id
         self.function_name = function_name
         self.arguments = arguments

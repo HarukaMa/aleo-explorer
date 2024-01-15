@@ -1,6 +1,6 @@
-from functools import partial
-from types import GenericAlias, MethodType
-from typing import Generic, TypeVar, get_args, Optional, Callable, TypeVarTuple, TypeGuard
+import functools
+from types import GenericAlias
+from typing import Generic, TypeVar, Optional, TypeVarTuple, TypeGuard, cast, Callable, Hashable
 
 from .basic import *
 
@@ -15,90 +15,64 @@ TP = TypeVarTuple('TP')
 L = TypeVar('L', bound=Int | FixedSize)
 I_co = TypeVar('I_co', bound=Int, covariant=True)
 
+# from cpython 3.11.6
+def tp_cache(func: Optional[Callable[..., Any]] = None, /, *, typed: bool = False):
+    """Internal wrapper caching __getitem__ of generic types.
 
-@lru_cache(maxsize=1024)
-def _get_args(self: GenericAlias):
-    return get_args(self)
+    For non-hashable arguments, the original function is used as a fallback.
+    """
+    def decorator(func: Callable[..., Any]):
+        cached = functools.lru_cache(maxsize=None, typed=typed)(func)
 
-class TypedGenericAlias(GenericAlias):
-    def __getattribute__(self, item: str) -> Any:
-        attr = super().__getattribute__(item)
-        if item.startswith("_"):
-            return attr
-        if isinstance(attr, MethodType):
-            attr = attr.__get__(self) # type: ignore
-            return partial(attr, types=_get_args(self)) # type: ignore
-        return attr
-
-    def __call__(self, *args: Any, **kwargs: Any):
-        kwargs["types"] = _get_args(self)
-        return super().__call__(*args, **kwargs)
-
-def access_generic_type(c): # type: ignore
-    def _tp_cache(func: Callable[..., Any], *, max_size: int | None = None):
-        cache = lru_cache(max_size)(func)
-
-        def wrapper(*args: Any, **kwargs: Any):
+        @functools.wraps(func)
+        def inner(*args: Hashable, **kwds: Hashable):
             try:
-                return cache(*args, **kwargs)
+                return cached(*args, **kwds)
             except TypeError:
-                return func(*args, **kwargs)
+                pass  # All real errors (not unhashable args) are raised below.
+            return func(*args, **kwds)
+        return inner
 
-        return wrapper
+    if func is not None:
+        return decorator(func)
 
-    # noinspection PyUnresolvedReferences
-    def __class_getitem__(cls: Any, item: str):
-        if not (hasattr(super(cls, cls), "__class_getitem__") and callable(super(cls, cls).__class_getitem__)): # type: ignore
-            raise TypeError
-        __generic_alias = super(cls, cls).__class_getitem__(item) # type: ignore
-        args = get_args(__generic_alias)
-        if not args:
-            raise TypeError
-        return TypedGenericAlias(cls, get_args(__generic_alias))
+    return decorator
 
-    def inject_types(f: Callable[..., Any]):
-        def wrapper(self: Any, *args: Any, **kwargs: Any):
-            if f is object.__new__:
-                return f(self)
-            if "types" in kwargs:
-                types = kwargs.pop("types")
-                self.types = types
-            return f(self, *args, **kwargs)
-        return wrapper
+def is_serializable(t: Any) -> TypeGuard[TType[Serializable]]:
+    return issubclass(t, Serializable)
 
-    c.__class_getitem__ = _tp_cache(__class_getitem__.__get__(c), max_size=1024) # type: ignore
-    c.__new__ = inject_types(c.__new__) # type: ignore
-    c.__init__ = inject_types(c.__init__) # type: ignore
-    return c # type: ignore
-
-
-def is_serializable(t: Any) -> TypeGuard[Serializable]:
-    return isinstance(t, Serializable)
-
-# noinspection PyTypeHints
-@access_generic_type
 class Tuple(tuple[*TP], Serializable):
-    types: tuple[TType[Any], ...]
+    types: tuple[TType[T], ...]
 
-    def __new__(cls, value: tuple[*TP]) -> Self:
+    def __new__(cls, value: tuple[*TP]):
         return tuple.__new__(cls, value)
+
+    @tp_cache
+    def __class_getitem__(cls, key) -> GenericAlias:
+        if not isinstance(key, tuple):
+            key = (key,)
+        param_type = type(
+            f"Tuple[{', '.join(t.__name__ for t in key)}]",
+            (Tuple,),
+            {"types": key},
+        )
+        return GenericAlias(param_type, key)
 
     def dump(self) -> bytes:
         return b"".join(t.dump() for t in self if is_serializable(t))
 
     @classmethod
-    def load(cls, data: BytesIO, *, types: Optional[tuple[TType[Any], ...]] = None) -> Self:
-        if types is None:
+    def load(cls, data: BytesIO) -> Self:
+        if cls.types is None:
             raise TypeError("expected types")
         value: list[Serializable] = []
-        for t in types:
+        for t in cls.types:
             if not is_serializable(t):
                 raise TypeError(f"expected Serializable type, got {t}")
             value.append(t.load(data))
         return cls(tuple(value)) # type: ignore
 
 
-@access_generic_type
 class Vec(list[T], Serializable, Generic[T, L]):
     types: tuple[TType[T], TType[L]]
 
@@ -112,6 +86,21 @@ class Vec(list[T], Serializable, Generic[T, L]):
             self._size_type = self.types[1]
             self._size = self._size_type(len(value))
 
+    @tp_cache
+    def __class_getitem__(cls, key) -> GenericAlias: # type: ignore
+        if not isinstance(key, tuple):
+            raise TypeError("expected tuple")
+        if isinstance(key[1], int):
+            class_name = f"Vec[{key[0].__name__}, {key[1]}]"
+        else:
+            class_name = f"Vec[{key[0].__name__}, {key[1].__name__}]"
+        param_type = type(
+            class_name,
+            (Vec,),
+            {"types": key},
+        )
+        return GenericAlias(param_type, key)
+
     def dump(self) -> bytes:
         res = b""
         if isinstance(self._size, Int):
@@ -121,10 +110,10 @@ class Vec(list[T], Serializable, Generic[T, L]):
         return res
 
     @classmethod
-    def load(cls, data: BytesIO, *, types: Optional[tuple[TType[T], L]] = None) -> Self:
-        if types is None:
+    def load(cls, data: BytesIO) -> Self:
+        if cls.types is None:
             raise TypeError("expected types")
-        value_type, size_type = types
+        value_type, size_type = cls.types
         if isinstance(size_type, FixedSize):
             size = size_type
         else:
@@ -135,12 +124,20 @@ class Vec(list[T], Serializable, Generic[T, L]):
         return f"[{', '.join(str(item) for item in self)}]"
 
 
-@access_generic_type
 class Option(Serializable, Generic[T]):
-    types: tuple[TType[T]]
+    types: TType[T]
 
     def __init__(self, value: Optional[T]):
         self.value = value
+
+    @tp_cache
+    def __class_getitem__(cls, key) -> GenericAlias:
+        param_type = type(
+            f"Option[{key.__name__}]",
+            (Option,),
+            {"types": key},
+        )
+        return GenericAlias(param_type, (key,))
 
     def dump(self) -> bytes:
         if self.value is None:
@@ -161,12 +158,12 @@ class Option(Serializable, Generic[T]):
             return self.value.dump()
 
     @classmethod
-    def load(cls, data: BytesIO, *, types: Optional[tuple[TType[T]]] = None) -> Self:
-        if types is None:
+    def load(cls, data: BytesIO) -> Self:
+        if cls.types is None:
             raise TypeError("expected types")
         is_some = bool_.load(data)
         if is_some:
-            value = types[0].load(data)
+            value = cls.types[0].load(data)
         else:
             value = None
         return cls(value)

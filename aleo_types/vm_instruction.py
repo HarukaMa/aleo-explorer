@@ -454,9 +454,8 @@ class BlockHeightOperand(Operand):
 
 N = TypeVar("N", bound=FixedSize)
 
-@access_generic_type
 class Literals(Serializable, Generic[N]):
-    types: tuple[N]
+    types: N
 
     def __init__(self, *, operands: list[Operand], destination: Register):
         self.num_operands = self.types[0]
@@ -464,6 +463,15 @@ class Literals(Serializable, Generic[N]):
             raise ValueError("incorrect number of operands")
         self.operands = operands
         self.destination = destination
+
+    @tp_cache
+    def __class_getitem__(cls, item) -> GenericAlias:
+        param_type = type(
+            f"Literals[{item}]",
+            (Literals,),
+            {"types": item},
+        )
+        return GenericAlias(param_type, item)
 
     def dump(self) -> bytes:
         res = b""
@@ -473,10 +481,8 @@ class Literals(Serializable, Generic[N]):
         return res
 
     @classmethod
-    def load(cls, data: BytesIO, *, types: Optional[tuple[N]] = None):
-        if types is None:
-            raise ValueError("types must be specified")
-        num_operands = types[0]
+    def load(cls, data: BytesIO):
+        num_operands = cls.types
         operands: list[Operand] = []
         for _ in range(num_operands):
             operands.append(Operand.load(data))
@@ -490,22 +496,26 @@ class Variant(int):
 
 V = TypeVar("V", bound=Variant)
 
-@access_generic_type
 class AssertInstruction(Serializable, Generic[V]):
-    types: tuple[V]
     variant: V
 
     def __init__(self, *, operands: tuple[Operand, Operand]):
-        self.variant = self.types[0]
         self.operands = operands
+
+    @tp_cache
+    def __class_getitem__(cls, item) -> GenericAlias:
+        param_type = type(
+            f"AssertInstruction[{item}]",
+            (AssertInstruction,),
+            {"variant": item},
+        )
+        return GenericAlias(param_type, item)
 
     def dump(self) -> bytes:
         return b"".join(operand.dump() for operand in self.operands)
 
     @classmethod
-    def load(cls, data: BytesIO, *, types: Optional[tuple[N]] = None):
-        if types is None:
-            raise ValueError("expected types")
+    def load(cls, data: BytesIO):
         op1 = Operand.load(data)
         op2 = Operand.load(data)
         return cls(operands=(op1, op2))
@@ -932,27 +942,32 @@ class ExternalRecordCastType(CastType):
         return cls(locator=locator)
 
 
-@access_generic_type
 class CastInstruction(Serializable, Generic[V]):
-    types: tuple[V]
+    type: V
 
     class Type(IntEnum):
         Cast = 0
         CastLossy = 1
 
     def __init__(self, *, operands: Vec[Operand, u8], destination: Register, cast_type: CastType):
-        self.type = self.types[0]
         self.operands = operands
         self.destination = destination
         self.cast_type = cast_type
+
+    @tp_cache
+    def __class_getitem__(cls, item) -> GenericAlias:
+        param_type = type(
+            f"CastInstruction[{item}]",
+            (CastInstruction,),
+            {"type": item},
+        )
+        return GenericAlias(param_type, item)
 
     def dump(self) -> bytes:
         return self.operands.dump() + self.destination.dump() + self.cast_type.dump()
 
     @classmethod
-    def load(cls, data: BytesIO, *, types: Optional[tuple[V]] = None):
-        if types is None:
-            raise ValueError("expected types")
+    def load(cls, data: BytesIO):
         operands = Vec[Operand, u8].load(data)
         destination = Register.load(data)
         cast_Type = CastType.load(data)
@@ -963,9 +978,8 @@ class EnumTypeValue(EnumType):
     def __class_getitem__(cls, item: EnumType):
         return item
 
-@access_generic_type
 class CommitInstruction(Serializable, Generic[V]):
-    types: tuple[V]
+    type: V
 
     class Type(IntEnum):
         CommitBHP256 = 0
@@ -976,18 +990,24 @@ class CommitInstruction(Serializable, Generic[V]):
         CommitPED128 = 5
 
     def __init__(self, *, operands: tuple[Operand, Operand], destination: Register, destination_type: LiteralType):
-        self.type = self.types[0]
         self.operands = operands
         self.destination = destination
         self.destination_type = destination_type
+
+    @tp_cache
+    def __class_getitem__(cls, item) -> GenericAlias:
+        param_type = type(
+            f"CommitInstruction[{item}]",
+            (CommitInstruction,),
+            {"type": item},
+        )
+        return GenericAlias(param_type, item)
 
     def dump(self) -> bytes:
         return b"".join(o.dump() for o in self.operands) + self.destination.dump() + self.destination_type.dump()
 
     @classmethod
-    def load(cls, data: BytesIO, *, types: Optional[tuple[V]] = None):
-        if not types:
-            raise ValueError("expected types")
+    def load(cls, data: BytesIO):
         op1 = Operand.load(data)
         op2 = Operand.load(data)
         destination = Register.load(data)
@@ -995,9 +1015,8 @@ class CommitInstruction(Serializable, Generic[V]):
         return cls(operands=(op1, op2), destination=destination, destination_type=destination_type)
 
 
-@access_generic_type
 class HashInstruction(Serializable, Generic[V]):
-    types: tuple[V]
+    type: V
 
     class Type(IntEnum):
 
@@ -1026,10 +1045,18 @@ class HashInstruction(Serializable, Generic[V]):
 
     # shortcut here so check doesn't work
     def __init__(self, *, operands: tuple[Operand, Optional[Operand]], destination: Register, destination_type: PlaintextType):
-        self.type = self.types[0]
         self.operands = operands
         self.destination = destination
         self.destination_type = destination_type
+
+    @tp_cache
+    def __class_getitem__(cls, item) -> GenericAlias:
+        param_type = type(
+            f"HashInstruction[{item}]",
+            (HashInstruction,),
+            {"type": item},
+        )
+        return GenericAlias(param_type, item)
 
     @classmethod
     def num_operands(cls, type_: Type, **_: Any) -> int:
@@ -1041,10 +1068,8 @@ class HashInstruction(Serializable, Generic[V]):
         return b"".join(op.dump() for op in self.operands if op) + self.destination.dump() + self.destination_type.dump()
 
     @classmethod
-    def load(cls, data: BytesIO, *, types: Optional[tuple[V]] = None):
-        if types is None:
-            raise ValueError("expected types")
-        size = cls.num_operands(cls.Type(types[0]))
+    def load(cls, data: BytesIO):
+        size = cls.num_operands(cls.Type(cls.type))
         op1 = Operand.load(data)
         if size == 2:
             op2 = Operand.load(data)
