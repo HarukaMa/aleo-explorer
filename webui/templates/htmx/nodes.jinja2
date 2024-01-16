@@ -19,12 +19,25 @@
         </tr>
         </thead>
         <tbody>
+        {% set max_height = (nodes.values() | list)[0].height | int %}
         {% for address, node in nodes.items() %}
             <tr>
                 <td>{{ address }}</td>
                 <td>{{ node.node_type }}</td>
                 <td><span class="mono">{{ node.address }}</span></td>
-                <td>{% if node.height is not none %}{{ node.height }}{% else %}-{% endif %}</td>
+                <td>
+                    {% if node.height %}
+                        {% if max_height - node["height"] > 50 %}
+                            <span style="color: #cc4b37">{{ node.height }}</span>
+                        {% elif max_height - node["height"] > 20 %}
+                            <span style="color: #ffae00">{{ node.height }}</span>
+                        {% else %}
+                            {{ node.height }}
+                        {% endif %}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
                 <td>{% if node.peer_count is not none %}{{ node.peer_count }}{% else %}-{% endif %}</td>
                 <td>{{ node.last_ping }}</td>
             </tr>
