@@ -1,4 +1,5 @@
 import asyncio
+import gc
 import os
 import random
 import time
@@ -110,6 +111,7 @@ class Node:
                 self.is_syncing = False
                 self.block_requests_deadline = float('inf')
                 self.is_fork = False
+                gc.collect()
             await self._sync()
 
         elif isinstance(frame.message, ChallengeRequest):

@@ -1,4 +1,5 @@
 import asyncio
+import gc
 import os
 import traceback
 from sys import stdout
@@ -86,6 +87,7 @@ class Explorer:
             await self.node.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4133")))
             asyncio.create_task(webui.run())
             asyncio.create_task(api.run())
+            gc.disable()
             while True:
                 msg = await self.message_queue.get()
                 match msg.type:
