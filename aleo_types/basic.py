@@ -179,7 +179,7 @@ class Int(int, Serializable, IntProtocol):
     def rem_wrapped(self, other: int | Self):
         return self.__mod__(other)
 
-    def __pow__(self, power: int | Self):
+    def __pow__(self, power: int | Self, mod: None = None):
         if isinstance(power, Int) and not isinstance(power, (u8, u16, u32)):
             raise TypeError(f"unsupported operand type(s) for **: '{type(self)}' and '{type(power)}'")
         power = int(power)
@@ -204,7 +204,7 @@ class Int(int, Serializable, IntProtocol):
         if not isinstance(destination_type, LiteralType):
             raise ValueError("invalid type")
 
-        reverse_primitive_type_map = {
+        reverse_primitive_type_map: dict[TType[Int], LiteralType] = {
             i8: LiteralType.I8,
             i16: LiteralType.I16,
             i32: LiteralType.I32,
@@ -502,12 +502,12 @@ class bool_(Sized, Serializable, And, Or, Not, Xor, Nand, Nor):
             return bool_(self.value ^ other)
         return bool_(self.value ^ other.value)
 
-    def nand(self, other: bool | Self) -> Self:
+    def nand(self, other: bool | Self) -> "bool_":
         if isinstance(other, bool):
             return bool_(not (self.value and other))
         return bool_(not (self.value and other.value))
 
-    def nor(self, other: bool | Self) -> Self:
+    def nor(self, other: bool | Self) -> "bool_":
         if isinstance(other, bool):
             return bool_(not (self.value or other))
         return bool_(not (self.value or other.value))
@@ -523,7 +523,6 @@ class bool_(Sized, Serializable, And, Or, Not, Xor, Nand, Nor):
         return False
 
     __match_args__ = ("value",)
-
 
 
 class SocketAddr(Serializable):

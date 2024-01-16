@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from .generic import *
 
 
@@ -168,7 +170,7 @@ class Field(Serializable, Double, Sub, Square, Div, Sqrt, Compare, Pow, Inv, Neg
     def __add__(self, other: Self):
         return Field.load(BytesIO(aleo_explorer_rust.field_ops(self, other, "add")))
 
-    def double(self) -> Self:
+    def double(self) -> Field:
         return Field.load(BytesIO(aleo_explorer_rust.field_ops(self, self, "double")))
 
     def __sub__(self, other: Self):
@@ -177,10 +179,10 @@ class Field(Serializable, Double, Sub, Square, Div, Sqrt, Compare, Pow, Inv, Neg
     def __mul__(self, other: Self):
         return Field.load(BytesIO(aleo_explorer_rust.field_ops(self, other, "mul")))
 
-    def square(self) -> Self:
+    def square(self) -> Field:
         return Field.load(BytesIO(aleo_explorer_rust.field_ops(self, self, "square")))
 
-    def sqrt(self) -> Self:
+    def sqrt(self) -> Field:
         return Field.load(BytesIO(aleo_explorer_rust.field_ops(self, self, "sqrt")))
 
     def __floordiv__(self, other: Self):
@@ -198,13 +200,13 @@ class Field(Serializable, Double, Sub, Square, Div, Sqrt, Compare, Pow, Inv, Neg
     def __le__(self, other: Self):
         return bool_.load(BytesIO(aleo_explorer_rust.field_ops(self, other, "lte"))).value
 
-    def __pow__(self, power: Self):
+    def __pow__(self, power: Self, mod: None = None):
         return Field.load(BytesIO(aleo_explorer_rust.field_ops(self, power, "pow")))
 
-    def inv(self) -> Self:
+    def inv(self) -> Field:
         return Field.load(BytesIO(aleo_explorer_rust.field_ops(self, self, "inv")))
 
-    def __neg__(self) -> Self:
+    def __neg__(self) -> Field:
         return Field.load(BytesIO(aleo_explorer_rust.field_ops(self, self, "neg")))
 
     def cast(self, destination_type: Any, *, lossy: bool) -> Any:
@@ -240,16 +242,16 @@ class Group(Serializable, Add, Sub, Mul, Neg, Cast):
     def __add__(self, other: Self):
         return Group.load(BytesIO(aleo_explorer_rust.group_ops(self, other, "add")))
 
-    def double(self) -> Self:
+    def double(self) -> Group:
         return Group.load(BytesIO(aleo_explorer_rust.group_ops(self, self, "double")))
 
     def __sub__(self, other: Self):
         return Group.load(BytesIO(aleo_explorer_rust.group_ops(self, other, "sub")))
 
-    def __mul__(self, other: "Scalar"):
+    def __mul__(self, other: Scalar):
         return Group.load(BytesIO(aleo_explorer_rust.group_ops(self, other, "mul")))
 
-    def __neg__(self) -> Self:
+    def __neg__(self) -> Group:
         return Group.load(BytesIO(aleo_explorer_rust.group_ops(self, self, "neg")))
 
     def cast(self, destination_type: Any, *, lossy: bool) -> Any:
@@ -474,5 +476,5 @@ class Data(Serializable, Generic[T]):
         if version != cls.version:
             raise ValueError(f"expected version {cls.version}, got {version}")
         size = u32.load(data)
-        value = cls.types[0].load(BytesIO(data.read(size)))
+        value = cls.types.load(BytesIO(data.read(size)))
         return cls(value)

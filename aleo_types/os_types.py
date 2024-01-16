@@ -39,7 +39,7 @@ class Message(EnumBaseSerialize, RustEnum, Serializable):
     type: Type
 
     @classmethod
-    def load(cls, data: BytesIO) -> Self:
+    def load(cls, data: BytesIO):
         type_ = Message.Type(struct.unpack("<H", data.read(2))[0])
         match type_:
             case Message.Type.BlockRequest:
@@ -246,13 +246,13 @@ class BlockLocators(Serializable):
     @classmethod
     def load(cls, data: BytesIO):
         num_locators = u32.load(data)
-        recents = {}
+        recents: dict[u32, BlockHash] = {}
         for _ in range(num_locators):
             height = u32.load(data)
             block_hash = BlockHash.load(data)
             recents[height] = block_hash
         num_checkpoints = u32.load(data)
-        checkpoints = {}
+        checkpoints: dict[u32, BlockHash] = {}
         for _ in range(num_checkpoints):
             height = u32.load(data)
             block_hash = BlockHash.load(data)

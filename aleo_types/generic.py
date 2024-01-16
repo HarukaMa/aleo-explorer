@@ -39,36 +39,35 @@ def tp_cache(func: Optional[Callable[..., Any]] = None, /, *, typed: bool = Fals
     return decorator
 
 def is_serializable(t: Any) -> TypeGuard[TType[Serializable]]:
-    return issubclass(t, Serializable)
+    return isinstance(t, Serializable)
 
 class Tuple(tuple[*TP], Serializable):
-    types: tuple[TType[T], ...]
+    types: tuple[TType[Serializable], ...]
 
     def __new__(cls, value: tuple[*TP]):
         return tuple.__new__(cls, value)
 
     @tp_cache
-    def __class_getitem__(cls, key) -> GenericAlias:
+    def __class_getitem__(cls, key: Any | tuple[Any, ...]) -> GenericAlias: # type: ignore
         if not isinstance(key, tuple):
             key = (key,)
+        for t in key:
+            if not is_serializable(t):
+                raise TypeError(f"expected Serializable type, got {t}")
         param_type = type(
-            f"Tuple[{', '.join(t.__name__ for t in key)}]",
+            f"Tuple[{', '.join(cast(TType[Serializable], t).__name__ for t in key)}]",
             (Tuple,),
             {"types": key},
         )
         return GenericAlias(param_type, key)
 
     def dump(self) -> bytes:
-        return b"".join(t.dump() for t in self if is_serializable(t))
+        return b"".join(cast(Serializable, t).dump() for t in self)
 
     @classmethod
     def load(cls, data: BytesIO) -> Self:
-        if cls.types is None:
-            raise TypeError("expected types")
         value: list[Serializable] = []
         for t in cls.types:
-            if not is_serializable(t):
-                raise TypeError(f"expected Serializable type, got {t}")
             value.append(t.load(data))
         return cls(tuple(value)) # type: ignore
 
@@ -87,13 +86,20 @@ class Vec(list[T], Serializable, Generic[T, L]):
             self._size = self._size_type(len(value))
 
     @tp_cache
-    def __class_getitem__(cls, key) -> GenericAlias: # type: ignore
+    def __class_getitem__(cls, key: Any | tuple[Any, ...]) -> GenericAlias: # type: ignore
         if not isinstance(key, tuple):
-            raise TypeError("expected tuple")
-        if isinstance(key[1], int):
-            class_name = f"Vec[{key[0].__name__}, {key[1]}]"
+            raise TypeError("expected type and size")
+        if len(key) != 2:
+            raise TypeError("expected type and size")
+        var_type, size_type = key
+        if not is_serializable(var_type):
+            raise TypeError(f"expected Serializable type, got {var_type}")
+        if not (isinstance(size_type, FixedSize) or issubclass(size_type, Int)):
+            raise TypeError(f"expected Int or FixedSize type, got {size_type}")
+        if isinstance(size_type, int):
+            class_name = f"Vec[{var_type.__name__}, {size_type}]"
         else:
-            class_name = f"Vec[{key[0].__name__}, {key[1].__name__}]"
+            class_name = f"Vec[{var_type.__name__}, {size_type.__name__}]"
         param_type = type(
             class_name,
             (Vec,),
@@ -111,13 +117,11 @@ class Vec(list[T], Serializable, Generic[T, L]):
 
     @classmethod
     def load(cls, data: BytesIO) -> Self:
-        if cls.types is None:
-            raise TypeError("expected types")
         value_type, size_type = cls.types
         if isinstance(size_type, FixedSize):
             size = size_type
         else:
-            size = size_type.load(data)
+            size = cast(Int, size_type).load(data)
         return cls(list(value_type.load(data) for _ in range(size)))
 
     def __str__(self):
@@ -131,7 +135,9 @@ class Option(Serializable, Generic[T]):
         self.value = value
 
     @tp_cache
-    def __class_getitem__(cls, key) -> GenericAlias:
+    def __class_getitem__(cls, key: Any | tuple[Any, ...]) -> GenericAlias:
+        if isinstance(key, tuple):
+            raise TypeError("expected one type")
         param_type = type(
             f"Option[{key.__name__}]",
             (Option,),
@@ -159,11 +165,9 @@ class Option(Serializable, Generic[T]):
 
     @classmethod
     def load(cls, data: BytesIO) -> Self:
-        if cls.types is None:
-            raise TypeError("expected types")
         is_some = bool_.load(data)
         if is_some:
-            value = cls.types[0].load(data)
+            value = cls.types.load(data)
         else:
             value = None
         return cls(value)

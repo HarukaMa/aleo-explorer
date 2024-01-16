@@ -458,7 +458,7 @@ class Literals(Serializable, Generic[N]):
     types: N
 
     def __init__(self, *, operands: list[Operand], destination: Register):
-        self.num_operands = self.types[0]
+        self.num_operands = self.types
         if len(operands) != self.num_operands:
             raise ValueError("incorrect number of operands")
         self.operands = operands
