@@ -14,6 +14,7 @@
             <th>Type</th>
             <th>Address</th>
             <th>Height</th>
+            <th>Peers</th>
             <th>Last update</th>
         </tr>
         </thead>
@@ -24,6 +25,7 @@
                 <td>{{ node.node_type }}</td>
                 <td><span class="mono">{{ node.address }}</span></td>
                 <td>{% if node.height is not none %}{{ node.height }}{% else %}-{% endif %}</td>
+                <td>{% if node.peer_count is not none %}{{ node.peer_count }}{% else %}-{% endif %}</td>
                 <td>{{ node.last_ping }}</td>
             </tr>
         {% endfor %}
