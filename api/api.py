@@ -1,4 +1,5 @@
 import asyncio
+import gc
 import logging
 import multiprocessing
 import os
@@ -70,6 +71,7 @@ async def startup():
     app.state.db = db
     app.state.program_cache = Cache()
     set_proc_title("aleo-explorer: api")
+    gc.enable()
 
 log_format = '\033[92mAPI\033[0m: \033[94m%(client_addr)s\033[0m - - %(t)s \033[96m"%(request_line)s"\033[0m \033[93m%(s)s\033[0m %(B)s "%(f)s" "%(a)s" %(L)s'
 # noinspection PyTypeChecker
