@@ -848,7 +848,7 @@ class Program(Serializable):
         res += self.version.dump()
         res += self.id.dump()
         res += self.imports.dump()
-        res += u16(len(self.identifiers)).dump()
+        res += len(self.identifiers).to_bytes(2, "little")
         for i, d in self.identifiers:
             res += d.dump()
             if d == ProgramDefinition.Mapping:
@@ -1463,11 +1463,11 @@ class StructPlaintext(Plaintext):
 
     def dump(self) -> bytes:
         res = self.type.dump()
-        res += u8(len(self.members)).dump()
+        res += len(self.members).to_bytes(byteorder="little")
         for member in self.members:
             res += member[0].dump()  # Identifier
             num_bytes = member[1].dump()  # Plaintext
-            res += u16(len(num_bytes)).dump()
+            res += len(num_bytes).to_bytes(2, "little")
             res += num_bytes
         return res
 
@@ -1618,10 +1618,10 @@ class ArrayPlaintext(Plaintext):
 
     def dump(self) -> bytes:
         res = self.type.dump()
-        res += u32(len(self.elements)).dump()
+        res += len(self.elements).to_bytes(4, "little")
         for element in self.elements:
             data = element.dump()
-            res += u16(len(data)).dump()
+            res += len(data).to_bytes(2, "little")
             res += data
         return res
 
@@ -1854,11 +1854,11 @@ class Record(Serializable, Generic[T]):
     def dump(self) -> bytes:
         res = b""
         res += self.owner.dump()
-        res += u8(len(self.data)).dump()
+        res += len(self.data).to_bytes(byteorder="little")
         for identifier, entry in self.data:
             res += identifier.dump()
             bytes_ = entry.dump()
-            res += u16(len(bytes_)).dump()
+            res += len(bytes_).to_bytes(2, "little")
             res += bytes_
         res += self.nonce.dump()
         return res
@@ -1989,7 +1989,7 @@ class PlaintextArgument(Argument):
 
     def dump(self) -> bytes:
         data = self.type.dump() + self.plaintext.dump()
-        return u16(len(data)).dump() + data
+        return len(data).to_bytes(2, "little") + data
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -2004,7 +2004,7 @@ class FutureArgument(Argument):
 
     def dump(self) -> bytes:
         data = self.type.dump() + self.future.dump()
-        return u16(len(data)).dump() + data
+        return len(data).to_bytes(2, "little") + data
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -3410,7 +3410,7 @@ class Subdag1(Serializable):
 
     def dump(self) -> bytes:
         res = self.version.dump()
-        res += u32(len(self.subdag)).dump()
+        res += len(self.subdag).to_bytes(4, 'little')
         for round_, certificates in self.subdag.items():
             res += round_.dump() + certificates.dump()
         return res
@@ -3435,7 +3435,7 @@ class Subdag2(Serializable):
 
     def dump(self) -> bytes:
         res = self.version.dump()
-        res += u32(len(self.subdag)).dump()
+        res += len(self.subdag).to_bytes(4, 'little')
         for round_, certificates in self.subdag.items():
             res += round_.dump() + certificates.dump()
         res += self.election_certificate_ids.dump()

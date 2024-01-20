@@ -466,7 +466,7 @@ class Data(Serializable, Generic[T]):
 
     def dump(self) -> bytes:
         data = self.value.dump()
-        return self.version.dump() + u32(len(data)).dump() + data
+        return self.version.dump() + len(data).to_bytes(4, "little") + data
 
     @classmethod
     def load(cls, data: BytesIO) -> Self:

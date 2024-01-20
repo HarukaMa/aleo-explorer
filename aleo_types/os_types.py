@@ -235,10 +235,10 @@ class BlockLocators(Serializable):
         self.checkpoints = checkpoints
 
     def dump(self) -> bytes:
-        res = u32(len(self.recents)).dump()
+        res = len(self.recents).to_bytes(4, "little")
         for height, block_hash in self.recents.items():
             res += height.dump() + block_hash.dump()
-        res += u32(len(self.checkpoints)).dump()
+        res += len(self.checkpoints).to_bytes(4, "little")
         for height, block_hash in self.checkpoints.items():
             res += height.dump() + block_hash.dump()
         return res

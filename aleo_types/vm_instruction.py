@@ -12,7 +12,7 @@ class StringType(Serializable):
         bytes_ = self.string.encode("utf-8")
         if len(bytes_) > 255:
             raise ValueError("string too long")
-        return u16(len(bytes_)).dump() + bytes_
+        return len(bytes_).to_bytes(2, "little") + bytes_
 
     @classmethod
     def load(cls, data: BytesIO):
