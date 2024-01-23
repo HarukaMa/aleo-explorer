@@ -43,7 +43,7 @@ async def programs_route(request: Request):
     programs = await db.get_programs(start, start + 50, no_helloworld=no_helloworld)
     builtin_programs = await db.get_builtin_programs()
 
-    sync_info = await out_of_sync_check(db)
+    sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
         "request": request,
         "programs": programs + builtin_programs,
@@ -101,7 +101,7 @@ async def program_route(request: Request):
             "key_type": str(mapping.key.plaintext_type),
             "value_type": str(mapping.value.plaintext_type)
         })
-    sync_info = await out_of_sync_check(db)
+    sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx: dict[str, Any] = {
         "request": request,
         "program_id": str(program.id),
@@ -161,7 +161,7 @@ async def similar_programs_route(request: Request):
     start = 50 * (page - 1)
     programs = await db.get_programs_with_feature_hash(feature_hash, start, start + 50)
 
-    sync_info = await out_of_sync_check(db)
+    sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
         "request": request,
         "program_id": program_id,
@@ -206,7 +206,7 @@ async def upload_source_route(request: Request):
             else:
                 import_programs.append(None)
     message = request.query_params.get("message")
-    sync_info = await out_of_sync_check(db)
+    sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
         "request": request,
         "program_id": program_id,

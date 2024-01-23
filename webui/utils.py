@@ -27,20 +27,19 @@ def get_relative_time(timestamp: int):
     return f"{int(delta)} hours ago"
 
 
-async def get_remote_height(rpc_root: str) -> str:
+async def get_remote_height(session: aiohttp.ClientSession, rpc_root: str) -> str:
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"{rpc_root}/testnet3/latest/height") as resp:
-                if resp.status == 200:
-                    remote_height = await resp.text()
-                else:
-                    remote_height = "?"
+        async with session.get(f"{rpc_root}/testnet3/latest/height") as resp:
+            if resp.status == 200:
+                remote_height = await resp.text()
+            else:
+                remote_height = "?"
     except:
         remote_height = "?"
     return remote_height
 
 
-async def out_of_sync_check(db: Database):
+async def out_of_sync_check(session: aiohttp.ClientSession, db: Database):
     last_timestamp, last_height = await asyncio.gather(
         db.get_latest_block_timestamp(),
         db.get_latest_height()
@@ -52,9 +51,9 @@ async def out_of_sync_check(db: Database):
     reference_height = None
     if out_of_sync:
         if rpc_root := os.environ.get("RPC_URL_ROOT"):
-            node_height = await get_remote_height(rpc_root)
+            node_height = await get_remote_height(session, rpc_root)
         if ref_rpc_root := os.environ.get("REF_RPC_URL_ROOT"):
-            reference_height = await get_remote_height(ref_rpc_root)
+            reference_height = await get_remote_height(session, ref_rpc_root)
 
     return {
         "out_of_sync": out_of_sync,

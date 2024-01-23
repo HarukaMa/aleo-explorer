@@ -21,7 +21,7 @@ async def calc_route(request: Request):
     else:
         template = "calc.jinja2"
     proof_target = (await db.get_latest_block()).header.metadata.proof_target
-    sync_info = await out_of_sync_check(db)
+    sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
         "request": request,
         "proof_target": proof_target,
@@ -63,7 +63,7 @@ async def leaderboard_route(request: Request):
     total_credit = await db.get_leaderboard_total()
     target_credit = 37_500_000_000_000
     ratio = total_credit / target_credit * 100
-    sync_info = await out_of_sync_check(db)
+    sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
         "request": request,
         "leaderboard": data,
@@ -238,7 +238,7 @@ async def address_route(request: Request):
             "function_name": transition.function_name,
         })
 
-    sync_info = await out_of_sync_check(db)
+    sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
         "request": request,
         "address": address,
@@ -301,7 +301,7 @@ async def address_solution_route(request: Request):
             "target": solution["target"],
             "target_sum": solution["target_sum"],
         })
-    sync_info = await out_of_sync_check(db)
+    sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
         "request": request,
         "address": address,

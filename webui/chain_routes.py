@@ -142,7 +142,7 @@ async def block_route(request: Request):
             case _:
                 raise HTTPException(status_code=550, detail="Unsupported transaction type")
 
-    sync_info = await out_of_sync_check(db)
+    sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
         "request": request,
         "block": block,
@@ -231,7 +231,7 @@ async def transaction_route(request: Request):
         block = await db.get_block_from_transaction_id(tx_id)
         block_confirm_time = await db.get_block_confirm_time(block.height)
 
-    sync_info = await out_of_sync_check(db)
+    sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx: dict[str, Any] = {
         "request": request,
         "tx_id": tx_id,
@@ -566,7 +566,7 @@ async def transition_route(request: Request):
                     "value": f"{future.program_id}/{future.function_name}(...)",
                 })
 
-    sync_info = await out_of_sync_check(db)
+    sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
         "request": request,
         "ts_id": ts_id,
@@ -733,7 +733,7 @@ async def blocks_route(request: Request):
     start = total_blocks - 50 * (page - 1)
     blocks = await db.get_blocks_range_fast(start, start - 50)
 
-    sync_info = await out_of_sync_check(db)
+    sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
         "request": request,
         "blocks": blocks,
@@ -776,7 +776,7 @@ async def validators_route(request: Request):
         })
 
 
-    sync_info = await out_of_sync_check(db)
+    sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
         "request": request,
         "validators": validators,
@@ -815,7 +815,7 @@ async def unconfirmed_transactions_route(request: Request):
             "first_seen": await db.get_transaction_first_seen(str(tx.id)),
         })
 
-    sync_info = await out_of_sync_check(db)
+    sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
         "request": request,
         "transactions": transactions,

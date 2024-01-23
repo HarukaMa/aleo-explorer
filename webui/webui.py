@@ -48,7 +48,7 @@ async def index_route(request: Request):
     recent_blocks = await db.get_recent_blocks_fast()
     network_speed = await db.get_network_speed()
     participation_rate = await db.get_network_participation_rate()
-    sync_info = await out_of_sync_check(db)
+    sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
         "latest_block": await db.get_latest_block(),
         "request": request,
@@ -227,6 +227,7 @@ async def run():
     server = UvicornServer(config=config)
     # noinspection PyUnresolvedReferences
     app.state.lns = LightNodeState()
+    app.state.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=1))
 
     server.start()
     while True:
