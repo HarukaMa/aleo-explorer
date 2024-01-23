@@ -1692,6 +1692,15 @@ class Owner(EnumBaseSerialize, RustEnum, Serializable, Generic[T]):
 class PublicOwner(Owner[T]):
     type = Owner.Type.Public
 
+    @tp_cache
+    def __class_getitem__(cls, item) -> GenericAlias:
+        param_type = type(
+            f"PublicOwner[{item.__name__}]",
+            (PublicOwner,),
+            {"Private": item}
+        )
+        return GenericAlias(param_type, item)
+
     # This subtype is not generic
     # noinspection PyMissingConstructor
     def __init__(self, *, owner: Address):
@@ -1770,6 +1779,15 @@ class Entry(EnumBaseSerialize, RustEnum, Serializable, Generic[T]):
 class ConstantEntry(Entry[T]):
     type = Entry.Type.Constant
 
+    @tp_cache
+    def __class_getitem__(cls, item) -> GenericAlias:
+        param_type = type(
+            f"ConstantEntry[{item.__name__}]",
+            (ConstantEntry,),
+            {"Private": item}
+        )
+        return GenericAlias(param_type, item)
+
     # noinspection PyMissingConstructor
     def __init__(self, *, plaintext: Plaintext):
         self.plaintext = plaintext
@@ -1788,6 +1806,15 @@ class ConstantEntry(Entry[T]):
 
 class PublicEntry(Entry[T]):
     type = Entry.Type.Public
+
+    @tp_cache
+    def __class_getitem__(cls, item) -> GenericAlias:
+        param_type = type(
+            f"PublicEntry[{item.__name__}]",
+            (PublicEntry,),
+            {"Private": item}
+        )
+        return GenericAlias(param_type, item)
 
     # noinspection PyMissingConstructor
     def __init__(self, *, plaintext: Plaintext):
