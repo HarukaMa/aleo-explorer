@@ -103,9 +103,9 @@ List All Values in Mapping
       to the next request.
 
       **Remarks**: the ``count`` parameter doesn't guarantee the number of values returned if the mapping is
-      ``credits.aleo/bonded`` or ``credits.aleo/committee``, as those mapping values are stored in Redis. Therefore,
-      the response may contain more than ``count`` values, but should never contain less. Make sure to iterate through
-      the response values to get all data.
+      ``credits.aleo/bonded`` or ``credits.aleo/committee``, as those mapping values are stored in and directly queried
+      from Redis. Therefore, the response may contain more or less items than the provided ``count`` value. Make sure to
+      iterate through the response values to get all data.
 
       **Example request**:
 
