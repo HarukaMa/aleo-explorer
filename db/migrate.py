@@ -110,8 +110,8 @@ class DatabaseMigrate(DatabaseBase):
     @staticmethod
     async def migrate_12_set_on_delete_cascade(conn: psycopg.AsyncConnection[dict[str, Any]]):
         # https://stackoverflow.com/a/74476119
-        await conn.execute(
-            """
+        try:
+            await conn.execute("""
 WITH tables(oid) AS (
    UPDATE pg_constraint
    SET confdeltype = 'c'
@@ -125,6 +125,10 @@ SET tgfoid = '"RI_FKey_cascade_del"()'::regprocedure
 FROM tables
 WHERE tables.oid = pg_trigger.tgrelid
   AND tgtype = 9;
-            """,
-            (os.environ["DB_SCHEMA"],)
-        )
+                """, (os.environ["DB_SCHEMA"],)
+            )
+        except psycopg.errors.InsufficientPrivilege:
+            print("==========================")
+            print("You need superuser to run this migration")
+            print("==========================")
+            raise
