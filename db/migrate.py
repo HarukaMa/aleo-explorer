@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Awaitable, cast
+import os
+from typing import Awaitable
 
 import psycopg
 import psycopg.sql
@@ -26,6 +27,7 @@ class DatabaseMigrate(DatabaseBase):
             (9, self.migrate_9_add_transaction_original_id),
             (10, self.migrate_10_add_deploy_unconfirmed_program_info),
             (11, self.migrate_11_add_original_transaction_id_index),
+            (12, self.migrate_12_set_on_delete_cascade),
         ]
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -63,7 +65,9 @@ class DatabaseMigrate(DatabaseBase):
     async def migrate_5_fix_missing_program(conn: psycopg.AsyncConnection[dict[str, Any]]):
         async with conn.cursor() as cur:
             await cur.execute("select id from transaction where transaction_id = 'at1flfmj9pxkyz86zsezsdcjtc8pzr7uhx7skjzu7u7mzhkrmqh5gpqsf3gaf'")
-            transaction_id = (await cur.fetchone())["id"]
+            if (res := await cur.fetchone()) is None:
+                return
+            transaction_id = res["id"]
             await cur.execute("select id from transaction_deploy where transaction_id = %s", (transaction_id,))
             transaction_deploy_id = (await cur.fetchone())["id"]
             program = Program.load(BytesIO(bytes.fromhex("010b76656c747a6c65656c6c3204616c656f000100040568656c6c6f0200000001000b000102000b0100000002000100000100010002010001000202000b00")))
@@ -102,3 +106,25 @@ class DatabaseMigrate(DatabaseBase):
     @staticmethod
     async def migrate_11_add_original_transaction_id_index(conn: psycopg.AsyncConnection[dict[str, Any]]):
         await conn.execute("create index transaction_original_transaction_id_index on transaction (original_transaction_id text_pattern_ops)")
+
+    @staticmethod
+    async def migrate_12_set_on_delete_cascade(conn: psycopg.AsyncConnection[dict[str, Any]]):
+        # https://stackoverflow.com/a/74476119
+        await conn.execute(
+            """
+WITH tables(oid) AS (
+   UPDATE pg_constraint
+   SET confdeltype = 'c'
+   WHERE contype = 'f'
+     AND confdeltype <> 'c'
+     AND connamespace = %s::regnamespace
+   RETURNING confrelid
+)
+UPDATE pg_trigger
+SET tgfoid = '"RI_FKey_cascade_del"()'::regprocedure
+FROM tables
+WHERE tables.oid = pg_trigger.tgrelid
+  AND tgtype = 9;
+            """,
+            (os.environ["DB_SCHEMA"],)
+        )

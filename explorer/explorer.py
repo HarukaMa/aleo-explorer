@@ -74,6 +74,7 @@ class Explorer:
             await self.db.migrate()
             await self.check_dev_mode()
             await self.check_genesis()
+            await self.check_revert()
             latest_height = await self.db.get_latest_height()
             if latest_height is None:
                 raise ValueError("no block in database")
@@ -158,3 +159,10 @@ class Explorer:
         stdout.flush()
         await self.db.clear_database()
 
+    async def check_revert(self):
+        if os.path.exists("revert_flag") and os.path.isfile("revert_flag"):
+            try:
+                os.remove("revert_flag")
+            except OSError as e:
+                print("Cannot remove revert_flag:", e)
+            await self.db.revert_to_last_backup()

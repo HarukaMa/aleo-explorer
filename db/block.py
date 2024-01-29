@@ -913,7 +913,7 @@ class DatabaseBlock(DatabaseBase):
             )
 
     @staticmethod
-    async def _get_full_block_range(start: int, end: int, conn: psycopg.AsyncConnection[dict[str, Any]]):
+    async def get_full_block_range(start: int, end: int, conn: psycopg.AsyncConnection[dict[str, Any]]):
         async with conn.cursor() as cur:
             await cur.execute(
                 "SELECT * FROM block WHERE height <= %s AND height > %s ORDER BY height DESC",
@@ -1104,7 +1104,7 @@ class DatabaseBlock(DatabaseBase):
     async def get_blocks_range(self, start: int, end: int):
         async with self.pool.connection() as conn:
             try:
-                return await DatabaseBlock._get_full_block_range(start, end, conn)
+                return await DatabaseBlock.get_full_block_range(start, end, conn)
             except Exception as e:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
