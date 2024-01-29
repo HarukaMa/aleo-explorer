@@ -1952,6 +1952,9 @@ class PlaintextValue(Value):
     def __str__(self):
         return str(self.plaintext)
 
+    def __repr__(self):
+        return str(self.plaintext)
+
 
 class RecordValue(Value):
     type = Value.Type.Record
