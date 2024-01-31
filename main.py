@@ -1,4 +1,5 @@
 import asyncio
+import decimal
 
 from dotenv import load_dotenv
 
@@ -9,6 +10,7 @@ load_dotenv()
 
 async def main():
     set_proc_title("aleo-explorer: main")
+    decimal.getcontext().prec = 80
     e = Explorer()
     e.start()
     while True:
