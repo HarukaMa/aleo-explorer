@@ -130,5 +130,6 @@ WHERE tables.oid = pg_trigger.tgrelid
         except psycopg.errors.InsufficientPrivilege:
             print("==========================")
             print("You need superuser to run this migration")
+            print("If you can't or don't want to add superuser, please run it manually")
             print("==========================")
             raise
