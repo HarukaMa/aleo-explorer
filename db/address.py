@@ -129,14 +129,32 @@ class DatabaseAddress(DatabaseBase):
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT DISTINCT t.transition_id, b.height, b.timestamp FROM address_transition at "
-                        "JOIN transition t on at.transition_id = t.id "
-                        "JOIN transaction_execute te on te.id = t.transaction_execute_id "
-                        "JOIN transaction t2 on t2.id = te.transaction_id "
-                        "JOIN confirmed_transaction ct on ct.id = t2.confimed_transaction_id "
-                        "JOIN block b on b.id = ct.block_id "
-                        "WHERE at.address = %s ORDER BY b.height DESC LIMIT 30",
-                        (address,)
+                        """
+SELECT DISTINCT ts.transition_id,
+                b.height,
+                b.timestamp
+FROM address_transition at
+JOIN transition ts ON at.transition_id = ts.id
+JOIN transaction_execute te ON te.id = ts.transaction_execute_id
+JOIN transaction tx ON tx.id = te.transaction_id
+JOIN confirmed_transaction ct ON ct.id = tx.confimed_transaction_id
+JOIN block b ON b.id = ct.block_id
+WHERE at.address = %s
+UNION
+SELECT DISTINCT ts.transition_id,
+                b.height,
+                b.timestamp
+FROM address_transition at
+JOIN transition ts ON at.transition_id = ts.id
+JOIN fee f ON f.id = ts.fee_id
+JOIN transaction tx ON tx.id = f.transaction_id
+JOIN confirmed_transaction ct ON ct.id = tx.confimed_transaction_id
+JOIN block b ON b.id = ct.block_id
+WHERE at.address = %s
+ORDER BY height DESC
+LIMIT 30
+""",
+                        (address, address)
                     )
                     def transform(x: dict[str, Any]):
                         return {
