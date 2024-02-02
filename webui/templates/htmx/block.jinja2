@@ -85,9 +85,10 @@
                     <tr>
                         <td>Index</td>
                         <td>Transaction ID</td>
-                        <td>Type</td>
                         <td>State</td>
                         <td>Transitions</td>
+                        <td>Type</td>
+                        <td>Action</td>
                         <td>Fee</td>
                     </tr>
                     </thead>
@@ -95,10 +96,15 @@
                     {% for tx in transactions %}
                         <tr>
                             <td>{{ tx.index }}</td>
-                            <td class="mono"><a href="/transaction?id={{ tx.tx_id }}">{{ tx.tx_id }}</a></td>
-                            <td>{{ tx.type }}</td>
+                            <td class="mono" style="max-width: 240px; overflow: hidden; text-overflow: ellipsis"><a href="/transaction?id={{ tx.tx_id }}">{{ tx.tx_id }}</a></td>
                             <td>{{ state_label(tx.state) }}</td>
                             <td>{{ tx.transitions_count }}</td>
+                            <td>{{ tx.type }}</td>
+                        {% if tx.type == "Execute" %}
+                            <td class="mono">{{ tx.root_transition }}</td>
+                        {% elif tx.type == "Deploy" %}
+                            <td class="mono">{{ tx.program_id }}</td>
+                        {% endif %}
                             <td>
                                 {{ tx.base_fee | format_aleo_credit | safe }} base
                                 {% if tx.priority_fee > 0 %} + {{ tx.priority_fee | format_aleo_credit | safe }} priority{% endif %}

@@ -87,60 +87,67 @@ async def block_route(request: Request):
         total_base_fee += base_fee
         total_priority_fee += priority_fee
         total_burnt_fee += burnt_fee
-        match ct:
-            case AcceptedDeploy():
-                tx = ct.transaction
-                if not isinstance(tx, DeployTransaction):
-                    raise HTTPException(status_code=550, detail="Invalid transaction type")
-                t = {
-                    "tx_id": tx.id,
-                    "index": ct.index,
-                    "type": "Deploy",
-                    "state": "Accepted",
-                    "transitions_count": 1,
-                    "base_fee": base_fee - burnt_fee,
-                    "priority_fee": priority_fee,
-                    "burnt_fee": burnt_fee,
-                }
-                txs.append(t)
-            case AcceptedExecute():
-                tx = ct.transaction
-                if not isinstance(tx, ExecuteTransaction):
-                    raise HTTPException(status_code=550, detail="Invalid transaction type")
-                additional_fee = tx.additional_fee.value
-                if additional_fee is not None:
-                    base_fee, priority_fee = additional_fee.amount
-                else:
-                    base_fee, priority_fee = 0, 0
-                t = {
-                    "tx_id": tx.id,
-                    "index": ct.index,
-                    "type": "Execute",
-                    "state": "Accepted",
-                    "transitions_count": len(tx.execution.transitions) + bool(tx.additional_fee.value is not None),
-                    "base_fee": base_fee - burnt_fee,
-                    "priority_fee": priority_fee,
-                    "burnt_fee": burnt_fee,
-                }
-                txs.append(t)
-            case RejectedExecute():
-                tx = ct.transaction
-                if not isinstance(tx, FeeTransaction):
-                    raise HTTPException(status_code=550, detail="Invalid transaction type")
-                base_fee, priority_fee = tx.fee.amount
-                t = {
-                    "tx_id": tx.id,
-                    "index": ct.index,
-                    "type": "Execute",
-                    "state": "Rejected",
-                    "transitions_count": 1,
-                    "base_fee": base_fee - burnt_fee,
-                    "priority_fee": priority_fee,
-                    "burnt_fee": burnt_fee,
-                }
-                txs.append(t)
-            case _:
-                raise HTTPException(status_code=550, detail="Unsupported transaction type")
+        if isinstance(ct, AcceptedDeploy):
+            tx = ct.transaction
+            if not isinstance(tx, DeployTransaction):
+                raise HTTPException(status_code=550, detail="Invalid transaction type")
+            t = {
+                "tx_id": tx.id,
+                "index": ct.index,
+                "type": "Deploy",
+                "state": "Accepted",
+                "transitions_count": 1,
+                "base_fee": base_fee - burnt_fee,
+                "priority_fee": priority_fee,
+                "burnt_fee": burnt_fee,
+                "program_id": tx.deployment.program.id,
+            }
+            txs.append(t)
+        elif isinstance(ct, AcceptedExecute):
+            tx = ct.transaction
+            if not isinstance(tx, ExecuteTransaction):
+                raise HTTPException(status_code=550, detail="Invalid transaction type")
+            additional_fee = tx.additional_fee.value
+            if additional_fee is not None:
+                base_fee, priority_fee = additional_fee.amount
+            else:
+                base_fee, priority_fee = 0, 0
+            root_transition = tx.execution.transitions[-1]
+            t = {
+                "tx_id": tx.id,
+                "index": ct.index,
+                "type": "Execute",
+                "state": "Accepted",
+                "transitions_count": len(tx.execution.transitions) + bool(tx.additional_fee.value is not None),
+                "base_fee": base_fee - burnt_fee,
+                "priority_fee": priority_fee,
+                "burnt_fee": burnt_fee,
+                "root_transition": f"{root_transition.program_id}/{root_transition.function_name}",
+            }
+            txs.append(t)
+        elif isinstance(ct, RejectedExecute):
+            tx = ct.transaction
+            if not isinstance(tx, FeeTransaction):
+                raise HTTPException(status_code=550, detail="Invalid transaction type")
+            base_fee, priority_fee = tx.fee.amount
+            rejected = ct.rejected
+            if not isinstance(rejected, RejectedExecution):
+                raise HTTPException(status_code=550, detail="Invalid rejected transaction type")
+            root_transition = rejected.execution.transitions[-1]
+            t = {
+                "tx_id": tx.id,
+                "index": ct.index,
+                "type": "Execute",
+                "state": "Rejected",
+                "transitions_count": 1,
+                "base_fee": base_fee - burnt_fee,
+                "priority_fee": priority_fee,
+                "burnt_fee": burnt_fee,
+                "root_transition": f"{root_transition.program_id}/{root_transition.function_name}",
+            }
+            txs.append(t)
+        else:
+            raise HTTPException(status_code=550, detail="Unsupported transaction type")
 
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
@@ -264,7 +271,7 @@ async def transaction_route(request: Request):
             "program_id": str(program.id),
             "transitions": [{
                 "transition_id": transaction.fee.transition.id,
-                "action": await function_signature(db, str(fee_transition.program_id), str(fee_transition.function_name), False),
+                "action": f"{fee_transition.program_id}/{fee_transition.function_name}",
             }],
         })
     elif isinstance(transaction, ExecuteTransaction):
@@ -275,14 +282,14 @@ async def transaction_route(request: Request):
         for transition in transaction.execution.transitions:
             transitions.append({
                 "transition_id": transition.id,
-                "action": await function_signature(db, str(transition.program_id), str(transition.function_name),False),
+                "action":f"{transition.program_id}/{transition.function_name}",
             })
         if transaction.additional_fee.value is not None:
             additional_fee = transaction.additional_fee.value
             transition = additional_fee.transition
             fee_transition = {
                 "transition_id": transition.id,
-                "action": await function_signature(db, str(transition.program_id), str(transition.function_name), False),
+                "action":f"{transition.program_id}/{transition.function_name}",
             }
         else:
             fee_transition = None
@@ -301,7 +308,7 @@ async def transaction_route(request: Request):
         transition = transaction.fee.transition
         transitions.append({
             "transition_id": transition.id,
-            "action": await function_signature(db, str(transition.program_id), str(transition.function_name), False),
+            "action":f"{transition.program_id}/{transition.function_name}",
         })
         if isinstance(confirmed_transaction, RejectedExecute):
             rejected = confirmed_transaction.rejected
