@@ -3,7 +3,8 @@
 
 <div class="content" hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
     <div class="header">
-        <h3>Connected nodes: {{ nodes | length }}</h3>
+        <h3>Known nodes: {{ nodes | length }}</h3>
+        Connected: {{ connected }} | Validators: {{ validators }} | Clients: {{ clients }} | Provers: {{ provers }} | Unknown: {{ unknowns }}
     </div>
 
     <table class="unstriped">

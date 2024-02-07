@@ -14,7 +14,8 @@ from aleo_types import u32, Transition, ExecuteTransaction, PrivateTransitionInp
     ExternalRecordTransitionOutput, AcceptedDeploy, AcceptedExecute, RejectedExecute, \
     FeeTransaction, RejectedDeploy, RejectedExecution, Identifier, Entry, FutureTransitionOutput, Future, \
     PlaintextArgument, FutureArgument, StructPlaintext, Finalize, \
-    PlaintextFinalizeType, StructPlaintextType, UpdateKeyValue, Value, Plaintext, RemoveKeyValue, FinalizeOperation
+    PlaintextFinalizeType, StructPlaintextType, UpdateKeyValue, Value, Plaintext, RemoveKeyValue, FinalizeOperation, \
+    NodeType
 from db import Database
 from node.light_node import LightNodeState
 from util.global_cache import get_program
@@ -845,6 +846,11 @@ async def nodes_route(request: Request):
     for k, v in nodes.items():
         res[k] = copy.deepcopy(v)
         res[k]["last_ping"] = get_relative_time(v["last_ping"])
+    validators = 0
+    clients = 0
+    provers = 0
+    unknowns = 0
+    connected = 0
     def sort_key(item: tuple[str, dict[str, Any]]) -> int:
         if (x := item[1].get("height", 0)) is None:
             return 0
@@ -854,8 +860,25 @@ async def nodes_route(request: Request):
             return -1
         return x
     res = OrderedDict(sorted(res.items(), key=sort_key, reverse=True))
+    for node in res.values():
+        node_type = node.get("node_type", None)
+        if node_type is None:
+            unknowns += 1
+        elif node_type == NodeType.Validator:
+            validators += 1
+        elif node_type == NodeType.Client:
+            clients += 1
+        elif node_type == NodeType.Prover:
+            provers += 1
+        if node.get("peer_count", 0) > 0:
+            connected += 1
     ctx = {
         "request": request,
         "nodes": res,
+        "validators": validators,
+        "clients": clients,
+        "provers": provers,
+        "unknowns": unknowns,
+        "connected": connected,
     }
     return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'no-cache'})
