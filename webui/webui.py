@@ -199,7 +199,7 @@ async def startup():
     # noinspection PyUnresolvedReferences
     app.state.db = db
     # noinspection PyUnresolvedReferences
-    app.state.lns.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4133")))
+    app.state.lns.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4133")), None)
     set_proc_title("aleo-explorer: webui")
     gc.enable()
 

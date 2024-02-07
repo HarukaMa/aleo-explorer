@@ -2,7 +2,9 @@ import asyncio
 import random
 import time
 from io import BytesIO
+from typing import Optional
 
+import aiohttp
 import aleo_explorer_rust
 import requests
 
@@ -15,20 +17,37 @@ class LightNodeState:
     def __init__(self):
         self.states: dict[str, dict] = {}
         self.nodes: dict[str, LightNode] = {}
+        self.last_connect_attempt: dict[str, float] = {}
 
         # prevent infinite self connection loop
         r = requests.get("https://api.ipify.org/?format=json")
         self.self_ip = r.json()["ip"]
         print(f"self ip: {self.self_ip}")
 
-    def connect(self, ip: str, port: int):
+    def connect(self, ip: str, port: int, node_type: Optional[NodeType]):
         if ip == self.self_ip and port == 14133:
             return
         key = ":".join([ip, str(port)])
         if key not in self.states:
-            self.states[key] = {}
+            self.states[key] = {
+                "last_ping": time.time(),
+                "node_type": node_type,
+            }
             self.nodes[key] = LightNode(ip, port, self)
             self.nodes[key].connect()
+            self.last_connect_attempt[key] = time.time()
+        else:
+            connected = key in self.nodes
+            if node_type is not None:
+                if not connected:
+                    self.states[key]["last_ping"] = time.time()
+                self.states[key]["node_type"] = node_type
+            if not connected:
+                if int(time.time()) - self.last_connect_attempt[key] > 60:
+                    self.nodes[key] = LightNode(ip, port, self)
+                    self.nodes[key].connect()
+                    self.last_connect_attempt[key] = int(time.time())
+                    self.states[key]["last_ping"] = time.time()
 
     def node_connected(self, ip: str, port: int, address: str):
         key = ":".join([ip, str(port)])
@@ -52,8 +71,18 @@ class LightNodeState:
     def disconnected(self, ip: str, port: int):
         key = ":".join([ip, str(port)])
         if key in self.states:
-            del self.states[key]
             del self.nodes[key]
+
+    def cleanup(self):
+        outdated = []
+        for k, v in self.states.items():
+            if time.time() - v["last_ping"] > 300:
+                outdated.append(k)
+        for k in outdated:
+            del self.states[k]
+            if k in self.nodes:
+                self.nodes[k].close_outdated()
+                del self.nodes[k]
 
 
 class LightNode:
@@ -62,9 +91,13 @@ class LightNode:
         self.port = port
         self.state = state
 
-        self.reader, self.writer = None, None
-        self.ping_task: asyncio.Task | None = None
-        self.worker_task: asyncio.Task | None = None
+        self.reader: Optional[asyncio.StreamReader] = None
+        self.writer: Optional[asyncio.StreamWriter] = None
+        self.ping_task: Optional[asyncio.Task] = None
+        self.worker_task: Optional[asyncio.Task] = None
+
+        self.aiohttp_session: Optional[aiohttp.ClientSession] = None
+        self.last_rest_query = 0
 
         self.nonce = u64(random.randint(0, 2 ** 64 - 1))
 
@@ -86,6 +119,7 @@ class LightNode:
                 nonce=self.nonce,
             )
             await self.send_message(challenge_request)
+            self.aiohttp_session = aiohttp.ClientSession(f"http://{self.ip}:3033", timeout=aiohttp.ClientTimeout(total=1))
             while True:
                 try:
                     size = await self.reader.readexactly(4)
@@ -160,8 +194,23 @@ class LightNode:
         elif isinstance(frame.message, PeerResponse):
             msg = frame.message
             self.state.node_peer_count(self.ip, self.port, len(msg.peers))
+            peer_types = {}
+            if time.time() - self.last_rest_query > 60:
+                self.last_rest_query = time.time()
+                try:
+                    r = await self.aiohttp_session.get("/testnet3/peers/all/metrics")
+                    if r.ok:
+                        data = await r.json()
+                        for p in data:
+                            peer_types[p[0]] = p[1]
+                except Exception:
+                    pass
             for peer in msg.peers:
-                self.state.connect(*peer.ip_port())
+                if str(peer) in peer_types:
+                    peer_type = peer_types[str(peer)]
+                else:
+                    peer_type = None
+                self.state.connect(*peer.ip_port(), peer_type)
 
         else:
             pass
@@ -190,3 +239,18 @@ class LightNode:
         if self.writer is not None and not self.writer.is_closing():
             self.writer.close()
             await self.writer.wait_closed()
+        if self.aiohttp_session is not None:
+            await self.aiohttp_session.close()
+
+    async def close_session(self):
+        if self.aiohttp_session is not None:
+            await self.aiohttp_session.close()
+
+    def close_outdated(self):
+        if self.worker_task is not None:
+            self.worker_task.cancel()
+        if self.ping_task is not None:
+            self.ping_task.cancel()
+        if self.writer is not None and not self.writer.is_closing():
+            self.writer.close()
+        asyncio.create_task(self.close_session())

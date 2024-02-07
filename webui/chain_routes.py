@@ -834,6 +834,7 @@ async def unconfirmed_transactions_route(request: Request):
 
 async def nodes_route(request: Request):
     lns: LightNodeState = request.app.state.lns
+    lns.cleanup()
     is_htmx = request.scope["htmx"].is_htmx()
     if is_htmx:
         template = "htmx/nodes.jinja2"
@@ -842,12 +843,15 @@ async def nodes_route(request: Request):
     nodes = lns.states
     res = {}
     for k, v in nodes.items():
-        if "address" in v:
-            res[k] = copy.deepcopy(v)
-            res[k]["last_ping"] = get_relative_time(v["last_ping"])
+        res[k] = copy.deepcopy(v)
+        res[k]["last_ping"] = get_relative_time(v["last_ping"])
     def sort_key(item: tuple[str, dict[str, Any]]) -> int:
         if (x := item[1].get("height", 0)) is None:
             return 0
+        if item[1].get("node_type", None) is None:
+            return -2
+        if item[1].get("peer_count", None) is None:
+            return -1
         return x
     res = OrderedDict(sorted(res.items(), key=sort_key, reverse=True))
     ctx = {

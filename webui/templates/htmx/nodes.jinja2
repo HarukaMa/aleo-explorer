@@ -4,7 +4,6 @@
 <div class="content" hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
     <div class="header">
         <h3>Connected nodes: {{ nodes | length }}</h3>
-        <em>Note: only contains nodes that accept incoming connections</em>
     </div>
 
     <table class="unstriped">
@@ -23,8 +22,20 @@
         {% for address, node in nodes.items() %}
             <tr>
                 <td>{{ address }}</td>
-                <td>{{ node.node_type }}</td>
-                <td><span class="mono">{{ node.address }}</span></td>
+                <td>
+                    {% if node.node_type is not none %}
+                        {{ node.node_type }}
+                    {% else %}
+                        Unknown
+                    {% endif %}
+                </td>
+                <td><span class="mono">
+                    {% if node.address %}
+                        {{ node.address }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </span></td>
                 <td>
                     {% if node.height %}
                         {% if max_height - node["height"] > 50 %}
@@ -38,7 +49,7 @@
                         -
                     {% endif %}
                 </td>
-                <td>{% if node.peer_count is not none %}{{ node.peer_count }}{% else %}-{% endif %}</td>
+                <td>{% if node.peer_count %}{{ node.peer_count }}{% else %}-{% endif %}</td>
                 <td>{{ node.last_ping }}</td>
             </tr>
         {% endfor %}

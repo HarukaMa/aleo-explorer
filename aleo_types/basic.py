@@ -548,7 +548,7 @@ class SocketAddr(Serializable):
         return cls(ip=ip, port=port)
 
     def __str__(self):
-        return ":".join(self.ip_port())
+        return f"{self.ip}:{self.port}"
 
     def ip_port(self):
-        return str(self.ip), str(self.port)
+        return str(self.ip), self.port
