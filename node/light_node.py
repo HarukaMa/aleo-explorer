@@ -195,7 +195,7 @@ class LightNode:
             msg = frame.message
             self.state.node_peer_count(self.ip, self.port, len(msg.peers))
             peer_types = {}
-            if time.time() - self.last_rest_query > 60:
+            if time.time() - self.last_rest_query > 300:
                 self.last_rest_query = time.time()
                 try:
                     r = await self.aiohttp_session.get("/testnet3/peers/all/metrics")
