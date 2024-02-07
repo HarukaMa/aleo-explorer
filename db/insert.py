@@ -5,7 +5,6 @@ import os
 import signal
 import time
 from collections import defaultdict
-from typing import cast
 
 import psycopg.sql
 from redis.asyncio import Redis
@@ -22,7 +21,7 @@ class DatabaseInsert(DatabaseBase):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.redis_last_history_time = time.monotonic() - 3600
+        self.redis_last_history_time = time.monotonic() - 21600
 
     @staticmethod
     async def _insert_future(conn: psycopg.AsyncConnection[dict[str, Any]], future: Future,
@@ -881,7 +880,7 @@ class DatabaseInsert(DatabaseBase):
         if height != 0:
             now = time.monotonic()
             history = False
-            if self.redis_last_history_time + 3600 < now:
+            if self.redis_last_history_time + 43200 < now:
                 self.redis_last_history_time = now
                 history = True
             for key in keys:
