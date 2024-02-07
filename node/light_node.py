@@ -202,7 +202,7 @@ class LightNode:
                     if r.ok:
                         data = await r.json()
                         for p in data:
-                            peer_types[p[0]] = p[1]
+                            peer_types[p[0]] = NodeType[p[1]]
                 except Exception:
                     pass
             for peer in msg.peers:
@@ -210,7 +210,7 @@ class LightNode:
                     peer_type = peer_types[str(peer)]
                 else:
                     peer_type = None
-                self.state.connect(*peer.ip_port(), peer_type)
+                self.state.connect(str(peer.ip), peer.port, peer_type)
 
         else:
             pass
