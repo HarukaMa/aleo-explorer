@@ -1,7 +1,10 @@
 import datetime
+import functools
 import os
 from decimal import Decimal
+from typing import Callable, Coroutine, Any
 
+from starlette.requests import Request
 from starlette.templating import Jinja2Templates
 
 templates = Jinja2Templates(directory='webui/templates', trim_blocks=True, lstrip_blocks=True)
@@ -65,3 +68,18 @@ templates.env.filters["format_time"] = format_time # type: ignore
 templates.env.filters["format_time_delta"] = format_time_delta # type: ignore
 templates.env.filters["format_aleo_credit"] = format_aleo_credit # type: ignore
 templates.env.filters["format_number"] = format_number # type: ignore
+
+def htmx_template(template: str):
+    def decorator(func: Callable[[Request], Coroutine[Any, Any, dict[str, Any]]]):
+        @functools.wraps(func)
+        async def wrapper(request: Request):
+            is_htmx = request.scope["htmx"].is_htmx()
+            if is_htmx:
+                t = f"htmx/{template}"
+            else:
+                t = template
+            context, headers = await func(request)
+            context["request"] = request
+            return templates.TemplateResponse(t, context, headers=headers)
+        return wrapper
+    return decorator

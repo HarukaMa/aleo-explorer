@@ -19,7 +19,7 @@ from aleo_types import u32, Transition, ExecuteTransaction, PrivateTransitionInp
 from db import Database
 from node.light_node import LightNodeState
 from util.global_cache import get_program
-from .template import templates
+from .template import htmx_template
 from .utils import function_signature, out_of_sync_check, function_definition, get_relative_time
 
 try:
@@ -35,13 +35,9 @@ except ImportError:
 DictList = list[dict[str, Any]]
 
 @profile
+@htmx_template("block.jinja2")
 async def block_route(request: Request):
     db: Database = request.app.state.db
-    is_htmx = request.scope["htmx"].is_htmx()
-    if is_htmx:
-        template = "htmx/block.jinja2"
-    else:
-        template = "block.jinja2"
     height = request.query_params.get("h")
     block_hash = request.query_params.get("bh")
     if height is None and block_hash is None:
@@ -152,7 +148,6 @@ async def block_route(request: Request):
 
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
-        "request": request,
         "block": block,
         "block_hash_trunc": str(block_hash)[:12] + "..." + str(block_hash)[-6:],
         "validator": "Not implemented", # await db.get_miner_from_block_hash(block.block_hash),
@@ -165,15 +160,12 @@ async def block_route(request: Request):
         "total_burnt_fee": total_burnt_fee,
         "sync_info": sync_info,
     }
-    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
+    return ctx, {'Cache-Control': 'public, max-age=3600'}
 
+
+@htmx_template("transaction.jinja2")
 async def transaction_route(request: Request):
     db: Database = request.app.state.db
-    is_htmx = request.scope["htmx"].is_htmx()
-    if is_htmx:
-        template = "htmx/transaction.jinja2"
-    else:
-        template = "transaction.jinja2"
     tx_id = request.query_params.get("id")
     if tx_id is None:
         raise HTTPException(status_code=400, detail="Missing transaction id")
@@ -241,7 +233,6 @@ async def transaction_route(request: Request):
 
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx: dict[str, Any] = {
-        "request": request,
         "tx_id": tx_id,
         "tx_id_trunc": str(tx_id)[:12] + "..." + str(tx_id)[-6:],
         "block": block,
@@ -445,16 +436,12 @@ async def transaction_route(request: Request):
 
     ctx["mapping_operations"] = mapping_operations
 
-    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
+    return ctx, {'Cache-Control': 'public, max-age=15'}
 
 
+@htmx_template("transition.jinja2")
 async def transition_route(request: Request):
     db: Database = request.app.state.db
-    is_htmx = request.scope["htmx"].is_htmx()
-    if is_htmx:
-        template = "htmx/transition.jinja2"
-    else:
-        template = "transition.jinja2"
     ts_id = request.query_params.get("id")
     if ts_id is None:
         raise HTTPException(status_code=400, detail="Missing transition id")
@@ -627,7 +614,6 @@ async def transition_route(request: Request):
 
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
-        "request": request,
         "ts_id": ts_id,
         "ts_id_trunc": str(ts_id)[:12] + "..." + str(ts_id)[-6:],
         "transaction_id": transaction_id,
@@ -644,16 +630,12 @@ async def transition_route(request: Request):
         "finalizes": finalizes,
         "sync_info": sync_info,
     }
-    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
+    return ctx, {'Cache-Control': 'public, max-age=15'}
 
 
+@htmx_template("search_result.jinja2")
 async def search_route(request: Request):
     db: Database = request.app.state.db
-    is_htmx = request.scope["htmx"].is_htmx()
-    if is_htmx:
-        template = "htmx/search_result.jinja2"
-    else:
-        template = "search_result.jinja2"
     query = request.query_params.get("q")
     if query is None:
         raise HTTPException(status_code=400, detail="Missing query")
@@ -683,13 +665,12 @@ async def search_route(request: Request):
             blocks = blocks[:50]
             too_many = True
         ctx = {
-            "request": request,
             "query": query,
             "type": "block",
             "blocks": blocks,
             "too_many": too_many,
         }
-        return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
+        return ctx, {'Cache-Control': 'public, max-age=15'}
     elif query.startswith("at1"):
         # transaction id
         transactions = await db.search_transaction_id(query)
@@ -702,13 +683,12 @@ async def search_route(request: Request):
             transactions = transactions[:50]
             too_many = True
         ctx = {
-            "request": request,
             "query": query,
             "type": "transaction",
             "transactions": transactions,
             "too_many": too_many,
         }
-        return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
+        return ctx, {'Cache-Control': 'public, max-age=15'}
     elif query.startswith("au1"):
         # transition id
         transitions = await db.search_transition_id(query)
@@ -721,13 +701,12 @@ async def search_route(request: Request):
             transitions = transitions[:50]
             too_many = True
         ctx = {
-            "request": request,
             "query": query,
             "type": "transition",
             "transitions": transitions,
             "too_many": too_many,
         }
-        return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
+        return ctx, {'Cache-Control': 'public, max-age=15'}
     elif query.startswith("aleo1"):
         # address
         addresses = await db.search_address(query)
@@ -740,13 +719,12 @@ async def search_route(request: Request):
             addresses = addresses[:50]
             too_many = True
         ctx = {
-            "request": request,
             "query": query,
             "type": "address",
             "addresses": addresses,
             "too_many": too_many,
         }
-        return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
+        return ctx, {'Cache-Control': 'public, max-age=15'}
     else:
         # have to do this to support program name prefix search
         programs = await db.search_program(query)
@@ -758,23 +736,18 @@ async def search_route(request: Request):
                 programs = programs[:50]
                 too_many = True
             ctx = {
-                "request": request,
                 "query": query,
                 "type": "program",
                 "programs": programs,
                 "too_many": too_many,
             }
-            return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
+            return ctx, {'Cache-Control': 'public, max-age=15'}
     raise HTTPException(status_code=404, detail="Unknown object type or searching is not supported")
 
 
+@htmx_template("blocks.jinja2")
 async def blocks_route(request: Request):
     db: Database = request.app.state.db
-    is_htmx = request.scope["htmx"].is_htmx()
-    if is_htmx:
-        template = "htmx/blocks.jinja2"
-    else:
-        template = "blocks.jinja2"
     try:
         page = request.query_params.get("p")
         if page is None:
@@ -794,21 +767,17 @@ async def blocks_route(request: Request):
 
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
-        "request": request,
         "blocks": blocks,
         "page": page,
         "total_pages": total_pages,
         "sync_info": sync_info,
     }
-    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
+    return ctx, {'Cache-Control': 'public, max-age=15'}
 
+
+@htmx_template("validators.jinja2")
 async def validators_route(request: Request):
     db: Database = request.app.state.db
-    is_htmx = request.scope["htmx"].is_htmx()
-    if is_htmx:
-        template = "htmx/validators.jinja2"
-    else:
-        template = "validators.jinja2"
     try:
         page = request.query_params.get("p")
         if page is None:
@@ -837,21 +806,17 @@ async def validators_route(request: Request):
 
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
-        "request": request,
         "validators": validators,
         "page": page,
         "total_pages": total_pages,
         "sync_info": sync_info,
     }
-    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
+    return ctx, {'Cache-Control': 'public, max-age=15'}
 
+
+@htmx_template("unconfirmed_transactions.jinja2")
 async def unconfirmed_transactions_route(request: Request):
     db: Database = request.app.state.db
-    is_htmx = request.scope["htmx"].is_htmx()
-    if is_htmx:
-        template = "htmx/unconfirmed_transactions.jinja2"
-    else:
-        template = "unconfirmed_transactions.jinja2"
     try:
         page = request.query_params.get("p")
         if page is None:
@@ -876,22 +841,17 @@ async def unconfirmed_transactions_route(request: Request):
 
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
-        "request": request,
         "transactions": transactions,
         "page": page,
         "total_pages": total_pages,
         "sync_info": sync_info,
     }
-    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=5'}) # type: ignore
+    return ctx, {'Cache-Control': 'public, max-age=5'}
 
+@htmx_template("nodes.jinja2")
 async def nodes_route(request: Request):
     lns: LightNodeState = request.app.state.lns
     lns.cleanup()
-    is_htmx = request.scope["htmx"].is_htmx()
-    if is_htmx:
-        template = "htmx/nodes.jinja2"
-    else:
-        template = "nodes.jinja2"
     nodes = lns.states
     res = {}
     for k, v in nodes.items():
@@ -924,7 +884,6 @@ async def nodes_route(request: Request):
         if node.get("peer_count", 0) > 0:
             connected += 1
     ctx = {
-        "request": request,
         "nodes": res,
         "validators": validators,
         "clients": clients,
@@ -932,4 +891,4 @@ async def nodes_route(request: Request):
         "unknowns": unknowns,
         "connected": connected,
     }
-    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'no-cache'})
+    return ctx, {'Cache-Control': 'no-cache'}

@@ -9,35 +9,25 @@ from starlette.requests import Request
 from aleo_types import PlaintextValue, LiteralPlaintext, Literal, \
     Address, Value, StructPlaintext, Int, u64
 from db import Database
-from .template import templates
+from .template import htmx_template
 from .utils import out_of_sync_check
 
 
+@htmx_template("calc.jinja2")
 async def calc_route(request: Request):
     db: Database = request.app.state.db
-    is_htmx = request.scope["htmx"].is_htmx()
-    if is_htmx:
-        template = "htmx/calc.jinja2"
-    else:
-        template = "calc.jinja2"
     proof_target = (await db.get_latest_block()).header.metadata.proof_target
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
-        "request": request,
         "proof_target": proof_target,
         "sync_info": sync_info,
     }
-    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=60'}) # type: ignore
+    return ctx, {'Cache-Control': 'public, max-age=60'}
 
 
-
+@htmx_template("leaderboard.jinja2")
 async def leaderboard_route(request: Request):
     db: Database = request.app.state.db
-    is_htmx = request.scope["htmx"].is_htmx()
-    if is_htmx:
-        template = "htmx/leaderboard.jinja2"
-    else:
-        template = "leaderboard.jinja2"
     try:
         page = request.query_params.get("p")
         if page is None:
@@ -65,7 +55,6 @@ async def leaderboard_route(request: Request):
     ratio = total_credit / target_credit * 100
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
-        "request": request,
         "leaderboard": data,
         "page": page,
         "total_pages": total_pages,
@@ -75,16 +64,12 @@ async def leaderboard_route(request: Request):
         "now": now,
         "sync_info": sync_info,
     }
-    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
+    return ctx, {'Cache-Control': 'public, max-age=15'}
 
 
+@htmx_template("address.jinja2")
 async def address_route(request: Request):
     db: Database = request.app.state.db
-    is_htmx = request.scope["htmx"].is_htmx()
-    if is_htmx:
-        template = "htmx/address.jinja2"
-    else:
-        template = "address.jinja2"
     address = request.query_params.get("a")
     if not address:
         raise HTTPException(status_code=400, detail="Missing address")
@@ -240,7 +225,6 @@ async def address_route(request: Request):
 
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
-        "request": request,
         "address": address,
         "address_trunc": address[:14] + "..." + address[-6:],
         "solutions": recent_solutions,
@@ -264,16 +248,12 @@ async def address_route(request: Request):
         "transitions": recent_transitions,
         "sync_info": sync_info,
     }
-    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
+    return ctx, {'Cache-Control': 'public, max-age=15'}
 
 
+@htmx_template("address_solution.jinja2")
 async def address_solution_route(request: Request):
     db: Database = request.app.state.db
-    is_htmx = request.scope["htmx"].is_htmx()
-    if is_htmx:
-        template = "htmx/address_solution.jinja2"
-    else:
-        template = "address_solution.jinja2"
     address = request.query_params.get("a")
     if address is None:
         raise HTTPException(status_code=400, detail="Missing address")
@@ -303,7 +283,6 @@ async def address_solution_route(request: Request):
         })
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
-        "request": request,
         "address": address,
         "address_trunc": address[:14] + "..." + address[-6:],
         "solutions": data,
@@ -311,4 +290,4 @@ async def address_solution_route(request: Request):
         "total_pages": total_pages,
         "sync_info": sync_info,
     }
-    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
+    return ctx, {'Cache-Control': 'public, max-age=15'}

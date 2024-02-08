@@ -11,17 +11,13 @@ import disasm.aleo
 from aleo_types import DeployTransaction, Deployment, Program, \
     AcceptedDeploy
 from db import Database
-from .template import templates
+from .template import htmx_template
 from .utils import function_signature, out_of_sync_check
 
 
+@htmx_template("programs.jinja2")
 async def programs_route(request: Request):
     db: Database = request.app.state.db
-    is_htmx = request.scope["htmx"].is_htmx()
-    if is_htmx:
-        template = "htmx/programs.jinja2"
-    else:
-        template = "programs.jinja2"
     try:
         page = request.query_params.get("p")
         if page is None:
@@ -45,23 +41,18 @@ async def programs_route(request: Request):
 
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
-        "request": request,
         "programs": programs + builtin_programs,
         "page": page,
         "total_pages": total_pages,
         "no_helloworld": no_helloworld,
         "sync_info": sync_info,
     }
-    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
+    return ctx, {'Cache-Control': 'public, max-age=15'}
 
 
+@htmx_template("program.jinja2")
 async def program_route(request: Request):
     db: Database = request.app.state.db
-    is_htmx = request.scope["htmx"].is_htmx()
-    if is_htmx:
-        template = "htmx/program.jinja2"
-    else:
-        template = "program.jinja2"
     program_id = request.query_params.get("id")
     if program_id is None:
         raise HTTPException(status_code=400, detail="Missing program id")
@@ -103,7 +94,6 @@ async def program_route(request: Request):
         })
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx: dict[str, Any] = {
-        "request": request,
         "program_id": str(program.id),
         "times_called": await db.get_program_called_times(program_id),
         "imports": list(map(lambda i: str(i.program_id), program.imports)),
@@ -130,16 +120,12 @@ async def program_route(request: Request):
             "owner": None,
             "signature": None,
         })
-    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
+    return ctx, {'Cache-Control': 'public, max-age=15'}
 
 
+@htmx_template("similar_programs.jinja2")
 async def similar_programs_route(request: Request):
     db: Database = request.app.state.db
-    is_htmx = request.scope["htmx"].is_htmx()
-    if is_htmx:
-        template = "htmx/similar_programs.jinja2"
-    else:
-        template = "similar_programs.jinja2"
     try:
         page = request.query_params.get("p")
         if page is None:
@@ -163,23 +149,18 @@ async def similar_programs_route(request: Request):
 
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
-        "request": request,
         "program_id": program_id,
         "programs": programs,
         "page": page,
         "total_pages": total_pages,
         "sync_info": sync_info,
     }
-    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
+    return ctx, {'Cache-Control': 'public, max-age=15'}
 
 
+@htmx_template("upload_source.jinja2")
 async def upload_source_route(request: Request):
     db: Database = request.app.state.db
-    is_htmx = request.scope["htmx"].is_htmx()
-    if is_htmx:
-        template = "htmx/upload_source.jinja2"
-    else:
-        template = "upload_source.jinja2"
     program_id = request.query_params.get("id")
     if program_id is None:
         raise HTTPException(status_code=400, detail="Missing program id")
@@ -208,7 +189,6 @@ async def upload_source_route(request: Request):
     message = request.query_params.get("message")
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
-        "request": request,
         "program_id": program_id,
         "imports": imports,
         "import_programs": import_programs,
@@ -217,7 +197,8 @@ async def upload_source_route(request: Request):
         "source": source,
         "sync_info": sync_info,
     }
-    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=15'}) # type: ignore
+    return ctx, {'Cache-Control': 'public, max-age=15'}
+
 
 async def submit_source_route(request: Request):
     db: Database = request.app.state.db

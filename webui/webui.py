@@ -21,7 +21,6 @@ from .chain_routes import *
 from .error_routes import *
 from .program_routes import *
 from .proving_routes import *
-from .template import templates
 from .utils import out_of_sync_check
 
 
@@ -38,56 +37,36 @@ class UvicornServer(multiprocessing.Process):
     def run(self, *args: Any, **kwargs: Any):
         self.server.run()
 
+
+@htmx_template("index.jinja2")
 async def index_route(request: Request):
     db: Database = request.app.state.db
-    is_htmx = request.scope["htmx"].is_htmx()
-    if is_htmx:
-        template = "htmx/index.jinja2"
-    else:
-        template = "index.jinja2"
     recent_blocks = await db.get_recent_blocks_fast()
     network_speed = await db.get_network_speed()
     participation_rate = await db.get_network_participation_rate()
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
         "latest_block": await db.get_latest_block(),
-        "request": request,
         "recent_blocks": recent_blocks,
         "network_speed": network_speed,
         "participation_rate": participation_rate,
         "sync_info": sync_info,
     }
-    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=10'}) # type: ignore
+    return ctx, {'Cache-Control': 'public, max-age=10'}
 
+
+@htmx_template("tools.jinja2")
 async def tools_route(request: Request):
-    is_htmx = request.scope["htmx"].is_htmx()
-    if is_htmx:
-        template = "htmx/tools.jinja2"
-    else:
-        template = "tools.jinja2"
-    ctx = {
-        "request": request,
-    }
-    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
+    return {}, {'Cache-Control': 'public, max-age=3600'}
 
+
+@htmx_template("faq.jinja2")
 async def faq_route(request: Request):
-    is_htmx = request.scope["htmx"].is_htmx()
-    if is_htmx:
-        template = "htmx/faq.jinja2"
-    else:
-        template = "faq.jinja2"
-    ctx = {
-        "request": request,
-    }
-    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
+    return {}, {'Cache-Control': 'public, max-age=3600'}
 
 
+@htmx_template("feedback.jinja2")
 async def feedback_route(request: Request):
-    is_htmx = request.scope["htmx"].is_htmx()
-    if is_htmx:
-        template = "htmx/feedback.jinja2"
-    else:
-        template = "feedback.jinja2"
     if request.method == "POST":
         form = await request.form()
         contact = form.get("contact")
@@ -98,13 +77,13 @@ async def feedback_route(request: Request):
     success = request.query_params.get("success")
     message = request.query_params.get("message")
     ctx = {
-        "request": request,
         "success": success,
         "message": message,
         "contact": contact,
         "content": content,
     }
-    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
+    return ctx, {'Cache-Control': 'public, max-age=3600'}
+
 
 async def submit_feedback_route(request: Request):
     db: Database = request.app.state.db
@@ -132,16 +111,10 @@ async def submit_feedback_route(request: Request):
     await db.save_feedback(contact, content)
     return RedirectResponse(url="/feedback?success=1", status_code=303)
 
+
+@htmx_template("privacy.jinja2")
 async def privacy_route(request: Request):
-    is_htmx = request.scope["htmx"].is_htmx()
-    if is_htmx:
-        template = "htmx/privacy.jinja2"
-    else:
-        template = "privacy.jinja2"
-    ctx = {
-        "request": request,
-    }
-    return templates.TemplateResponse(template, ctx, headers={'Cache-Control': 'public, max-age=3600'}) # type: ignore
+    return {}, {'Cache-Control': 'public, max-age=3600'}
 
 async def robots_route(_: Request):
     return FileResponse("webui/robots.txt", headers={'Cache-Control': 'public, max-age=3600'})
