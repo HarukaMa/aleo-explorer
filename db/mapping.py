@@ -176,25 +176,29 @@ class DatabaseMapping(DatabaseBase):
                                        mapping_name: str, mapping_id: str, key_id: str, value_id: str,
                                        key: bytes, value: bytes, height: int, from_transaction: bool):
         try:
-            if program_name == "credits.aleo" and mapping_name in ["committee", "bonded"]:
+            limited_tracking = program_name == "credits.aleo" and mapping_name in ["committee", "bonded"]
+            if limited_tracking:
                 conn = self.redis
                 data = {
                     "key": key.hex(),
                     "value": value.hex(),
                 }
                 await conn.hset(f"{program_name}:{mapping_name}", key_id, json.dumps(data))
-            else:
+
+            if not limited_tracking or from_transaction:
                 await cur.execute("SELECT id FROM mapping WHERE mapping_id = %s", (mapping_id,))
                 mapping = await cur.fetchone()
                 if mapping is None:
                     raise ValueError(f"mapping {mapping_id} not found")
                 mapping_id = mapping['id']
-                await cur.execute(
-                    "INSERT INTO mapping_value (mapping_id, key_id, value_id, key, value) "
-                    "VALUES (%s, %s, %s, %s, %s) "
-                    "ON CONFLICT (mapping_id, key_id) DO UPDATE SET value_id = %s, value = %s",
-                    (mapping_id, key_id, value_id, key, value, value_id, value)
-                )
+
+                if not limited_tracking:
+                    await cur.execute(
+                        "INSERT INTO mapping_value (mapping_id, key_id, value_id, key, value) "
+                        "VALUES (%s, %s, %s, %s, %s) "
+                        "ON CONFLICT (mapping_id, key_id) DO UPDATE SET value_id = %s, value = %s",
+                        (mapping_id, key_id, value_id, key, value, value_id, value)
+                    )
 
                 await cur.execute(
                     "INSERT INTO mapping_history (mapping_id, height, key_id, key, value, from_transaction) "
@@ -210,19 +214,22 @@ class DatabaseMapping(DatabaseBase):
                                        mapping_name: str, mapping_id: str, key_id: str, key: bytes, height: int,
                                        from_transaction: bool):
         try:
-            if program_name == "credits.aleo" and mapping_name in ["committee", "bonded"]:
+            limited_tracking = program_name == "credits.aleo" and mapping_name in ["committee", "bonded"]
+            if limited_tracking:
                 conn = self.redis
                 await conn.hdel(f"{program_name}:{mapping_name}", key_id)
-            else:
+
+            if not limited_tracking or from_transaction:
                 await cur.execute("SELECT id FROM mapping WHERE mapping_id = %s", (mapping_id,))
                 mapping = await cur.fetchone()
                 if mapping is None:
                     raise ValueError(f"mapping {mapping_id} not found")
                 mapping_id = mapping['id']
-                await cur.execute(
-                    "DELETE FROM mapping_value WHERE mapping_id = %s AND key_id = %s",
-                    (mapping_id, key_id)
-                )
+                if not limited_tracking:
+                    await cur.execute(
+                        "DELETE FROM mapping_value WHERE mapping_id = %s AND key_id = %s",
+                        (mapping_id, key_id)
+                    )
 
                 await cur.execute(
                     "INSERT INTO mapping_history (mapping_id, height, key_id, key, value, from_transaction) "

@@ -212,7 +212,7 @@
                             <td><a href="/program?id={{ op.program_id }}">{{ op.program_id }}</a></td>
                             <td><span class="mono">{{ op.mapping_name }}[{% if op.key %}{{ op.key }}{% else %}<em>?</em>{% endif %}]</span></td>
                             <td><span class="mono">
-                                {% if not op.key %}
+                                {% if op.limited_tracked or not op.key %}
                                     <em>[not tracked]</em>
                                 {% elif op.previous_value %}
                                     {{ op.previous_value }}

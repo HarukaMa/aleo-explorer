@@ -336,7 +336,7 @@ async def transaction_route(request: Request):
 
     mapping_operations: Optional[list[dict[str, Any]]] = None
     if confirmed_transaction is not None:
-        no_history = {
+        limited_tracking = {
             cached_get_mapping_id("credits.aleo", "committee"): ("credits.aleo", "committee"),
             cached_get_mapping_id("credits.aleo", "bonded"): ("credits.aleo", "bonded"),
         }
@@ -345,24 +345,33 @@ async def transaction_route(request: Request):
         for ct in block.transactions:
             for fo in ct.finalize:
                 if isinstance(fo, (UpdateKeyValue, RemoveKeyValue)):
-                    if str(fo.mapping_id) in no_history:
+                    if str(fo.mapping_id) in limited_tracking:
                         untracked_fos.append(fo)
                     else:
                         fos.append(fo)
         mhs = await db.get_transaction_mapping_history_by_height(block.height)
+        # TODO: remove compatibility after mainnet
+        after_tracking = False
+        if len(fos) + len(untracked_fos) == len(mhs):
+            after_tracking = True
+            fos = []
+            for ct in block.transactions:
+                for fo in ct.finalize:
+                    if isinstance(fo, (UpdateKeyValue, RemoveKeyValue)):
+                        fos.append(fo)
         if len(fos) == len(mhs):
             indices: list[int] = []
             untracked_indices: list[int] = []
             for fo in confirmed_transaction.finalize:
                 if isinstance(fo, (UpdateKeyValue, RemoveKeyValue)):
-                    if fo in untracked_fos:
+                    if not after_tracking and fo in untracked_fos:
                         untracked_indices.append(untracked_fos.index(fo))
                     else:
                         indices.append(fos.index(fo))
             mapping_operations: Optional[list[dict[str, Any]]] = []
             for i in untracked_indices:
                 fo = untracked_fos[i]
-                program_id, mapping_name = no_history[str(fo.mapping_id)]
+                program_id, mapping_name = limited_tracking[str(fo.mapping_id)]
                 if isinstance(fo, UpdateKeyValue):
                     mapping_operations.append({
                         "type": "Update",
@@ -387,6 +396,7 @@ async def transaction_route(request: Request):
                 if str(fo.mapping_id) != str(mh["mapping_id"]):
                     mapping_operations = None
                     break
+                limited_tracked = str(fo.mapping_id) in limited_tracking
                 if isinstance(fo, UpdateKeyValue):
                     if mh["value"] is None:
                         mapping_operations = None
@@ -396,7 +406,10 @@ async def transaction_route(request: Request):
                     if value_id != str(fo.value_id):
                         mapping_operations = None
                         break
-                    previous_value = await db.get_mapping_history_previous_value(mh["id"], mh["key_id"])
+                    if limited_tracked:
+                        previous_value = None
+                    else:
+                        previous_value = await db.get_mapping_history_previous_value(mh["id"], mh["key_id"])
                     if previous_value is not None:
                         previous_value = str(Value.load(BytesIO(previous_value)))
                     mapping_operations.append({
@@ -406,15 +419,19 @@ async def transaction_route(request: Request):
                         "key": str(Plaintext.load(BytesIO(mh["key"]))),
                         "value": str(Value.load(BytesIO(mh["value"]))),
                         "previous_value": previous_value,
+                        "limited_tracked": limited_tracked,
                     })
                 elif isinstance(fo, RemoveKeyValue):
                     if mh["value"] is not None:
                         mapping_operations = None
                         break
-                    previous_value = await db.get_mapping_history_previous_value(mh["id"], mh["key_id"])
+                    if limited_tracked:
+                        previous_value = None
+                    else:
+                        previous_value = await db.get_mapping_history_previous_value(mh["id"], mh["key_id"])
                     if previous_value is not None:
                         previous_value = str(Value.load(BytesIO(previous_value)))
-                    else:
+                    elif not limited_tracked:
                         mapping_operations = None
                         break
                     mapping_operations.append({
@@ -423,6 +440,7 @@ async def transaction_route(request: Request):
                         "mapping_name": mh["mapping"],
                         "key": str(Plaintext.load(BytesIO(mh["key"]))),
                         "previous_value": previous_value,
+                        "limited_tracked": limited_tracked,
                     })
 
     ctx["mapping_operations"] = mapping_operations
