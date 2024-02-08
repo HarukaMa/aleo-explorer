@@ -210,9 +210,25 @@
                     {% for op in mapping_operations %}
                         <tr style="word-break: break-all">
                             <td><a href="/program?id={{ op.program_id }}">{{ op.program_id }}</a></td>
-                            <td><span class="mono">{{ op.mapping_name }}[{{ op.key }}]</span></td>
-                            <td><span class="mono">{% if op.previous_value %}{{ op.previous_value }}{% else %}<em>[new]</em>{% endif %}</span></td>
-                            <td><span class="mono">{% if op.value %}{{ op.value }}{% else %}<em>[removed]</em>{% endif %}</span></td>
+                            <td><span class="mono">{{ op.mapping_name }}[{% if op.key %}{{ op.key }}{% else %}<em>?</em>{% endif %}]</span></td>
+                            <td><span class="mono">
+                                {% if not op.key %}
+                                    <em>[not tracked]</em>
+                                {% elif op.previous_value %}
+                                    {{ op.previous_value }}
+                                {% else %}
+                                    <em>[new]</em>
+                                {% endif %}
+                            </span></td>
+                            <td><span class="mono">
+                                {% if not op.key %}
+                                    <em>[not tracked]</em>
+                                {% elif op.value %}
+                                    {{ op.value }}
+                                {% else %}
+                                    <em>[removed]</em>
+                                {% endif %}
+                            </span></td>
                         </tr>
                     {% endfor %}
                     </tbody>

@@ -15,7 +15,7 @@ from aleo_types import u32, Transition, ExecuteTransaction, PrivateTransitionInp
     FeeTransaction, RejectedDeploy, RejectedExecution, Identifier, Entry, FutureTransitionOutput, Future, \
     PlaintextArgument, FutureArgument, StructPlaintext, Finalize, \
     PlaintextFinalizeType, StructPlaintextType, UpdateKeyValue, Value, Plaintext, RemoveKeyValue, FinalizeOperation, \
-    NodeType
+    NodeType, cached_get_mapping_id
 from db import Database
 from node.light_node import LightNodeState
 from util.global_cache import get_program
@@ -336,18 +336,51 @@ async def transaction_route(request: Request):
 
     mapping_operations: Optional[list[dict[str, Any]]] = None
     if confirmed_transaction is not None:
+        no_history = {
+            cached_get_mapping_id("credits.aleo", "committee"): ("credits.aleo", "committee"),
+            cached_get_mapping_id("credits.aleo", "bonded"): ("credits.aleo", "bonded"),
+        }
         fos: list[FinalizeOperation] = []
+        untracked_fos: list[FinalizeOperation] = []
         for ct in block.transactions:
             for fo in ct.finalize:
                 if isinstance(fo, (UpdateKeyValue, RemoveKeyValue)):
-                    fos.append(fo)
+                    if str(fo.mapping_id) in no_history:
+                        untracked_fos.append(fo)
+                    else:
+                        fos.append(fo)
         mhs = await db.get_transaction_mapping_history_by_height(block.height)
         if len(fos) == len(mhs):
             indices: list[int] = []
+            untracked_indices: list[int] = []
             for fo in confirmed_transaction.finalize:
                 if isinstance(fo, (UpdateKeyValue, RemoveKeyValue)):
-                    indices.append(fos.index(fo))
+                    if fo in untracked_fos:
+                        untracked_indices.append(untracked_fos.index(fo))
+                    else:
+                        indices.append(fos.index(fo))
             mapping_operations: Optional[list[dict[str, Any]]] = []
+            for i in untracked_indices:
+                fo = untracked_fos[i]
+                program_id, mapping_name = no_history[str(fo.mapping_id)]
+                if isinstance(fo, UpdateKeyValue):
+                    mapping_operations.append({
+                        "type": "Update",
+                        "program_id": program_id,
+                        "mapping_name": mapping_name,
+                        "key": None,
+                        "value": None,
+                        "previous_value": None,
+                    })
+                elif isinstance(fo, RemoveKeyValue):
+                    mapping_operations.append({
+                        "type": "Remove",
+                        "program_id": program_id,
+                        "mapping_name": mapping_name,
+                        "key": None,
+                        "value": None,
+                        "previous_value": None,
+                    })
             for i in indices:
                 fo = fos[i]
                 mh = mhs[i]
