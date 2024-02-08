@@ -38,15 +38,14 @@ class LightNodeState:
             self.last_connect_attempt[key] = time.time()
         else:
             connected = key in self.nodes
-            if node_type is not None:
-                if not connected:
-                    self.states[key]["last_ping"] = time.time()
-                self.states[key]["node_type"] = node_type
             if not connected:
-                if int(time.time()) - self.last_connect_attempt[key] > 60:
+                if node_type is not None:
+                    self.states[key]["last_ping"] = time.time()
+                    self.states[key]["node_type"] = node_type
+                if time.time() - self.last_connect_attempt[key] > 60:
                     self.nodes[key] = LightNode(ip, port, self)
                     self.nodes[key].connect()
-                    self.last_connect_attempt[key] = int(time.time())
+                    self.last_connect_attempt[key] = time.time()
                     self.states[key]["last_ping"] = time.time()
 
     def node_connected(self, ip: str, port: int, address: str):
