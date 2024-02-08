@@ -78,7 +78,11 @@ def htmx_template(template: str):
                 t = f"htmx/{template}"
             else:
                 t = template
-            context, headers = await func(request)
+            result = await func(request)
+            if isinstance(result, tuple):
+                context, headers = result
+            else:
+                return result
             context["request"] = request
             return templates.TemplateResponse(t, context, headers=headers)
         return wrapper
