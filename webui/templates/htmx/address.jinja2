@@ -43,7 +43,7 @@
                 {% endcall %}
                 {% if unbond_state %}
                     {% call data_line("Credits unstaking") %}
-                        {{ unbond_state.amount | format_aleo_credit | safe }} Aleo credits, withdrawable {% if unbond_state.height > sync_info.local_height %}in {{ unbond_state.height - sync_info.local_height }} blocks{% else %}now{% endif %}
+                        {{ unbond_state.amount | format_aleo_credit | safe }} Aleo credits, withdrawable {% if unbond_state.height > sync_info.explorer_height %}in {{ unbond_state.height - sync_info.explorer_height }} blocks{% else %}now{% endif %}
                     {% endcall %}
                 {% endif %}
                 {% call data_line("Lifetime stake reward") %}

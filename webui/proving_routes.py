@@ -7,7 +7,7 @@ from starlette.exceptions import HTTPException
 from starlette.requests import Request
 
 from aleo_types import PlaintextValue, LiteralPlaintext, Literal, \
-    Address, Value, StructPlaintext, Int
+    Address, Value, StructPlaintext, Int, u64
 from db import Database
 from .template import templates
 from .utils import out_of_sync_check
@@ -191,7 +191,7 @@ async def address_route(request: Request):
         height = cast(LiteralPlaintext, plaintext["height"])
         unbond_state = {
             "amount": int(cast(Int, amount.literal.primitive)),
-            "height": str(height.literal.primitive),
+            "height": int(cast(u64, height.literal.primitive)),
         }
     if committee_state_bytes is None:
         committee_state = None
