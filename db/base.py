@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from asyncio import iscoroutinefunction
 from typing import Awaitable, ParamSpec
 
 from psycopg.rows import dict_row
@@ -14,11 +15,15 @@ try:
 except ImportError:
     P = ParamSpec('P')
     R = TypeVar('R')
-    def profile(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
-        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-            return await func(*args, **kwargs)
-        return wrapper
-
+    def profile(func: Callable[P, Awaitable[R]] | Callable[P, R]) -> Callable[P, Awaitable[R]] | Callable[P, R]:
+        if iscoroutinefunction(func):
+            async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+                return await func(*args, **kwargs)
+            return wrapper
+        else:
+            def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+                return func(*args, **kwargs)
+            return wrapper
 
 class DatabaseBase:
 
