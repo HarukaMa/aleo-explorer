@@ -718,6 +718,7 @@ class DatabaseInsert(DatabaseBase):
         return stakers
 
     @staticmethod
+    @profile
     def _check_committee_staker_match(committee_members: dict[Address, tuple[u64, bool_]],
                                       stakers: dict[Address, tuple[Address, u64]]):
         address_stakes: dict[Address, u64] = defaultdict(lambda: u64())
@@ -740,6 +741,7 @@ class DatabaseInsert(DatabaseBase):
 
 
     @staticmethod
+    @profile
     def _stake_rewards(committee_members: dict[Address, tuple[u64, bool_]],
                        stakers: dict[Address, tuple[Address, u64]], block_reward: u64):
         total_stake = sum(x[0] for x in committee_members.values())
@@ -766,6 +768,7 @@ class DatabaseInsert(DatabaseBase):
         return new_stakers, stake_rewards
 
     @staticmethod
+    @profile
     def _next_committee_members(committee_members: dict[Address, tuple[u64, bool_]],
                                 stakers: dict[Address, tuple[Address, u64]]) -> dict[Address, tuple[u64, bool_]]:
         validators: dict[Address, u64] = defaultdict(lambda: u64())

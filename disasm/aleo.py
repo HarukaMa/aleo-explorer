@@ -88,7 +88,7 @@ def disasm_literal(value: Literal) -> str:
             return str(value.primitive) + value.type.name.lower()
         case LT.Address:
             return aleo_explorer_rust.bech32_encode("aleo", value.primitive.dump())
-        case LT.Field | LT.Group | LT.Scalar | LT.Boolean:
+        case LT.Field | LT.Group | LT.Scalar | LT.Boolean | LT.Signature:
             return str(value.primitive)
         case _:
             raise NotImplementedError
