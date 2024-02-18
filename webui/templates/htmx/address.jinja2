@@ -70,7 +70,7 @@
                     {% endcall %}
                     {% call data_line("Estimated speed") %}
                         {% if speed != 0 %}
-                            {{ "%.2f" % speed }} <span data-tooltip title='commitments per second, also known as "p/s" or "s/s"'>c/s</span> (last {{ timespan }})
+                            {{ "%.2f" % speed }} <span data-tippy-content='commitments per second, also known as "p/s" or "s/s"'>c/s</span> (last {{ timespan }})
                         {% else %}
                             Not enough solutions during last day
                         {% endif %}

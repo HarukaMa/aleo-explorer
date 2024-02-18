@@ -174,12 +174,9 @@ input:not([type]):focus {
     color: #999;
 }
 
-.tooltip {
-    max-width: 250px;
-}
-
-.has-tip {
-    font-weight: normal;
+[data-tippy-content] {
+    cursor: help;
+    text-decoration: underline dotted;
 }
 
 .timestamp-font-size {

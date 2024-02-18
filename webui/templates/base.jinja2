@@ -13,6 +13,9 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/foundicons/3.0.0/foundation-icons.min.css"
           integrity="sha512-kDmbIQZ10fxeKP5NSt3+tz77HO42IJiS+YPIirOIKTdokl4LtuXYo3NNvq9mTAF+rzdV1plp0sm9E6nvtVpnFQ=="
           crossorigin="anonymous" referrerpolicy="no-referrer"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/6.3.7/tippy.min.css"
+          integrity="sha512-HbPh+j4V7pXprvQMt2dtmK/zCEsUeZWYXRln4sOwmoyHPQAPqy/k9lIquKUyKNpNbDGAY06UdiDHcEkBc72yCQ=="
+          crossorigin="anonymous" referrerpolicy="no-referrer" />
     <style>
         .top-bar, .top-bar ul {
         {% if "BETA" | get_env %}
@@ -22,7 +25,7 @@
         {% endif %}
         }
     </style>
-    <link rel="stylesheet" href="/static/base_style_v5.css">
+    <link rel="stylesheet" href="/static/base_style_v6.css">
     {% block head %}{% endblock %}
 </head>
 <body hx-ext="morph" hx-indicator="#htmx-body">
@@ -113,14 +116,24 @@
 <script src="https://unpkg.com/idiomorph@0.0.8/dist/idiomorph-ext.min.js"
         integrity="sha512-j+QoMRpO36QMBWcBvmktsy35CPVqxMOiLEp42+0T87V/sFWHGT/d0d+0unePWCqfCKXggIzhcTvIJeBiMUGofw=="
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/2.11.8/umd/popper.min.js"
+        integrity="sha512-TPh2Oxlg1zp+kz3nFA0C5vVC6leG/6mm1z9+mA81MI5eaUVqasPLO8Cuk4gMF4gUfP5etR73rgU/8PNMsSesoQ=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/6.3.7/tippy.umd.min.js"
+        integrity="sha512-2TtfktSlvvPzopzBA49C+MX6sdc7ykHGbBQUTH8Vk78YpkXVD5r6vrNU+nOmhhl1MyTWdVfxXdZfyFsvBvOllw=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
 <script id="content-script"></script>
 <script src="/static/base_script_v2.js"></script>
 <script>
     $(document).foundation()
 
+    tippy('[data-tippy-content]')
+
     htmx.on("htmx:afterSwap", () => {
         $(document).foundation()
         apply_timezone()
+        tippy('[data-tippy-content]')
     })
 
     htmx.on("htmx:beforeSwap", function(e) {
