@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import json
 import re
 from hashlib import sha256, md5
@@ -397,20 +398,81 @@ class ContainsCommand(Command):
         destination = Register.load(data)
         return cls(mapping=mapping, key=key, destination=destination)
 
+class MappingLocator(EnumBaseSerialize, RustEnum, Serializable):
+    version = u8()
+
+    class Type(IntEnumu8):
+        Locator = 0
+        Resource = 1
+
+    type: Type
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        version = u8.load(data)
+        if version != cls.version:
+            raise ValueError("invalid version")
+        type_ = cls.Type.load(data)
+        if type_ == cls.Type.Locator:
+            return LocatorMappingLocator.load(data)
+        elif type_ == cls.Type.Resource:
+            return ResourceMappingLocator.load(data)
+        else:
+            raise ValueError("invalid variant")
+
+class LocatorMappingLocator(MappingLocator):
+    type = MappingLocator.Type.Locator
+
+    def __init__(self, *, locator: Locator):
+        self.locator = locator
+
+    def dump(self) -> bytes:
+        return self.version.dump() + self.type.dump() + self.locator.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        locator = Locator.load(data)
+        return cls(locator=locator)
+
+class ResourceMappingLocator(MappingLocator):
+    type = MappingLocator.Type.Resource
+
+    def __init__(self, *, resource: Identifier):
+        self.resource = resource
+
+    def dump(self) -> bytes:
+        return self.version.dump() + self.type.dump() + self.resource.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        resource = Identifier.load(data)
+        return cls(resource=resource)
+
+
 class GetCommand(Command):
     type = Command.Type.Get
 
-    def __init__(self, *, mapping: Identifier, key: Operand, destination: Register):
+    def __init__(self, *, mapping: MappingLocator, key: Operand, destination: Register):
         self.mapping = mapping
         self.key = key
         self.destination = destination
 
     def dump(self) -> bytes:
-        return self.type.dump() + self.mapping.dump() + self.key.dump() + self.destination.dump()
+        data = self.type.dump()
+        if isinstance(self.mapping, LocatorMappingLocator):
+            data += self.mapping.dump()
+        elif isinstance(self.mapping, ResourceMappingLocator):
+            data += self.mapping.resource.dump()
+        return data + self.key.dump() + self.destination.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
-        mapping = Identifier.load(data)
+        first = data.read(1)
+        data.seek(-1, io.SEEK_CUR)
+        if first[0] == 0:
+            mapping = MappingLocator.load(data)
+        else:
+            mapping = ResourceMappingLocator(resource=Identifier.load(data))
         key = Operand.load(data)
         destination = Register.load(data)
         return cls(mapping=mapping, key=key, destination=destination)
@@ -419,18 +481,28 @@ class GetCommand(Command):
 class GetOrUseCommand(Command):
     type = Command.Type.GetOrUse
 
-    def __init__(self, *, mapping: Identifier, key: Operand, default: Operand, destination: Register):
+    def __init__(self, *, mapping: MappingLocator, key: Operand, default: Operand, destination: Register):
         self.mapping = mapping
         self.key = key
         self.default = default
         self.destination = destination
 
     def dump(self) -> bytes:
-        return self.type.dump() + self.mapping.dump() + self.key.dump() + self.default.dump() + self.destination.dump()
+        data = self.type.dump()
+        if isinstance(self.mapping, LocatorMappingLocator):
+            data += self.mapping.dump()
+        elif isinstance(self.mapping, ResourceMappingLocator):
+            data += self.mapping.resource.dump()
+        return data + self.key.dump() + self.default.dump() + self.destination.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
-        mapping = Identifier.load(data)
+        first = data.read(1)
+        data.seek(-1, io.SEEK_CUR)
+        if first[0] == 0:
+            mapping = MappingLocator.load(data)
+        else:
+            mapping = ResourceMappingLocator(resource=Identifier.load(data))
         key = Operand.load(data)
         default = Operand.load(data)
         destination = Register.load(data)
@@ -1650,6 +1722,9 @@ class ArrayPlaintext(Plaintext):
 
     def __setitem__(self, key: int, value: Plaintext):
         self.elements[key] = value
+
+    def __len__(self):
+        return len(self.elements)
 
     def __eq__(self, other: object):
         if not isinstance(other, ArrayPlaintext):
