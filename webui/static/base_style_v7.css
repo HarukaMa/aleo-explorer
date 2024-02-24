@@ -1,5 +1,42 @@
+@font-face {
+    font-family: 'Open Sans';
+    src: url('/static/opensans-bold.woff2') format('woff2');
+    font-weight: bold;
+    font-style: normal;
+
+}
+
+@font-face {
+    font-family: 'Open Sans';
+    src: url('/static/opensans-bolditalic.woff2') format('woff2');
+    font-weight: bold;
+    font-style: italic;
+
+}
+
+@font-face {
+    font-family: 'Open Sans';
+    src: url('/static/opensans-italic.woff2') format('woff2');
+    font-weight: normal;
+    font-style: italic;
+
+}
+
+@font-face {
+    font-family: 'Open Sans';
+    src: url('/static/opensans-regular.woff2') format('woff2');
+    font-weight: normal;
+    font-style: normal;
+
+}
+
 body {
     color: #111;
+    font-family: "Open Sans", sans-serif;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: "Open Sans", sans-serif;
 }
 
 .global-banner {
@@ -14,7 +51,7 @@ body {
     max-width: 1280px;
     margin: auto;
     padding: 8px;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
 }
 
 .footer-container {
@@ -25,14 +62,14 @@ body {
     max-width: 1280px;
     margin: auto;
     padding: 8px;
-    font-size: 0.875rem;
+    font-size: 0.9rem;
 }
 
 .settings {
     max-width: 1280px;
     margin: auto;
     padding: 32px 8px 8px 8px;
-    font-size: 0.875rem;
+    font-size: 0.9rem;
 }
 
 #search {
@@ -45,6 +82,11 @@ body {
     margin: auto;
     display: flex;
     padding: 0 20px;
+}
+
+.menubar .dropdown > li > a {
+    margin-top: 2px;
+    margin-bottom: -2px;
 }
 
 .top-bar-right {

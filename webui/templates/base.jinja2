@@ -25,7 +25,7 @@
         {% endif %}
         }
     </style>
-    <link rel="stylesheet" href="/static/base_style_v6.css">
+    <link rel="stylesheet" href="/static/base_style_v7.css">
     {% block head %}{% endblock %}
 </head>
 <body hx-ext="morph" hx-indicator="#htmx-body">
@@ -34,12 +34,7 @@
     <div class="menubar">
         <div class="top-bar-left">
             <ul class="dropdown menu" data-dropdown-menu hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
-                {% if "BETA" | get_env %}
-                    <li class="menu-text">Haruka's Explorer <sup>PREVIEW</sup></li>
-                {% else %}
-                    <li class="menu-text">Haruka's Aleo Explorer</li>
-                {% endif %}
-                <li><a href="/">Home</a></li>
+                <a href="/" style="padding: 0; margin: auto 0"><img src="/static/aleoscan.svg" style="height: 20px" alt="Aleoscan"></a>
                 <li>
                     <a href="#">Blockchain</a>
                     <ul class="menu">
