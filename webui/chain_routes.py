@@ -8,6 +8,7 @@ from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
 
+import util.arc0137
 from aleo_types import u32, Transition, ExecuteTransaction, PrivateTransitionInput, \
     RecordTransitionInput, TransitionOutput, RecordTransitionOutput, DeployTransaction, PublicTransitionInput, \
     PublicTransitionOutput, PrivateTransitionOutput, ExternalRecordTransitionInput, \
@@ -15,7 +16,7 @@ from aleo_types import u32, Transition, ExecuteTransaction, PrivateTransitionInp
     FeeTransaction, RejectedDeploy, RejectedExecution, Identifier, Entry, FutureTransitionOutput, Future, \
     PlaintextArgument, FutureArgument, StructPlaintext, Finalize, \
     PlaintextFinalizeType, StructPlaintextType, UpdateKeyValue, Value, Plaintext, RemoveKeyValue, FinalizeOperation, \
-    NodeType, cached_get_mapping_id
+    NodeType, cached_get_mapping_id, cached_get_key_id
 from db import Database
 from node.light_node import LightNodeState
 from util.global_cache import get_program
@@ -392,7 +393,7 @@ async def transaction_route(request: Request):
                     if mh["value"] is None:
                         mapping_operations = None
                         break
-                    key_id = aleo_explorer_rust.get_key_id(mh["program_id"], mh["mapping"], mh["key"])
+                    key_id = cached_get_key_id(mh["program_id"], mh["mapping"], mh["key"])
                     value_id = aleo_explorer_rust.get_value_id(str(key_id), mh["value"])
                     if value_id != str(fo.value_id):
                         mapping_operations = None
@@ -725,6 +726,13 @@ async def search_route(request: Request):
             "too_many": too_many,
         }
         return ctx, {'Cache-Control': 'public, max-age=15'}
+    elif query.endswith(".ans"):
+        address = await util.arc0137.get_address_from_domain(db, query)
+        if address is None:
+            raise HTTPException(status_code=404, detail="ANS domain not found")
+        if address == "":
+            raise HTTPException(status_code=404, detail="ANS domain is private")
+        return RedirectResponse(f"/address?a={address}{remaining_query}", status_code=302)
     else:
         # have to do this to support program name prefix search
         programs = await db.search_program(query)

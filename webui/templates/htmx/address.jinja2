@@ -11,8 +11,13 @@
         <div id="data">
             <h4>Overview</h4>
         {% call data_line("Address") %}
-            <span class="mono">{{ address }}</span>
+            <span class="mono">{{ address.address }}</span>
         {% endcall %}
+        {% if address.name %}
+        {% call data_line("Primary domain name") %}
+            {{ address.name }}
+        {% endcall %}
+        {% endif %}
         {% call data_line("Public credits") %}
             {{ public_balance | format_aleo_credit | safe }} Aleo credits
         {% endcall %}

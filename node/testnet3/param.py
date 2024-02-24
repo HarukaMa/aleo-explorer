@@ -26,3 +26,5 @@ class Testnet3:
     block_locator_checkpoint_interval = 10000
 
     deployment_fee_multiplier = 1000
+
+    ans_registry = "aleo_name_service_registry_v3.aleo"

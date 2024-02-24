@@ -2,13 +2,13 @@ import time
 from io import BytesIO
 from typing import Any, cast
 
-import aleo_explorer_rust
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
 
 from aleo_types import PlaintextValue, LiteralPlaintext, Literal, \
-    Address, Value, StructPlaintext, Int, u64
+    Address, Value, StructPlaintext, Int, u64, cached_get_key_id
 from db import Database
+from .classes import ANSAddress
 from .template import htmx_template
 from .utils import out_of_sync_check
 
@@ -83,10 +83,10 @@ async def address_route(request: Request):
         )
     )
     address_key_bytes = address_key.dump()
-    account_key_id = aleo_explorer_rust.get_key_id("credits.aleo", "account", address_key_bytes)
-    bonded_key_id = aleo_explorer_rust.get_key_id("credits.aleo", "bonded", address_key_bytes)
-    unbonding_key_id = aleo_explorer_rust.get_key_id("credits.aleo", "unbonding", address_key_bytes)
-    committee_key_id = aleo_explorer_rust.get_key_id("credits.aleo", "committee", address_key_bytes)
+    account_key_id = cached_get_key_id("credits.aleo", "account", address_key_bytes)
+    bonded_key_id = cached_get_key_id("credits.aleo", "bonded", address_key_bytes)
+    unbonding_key_id = cached_get_key_id("credits.aleo", "unbonding", address_key_bytes)
+    committee_key_id = cached_get_key_id("credits.aleo", "committee", address_key_bytes)
     public_balance_bytes = await db.get_mapping_value("credits.aleo", "account", account_key_id)
     bond_state_bytes = await db.get_mapping_value("credits.aleo", "bonded", bonded_key_id)
     unbond_state_bytes = await db.get_mapping_value("credits.aleo", "unbonding", unbonding_key_id)
@@ -225,7 +225,7 @@ async def address_route(request: Request):
 
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
-        "address": address,
+        "address": await ANSAddress(address).resolve(db),
         "address_trunc": address[:14] + "..." + address[-6:],
         "solutions": recent_solutions,
         "programs": recent_programs,
