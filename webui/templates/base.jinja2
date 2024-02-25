@@ -63,7 +63,6 @@
                         <li><a href="/feedback">Feedback</a></li>
                     </ul>
                 </li>
-                <li><a href="/"></a></li>
                 <li><a href="{{ "API_DOC_ROOT" | get_env }}" target="_blank">API</a></li>
                 {% if "HAS_BETA" | get_env %}
                     <li style="margin-left: auto"><a href="//explorerb.hamp.app">Preview</a></li>
@@ -95,7 +94,8 @@
         Advanced mode: <span id="advanced-setting"></span><br>
     </div>
     <div class="footer">
-        <a href="https://github.com/HarukaMa/aleo-explorer" target="_blank">Open source</a> Aleo explorer made by Haruka. <br>
+        <a href="https://github.com/HarukaMa/aleo-explorer" target="_blank">Open source</a> Aleo explorer made by Haruka.
+        <a href="/changelog">Changelog</a>.<br>
         {% if "CLOUDFLARE" | get_env %} Contains CloudFlare analytics.{% endif %}
         {% if "PLAUSIBLE" | get_env %} Contains self-hosted Plausible analytics. <a onclick="toggle_optout()"><span id="plausible-optout"></span></a>.{% endif %}
         <a href="/privacy">Privacy policy</a>.

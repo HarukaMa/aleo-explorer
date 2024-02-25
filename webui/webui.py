@@ -118,6 +118,10 @@ async def submit_feedback_route(request: Request):
 async def privacy_route(request: Request):
     return {}, {'Cache-Control': 'public, max-age=3600'}
 
+@htmx_template("changelog.jinja2")
+async def changelog_route(request: Request):
+    return {}, {'Cache-Control': 'public, max-age=600'}
+
 async def robots_route(_: Request):
     return FileResponse("webui/robots.txt", headers={'Cache-Control': 'public, max-age=3600'})
 
@@ -150,6 +154,7 @@ routes = [
     Route("/feedback", feedback_route, methods=["GET", "POST"]),
     Route("/submit_feedback", submit_feedback_route, methods=["POST"]),
     Route("/privacy", privacy_route),
+    Route("/changelog", changelog_route),
     Route("/robots.txt", robots_route),
     Route("/cf", cloudflare_error_page),
     Mount("/static", StaticFiles(directory="webui/static"), name="static"),
