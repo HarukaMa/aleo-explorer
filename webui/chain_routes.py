@@ -148,10 +148,10 @@ async def block_route(request: Request):
         else:
             raise HTTPException(status_code=550, detail="Unsupported transaction type")
 
-    validators, all_validators_raw = await db.get_validator_participation_by_height(height)
+    validators, all_validators_raw = await db.get_validator_by_height(height)
     all_validators = []
     for v in all_validators_raw:
-        all_validators.append(await UIAddress(v).resolve(db))
+        all_validators.append(await UIAddress(v["address"]).resolve(db))
 
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
@@ -812,17 +812,19 @@ async def validators_route(request: Request):
     start = 50 * (page - 1)
     validators_data = await db.get_validators_range_at_height(latest_height, start, start + 50)
     validators: list[dict[str, Any]] = []
+    total_stake = 0
     for validator in validators_data:
         validators.append({
             "address": validator["address"],
             "stake": validator["stake"],
             "uptime": validator["uptime"] * 100,
         })
-
+        total_stake += validator["stake"]
 
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
         "validators": validators,
+        "total_stake": total_stake,
         "page": page,
         "total_pages": total_pages,
         "sync_info": sync_info,

@@ -16,7 +16,8 @@
                 <tr>
                     <th>Rank</th>
                     <th>Validator</th>
-                    <th>Total vote</th>
+                    <th>Total stake</th>
+                    <th>Vote power</th>
                     <th>Uptime (last 24 hours)</th>
                 </tr>
                 </thead>
@@ -26,6 +27,7 @@
                         <td>{{ loop.index + (page - 1) * 50 }}</td>
                         <td><span class="mono"><a href="/address?a={{ validator.address }}">{{ validator.address }}</a></span></td>
                         <td>{{ validator.stake | format_aleo_credit | safe }}</td>
+                        <td>{{ "%0.2f" | format(validator.stake / total_stake * 100) }}%</td>
                         <td>{{ "%0.2f" | format(validator.uptime) }}%</td>
                     </tr>
                 {% endfor %}

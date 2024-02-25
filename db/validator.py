@@ -179,7 +179,8 @@ class DatabaseValidator(DatabaseBase):
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_validator_participation_by_height(self, height: int):
+    # returns: validators, all_validators_data
+    async def get_validator_by_height(self, height: int) -> tuple[list[str], list[dict[str, Any]]]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -194,15 +195,12 @@ class DatabaseValidator(DatabaseBase):
                     for row in await cur.fetchall():
                         validators.append(row["author"])
                     await cur.execute(
-                        "SELECT address FROM committee_history_member chm "
+                        "SELECT chm.* FROM committee_history_member chm "
                         "JOIN committee_history ch ON chm.committee_id = ch.id "
                         "WHERE ch.height = %s ORDER BY stake DESC",
                         (height,)
                     )
-                    all_validators = []
-                    for row in await cur.fetchall():
-                        all_validators.append(row["address"])
-                    return validators, all_validators
+                    return validators, await cur.fetchall()
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise

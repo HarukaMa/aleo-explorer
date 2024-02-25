@@ -41,7 +41,7 @@
             <div class="tabs-panel is-active" id="stats">
                 {% call data_line("Credits staked") %}
                     {% if bond_state %}
-                        {{ bond_state.amount | format_aleo_credit | safe }} Aleo credits, voted to {% if bond_state.validator == address %}self{% else %}validator <span class="mono"><a href="/address?a={{ bond_state.validator }}">{{ bond_state.validator }}</a></span>{% endif %}
+                        {{ bond_state.amount | format_aleo_credit | safe }} Aleo credits, staked to {% if bond_state.validator == address %}self{% else %}validator <span class="mono"><a href="/address?a={{ bond_state.validator }}">{{ bond_state.validator }}</a></span>{% endif %}
                     {% else %}
                         0 Aleo credits
                     {% endif %}
@@ -85,7 +85,7 @@
 
             {% if committee_state %}
             <div class="tabs-panel" id="validator">
-                {% call data_line("Credits voted") %}
+                {% call data_line("Credits staked") %}
                     {{ committee_state.amount | format_aleo_credit | safe }} Aleo credits
                 {% endcall %}
                 {% call data_line("Open for staking") %}
