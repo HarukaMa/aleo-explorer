@@ -92,6 +92,7 @@ async def program_route(request: Request):
             "key_type": str(mapping.key.plaintext_type),
             "value_type": str(mapping.value.plaintext_type)
         })
+    address = await db.get_program_address(program_id)
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx: dict[str, Any] = {
         "program_id": str(program.id),
@@ -106,6 +107,7 @@ async def program_route(request: Request):
         "has_leo_source": has_leo_source,
         "recent_calls": await db.get_program_calls(program_id, 0, 30),
         "similar_count": await db.get_program_similar_count(program_id),
+        "address": address,
         "sync_info": sync_info,
     }
     if transaction:

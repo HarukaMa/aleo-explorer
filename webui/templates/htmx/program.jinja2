@@ -10,6 +10,9 @@
             {% call data_line("Program ID") %}
                 <span class="mono">{{ program_id }}</span>
             {% endcall %}
+            {% call data_line("Program Address") %}
+                <span class="mono">{{ address }}</span>
+            {% endcall %}
             {% call data_line("Deployment transaction") %}
                 {% if transaction_id %}
                 <span class="mono"><a href="/transaction?id={{ transaction_id }}">{{ transaction_id }}</a></span>

@@ -279,3 +279,15 @@ class DatabaseProgram(DatabaseBase):
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
+
+    async def get_program_address(self, program_id: str) -> Optional[str]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute("SELECT address FROM program WHERE program_id = %s", (program_id,))
+                    if (res := await cur.fetchone()) is None:
+                        return None
+                    return res['address']
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
