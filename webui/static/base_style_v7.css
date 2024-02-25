@@ -100,13 +100,12 @@ h1, h2, h3, h4, h5, h6 {
 .top-bar input {
     max-width: 100%;
 }
-
 .input-group {
     margin-bottom: 0;
 }
 
 .mono {
-    font-family: monospace;
+    font-family: Hack, monospace;
     font-size: 0.825rem;
 }
 
@@ -264,8 +263,8 @@ pre {
 }
 
 #read input:not([type]), #read input[type="text"] {
-    font-size: 0.9rem !important;
-    font-family: monospace !important;
+    font-size: 0.85rem !important;
+    font-family: Hack, monospace !important;
 }
 
 #rejected-transitions {
@@ -293,12 +292,16 @@ pre {
 }
 
 textarea {
-    font-family: monospace;
+    font-family: Hack, monospace;
     height: 400px;
 }
 
 .mono-only {
-    font-family: monospace;
+    font-family: Hack, monospace;
+}
+
+code, pre {
+    font-family: Hack, monospace;
 }
 
 .htmx-indicator {

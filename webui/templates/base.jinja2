@@ -16,6 +16,9 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/6.3.7/tippy.min.css"
           integrity="sha512-HbPh+j4V7pXprvQMt2dtmK/zCEsUeZWYXRln4sOwmoyHPQAPqy/k9lIquKUyKNpNbDGAY06UdiDHcEkBc72yCQ=="
           crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/hack-font/3.3.0/web/hack.min.css"
+          integrity="sha512-XgCw4Srl8lC1ECwcaHwAU0WnxQwHkqmInzg9wJLtGB7DRuMaXPuK2k9WJ2AwRDGdrgK9eJpZl2hUlLi2WQssmw=="
+          crossorigin="anonymous" referrerpolicy="no-referrer" />
     <style>
         .top-bar, .top-bar ul {
         {% if "BETA" | get_env %}
@@ -34,7 +37,7 @@
     <div class="menubar">
         <div class="top-bar-left">
             <ul class="dropdown menu" data-dropdown-menu hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
-                <a href="/" style="padding: 0; margin: auto 0"><img src="/static/aleoscan.svg" style="height: 20px" alt="Aleoscan"></a>
+                <a href="/" style="padding: 0; margin: auto 0"><img src="/static/aleoscan.svg" style="height: 20px" alt="Aleoscan"></a>Testnet3
                 <li>
                     <a href="#">Blockchain</a>
                     <ul class="menu">
@@ -60,6 +63,7 @@
                         <li><a href="/feedback">Feedback</a></li>
                     </ul>
                 </li>
+                <li><a href="/"></a></li>
                 <li><a href="{{ "API_DOC_ROOT" | get_env }}" target="_blank">API</a></li>
                 {% if "HAS_BETA" | get_env %}
                     <li style="margin-left: auto"><a href="//explorerb.hamp.app">Preview</a></li>
