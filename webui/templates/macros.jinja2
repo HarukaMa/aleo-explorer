@@ -93,7 +93,7 @@
 {% macro htmx_title(request, title) %}
 <script>
     {% if request.htmx.is_htmx() %}
-        document.title = "{{ title | safe }} - Haruka's Aleo Explorer"
+        document.title = "{{ title | safe }} - Aleoscan"
     {% endif %}
 </script>
 {% endmacro %}
