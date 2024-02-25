@@ -261,7 +261,6 @@ class Group(Serializable, Add, Sub, Mul, Neg, Cast):
         return destination_type.primitive_type.load(BytesIO(aleo_explorer_rust.cast(str(self), LiteralType.Group, destination_type, lossy)))
 
 
-
 class Scalar(Serializable, Add, Sub, Mul, Compare, Cast):
     # Could be wrong as well
     def __init__(self, data: int):

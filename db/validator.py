@@ -131,6 +131,25 @@ class DatabaseValidator(DatabaseBase):
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
+    async def get_current_validator_count(self):
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT b.height, COUNT(*) FROM committee_history_member chm "
+                        "JOIN committee_history ch ON chm.committee_id = ch.id "
+                        "JOIN block b ON ch.height = b.height "
+                        "GROUP BY b.height ORDER BY b.height DESC LIMIT 1"
+                    )
+                    res = await cur.fetchone()
+                    if res:
+                        return res["count"]
+                    else:
+                        return 0
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
     async def get_network_participation_rate(self) -> float:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:

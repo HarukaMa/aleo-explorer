@@ -43,12 +43,14 @@ async def index_route(request: Request):
     db: Database = request.app.state.db
     recent_blocks = await db.get_recent_blocks_fast()
     network_speed = await db.get_network_speed()
+    validators = await db.get_current_validator_count()
     participation_rate = await db.get_network_participation_rate()
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
         "latest_block": await db.get_latest_block(),
         "recent_blocks": recent_blocks,
         "network_speed": network_speed,
+        "validators": validators,
         "participation_rate": participation_rate,
         "sync_info": sync_info,
     }
