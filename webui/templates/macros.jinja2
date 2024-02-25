@@ -49,10 +49,10 @@
     </div>
 {% endmacro %}
 
-{% macro data_line(title) %}
+{% macro data_line(title, additional="") %}
     <div class="data-line grid-x grid-padding-x">
         <div class="cell small-3 block-data-line-label">
-            {{ title }}
+            {{ title }} {{ additional | safe }}
         </div>
         <div class="cell auto data-line-value">
             {{ caller() }}

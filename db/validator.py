@@ -117,20 +117,6 @@ class DatabaseValidator(DatabaseBase):
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-
-    async def get_address_stakers(self, address: str) -> list[dict[str, Any]]:
-        async with self.pool.connection() as conn:
-            async with conn.cursor() as cur:
-                try:
-                    await cur.execute(
-                        "SELECT address, stake FROM staker WHERE validator = %s",
-                        (address,)
-                    )
-                    return await cur.fetchall()
-                except Exception as e:
-                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
-                    raise
-
     async def get_current_validator_count(self):
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -189,6 +175,34 @@ class DatabaseValidator(DatabaseBase):
                     else:
                         return 0
                     return validator_count / total_validator_count
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def get_validator_participation_by_height(self, height: int):
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT DISTINCT author FROM dag_vertex dv "
+                        "JOIN authority a on dv.authority_id = a.id "
+                        "JOIN block b on a.block_id = b.id "
+                        "WHERE b.height = %s ",
+                        (height,)
+                    )
+                    validators = []
+                    for row in await cur.fetchall():
+                        validators.append(row["author"])
+                    await cur.execute(
+                        "SELECT address FROM committee_history_member chm "
+                        "JOIN committee_history ch ON chm.committee_id = ch.id "
+                        "WHERE ch.height = %s ORDER BY stake DESC",
+                        (height,)
+                    )
+                    all_validators = []
+                    for row in await cur.fetchall():
+                        all_validators.append(row["address"])
+                    return validators, all_validators
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise

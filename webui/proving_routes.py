@@ -8,7 +8,7 @@ from starlette.requests import Request
 from aleo_types import PlaintextValue, LiteralPlaintext, Literal, \
     Address, Value, StructPlaintext, Int, u64, cached_get_key_id
 from db import Database
-from .classes import ANSAddress
+from .classes import UIAddress
 from .template import htmx_template
 from .utils import out_of_sync_check
 
@@ -225,7 +225,7 @@ async def address_route(request: Request):
 
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
-        "address": await ANSAddress(address).resolve(db),
+        "address": await UIAddress(address).resolve(db),
         "address_trunc": address[:14] + "..." + address[-6:],
         "solutions": recent_solutions,
         "programs": recent_programs,

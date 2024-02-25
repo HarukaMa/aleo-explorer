@@ -312,3 +312,67 @@ code, pre {
 .htmx-request.htmx-indicator {
     opacity: 0.4 !important;
 }
+
+.fa-regular {
+    margin-left: 0.5em;
+    color: #999;
+}
+
+.block-validator > a {
+    margin: 0 0.25em 0.25em 0;
+    padding: 2px 8px;
+    display: inline-block;
+    border: 1px solid;
+    border-radius: 4px;
+}
+
+.block-validator > a:has(.yes) {
+    border-color: green;
+}
+
+.block-validator > a:has(.no) {
+    border-color: darkred;
+}
+
+.block-validator > a > .yes {
+    color: green;
+}
+
+.block-validator > a > .no {
+    color: darkred;
+}
+
+.block-validator {
+    max-height: 6em;
+    overflow: hidden;
+    position: relative;
+}
+
+.block-validator-expand {
+    position: absolute;
+    top: 3rem;
+    height: 3rem;
+    width: 100%;
+    display: flex;
+    pointer-events: none;
+    background:
+        linear-gradient(
+            rgba(255, 255, 255, 0),
+            rgba(255, 255, 255, 0.8) 50%,
+            rgba(255, 255, 255, 0.95) 75%,
+            rgba(255, 255, 255, 1)
+        );
+}
+
+.block-validator-expand span {
+    align-self: flex-end;
+    width: 100%;
+    text-align: center;
+    padding-top: 0.5rem;
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.label .mono {
+    font-size: 0.8rem;
+}

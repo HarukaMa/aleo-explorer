@@ -15,8 +15,23 @@
         {% call data_line("Block hash") %}
             <span class="mono">{{ block.block_hash }}</span>
         {% endcall %}
-        {% call data_line("Timestamp") %}
+        {% call data_line("Timestamp", '<i class="fa-regular fa-circle-question" data-tippy-content="Timestamp property in block, which is earlier than block generation time"></i>') %}
             {{ block.header.metadata.timestamp | format_time | safe }}
+        {% endcall %}
+        {% call data_line("Validators", '<i class="fa-regular fa-circle-question" data-tippy-content="If the validator has participated in this block"></i>') %}
+            <div class="block-validator">
+                {% for v in all_validators %}
+                    {% if v.address in validators %}
+                    {% set class = "yes" %}
+                    {% else %}
+                    {% set class = "no" %}
+                    {% endif %}
+                    <a href="/address?a={{ v.address }}"><span class="mono {{ class }}">{{ v.trunc() }}</span></a>
+                {% endfor %}
+                <div class="block-validator-expand">
+                    <span>Show all</span>
+                </div>
+            </div>
         {% endcall %}
         {% call data_line("Proof target") %}
             {{ block.header.metadata.proof_target | format_number | safe }}
@@ -146,5 +161,14 @@
         </div>
 
     </div>
+
+<script id="content-script" hx-swap-oob="true">
+    document.querySelectorAll('.block-validator-expand').forEach(function (el) {
+        el.addEventListener('click', function () {
+            el.style.display = 'none'
+            el.parentElement.style.maxHeight = 'none'
+        })
+    })
+</script>
 
 {{ htmx_title(request, "Block " ~ block.header.metadata.height) }}

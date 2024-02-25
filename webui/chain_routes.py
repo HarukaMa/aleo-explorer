@@ -20,6 +20,7 @@ from aleo_types import u32, Transition, ExecuteTransaction, PrivateTransitionInp
 from db import Database
 from node.light_node import LightNodeState
 from util.global_cache import get_program
+from .classes import UIAddress
 from .template import htmx_template
 from .utils import function_signature, out_of_sync_check, function_definition, get_relative_time
 
@@ -147,6 +148,11 @@ async def block_route(request: Request):
         else:
             raise HTTPException(status_code=550, detail="Unsupported transaction type")
 
+    validators, all_validators_raw = await db.get_validator_participation_by_height(height)
+    all_validators = []
+    for v in all_validators_raw:
+        all_validators.append(await UIAddress(v).resolve(db))
+
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
         "block": block,
@@ -159,6 +165,8 @@ async def block_route(request: Request):
         "total_base_fee": total_base_fee,
         "total_priority_fee": total_priority_fee,
         "total_burnt_fee": total_burnt_fee,
+        "validators": validators,
+        "all_validators": all_validators,
         "sync_info": sync_info,
     }
     return ctx, {'Cache-Control': 'public, max-age=3600'}
