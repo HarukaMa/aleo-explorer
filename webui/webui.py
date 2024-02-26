@@ -1,5 +1,4 @@
 import asyncio
-import gc
 import logging
 import multiprocessing
 import os
@@ -181,7 +180,6 @@ async def startup():
     # noinspection PyUnresolvedReferences
     app.state.lns.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4133")), None)
     set_proc_title("aleo-explorer: webui")
-    gc.enable()
 
 log_format = '\033[92mACCESS\033[0m: \033[94m%(client_addr)s\033[0m - - %(t)s \033[96m"%(request_line)s"\033[0m \033[93m%(s)s\033[0m %(B)s "%(f)s" "%(a)s" %(L)s \033[95m%(htmx)s\033[0m'
 # noinspection PyTypeChecker
