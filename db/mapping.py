@@ -308,8 +308,9 @@ class DatabaseMapping(DatabaseBase):
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
+                        "/*+ IndexScan(mapping_history mapping_history_key_id_index) */ "
                         "SELECT key, value FROM mapping_history WHERE id < %s AND key_id = %s ORDER BY id DESC LIMIT 1",
-                        (history_id, key_id)
+                        (history_id, key_id),
                     )
                     res = await cur.fetchone()
                     if res is None:
