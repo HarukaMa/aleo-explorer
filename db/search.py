@@ -62,6 +62,10 @@ class DatabaseSearch(DatabaseBase):
                         "SELECT DISTINCT address FROM address_transition WHERE address LIKE %s", (f"{address}%",)
                     )
                     res.update(set(map(lambda x: x['address'], await cur.fetchall())))
+                    await cur.execute(
+                        "SELECT address FROM program WHERE address LIKE %s", (f"{address}%",)
+                    )
+                    res.update(set(map(lambda x: x['address'], await cur.fetchall())))
                     return list(res)
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))

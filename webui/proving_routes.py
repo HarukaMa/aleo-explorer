@@ -95,6 +95,7 @@ async def address_route(request: Request):
     transfer_in = await db.get_address_transfer_in(address)
     transfer_out = await db.get_address_transfer_out(address)
     fee = await db.get_address_total_fee(address)
+    program_name = await db.get_program_name_from_address(address)
 
     if (len(solutions) == 0
         and len(programs) == 0
@@ -107,6 +108,7 @@ async def address_route(request: Request):
         and transfer_in is None
         and transfer_out is None
         and fee is None
+        and program_name is None
     ):
         raise HTTPException(status_code=404, detail="Address not found")
     if len(solutions) > 0:
@@ -246,6 +248,7 @@ async def address_route(request: Request):
         "transfer_out": transfer_out,
         "fee": fee,
         "transitions": recent_transitions,
+        "program_name": program_name,
         "sync_info": sync_info,
     }
     return ctx, {'Cache-Control': 'public, max-age=15'}

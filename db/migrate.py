@@ -28,6 +28,7 @@ class DatabaseMigrate(DatabaseBase):
             (10, self.migrate_10_add_deploy_unconfirmed_program_info),
             (11, self.migrate_11_add_original_transaction_id_index),
             (12, self.migrate_12_set_on_delete_cascade),
+            (13, self.migrate_13_add_program_address_index),
         ]
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -133,3 +134,7 @@ WHERE tables.oid = pg_trigger.tgrelid
             print("If you can't or don't want to add superuser, please run it manually")
             print("==========================")
             raise
+
+    @staticmethod
+    async def migrate_13_add_program_address_index(conn: psycopg.AsyncConnection[dict[str, Any]]):
+        await conn.execute("create index program_address_index on program (address text_pattern_ops)")

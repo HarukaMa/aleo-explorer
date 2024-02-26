@@ -7,12 +7,19 @@
         <div id="header">
             <h3>{% if committee_state %}Validator{% else %}Address{% endif %} {{ address_trunc }}</h3>
         </div>
-
+        {% if program_name is not none %}
+        <div class="callout warning">This is a program address. Records owned by programs are currently unspendable.</div>
+        {% endif %}
         <div id="data">
             <h4>Overview</h4>
         {% call data_line("Address") %}
             <span class="mono">{{ address.address }}</span>
         {% endcall %}
+        {% if program_name is not none %}
+        {% call data_line("Program name") %}
+            <span class="mono"><a href="/program?id={{ program_name }}">{{ program_name }}</a></span>
+        {% endcall %}
+        {% endif %}
         {% if address.name %}
         {% call data_line("Primary domain name") %}
             {{ address.name }}

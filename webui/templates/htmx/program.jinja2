@@ -11,7 +11,7 @@
                 <span class="mono">{{ program_id }}</span>
             {% endcall %}
             {% call data_line("Program Address") %}
-                <span class="mono">{{ address }}</span>
+                <span class="mono"><a href="/address?a={{ address }}">{{ address }}</a></span>
             {% endcall %}
             {% call data_line("Deployment transaction") %}
                 {% if transaction_id %}
