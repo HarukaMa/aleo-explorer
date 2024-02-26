@@ -434,6 +434,9 @@ class LocatorMappingLocator(MappingLocator):
         locator = Locator.load(data)
         return cls(locator=locator)
 
+    def __str__(self):
+        return str(self.locator)
+
 class ResourceMappingLocator(MappingLocator):
     type = MappingLocator.Type.Resource
 
@@ -448,6 +451,8 @@ class ResourceMappingLocator(MappingLocator):
         resource = Identifier.load(data)
         return cls(resource=resource)
 
+    def __str__(self):
+        return str(self.resource)
 
 class GetCommand(Command):
     type = Command.Type.Get
