@@ -5,6 +5,26 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="format-detection" content="telephone=no">
     <meta name="htmx-config" content='{"getCacheBusterParam":true}'>
+    <script type="application/ld+json">
+        {
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            "name": "Aleoscan",
+            "author": {
+                "@type": "Person",
+                "name": "Haruka Ma"
+            },
+            "url": "https://testnet3.aleoscan.io/",
+            "description": "Aleoscan is an open-source Aleo explorer, providing information about the Aleo blockchain.",
+            "potentialAction": {
+                "@type": "SearchAction",
+                "target": "https://testnet3.aleoscan.io/search?q={search_term_string}",
+                "query-input": "required name=search_term_string"
+            }
+        }
+    </script>
+    <meta name="description" content="Aleoscan - open source Aleo explorer. Explore the Aleo blockchain, find information about blocks, transactions, validators, programs and more.">
+
     <title>{% block title %}{% endblock %}</title>
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/foundation/6.7.4/css/foundation.min.css"

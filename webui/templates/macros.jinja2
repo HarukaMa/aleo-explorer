@@ -93,7 +93,7 @@
 {% macro htmx_title(request, title) %}
 <script>
     {% if request.htmx.is_htmx() %}
-        document.title = "{{ title | safe }} - Aleoscan"
+        document.title = "{{ title | safe }} - Aleoscan - Aleo Blockchain Explorer"
     {% endif %}
 </script>
 {% endmacro %}
