@@ -81,6 +81,8 @@ def htmx_template(template: str):
                 t = template
             try:
                 result = await func(request)
+            except HTTPException:
+                raise
             except Exception as e:
                 tb = e.__traceback__
                 while tb.tb_next:
