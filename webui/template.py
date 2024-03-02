@@ -82,7 +82,11 @@ def htmx_template(template: str):
             try:
                 result = await func(request)
             except Exception as e:
-                raise HTTPException(status_code=550, detail=f"error in {func.__name__}: {e.__class__.__name__}: {str(e)}") from e
+                tb = e.__traceback__
+                while tb.tb_next:
+                    tb = tb.tb_next
+                frame = tb.tb_frame
+                raise HTTPException(status_code=550, detail=f"error in {frame.f_code.co_filename.rsplit('/', 1)[-1]}:{frame.f_lineno}: {e.__class__.__name__}: {str(e)}") from e
             if isinstance(result, tuple):
                 context, headers = result
             else:
