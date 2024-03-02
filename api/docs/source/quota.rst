@@ -27,4 +27,4 @@ request. This means a request could time out while the returned headers indicate
 
 The quota system is implemented in the ``APIQuotaMiddleware`` middleware class.
 
-For feedback or questions, please use `the feedback form <https://explorer.hamp.app/feedback>`_.
+For feedback or questions, please use `the feedback form <https://testnet3.aleoscan.io/feedback>`_.

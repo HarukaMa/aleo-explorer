@@ -24,7 +24,7 @@ Get Mapping Value
    .. sourcecode:: http
 
       GET /api/v1/mapping/get_value/credits.aleo/account/aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px HTTP/1.1
-      Host: explorer.hamp.app
+      Host: testnet3.aleoscan.io
 
    **Example response**:
 
@@ -65,7 +65,7 @@ List Mappings in Program
    .. sourcecode:: http
 
       GET /api/v1/mapping/list_program_mappings/credits.aleo HTTP/1.1
-      Host: explorer.hamp.app
+      Host: testnet3.aleoscan.io
 
    **Example response**:
 
@@ -112,7 +112,7 @@ List All Values in Mapping
       .. sourcecode:: http
 
          GET /api/v2/mapping/list_program_mapping_values/credits.aleo/account?count=5 HTTP/1.1
-         Host: explorer.hamp.app
+         Host: testnet3.aleoscan.io
 
       **Example response**:
 
@@ -164,7 +164,7 @@ Get Mapping Key Count
    .. sourcecode:: http
 
       GET /api/v2/mapping/get_key_count/credits.aleo/account HTTP/1.1
-      Host: explorer.hamp.app
+      Host: testnet3.aleoscan.io
 
    **Example response**:
 

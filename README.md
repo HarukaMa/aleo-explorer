@@ -1,6 +1,6 @@
 # Aleo Explorer
 
-[The "official" instance](https://explorer.hamp.app)
+[The "official" instance](https://testnet3.aleoscan.io)
 
 ## Description
 

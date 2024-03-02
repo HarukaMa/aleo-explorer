@@ -22,7 +22,7 @@ Simulate Finalize Execution
    .. sourcecode:: http
 
       POST /api/v1/simulate_execution/finalize HTTP/1.1
-      Host: explorer.hamp.app
+      Host: testnet3.aleoscan.io
       Content-Type: application/json
 
       {

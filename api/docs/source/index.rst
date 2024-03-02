@@ -22,12 +22,12 @@ Overview
 This is the documentation for the API of the explorer.
 
 Available API endpoints are pretty limited right now. If you have ideas and
-specific needs, please provide feedback `here <https://explorer.hamp.app/feedback>`_.
+specific needs, please provide feedback `here <https://testnet3.aleoscan.io/feedback>`_.
 
 Base Endpoint
 ^^^^^^^^^^^^^
 
-The base endpoint is ``https://explorer.hamp.app``.
+The base endpoint is ``https://testnet3.aleoscan.io``.
 
 Authentication
 ^^^^^^^^^^^^^^
