@@ -4,6 +4,7 @@ import os
 from decimal import Decimal
 from typing import Callable, Coroutine, Any
 
+from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.templating import Jinja2Templates
 
@@ -78,7 +79,10 @@ def htmx_template(template: str):
                 t = f"htmx/{template}"
             else:
                 t = template
-            result = await func(request)
+            try:
+                result = await func(request)
+            except Exception as e:
+                raise HTTPException(status_code=550, detail=f"error in {func.__name__}: {e.__class__.__name__}: {str(e)}") from e
             if isinstance(result, tuple):
                 context, headers = result
             else:
