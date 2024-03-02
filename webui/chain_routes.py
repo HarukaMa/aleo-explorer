@@ -1,4 +1,5 @@
 import copy
+import functools
 from collections import OrderedDict
 from io import BytesIO
 from typing import Any, cast, Optional, ParamSpec, TypeVar, Callable, Awaitable
@@ -882,15 +883,37 @@ async def nodes_route(request: Request):
     provers = 0
     unknowns = 0
     connected = 0
-    def sort_key(item: tuple[str, dict[str, Any]]) -> int:
-        if (x := item[1].get("height", 0)) is None:
-            return 0
-        if item[1].get("node_type", None) is None:
-            return -2
-        if item[1].get("peer_count", None) is None:
+    def sort_cmp(a: tuple[str, dict[str, Any]], b: tuple[str, dict[str, Any]]) -> int:
+        # sort by: height, address, node type
+        a_height = a[1].get("height", None)
+        b_height = b[1].get("height", None)
+        if a_height is not None and b_height is not None:
+            return int(b_height) - int(a_height)
+        if a_height is None and b_height is not None:
+            return 1
+        if a_height is not None and b_height is None:
             return -1
-        return x
-    res = OrderedDict(sorted(res.items(), key=sort_key, reverse=True))
+        a_address = a[1].get("address", None)
+        b_address = b[1].get("address", None)
+        if a_address is not None and b_address is not None:
+            if a_address == b_address:
+                return 0
+            return 1 if a_address > b_address else -1
+        if a_address is None and b_address is not None:
+            return 1
+        if a_address is not None and b_address is None:
+            return -1
+        a_type = a[1].get("node_type", None)
+        b_type = b[1].get("node_type", None)
+        if a_type is None and b_type is not None:
+            return 1
+        if a_type is not None and b_type is None:
+            return -1
+        if a_type == b_type:
+            return 0
+        return a_type.value - b_type.value
+
+    res = OrderedDict(sorted(res.items(), key=functools.cmp_to_key(sort_cmp)))
     for node in res.values():
         node_type = node.get("node_type", None)
         if node_type is None:
