@@ -47,7 +47,6 @@ class DatabaseProgram(DatabaseBase):
                 try:
                     where = "WHERE feature_hash NOT IN (SELECT hash FROM program_filter_hash) " if no_helloworld else ""
                     await cur.execute(
-                        "/*+ Leading(p td t ct b pf) IndexScan(t) */ "
                         "SELECT p.program_id, b.height, t.transaction_id, SUM(pf.called) as called "
                         "FROM program p "
                         "JOIN transaction_deploy td on p.transaction_deploy_id = td.id "
@@ -56,8 +55,8 @@ class DatabaseProgram(DatabaseBase):
                         "JOIN block b on ct.block_id = b.id "
                         "JOIN program_function pf on p.id = pf.program_id "
                         f"{where}"
-                        "GROUP BY p.program_id, b.height, t.transaction_id "
-                        "ORDER BY b.height DESC "
+                        "GROUP BY p.program_id, b.height, p.id, t.transaction_id "
+                        "ORDER BY p.id DESC "
                         "LIMIT %s OFFSET %s",
                         (end - start, start)
                     )
