@@ -362,12 +362,14 @@ async def transaction_route(request: Request):
         if len(fos) == len(mhs):
             indices: list[int] = []
             untracked_indices: list[int] = []
+            last_index = -1
             for fo in confirmed_transaction.finalize:
                 if isinstance(fo, (UpdateKeyValue, RemoveKeyValue)):
                     if not after_tracking and fo in untracked_fos:
                         untracked_indices.append(untracked_fos.index(fo))
                     else:
-                        indices.append(fos.index(fo))
+                        last_index = fos.index(fo, last_index + 1)
+                        indices.append(last_index)
             mapping_operations: Optional[list[dict[str, Any]]] = []
             for i in untracked_indices:
                 fo = untracked_fos[i]
