@@ -86,12 +86,19 @@ def htmx_template(template: str):
                 while tb.tb_next:
                     tb = tb.tb_next
                 frame = tb.tb_frame
-                raise HTTPException(status_code=550, detail=f"error in {frame.f_code.co_filename.rsplit('/', 1)[-1]}:{frame.f_lineno}: {e.__class__.__name__}: {str(e)}") from e
+                raise HTTPException(status_code=550, detail=f"uncaught exception at {frame.f_code.co_filename.rsplit('/', 1)[-1]}:{frame.f_lineno}: {e.__class__.__name__}: {str(e)}") from e
             if isinstance(result, tuple):
                 context, headers = result
             else:
                 return result
             context["request"] = request
-            return templates.TemplateResponse(t, context, headers=headers)
+            try:
+                return templates.TemplateResponse(t, context, headers=headers)
+            except Exception as e:
+                tb = e.__traceback__
+                while tb.tb_next and tb.tb_next.tb_next:
+                    tb = tb.tb_next
+                frame = tb.tb_frame
+                raise HTTPException(status_code=550, detail=f"template error at {frame.f_code.co_filename.rsplit('/', 1)[-1]}:{frame.f_lineno}: {e.__class__.__name__}: {str(e)}") from e
         return wrapper
     return decorator
