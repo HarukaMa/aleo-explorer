@@ -201,9 +201,22 @@ class DatabaseMapping(DatabaseBase):
                     )
 
                 await cur.execute(
-                    "INSERT INTO mapping_history (mapping_id, height, key_id, key, value, from_transaction) "
-                    "VALUES (%s, %s, %s, %s, %s, %s)",
-                    (mapping_id, height, key_id, key, value, from_transaction)
+                    "SELECT last_history_id FROM mapping_history_last_id WHERE key_id = %s",
+                    (key_id,)
+                )
+                previous_id = res['last_history_id'] if (res := await cur.fetchone()) is not None else None
+
+                await cur.execute(
+                    "INSERT INTO mapping_history (mapping_id, height, key_id, key, value, from_transaction, previous_id) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s) "
+                    "RETURNING id",
+                    (mapping_id, height, key_id, key, value, from_transaction, previous_id)
+                )
+                latest_id = (await cur.fetchone())['id']
+                await cur.execute(
+                    "INSERT INTO mapping_history_last_id (key_id, last_history_id) VALUES (%s, %s) "
+                    "ON CONFLICT (key_id) DO UPDATE SET last_history_id = %s",
+                    (key_id, latest_id, latest_id)
                 )
 
         except Exception as e:
@@ -232,9 +245,22 @@ class DatabaseMapping(DatabaseBase):
                     )
 
                 await cur.execute(
-                    "INSERT INTO mapping_history (mapping_id, height, key_id, key, value, from_transaction) "
-                    "VALUES (%s, %s, %s, %s, NULL, %s)",
-                    (mapping_id, height, key_id, key, from_transaction)
+                    "SELECT last_history_id FROM mapping_history_last_id WHERE key_id = %s",
+                    (key_id,)
+                )
+                previous_id = res['last_history_id'] if (res := await cur.fetchone()) is not None else None
+
+                await cur.execute(
+                    "INSERT INTO mapping_history (mapping_id, height, key_id, key, value, from_transaction, previous_id) "
+                    "VALUES (%s, %s, %s, %s, NULL, %s, %s) "
+                    "RETURNING id",
+                    (mapping_id, height, key_id, key, from_transaction, previous_id)
+                )
+                latest_id = (await cur.fetchone())['id']
+                await cur.execute(
+                    "INSERT INTO mapping_history_last_id (key_id, last_history_id) VALUES (%s, %s) "
+                    "ON CONFLICT (key_id) DO UPDATE SET last_history_id = %s",
+                    (key_id, latest_id, latest_id)
                 )
 
         except Exception as e:
@@ -308,12 +334,22 @@ class DatabaseMapping(DatabaseBase):
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "/*+ IndexScan(mapping_history mapping_history_key_id_index) */ "
-                        "SELECT key, value FROM mapping_history WHERE id < %s AND key_id = %s ORDER BY id DESC LIMIT 1",
-                        (history_id, key_id),
+                        "SELECT previous_id FROM mapping_history WHERE id = %s",
+                        (history_id,)
+                    )
+                    if (res := await cur.fetchone()) is None:
+                        return None
+                    previous_id = res["previous_id"]
+                    if previous_id is None:
+                        return None
+                    await cur.execute(
+                        "SELECT key_id, value FROM mapping_history WHERE id = %s",
+                        (previous_id,)
                     )
                     res = await cur.fetchone()
                     if res is None:
+                        return None
+                    if res["key_id"] != key_id:
                         return None
                     return res['value']
                 except Exception as e:

@@ -29,6 +29,8 @@ class DatabaseMigrate(DatabaseBase):
             (11, self.migrate_11_add_original_transaction_id_index),
             (12, self.migrate_12_set_on_delete_cascade),
             (13, self.migrate_13_add_program_address_index),
+            (14, self.migrate_14_add_mapping_history_prev_pointer),
+            (15, self.migrate_15_add_mapping_history_last_id),
         ]
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -138,3 +140,60 @@ WHERE tables.oid = pg_trigger.tgrelid
     @staticmethod
     async def migrate_13_add_program_address_index(conn: psycopg.AsyncConnection[dict[str, Any]]):
         await conn.execute("create index program_address_index on program (address text_pattern_ops)")
+
+    @staticmethod
+    async def migrate_14_add_mapping_history_prev_pointer(conn: psycopg.AsyncConnection[dict[str, Any]]):
+        print("WARNING: This migration needs 10+ GBs of RAM")
+        print("Long running migration, please wait")
+        await conn.execute("alter table mapping_history add previous_id bigint")
+        await conn.execute(
+            "alter table mapping_history "
+            "add constraint mapping_history_mapping_history_id_fk "
+            "foreign key (previous_id) references mapping_history "
+            "on update restrict on delete restrict"
+        )
+        async with conn.cursor() as cur:
+            await cur.execute("select count(*) from mapping_history")
+            count = (await cur.fetchone())["count"]
+            await cur.execute("select id, key_id from mapping_history order by id")
+            n = 0
+            data = await cur.fetchall()
+            last_id = {}
+            update_data = []
+
+            for row in data:
+                previous_id = last_id.get(row["key_id"])
+                if previous_id is not None:
+                    update_data.append((previous_id, row["id"]))
+                last_id[row["key_id"]] = row["id"]
+                n += 1
+                if n % 1000000 == 0:
+                    print(f"{n}/{count} rows processed")
+
+            print("Updating database...")
+            print("1/5")
+            await cur.execute("create temporary table mapping_history_temp (previous_id bigint, id bigint) on commit drop")
+            print("2/5")
+            async with cur.copy("copy mapping_history_temp (previous_id, id) from stdin") as copy:
+                for row in update_data:
+                    await copy.write_row(row)
+            print("3/5")
+            await cur.execute("create unique index mapping_history_temp_id_uindex on mapping_history_temp (id)")
+            print("4/5")
+            await cur.execute("update mapping_history set previous_id = m.previous_id from mapping_history_temp m where mapping_history.id = m.id")
+            print("5/5")
+            await cur.execute("create unique index mapping_history_previous_id_uindex on mapping_history (previous_id)")
+
+    @staticmethod
+    async def migrate_15_add_mapping_history_last_id(conn: psycopg.AsyncConnection[dict[str, Any]]):
+        await conn.execute(
+            "create table mapping_history_last_id ("
+            "    key_id text not null"
+            "        constraint mapping_history_last_id_pk"
+            "            primary key,"
+            "    last_history_id bigint not null"
+            ")"
+        )
+        await conn.execute(
+            "insert into mapping_history_last_id (key_id, last_history_id) select key_id, max(id) from mapping_history group by key_id"
+        )
