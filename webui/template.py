@@ -50,11 +50,11 @@ def format_number(number: int | Decimal, decimal_places: int = 2):
         decimal_parts.pop()
     if not decimal_parts:
         return '<span class="formatted-number">' + \
-            "".join(map(lambda x: f'<span class="number-part">{x}</span>', integer_parts)) + \
+            '<span class="number-separator">,</span>'.join(map(lambda x: f'<span class="number-part">{x}</span>', integer_parts)) + \
             '</span>'
 
     return '<span class="formatted-number">' + \
-        "".join(map(lambda x: f'<span class="number-part">{x}</span>', integer_parts)) + \
+        '<span class="number-separator">,</span>'.join(map(lambda x: f'<span class="number-part">{x}</span>', integer_parts)) + \
         '<span class="number-dot">.</span>' + \
         "".join(map(lambda x: f'<span class="number-part">{x}</span>', decimal_parts)) + \
         '</span>'

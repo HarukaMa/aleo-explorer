@@ -151,16 +151,8 @@ input[type=number] {
     width: 50px;
 }
 
-.number-part {
-    margin: 0 0.1em;
-}
-
-.number-dot {
-    margin: 0 -0.05em;
-}
-
-.formatted-number {
-    margin: 0 -0.1em;
+.number-separator {
+    user-select: none;
 }
 
 input:not([type]) {
