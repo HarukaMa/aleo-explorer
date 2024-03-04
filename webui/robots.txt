@@ -6,7 +6,7 @@ User-agent: dotbot
 User-agent: DataForSeoBot
 User-agent: rogerbot
 User-agent: BLEXBot
-User-agnet: Petalbot
+User-agent: Petalbot
 Disallow: /
 
 User-agent: *
