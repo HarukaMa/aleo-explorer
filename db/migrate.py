@@ -31,6 +31,7 @@ class DatabaseMigrate(DatabaseBase):
             (13, self.migrate_13_add_program_address_index),
             (14, self.migrate_14_add_mapping_history_prev_pointer),
             (15, self.migrate_15_add_mapping_history_last_id),
+            (16, self.migrate_16_add_rejected_deploy_support),
         ]
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -197,3 +198,7 @@ WHERE tables.oid = pg_trigger.tgrelid
         await conn.execute(
             "insert into mapping_history_last_id (key_id, last_history_id) select key_id, max(id) from mapping_history group by key_id"
         )
+
+    @staticmethod
+    async def migrate_16_add_rejected_deploy_support(conn: psycopg.AsyncConnection[dict[str, Any]]):
+        await conn.execute(open("migration_16.sql").read())

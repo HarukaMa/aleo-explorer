@@ -71,6 +71,7 @@ class DatabaseUtil(DatabaseBase):
                                 raise RuntimeError(f"backup key not found: {redis_key}:history:{last_backup_height}")
                         print(f"reverting to last backup: {last_backup_height}")
 
+                        print("fetching old mapping values from mapping history")
                         await cur.execute(
                             "select distinct on (mapping_id, key_id) mapping_id, key_id, key, value from mapping_history "
                             "where height <= %s "
@@ -78,9 +79,14 @@ class DatabaseUtil(DatabaseBase):
                             (last_backup_height,)
                         )
                         mapping_snapshot = await cur.fetchall()
+                        print("truncating mapping values")
                         await cur.execute(
                             "TRUNCATE TABLE mapping_value RESTART IDENTITY"
                         )
+                        copy_data = []
+                        print("processing old mapping values")
+                        total = len(mapping_snapshot)
+                        count = 0
                         for item in mapping_snapshot:
                             mapping_id = item["mapping_id"]
                             key_id = item["key_id"]
@@ -88,20 +94,32 @@ class DatabaseUtil(DatabaseBase):
                             value = item["value"]
                             if value is not None:
                                 value_id = get_value_id(key_id, value)
-                                await cur.execute(
-                                    "INSERT INTO mapping_value (mapping_id, key_id, value_id, key, value) "
-                                    "VALUES (%s, %s, %s, %s, %s) ",
-                                    (mapping_id, key_id, value_id, key, value)
-                                )
+                                copy_data.append((mapping_id, key_id, value_id, key, value))
+                            count += 1
+                            if count % 10000 == 0:
+                                print(f"{count}/{total}")
+                        print("saving mapping values")
+                        if copy_data:
+                            async with cur.copy("COPY mapping_value (mapping_id, key_id, value_id, key, value) FROM STDIN") as copy:
+                                total = len(copy_data)
+                                count = 0
+                                for item in copy_data:
+                                    await copy.write_row(item)
+                                    count += 1
+                                    if count % 10000 == 0:
+                                        print(f"{count}/{total}")
                         await cur.execute(
                             "DELETE FROM mapping_history WHERE height > %s",
                             (last_backup_height,)
                         )
 
+                        print("fetching blocks to revert")
                         blocks_to_revert = await DatabaseBlock.get_full_block_range(u32.max, last_backup_height, conn)
                         for block in blocks_to_revert:
+                            print("reverting block", block.height)
                             for ct in block.transactions:
                                 t = ct.transaction
+                                print("reverting transaction", t.id)
                                 # revert to unconfirmed transactions
                                 if isinstance(ct, (RejectedDeploy, RejectedExecute)):
                                     await cur.execute(
@@ -164,6 +182,8 @@ class DatabaseUtil(DatabaseBase):
                                         "WHERE p.program_id = %s AND p.id = pf.program_id AND pf.name = %s",
                                         (str(ts.program_id), str(ts.function_name))
                                     )
+                            print("reverting leaderboard data")
+                            # TODO: change leaderboard to something else, we dont need that on mainnet
                             # revert leaderboard
                             await cur.execute(
                                 "SELECT address, reward FROM prover_solution ps "

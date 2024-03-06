@@ -539,24 +539,39 @@ class DatabaseBlock(DatabaseBase):
                     raise NotImplementedError
 
             transaction = confirmed_transaction
+            # TODO: store full program on rejected deploy so we dont need dummy data
             match confirmed_transaction["confirmed_transaction_type"]:
                 case ConfirmedTransaction.Type.AcceptedDeploy.name | ConfirmedTransaction.Type.RejectedDeploy.name:
-                    if confirmed_transaction["confirmed_transaction_type"] == ConfirmedTransaction.Type.RejectedDeploy.name:
-                        raise NotImplementedError
                     deploy_transaction = transaction
-                    await cur.execute(
-                        "SELECT raw_data, owner, signature FROM program WHERE transaction_deploy_id = %s",
-                        (deploy_transaction["transaction_deploy_id"],)
-                    )
-                    program_data = await cur.fetchone()
-                    if program_data is None:
-                        raise RuntimeError("database inconsistent")
-                    program = program_data["raw_data"]
-                    deployment = Deployment(
-                        edition=u16(deploy_transaction["edition"]),
-                        program=Program.load(BytesIO(program)),
-                        verifying_keys=Vec[Tuple[Identifier, VerifyingKey, Certificate], u16].load(BytesIO(deploy_transaction["verifying_keys"])),
-                    )
+                    if confirmed_transaction["confirmed_transaction_type"] == ConfirmedTransaction.Type.AcceptedDeploy.name:
+                        await cur.execute(
+                            "SELECT raw_data, owner, signature FROM program WHERE transaction_deploy_id = %s",
+                            (deploy_transaction["transaction_deploy_id"],)
+                        )
+                        program_data = await cur.fetchone()
+                        if program_data is None:
+                            raise RuntimeError("database inconsistent")
+                        program = program_data["raw_data"]
+                        deployment = Deployment(
+                            edition=u16(deploy_transaction["edition"]),
+                            program=Program.load(BytesIO(program)),
+                            verifying_keys=Vec[Tuple[Identifier, VerifyingKey, Certificate], u16].load(BytesIO(deploy_transaction["verifying_keys"])),
+                        )
+                    else:
+                        deployment = Deployment(
+                            edition=u16(deploy_transaction["edition"]),
+                            program=Program(
+                                id_=ProgramID.loads("placeholder.aleo"),
+                                imports=Vec[Import, u8]([]),
+                                mappings={},
+                                structs={},
+                                records={},
+                                closures={},
+                                functions={},
+                                identifiers=[],
+                            ),
+                            verifying_keys=Vec[Tuple[Identifier, VerifyingKey, Certificate], u16]([])
+                        )
                     fee_dict = transaction
                     if fee_dict is None:
                         raise RuntimeError("database inconsistent")
@@ -575,15 +590,33 @@ class DatabaseBlock(DatabaseBase):
                         global_state_root=StateRoot.loads(fee_dict["fee_global_state_root"]),
                         proof=Option[Proof](proof),
                     )
-                    tx = DeployTransaction(
-                        id_=TransactionID.loads(transaction["transaction_id"]),
-                        deployment=deployment,
-                        fee=fee,
-                        owner=ProgramOwner(
-                            address=Address.loads(program_data["owner"]),
-                            signature=Signature.loads(program_data["signature"])
+                    if confirmed_transaction["confirmed_transaction_type"] == ConfirmedTransaction.Type.AcceptedDeploy.name:
+                        tx = DeployTransaction(
+                            id_=TransactionID.loads(transaction["transaction_id"]),
+                            deployment=deployment,
+                            fee=fee,
+                            owner=ProgramOwner(
+                                address=Address.loads(program_data["owner"]),
+                                signature=Signature.loads(program_data["signature"])
+                            )
                         )
-                    )
+                    else:
+                        tx = DeployTransaction(
+                            id_=TransactionID.loads(transaction["transaction_id"]),
+                            deployment=deployment,
+                            fee=fee,
+                            owner=ProgramOwner(
+                                address=Address.loads(deploy_transaction["owner"]),
+                                signature=Signature(
+                                    challenge=Scalar(0),
+                                    response=Scalar(0),
+                                    compute_key=ComputeKey(
+                                        pk_sig=Group(0),
+                                        pr_sig=Group(0),
+                                    )
+                                )
+                            )
+                        )
                     ctx = AcceptedDeploy(
                         index=u32(confirmed_transaction["index"]),
                         transaction=tx,
@@ -609,6 +642,7 @@ class DatabaseBlock(DatabaseBase):
                         )
                         fee_transition = await cur.fetchone()
                         if fee_transition is None:
+                            print(transaction)
                             raise ValueError("fee transition not found")
                         proof = None
                         if additional_fee["fee_proof"] is not None:
@@ -675,11 +709,16 @@ class DatabaseBlock(DatabaseBase):
                     if confirmed_transaction_type == ConfirmedTransaction.Type.AcceptedDeploy.name or \
                         confirmed_transaction_type == ConfirmedTransaction.Type.RejectedDeploy.name:
                         if confirmed_transaction_type == ConfirmedTransaction.Type.RejectedDeploy.name:
-                            raise NotImplementedError
-                        await cur.execute(
-                            "SELECT id as transaction_deploy_id, edition, verifying_keys FROM transaction_deploy WHERE transaction_id = %s",
-                            (confirmed_transaction["transaction_db_id"],)
-                        )
+                            await cur.execute(
+                                "SELECT id as transaction_deploy_id, edition, verifying_keys, program_id, owner "
+                                "FROM transaction_deploy WHERE transaction_id = %s",
+                                (confirmed_transaction["transaction_db_id"],)
+                            )
+                        else:
+                            await cur.execute(
+                                "SELECT id as transaction_deploy_id, edition, verifying_keys FROM transaction_deploy WHERE transaction_id = %s",
+                                (confirmed_transaction["transaction_db_id"],)
+                            )
                         deploy = await cur.fetchone()
                         if deploy is None:
                             raise RuntimeError("database inconsistent")
