@@ -300,6 +300,11 @@ class DatabaseInsert(DatabaseBase):
                 program_id = None
                 owner = None
             await cur.execute(
+                "SELECT id FROM transaction_deploy WHERE transaction_id = %s", (transaction_db_id,)
+            )
+            if await cur.fetchone() is not None:
+                raise RuntimeError("transaction deploy already exists in database")
+            await cur.execute(
                 "INSERT INTO transaction_deploy (transaction_id, edition, verifying_keys, program_id, owner) "
                 "VALUES (%s, %s, %s, %s, %s) RETURNING id",
                 (transaction_db_id, deployment.edition, deployment.verifying_keys.dump(), program_id, owner)
@@ -323,6 +328,11 @@ class DatabaseInsert(DatabaseBase):
                                           execution: Execution, fee: Optional[Fee], transaction_db_id: int,
                                           is_rejected: bool = False, ts_should_exist: bool = False):
         async with conn.cursor() as cur:
+            await cur.execute(
+                "SELECT id FROM transaction_execute WHERE transaction_id = %s", (transaction_db_id,)
+            )
+            if await cur.fetchone() is not None:
+                raise RuntimeError("transaction execute already exists in database")
             await cur.execute(
                 "INSERT INTO transaction_execute (transaction_id, global_state_root, proof) "
                 "VALUES (%s, %s, %s) RETURNING id",
