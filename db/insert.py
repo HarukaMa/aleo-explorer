@@ -303,7 +303,10 @@ class DatabaseInsert(DatabaseBase):
                 "SELECT id FROM transaction_deploy WHERE transaction_id = %s", (transaction_db_id,)
             )
             if await cur.fetchone() is not None:
-                raise RuntimeError("transaction deploy already exists in database")
+                if not fee_should_exist:
+                    raise RuntimeError("transaction deploy already exists in database")
+                else:
+                    return
             await cur.execute(
                 "INSERT INTO transaction_deploy (transaction_id, edition, verifying_keys, program_id, owner) "
                 "VALUES (%s, %s, %s, %s, %s) RETURNING id",
@@ -332,7 +335,10 @@ class DatabaseInsert(DatabaseBase):
                 "SELECT id FROM transaction_execute WHERE transaction_id = %s", (transaction_db_id,)
             )
             if await cur.fetchone() is not None:
-                raise RuntimeError("transaction execute already exists in database")
+                if not ts_should_exist:
+                    raise RuntimeError("transaction execute already exists in database")
+                else:
+                    return
             await cur.execute(
                 "INSERT INTO transaction_execute (transaction_id, global_state_root, proof) "
                 "VALUES (%s, %s, %s) RETURNING id",
@@ -345,7 +351,6 @@ class DatabaseInsert(DatabaseBase):
 
             for ts_index, transition in enumerate(execution.transitions):
                 await DatabaseInsert._insert_transition(conn, redis, execute_transaction_db_id, None, transition, ts_index, is_rejected, ts_should_exist)
-
 
             if fee:
                 await cur.execute(
