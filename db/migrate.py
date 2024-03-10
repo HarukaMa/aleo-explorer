@@ -32,6 +32,7 @@ class DatabaseMigrate(DatabaseBase):
             (14, self.migrate_14_add_mapping_history_prev_pointer),
             (15, self.migrate_15_add_mapping_history_last_id),
             (16, self.migrate_16_add_rejected_deploy_support),
+            (17, self.migrate_17_inconsistent_database_workaround),
         ]
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -202,3 +203,7 @@ WHERE tables.oid = pg_trigger.tgrelid
     @staticmethod
     async def migrate_16_add_rejected_deploy_support(conn: psycopg.AsyncConnection[dict[str, Any]]):
         await conn.execute(open("migration_16.sql").read())
+
+    @staticmethod
+    async def migrate_17_inconsistent_database_workaround(conn: psycopg.AsyncConnection[dict[str, Any]]):
+        await conn.execute(open("migration_17.sql").read())
