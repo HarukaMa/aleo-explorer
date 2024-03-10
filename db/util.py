@@ -67,14 +67,15 @@ class DatabaseUtil(DatabaseBase):
                         last_backup = keys[-1]
                         last_backup_height = int(last_backup.split(":")[-1])
                         for redis_key in redis_keys:
-                            if not await self.redis.exists(f"{redis_key}:history:{last_backup_height}"):
-                                raise RuntimeError(f"backup key not found: {redis_key}:history:{last_backup_height}")
-                            await self.redis.persist(redis_key)
+                            backup_key = f"{redis_key}:history:{last_backup_height}"
+                            if not await self.redis.exists(backup_key):
+                                raise RuntimeError(f"backup key not found: {backup_key}")
+                            await self.redis.persist(backup_key)
                         print(f"reverting to last backup: {last_backup_height}")
 
                         print("fetching old mapping values from mapping history")
                         await cur.execute(
-                            "select distinct on (mapping_id, key_id) mapping_id, key_id, key, value from mapping_history "
+                            "select distinct on (mapping_id, key_id) id, mapping_id, key_id, key, value from mapping_history "
                             "where height <= %s "
                             "order by mapping_id, key_id, id desc",
                             (last_backup_height,)
@@ -84,25 +85,34 @@ class DatabaseUtil(DatabaseBase):
                         await cur.execute(
                             "TRUNCATE TABLE mapping_value RESTART IDENTITY"
                         )
-                        copy_data = []
+                        await cur.execute(
+                            "TRUNCATE TABLE mapping_history_last_id"
+                        )
+                        mapping_value_copy_data = []
+                        mapping_history_last_id_copy_data = []
                         print("processing old mapping values")
                         total = len(mapping_snapshot)
                         count = 0
                         for item in mapping_snapshot:
+                            id_ = item["id"]
                             mapping_id = item["mapping_id"]
                             key_id = item["key_id"]
                             key = item["key"]
                             value = item["value"]
                             if value is not None:
                                 value_id = get_value_id(key_id, value)
-                                copy_data.append((mapping_id, key_id, value_id, key, value))
+                                mapping_value_copy_data.append((mapping_id, key_id, value_id, key, value))
+                            mapping_history_last_id_copy_data.append((key_id, id_))
                             count += 1
                             if count % 10000 == 0:
                                 print(f"{count}/{total}")
                         print("saving mapping values")
-                        if copy_data:
+                        if mapping_value_copy_data:
                             async with cur.copy("COPY mapping_value (mapping_id, key_id, value_id, key, value) FROM STDIN") as copy:
-                                for item in copy_data:
+                                for item in mapping_value_copy_data:
+                                    await copy.write_row(item)
+                            async with cur.copy("COPY mapping_history_last_id (key_id, last_history_id) FROM STDIN") as copy:
+                                for item in mapping_history_last_id_copy_data:
                                     await copy.write_row(item)
                         await cur.execute(
                             "DELETE FROM mapping_history WHERE height > %s",
@@ -206,6 +216,8 @@ class DatabaseUtil(DatabaseBase):
                             backup_key = f"{redis_key}:history:{last_backup_height}"
                             await self.redis.copy(backup_key, redis_key, replace=True)
                             await self.redis.persist(redis_key)
+                            await self.redis.expire(backup_key, 259200)
+
                             # remove rollback backup as well
                             _, keys = await self.redis.scan(0, f"{redis_key}:rollback_backup:*", 100)
                             for key in keys:
