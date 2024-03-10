@@ -102,13 +102,8 @@ class DatabaseUtil(DatabaseBase):
                         print("saving mapping values")
                         if copy_data:
                             async with cur.copy("COPY mapping_value (mapping_id, key_id, value_id, key, value) FROM STDIN") as copy:
-                                total = len(copy_data)
-                                count = 0
                                 for item in copy_data:
                                     await copy.write_row(item)
-                                    count += 1
-                                    if count % 10000 == 0:
-                                        print(f"{count}/{total}")
                         await cur.execute(
                             "DELETE FROM mapping_history WHERE height > %s",
                             (last_backup_height,)
@@ -120,7 +115,6 @@ class DatabaseUtil(DatabaseBase):
                             print("reverting block", block.height)
                             for ct in block.transactions:
                                 t = ct.transaction
-                                print("reverting transaction", t.id)
                                 # revert to unconfirmed transactions
                                 if isinstance(ct, (RejectedDeploy, RejectedExecute)):
                                     await cur.execute(
@@ -183,7 +177,6 @@ class DatabaseUtil(DatabaseBase):
                                         "WHERE p.program_id = %s AND p.id = pf.program_id AND pf.name = %s",
                                         (str(ts.program_id), str(ts.function_name))
                                     )
-                            print("reverting leaderboard data")
                             # TODO: change leaderboard to something else, we dont need that on mainnet
                             # revert leaderboard
                             await cur.execute(
