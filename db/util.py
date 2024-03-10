@@ -69,6 +69,7 @@ class DatabaseUtil(DatabaseBase):
                         for redis_key in redis_keys:
                             if not await self.redis.exists(f"{redis_key}:history:{last_backup_height}"):
                                 raise RuntimeError(f"backup key not found: {redis_key}:history:{last_backup_height}")
+                            await self.redis.persist(redis_key)
                         print(f"reverting to last backup: {last_backup_height}")
 
                         print("fetching old mapping values from mapping history")
