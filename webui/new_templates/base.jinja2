@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="htmx-config" content='{"getCacheBusterParam":true}'>
+    <script type="application/ld+json">
+        {
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            "name": "Aleoscan",
+            "author": {
+                "@type": "Person",
+                "name": "Haruka Ma"
+            },
+            "url": "https://testnet3.aleoscan.io/",
+            "description": "Aleoscan is an open-source Aleo explorer, providing information about the Aleo blockchain.",
+            "potentialAction": {
+                "@type": "SearchAction",
+                "target": "https://testnet3.aleoscan.io/search?q={search_term_string}",
+                "query-input": "required name=search_term_string"
+            }
+        }
+    </script>
+    <meta name="description" content="Aleoscan - open source Aleo explorer. Explore the Aleo blockchain, find information about blocks, transactions, validators, programs and more. Formerly known as Haruka's Aleo Explorer.">
+
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
+    <link rel="manifest" href="/static/site.webmanifest">
+    <link rel="mask-icon" href="/static/safari-pinned-tab.svg" color="#5bbad5">
+    <meta name="apple-mobile-web-app-title" content="AleoScan">
+    <meta name="application-name" content="AleoScan">
+    <meta name="msapplication-TileColor" content="#da532c">
+    <meta name="theme-color" content="#ffffff">
+
+    <title>{% block title %}{% endblock %}</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/picocss/2.0.6/pico.conditional.min.css"
+          integrity="sha512-TihSskfreoSBVJXs+Yk4T+vWau6Dka3YEj/BtKtkFNqxS4nvbDrDZobTiQ2kvmBpfdd0zgH45oLkx06LRPm/kQ=="
+          crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/inter-ui/4.0.2/inter.css"
+          integrity="sha512-hijzqbP8sLpfqc1R7Sn4uta4OW5x4KQ5jBY3gPgxOHVZnDX/xzfgMLKZye+qM+kIGjE8YAUeeKWcnwiTx3kK7g=="
+          crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="/static/modern_style_v0.css">
+{% block head %}{% endblock %}
+</head>
+<body hx-ext="morph" hx-indicator="#htmx-body">
+
+<nav>
+    <div class="title-logo"></div>
+    <div class="title-network-indicator-container">
+        <span class="title-network-indicator-name">Testnet 3</span>
+    </div>
+</nav>
+
+<div class="container">
+    <div id="htmx-body" class="htmx-indicator">
+        {% block content %}{% endblock %}
+    </div>
+    <div class="footer-container">
+
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/htmx/1.9.4/htmx.min.js"
+        integrity="sha512-ZM2vxgVBxhBI5Etj/c/qcJV+upate3VzbVQOQRCx1YGuyEX9dYdMh8pRUot4xIwtAay6QwRQC/FdXRjSWIEHrg=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://unpkg.com/idiomorph@0.0.8/dist/idiomorph-ext.min.js"
+        integrity="sha512-j+QoMRpO36QMBWcBvmktsy35CPVqxMOiLEp42+0T87V/sFWHGT/d0d+0unePWCqfCKXggIzhcTvIJeBiMUGofw=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/2.11.8/umd/popper.min.js"
+        integrity="sha512-TPh2Oxlg1zp+kz3nFA0C5vVC6leG/6mm1z9+mA81MI5eaUVqasPLO8Cuk4gMF4gUfP5etR73rgU/8PNMsSesoQ=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/6.3.7/tippy.umd.min.js"
+        integrity="sha512-2TtfktSlvvPzopzBA49C+MX6sdc7ykHGbBQUTH8Vk78YpkXVD5r6vrNU+nOmhhl1MyTWdVfxXdZfyFsvBvOllw=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script id="content-script"></script>
+<script src="/static/modern_script_v0.js"></script>
+<script>
+  tippy('[data-tippy-content]')
+
+  htmx.on("htmx:afterSwap", () => {
+    apply_timezone()
+    tippy('[data-tippy-content]')
+  })
+
+  htmx.on("htmx:beforeSwap", function(e) {
+    if (e.detail.xhr.status >= 400) {
+      e.detail.shouldSwap = true
+      e.detail.isError = false
+    }
+  })
+
+  {% if "PLAUSIBLE" | get_env %}
+    el = document.getElementById('plausible-optout');
+    if (localStorage.getItem('plausible_ignore') === 'true') {
+      el.innerHTML = 'Opt in';
+    } else {
+      el.innerHTML = 'Opt out';
+    }
+
+    function toggle_optout() {
+      if (localStorage.getItem('plausible_ignore') === 'true') {
+        localStorage.setItem('plausible_ignore', 'false');
+        el.innerHTML = 'Opt out';
+      } else {
+        localStorage.setItem('plausible_ignore', 'true');
+        el.innerHTML = 'Opt in';
+      }
+    }
+  {% endif %}
+</script>
+</body>

@@ -13,7 +13,6 @@ from starlette.staticfiles import StaticFiles
 
 from middleware.asgi_logger import AccessLoggerMiddleware
 from middleware.htmx import HtmxMiddleware
-from middleware.minify import MinifyMiddleware
 from middleware.server_timing import ServerTimingMiddleware
 from util.set_proc_title import set_proc_title
 from .chain_routes import *
@@ -191,7 +190,7 @@ app = Starlette(
     middleware=[
         Middleware(AccessLoggerMiddleware, format=log_format),
         Middleware(HtmxMiddleware),
-        Middleware(MinifyMiddleware),
+        # Middleware(MinifyMiddleware),
         Middleware(ServerTimingMiddleware),
     ]
 )

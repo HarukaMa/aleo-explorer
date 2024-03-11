@@ -8,7 +8,7 @@ from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.templating import Jinja2Templates
 
-templates = Jinja2Templates(directory='webui/templates', trim_blocks=True, lstrip_blocks=True)
+templates = Jinja2Templates(directory='webui/new_templates', trim_blocks=True, lstrip_blocks=True)
 
 def get_env(name: str):
     return os.environ.get(name)

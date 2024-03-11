@@ -37,11 +37,9 @@ docker-compose up -d
 
 ## A better frontend?
 
-Yeah, I'm not really a frontend developer. I know it's ugly, but I'm focusing on features here.
+Yay! you've found the next iteration of the frontend. Very early WIP, of course. When will it be ready? Weeks? Months? Years? Who knows. My full-time job is affecting the progress, but I have to eat. Plus it's also fun. Anyway, enough of my rambling.
 
-You are welcome to contribute a better frontend, as long as you keep the current one as a function baseline reference.
-You can also create an entirely new frontend outside this repository; all you really need is the blockchain data in the
-database.
+TODO: remove this section when the frontend is ready.
 
 ## License
 
