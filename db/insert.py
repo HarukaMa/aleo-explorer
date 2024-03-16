@@ -380,6 +380,54 @@ class DatabaseInsert(DatabaseBase):
             if (await cur.fetchone()) is None: # first seen
                 prior_tx = False
                 transaction_db_id: int = -1
+                # check for existing transactions and remove unconfirmed transactions
+                # wasteful for now, just a strange edge case avoidance
+                # TODO: refactor
+                if confirmed_transaction is not None:
+                    if isinstance(confirmed_transaction, AcceptedDeploy):
+                        if not isinstance(transaction, DeployTransaction):
+                            raise RuntimeError("expected a deploy transaction for accepted deploy")
+                        find_transition_id = transaction.fee.transition.id
+                        await cur.execute(
+                            "SELECT tx.id, tx.transaction_id FROM transaction tx "
+                            "JOIN fee f on tx.id = f.transaction_id "
+                            "JOIN transition t on f.id = t.fee_id "
+                            "WHERE t.transition_id = %s AND tx.confimed_transaction_id IS NULL",
+                            (str(find_transition_id),)
+                        )
+                        res = await cur.fetchall()
+                    elif isinstance(confirmed_transaction, AcceptedExecute):
+                        if not isinstance(transaction, ExecuteTransaction):
+                            raise RuntimeError("expected an execute transaction for accepted execute")
+                        find_transition_ids = list(map(lambda x: str(x.id), transaction.execution.transitions))
+                        await cur.execute(
+                            "SELECT tx.id, tx.transaction_id FROM transaction tx "
+                            "JOIN transaction_execute te on tx.id = te.transaction_id "
+                            "JOIN transition t on te.id = t.transaction_execute_id "
+                            "WHERE t.transition_id = ANY(%s::text[]) AND tx.confimed_transaction_id IS NULL",
+                            (find_transition_ids,)
+                        )
+                        res = await cur.fetchall()
+                        if (fee := transaction.additional_fee.value) is not None:
+                            await cur.execute(
+                                "SELECT tx.id, tx.transaction_id FROM transaction tx "
+                                "JOIN fee f on tx.id = f.transaction_id "
+                                "JOIN transition t on f.id = t.fee_id "
+                                "WHERE t.transition_id = %s AND tx.confimed_transaction_id IS NULL",
+                                (str(fee.transition.id),)
+                            )
+                            for row in await cur.fetchall():
+                                if row not in res:
+                                    res.append(row)
+                    else:
+                        res = []
+                    for row in res:
+                        print("removing strange unconfirmed transaction:", row["transaction_id"])
+                        await cur.execute(
+                            "DELETE FROM transaction WHERE id = %s",
+                            (row["id"],)
+                        )
+
                 if isinstance(transaction, FeeTransaction): # check probable rejected unconfirmed transaction
                     if confirmed_transaction is None:
                         raise RuntimeError("expected a confirmed transaction for fee transaction")
