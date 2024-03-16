@@ -25,6 +25,16 @@
     </script>
     <meta name="description" content="Aleoscan - open source Aleo explorer. Explore the Aleo blockchain, find information about blocks, transactions, validators, programs and more. Formerly known as Haruka's Aleo Explorer.">
 
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
+    <link rel="manifest" href="/static/site.webmanifest">
+    <link rel="mask-icon" href="/static/safari-pinned-tab.svg" color="#5bbad5">
+    <meta name="apple-mobile-web-app-title" content="AleoScan">
+    <meta name="application-name" content="AleoScan">
+    <meta name="msapplication-TileColor" content="#da532c">
+    <meta name="theme-color" content="#ffffff">
+
     <title>{% block title %}{% endblock %}</title>
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/foundation/6.7.4/css/foundation.min.css"
@@ -48,7 +58,7 @@
         {% endif %}
         }
     </style>
-    <link rel="stylesheet" href="/static/base_style_v10.css">
+    <link rel="stylesheet" href="/static/base_style_v11.css">
     {% block head %}{% endblock %}
 </head>
 <body hx-ext="morph" hx-indicator="#htmx-body">
@@ -57,7 +67,10 @@
     <div class="menubar">
         <div class="top-bar-left">
             <ul class="dropdown menu" data-dropdown-menu hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
-                <a href="/" style="padding: 0; margin: auto 0"><img src="/static/aleoscan.svg" style="height: 20px" alt="Aleoscan"></a>Testnet3
+                <a href="/" style="padding: 0; margin: auto 0"><div class="title-logo"></div></a>
+                <div class="title-network-indicator-container">
+                    <span class="title-network-indicator-name">Testnet 3</span>
+                </div>
                 <li>
                     <a href="#">Blockchain</a>
                     <ul class="menu">
