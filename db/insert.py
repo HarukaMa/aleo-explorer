@@ -1321,7 +1321,7 @@ class DatabaseInsert(DatabaseBase):
             async with conn.cursor() as cur:
                 await cur.execute(
                     "DELETE FROM transaction WHERE first_seen < %s AND confimed_transaction_id IS NULL",
-                    (int(time.time()) - 86400 * 7)
+                    (int(time.time()) - 86400 * 7,)
                 )
 
     async def save_block(self, block: Block):
