@@ -79,6 +79,15 @@ nav {
     position: relative;
 }
 
+@keyframes opacity {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
 .nav-link:hover {
     color: var(--blue-500);
 
@@ -90,6 +99,7 @@ nav {
     > .nav-link-menu {
         color: var(--pico-color);
         display: flex;
+        animation: opacity 200ms ease-out;
     }
 }
 
