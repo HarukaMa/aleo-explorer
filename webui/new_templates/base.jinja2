@@ -37,6 +37,9 @@
 
     <title>{% block title %}{% endblock %}</title>
 
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com/">
+    <link rel="preconnect" href="https://unpkg.com/">
+
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/picocss/2.0.6/pico.conditional.min.css"
           integrity="sha512-TihSskfreoSBVJXs+Yk4T+vWau6Dka3YEj/BtKtkFNqxS4nvbDrDZobTiQ2kvmBpfdd0zgH45oLkx06LRPm/kQ=="
           crossorigin="anonymous" referrerpolicy="no-referrer" />
@@ -46,12 +49,40 @@
     <link rel="stylesheet" href="/static/modern_style_v0.css">
 {% block head %}{% endblock %}
 </head>
-<body hx-ext="morph" hx-indicator="#htmx-body">
+<body hx-ext="morph" hx-indicator="#htmx-body" hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
 
 <nav>
     <div class="title-logo"></div>
     <div class="title-network-indicator-container">
         <span class="title-network-indicator-name">Testnet 3</span>
+    </div>
+    <div class="nav-links">
+        <div class="nav-link">
+            Blockchain
+            <span class="chevron"></span>
+
+            <div class="nav-link-menu">
+                <div class="nav-link-menu-item">Blocks</div>
+                <div class="nav-link-menu-item">Validators</div>
+                <div class="nav-link-menu-item">Programs</div>
+            </div>
+        </div>
+
+        <div class="nav-link">
+            Proving
+            <span class="chevron"></span>
+
+            <div class="nav-link-menu">
+                <div class="nav-link-menu-item">Blocks</div>
+                <div class="nav-link-menu-item">Validators</div>
+                <div class="nav-link-menu-item">Programs</div>
+            </div>
+        </div>
+
+        <div class="nav-link">
+            Developers
+            <span class="chevron"></span>
+        </div>
     </div>
 </nav>
 
