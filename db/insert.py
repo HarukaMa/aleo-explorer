@@ -1301,6 +1301,9 @@ class DatabaseInsert(DatabaseBase):
 
                         await self._post_ratify(cur, self.redis, block.height, block.round, block.ratifications.ratifications, address_puzzle_rewards)
 
+                        if block.height % 100 == 0:
+                            await self.cleanup_unconfirmed_transactions()
+
                         signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT})
                         await self._redis_cleanup(self.redis, redis_keys, block.height, False)
 
@@ -1312,6 +1315,14 @@ class DatabaseInsert(DatabaseBase):
                         await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                         raise
             signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGINT})
+
+    async def cleanup_unconfirmed_transactions(self):
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "DELETE FROM transaction WHERE first_seen < %s AND confimed_transaction_id IS NULL",
+                    (int(time.time()) - 86400 * 7)
+                )
 
     async def save_block(self, block: Block):
         await self._save_block(block)
