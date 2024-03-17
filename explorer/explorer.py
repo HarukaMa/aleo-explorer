@@ -84,7 +84,8 @@ class Explorer:
             self.latest_block_hash = latest_block_hash
             print(f"latest height: {self.latest_height}")
             self.node = Node(explorer_message=self.message, explorer_request=self.node_request)
-            await self.node.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4133")))
+            if not os.environ.get("WEB_ONLY"):
+                await self.node.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4133")))
             asyncio.create_task(webui.run())
             asyncio.create_task(api.run())
             while True:
