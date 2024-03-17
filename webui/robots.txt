@@ -10,14 +10,4 @@ User-agent: Petalbot
 Disallow: /
 
 User-agent: *
-Disallow: /block
-Disallow: /blocks
-Disallow: /address
-Disallow: /address_solution
-Disallow: /transaction
-Disallow: /transition
-Disallow: /programs
-Disallow: /similar_programs
-Disallow: /upload_source
-Disallow: /leaderboard
 Crawl-delay: 5
