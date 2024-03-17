@@ -157,6 +157,7 @@ routes = [
     Route("/robots.txt", robots_route),
     Route("/cf", cloudflare_error_page),
     Mount("/static", StaticFiles(directory="webui/static"), name="static"),
+    Route("/favicon.ico", lambda _: FileResponse("webui/static/favicon.ico"))
 ]
 
 exc_handlers = {
