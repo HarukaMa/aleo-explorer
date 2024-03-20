@@ -6,7 +6,7 @@ import aleo_explorer_rust
 from aleo_types import Address, Field, StructPlaintext, Vec, Tuple, Identifier, Plaintext, u8, LiteralType, Value, \
     PlaintextValue, LiteralPlaintext, Literal, cached_get_mapping_id, cached_get_key_id, ArrayPlaintext
 from db import Database
-from node.testnet3 import Testnet3
+from node.canary import Canary as Network
 from util.aleo_strings import string_to_u128_array_le, string_from_u128_array_le
 from util.global_cache import global_mapping_cache
 
@@ -47,7 +47,7 @@ def _get_name_st(name: str, parent: Field) -> StructPlaintext:
 
 async def _resolve_name_hash(db: Database, name_hash: Field) -> Optional[str]:
     key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Field, primitive=name_hash))
-    name_struct = await _get_mapping_value(db, Testnet3.ans_registry, "names", key)
+    name_struct = await _get_mapping_value(db, Network.ans_registry, "names", key)
     if name_struct is None:
         return None
 
@@ -79,14 +79,14 @@ async def get_address_from_domain(db: Database, domain: str) -> Optional[str]:
     name_hash = LiteralPlaintext(literal=Literal(type_=Literal.Type.Field, primitive=parent_hash))
 
     # name exists?
-    name_struct = await _get_mapping_value(db, Testnet3.ans_registry, "names", name_hash)
+    name_struct = await _get_mapping_value(db, Network.ans_registry, "names", name_hash)
     if name_struct is None:
         return None
     if not isinstance(name_struct, StructPlaintext):
         raise RuntimeError(f"mapping value is not a struct: {name_struct}")
 
     # public owner?
-    owner = await _get_mapping_value(db, Testnet3.ans_registry, "nft_owners", name_hash)
+    owner = await _get_mapping_value(db, Network.ans_registry, "nft_owners", name_hash)
     if owner is None:
         return ""
     if not isinstance(owner, LiteralPlaintext):
@@ -103,7 +103,7 @@ async def get_address_from_domain(db: Database, domain: str) -> Optional[str]:
 
 async def get_primary_name_from_address(db: Database, address: str) -> Optional[str]:
     key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=Address.loads(address)))
-    name_hash = await _get_mapping_value(db, Testnet3.ans_registry, "primary_names", key)
+    name_hash = await _get_mapping_value(db, Network.ans_registry, "primary_names", key)
     if name_hash is None:
         return None
     if not isinstance(name_hash, LiteralPlaintext):

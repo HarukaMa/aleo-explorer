@@ -1217,8 +1217,8 @@ class Deployment(Serializable):
 
     @property
     def cost(self) -> tuple[int, int]:
-        from node.testnet3 import Testnet3
-        storage_cost = len(self.dump()) * Testnet3.deployment_fee_multiplier
+        from node.canary import Canary
+        storage_cost = len(self.dump()) * Canary.deployment_fee_multiplier
         namespace_cost = 10 ** max(0, 10 - len(self.program.id.name.data)) * 1000000
         return storage_cost, namespace_cost
 
@@ -3197,40 +3197,44 @@ class Ratify(EnumBaseSerialize, RustEnum, Serializable):
 class Committee(Serializable):
     version = u8(1)
 
-    def __init__(self, *, starting_round: u64, members: Vec[Tuple[Address, u64, bool_], u16], total_stake: u64):
+    def __init__(self, *, id_: Field, starting_round: u64, members: Vec[Tuple[Address, u64, bool_], u16], total_stake: u64):
+        self.id = id_
         self.starting_round = starting_round
         self.members = members
         self.total_stake = total_stake
 
     def dump(self) -> bytes:
-        return self.version.dump() + self.starting_round.dump() + self.members.dump() + self.total_stake.dump()
+        return self.version.dump() + self.id.dump() + self.starting_round.dump() + self.members.dump() + self.total_stake.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
         version = u8.load(data)
         if version != cls.version:
             raise ValueError(f"invalid committee version")
+        id_ = Field.load(data)
         starting_round = u64.load(data)
         members = Vec[Tuple[Address, u64, bool_], u16].load(data)
         total_stake = u64.load(data)
-        return cls(starting_round=starting_round, members=members, total_stake=total_stake)
+        return cls(id_=id_, starting_round=starting_round, members=members, total_stake=total_stake)
 
 
 class GenesisRatify(Ratify):
     type = Ratify.Type.Genesis
 
-    def __init__(self, *, committee: Committee, public_balances: Vec[Tuple[Address, u64], u16]):
+    def __init__(self, *, committee: Committee, public_balances: Vec[Tuple[Address, u64], u16], bonded_balances: Vec[Tuple[Address, Address, Address, u64], u16]):
         self.committee = committee
         self.public_balances = public_balances
+        self.bonded_balances = bonded_balances
 
     def dump(self) -> bytes:
-        return self.version.dump() + self.type.dump() + self.committee.dump() + self.public_balances.dump()
+        return self.version.dump() + self.type.dump() + self.committee.dump() + self.public_balances.dump() + self.bonded_balances.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
         committee = Committee.load(data)
         public_balances = Vec[Tuple[Address, u64], u16].load(data)
-        return cls(committee=committee, public_balances=public_balances)
+        bonded_balances = Vec[Tuple[Address, Address, Address, u64], u16].load(data)
+        return cls(committee=committee, public_balances=public_balances, bonded_balances=bonded_balances)
 
 
 class BlockRewardRatify(Ratify):

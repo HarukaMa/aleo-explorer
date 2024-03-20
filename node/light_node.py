@@ -10,7 +10,7 @@ import requests
 
 from aleo_types import ChallengeRequest, NodeType, u16, u64, Frame, Message, ChallengeResponse, \
     PeerRequest, Ping, PeerResponse, Pong, bool_, BlockLocators, Address, Signature, Option, Data
-from .testnet3 import Testnet3
+from .canary import Canary as Network
 
 
 class LightNodeState:
@@ -111,7 +111,7 @@ class LightNode:
             return
         try:
             challenge_request = ChallengeRequest(
-                version=Testnet3.version,
+                version=Network.version,
                 listener_port=u16(14134),
                 node_type=NodeType.Prover,
                 address=Address.loads("aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px"),
@@ -138,12 +138,12 @@ class LightNode:
 
         if isinstance(frame.message, ChallengeRequest):
             msg = frame.message
-            if msg.version < Testnet3.version:
+            if msg.version < Network.version:
                 raise ValueError("peer is outdated")
             nonce = msg.nonce
             self.state.node_connected(self.ip, self.port, str(msg.address))
             response = ChallengeResponse(
-                genesis_header=Testnet3.genesis_block.header,
+                genesis_header=Network.genesis_block.header,
                 signature=Data[Signature](Signature.load(BytesIO(bytes(aleo_explorer_rust.sign_nonce("APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH", nonce.dump()))))),
             )
             await self.send_message(response)
@@ -158,7 +158,7 @@ class LightNode:
 
         elif isinstance(frame.message, ChallengeResponse):
             msg = frame.message
-            if msg.genesis_header.transactions_root != Testnet3.genesis_block.header.transactions_root:
+            if msg.genesis_header.transactions_root != Network.genesis_block.header.transactions_root:
                 raise ValueError("peer has wrong genesis block")
 
         elif isinstance(frame.message, Ping):
@@ -216,7 +216,7 @@ class LightNode:
 
     async def send_ping(self):
         ping = Ping(
-            version=Testnet3.version,
+            version=Network.version,
             node_type=NodeType.Prover,
             block_locators=Option[BlockLocators](None),
         )

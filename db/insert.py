@@ -706,8 +706,15 @@ class DatabaseInsert(DatabaseBase):
         await DatabaseInsert._update_committee_bonded_map(cur, self.redis, committee_members, stakers, 0)
 
         account_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "account"))
-        public_balances = ratification.public_balances
         global_mapping_cache[account_mapping_id] = {}
+        bonded_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "bonded"))
+        global_mapping_cache[bonded_mapping_id] = {}
+        withdraw_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "withdraw"))
+        global_mapping_cache[withdraw_mapping_id] = {}
+        metadata_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "metadata"))
+        global_mapping_cache[metadata_mapping_id] = {}
+
+        public_balances = ratification.public_balances
         operations: list[dict[str, Any]] = []
         for address, balance in public_balances:
             key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=address))
@@ -730,6 +737,115 @@ class DatabaseInsert(DatabaseBase):
                 "mapping_name": "account",
                 "from_transaction": False,
             })
+
+        bonded_balances = ratification.bonded_balances
+        for staker, validator, withdrawal, amount in bonded_balances:
+            key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=staker))
+            key_id = Field.loads(cached_get_key_id("credits.aleo", "bonded", key.dump()))
+            k = Tuple[Identifier, Plaintext]((
+                Identifier.loads("validator"),
+                LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=validator))
+            ))
+            v = Tuple[Identifier, Plaintext]((
+                Identifier.loads("microcredits"),
+                LiteralPlaintext(literal=Literal(type_=Literal.Type.U64, primitive=amount))
+            ))
+            value = PlaintextValue(
+                plaintext=StructPlaintext(
+                    members=Vec[Tuple[Identifier, Plaintext], u8]([k, v])
+                )
+            )
+            value_id = Field.loads(aleo_explorer_rust.get_value_id(str(key_id), value.dump()))
+            global_mapping_cache[bonded_mapping_id][key_id] = {
+                "key": key,
+                "value": value,
+            }
+            operations.append({
+                "type": FinalizeOperation.Type.UpdateKeyValue,
+                "mapping_id": bonded_mapping_id,
+                "key_id": key_id,
+                "value_id": value_id,
+                "key": key,
+                "value": value,
+                "height": 0,
+                "program_name": "credits.aleo",
+                "mapping_name": "bonded",
+                "from_transaction": False,
+            })
+
+            key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=staker))
+            key_id = Field.loads(cached_get_key_id("credits.aleo", "withdraw", key.dump()))
+            value = PlaintextValue(plaintext=LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=withdrawal)))
+            value_id = Field.loads(aleo_explorer_rust.get_value_id(str(key_id), value.dump()))
+            global_mapping_cache[withdraw_mapping_id][key_id] = {
+                "key": key,
+                "value": value,
+            }
+            operations.append({
+                "type": FinalizeOperation.Type.UpdateKeyValue,
+                "mapping_id": withdraw_mapping_id,
+                "key_id": key_id,
+                "value_id": value_id,
+                "key": key,
+                "value": value,
+                "height": 0,
+                "program_name": "credits.aleo",
+                "mapping_name": "withdraw",
+                "from_transaction": False,
+            })
+
+        key = LiteralPlaintext(
+            literal=Literal(
+                type_=Literal.Type.Address,
+                primitive=Address.loads("aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc")
+            )
+        )
+        key_id = Field.loads(cached_get_key_id("credits.aleo", "metadata", key.dump()))
+        value = PlaintextValue(plaintext=LiteralPlaintext(literal=Literal(type_=Literal.Type.U32, primitive=u32(len(committee_members)))))
+        value_id = Field.loads(aleo_explorer_rust.get_value_id(str(key_id), value.dump()))
+        global_mapping_cache[metadata_mapping_id][key_id] = {
+            "key": key,
+            "value": value,
+        }
+        operations.append({
+            "type": FinalizeOperation.Type.UpdateKeyValue,
+            "mapping_id": metadata_mapping_id,
+            "key_id": key_id,
+            "value_id": value_id,
+            "key": key,
+            "value": value,
+            "height": 0,
+            "program_name": "credits.aleo",
+            "mapping_name": "metadata",
+            "from_transaction": False,
+        })
+
+        key = LiteralPlaintext(
+            literal=Literal(
+                type_=Literal.Type.Address,
+                primitive=Address.loads("aleo1qgqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqanmpl0")
+            )
+        )
+        key_id = Field.loads(cached_get_key_id("credits.aleo", "metadata", key.dump()))
+        value = PlaintextValue(plaintext=LiteralPlaintext(literal=Literal(type_=Literal.Type.U32, primitive=u32(len(bonded_balances) - len(committee_members)))))
+        value_id = Field.loads(aleo_explorer_rust.get_value_id(str(key_id), value.dump()))
+        global_mapping_cache[metadata_mapping_id][key_id] = {
+            "key": key,
+            "value": value,
+        }
+        operations.append({
+            "type": FinalizeOperation.Type.UpdateKeyValue,
+            "mapping_id": metadata_mapping_id,
+            "key_id": key_id,
+            "value_id": value_id,
+            "key": key,
+            "value": value,
+            "height": 0,
+            "program_name": "credits.aleo",
+            "mapping_name": "metadata",
+            "from_transaction": False,
+        })
+
         from interpreter.interpreter import execute_operations
         await execute_operations(self, cur, operations)
 

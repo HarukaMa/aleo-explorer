@@ -10,7 +10,7 @@ from db import Database
 from interpreter.interpreter import init_builtin_program
 from node import Node
 # from node.light_node import LightNodeState
-from node.testnet3 import Testnet3
+from node.canary import Canary as Network
 from .types import Request, Message, ExplorerRequest
 
 
@@ -29,7 +29,7 @@ class Explorer:
         # states
         self.dev_mode = False
         self.latest_height = 0
-        self.latest_block_hash: BlockHash = Testnet3.genesis_block.block_hash
+        self.latest_block_hash: BlockHash = Network.genesis_block.block_hash
 
     def start(self):
         self.task = asyncio.create_task(self.main_loop())
