@@ -10,11 +10,11 @@ from .base import DatabaseBase
 
 class DatabaseAddress(DatabaseBase):
 
-    async def get_leaderboard_size(self) -> int:
+    async def get_puzzle_reward_address_count(self) -> int:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
-                    await cur.execute("SELECT COUNT(*) FROM leaderboard")
+                    await cur.execute("SELECT COUNT(*) FROM address_puzzle_reward")
                     if (res := await cur.fetchone()) is None:
                         return 0
                     return res["count"]
@@ -22,13 +22,13 @@ class DatabaseAddress(DatabaseBase):
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_leaderboard(self, start: int, end: int) -> list[dict[str, Any]]:
+    async def get_puzzle_rewards(self, start: int, end: int) -> list[dict[str, Any]]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT * FROM leaderboard "
-                        "ORDER BY total_incentive DESC, total_reward DESC "
+                        "SELECT * FROM address_puzzle_reward "
+                        "ORDER BY total_reward DESC "
                         "LIMIT %s OFFSET %s",
                         (end - start, start)
                     )
@@ -37,17 +37,17 @@ class DatabaseAddress(DatabaseBase):
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_leaderboard_rewards_by_address(self, address: str) -> tuple[int, int]:
+    async def get_puzzle_reward_by_address(self, address: str) -> int:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT total_reward, total_incentive FROM leaderboard WHERE address = %s", (address,)
+                        "SELECT total_reward FROM address_puzzle_reward WHERE address = %s", (address,)
                     )
                     row = await cur.fetchone()
                     if row is None:
                         return 0, 0
-                    return row["total_reward"], row["total_incentive"]
+                    return row["total_reward"]
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
@@ -253,20 +253,6 @@ LIMIT 30
                     for height in heights:
                         total_solutions += ref_proof_target_dict[height - 1]
                     return total_solutions / interval
-                except Exception as e:
-                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
-                    raise
-
-    async def get_leaderboard_total(self) -> int:
-        async with self.pool.connection() as conn:
-            async with conn.cursor() as cur:
-                try:
-                    await cur.execute("SELECT total_credit FROM leaderboard_total")
-                    total_credit = await cur.fetchone()
-                    if total_credit is None:
-                        await cur.execute("INSERT INTO leaderboard_total (total_credit) VALUES (0)")
-                        return 0
-                    return int(total_credit["total_credit"])
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise

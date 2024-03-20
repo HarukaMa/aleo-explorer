@@ -1364,13 +1364,6 @@ class DatabaseInsert(DatabaseBase):
                             if (res := await cur.fetchone()) is None:
                                 raise RuntimeError("failed to insert row into database")
                             coinbase_solution_db_id = res["id"]
-                            await cur.execute("SELECT total_credit FROM leaderboard_total")
-                            current_total_credit = await cur.fetchone()
-                            if current_total_credit is None:
-                                await cur.execute("INSERT INTO leaderboard_total (total_credit) VALUES (0)")
-                                current_total_credit = 0
-                            else:
-                                current_total_credit = current_total_credit["total_credit"]
                             copy_data: list[tuple[None, int, str, u64, str, int, int, str, bool]] = []
                             for prover_solution, target, reward in solutions:
                                 partial_solution = prover_solution.partial_solution
@@ -1386,22 +1379,12 @@ class DatabaseInsert(DatabaseBase):
                                 async with cur.copy("COPY prover_solution (dag_vertex_id, coinbase_solution_id, address, nonce, commitment, target, reward, proof_x, proof_y_is_positive) FROM STDIN") as copy:
                                     for row in copy_data:
                                         await copy.write_row(row)
-                                if block.header.metadata.height >= 130888 and block.header.metadata.timestamp < 1675209600 and current_total_credit < 37_500_000_000_000:
-                                    await cur.execute(
-                                        "UPDATE leaderboard_total SET total_credit = leaderboard_total.total_credit + %s",
-                                        (sum(reward for _, _, reward in solutions),)
-                                    )
                                 for address, reward in address_puzzle_rewards.items():
                                     await cur.execute(
-                                        "INSERT INTO leaderboard (address, total_reward) VALUES (%s, %s) "
-                                        "ON CONFLICT (address) DO UPDATE SET total_reward = leaderboard.total_reward + %s",
+                                        "INSERT INTO address_puzzle_reward (address, total_reward) VALUES (%s, %s) "
+                                        "ON CONFLICT (address) DO UPDATE SET total_reward = total_reward + %s",
                                         (address, reward, reward)
                                     )
-                                    if block.header.metadata.height >= 130888 and block.header.metadata.timestamp < 1675209600 and current_total_credit < 37_500_000_000_000:
-                                        await cur.execute(
-                                            "UPDATE leaderboard SET total_incentive = leaderboard.total_incentive + %s WHERE address = %s",
-                                            (reward, address)
-                                        )
 
                         for aborted in block.aborted_transactions_ids:
                             await cur.execute(
