@@ -845,7 +845,7 @@ class DatabaseInsert(DatabaseBase):
         })
 
         from interpreter.interpreter import execute_operations
-        await execute_operations(cast(Database, self), cur, operations)
+        await execute_operations(cast("Database", self), cur, operations)
 
     @staticmethod
     async def _get_committee_mapping(redis_conn: Redis[str]) -> dict[Address, tuple[u64, bool_]]:
@@ -1102,14 +1102,14 @@ class DatabaseInsert(DatabaseBase):
                     try:
                         if block.height != 0:
                             block_reward, coinbase_reward = block.compute_rewards(
-                                await cast(Database, self).get_latest_coinbase_target(),
-                                await cast(Database, self).get_latest_cumulative_proof_target()
+                                await cast("Database", self).get_latest_coinbase_target(),
+                                await cast("Database", self).get_latest_cumulative_proof_target()
                             )
                             puzzle_reward = coinbase_reward // 2
                         else:
                             block_reward, coinbase_reward, puzzle_reward = 0, 0, 0
 
-                        block_reward += await block.get_total_priority_fee(cast(Database, self))
+                        block_reward += await block.get_total_priority_fee(cast("Database", self))
 
                         for ratification in block.ratifications:
                             if isinstance(ratification, BlockRewardRatify):
@@ -1122,7 +1122,7 @@ class DatabaseInsert(DatabaseBase):
                                 await self._pre_ratify(cur, ratification)
 
                         from interpreter.interpreter import finalize_block
-                        reject_reasons = await finalize_block(cast(Database, self), cur, block)
+                        reject_reasons = await finalize_block(cast("Database", self), cur, block)
 
                         await cur.execute(
                             "INSERT INTO block (height, block_hash, previous_hash, previous_state_root, transactions_root, "
