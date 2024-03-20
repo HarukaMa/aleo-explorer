@@ -2678,7 +2678,8 @@ class FinalizeOperation(EnumBaseSerialize, RustEnum, Serializable):
         InsertKeyValue = 1
         UpdateKeyValue = 2
         RemoveKeyValue = 3
-        RemoveMapping = 4
+        ReplaceMapping = 4
+        RemoveMapping = 5
 
     type: Type
     mapping_id: Field
@@ -2694,6 +2695,8 @@ class FinalizeOperation(EnumBaseSerialize, RustEnum, Serializable):
             return UpdateKeyValue.load(data)
         elif type_ == cls.Type.RemoveKeyValue:
             return RemoveKeyValue.load(data)
+        elif type_ == cls.Type.ReplaceMapping:
+            return ReplaceMapping.load(data)
         elif type_ == cls.Type.RemoveMapping:
             return RemoveMapping.load(data)
         else:
@@ -2810,49 +2813,62 @@ class InsertKeyValue(FinalizeOperation):
 class UpdateKeyValue(FinalizeOperation):
     type = FinalizeOperation.Type.UpdateKeyValue
 
-    def __init__(self, *, mapping_id: Field, index: u64, key_id: Field, value_id: Field):
+    def __init__(self, *, mapping_id: Field, key_id: Field, value_id: Field):
         self.mapping_id = mapping_id
-        self.index = index
         self.key_id = key_id
         self.value_id = value_id
 
     def dump(self) -> bytes:
-        return self.type.dump() + self.mapping_id.dump() + self.index.dump() + self.key_id.dump() + self.value_id.dump()
+        return self.type.dump() + self.mapping_id.dump() + self.key_id.dump() + self.value_id.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
         mapping_id = Field.load(data)
-        index = u64.load(data)
         key_id = Field.load(data)
         value_id = Field.load(data)
-        return cls(mapping_id=mapping_id, index=index, key_id=key_id, value_id=value_id)
+        return cls(mapping_id=mapping_id, key_id=key_id, value_id=value_id)
 
     def __eq__(self, other):
         if not isinstance(other, UpdateKeyValue):
             return False
-        return self.mapping_id == other.mapping_id and self.index == other.index and self.key_id == other.key_id and self.value_id == other.value_id
+        return self.mapping_id == other.mapping_id and self.key_id == other.key_id and self.value_id == other.value_id
 
 
 class RemoveKeyValue(FinalizeOperation):
     type = FinalizeOperation.Type.RemoveKeyValue
 
-    def __init__(self, *, mapping_id: Field, index: u64):
+    def __init__(self, *, mapping_id: Field, key_id: Field):
         self.mapping_id = mapping_id
-        self.index = index
+        self.key_id = key_id
 
     def dump(self) -> bytes:
-        return self.type.dump() + self.mapping_id.dump() + self.index.dump()
+        return self.type.dump() + self.mapping_id.dump() + self.key_id.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
         mapping_id = Field.load(data)
-        index = u64.load(data)
-        return cls(mapping_id=mapping_id, index=index)
+        key_id = Field.load(data)
+        return cls(mapping_id=mapping_id, key_id=key_id)
 
     def __eq__(self, other):
         if not isinstance(other, RemoveKeyValue):
             return False
-        return self.mapping_id == other.mapping_id and self.index == other.index
+        return self.mapping_id == other.mapping_id and self.key_id == other.key_id
+
+
+class ReplaceMapping(FinalizeOperation):
+    type = FinalizeOperation.Type.ReplaceMapping
+
+    def __init__(self, *, mapping_id: Field):
+        self.mapping_id = mapping_id
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.mapping_id.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        mapping_id = Field.load(data)
+        return cls(mapping_id=mapping_id)
 
 
 class RemoveMapping(FinalizeOperation):

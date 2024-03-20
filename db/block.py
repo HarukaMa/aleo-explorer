@@ -523,15 +523,16 @@ class DatabaseBlock(DatabaseBase):
                 elif finalize_operation["type"] == FinalizeOperation.Type.UpdateKeyValue.name:
                     f.append(UpdateKeyValue(
                         mapping_id=Field.loads(finalize_operation["mapping_id"]),
-                        index=u64(),
                         key_id=Field.loads(finalize_operation["key_id"]),
                         value_id=Field.loads(finalize_operation["value_id"]),
                     ))
                 elif finalize_operation["type"] == FinalizeOperation.Type.RemoveKeyValue.name:
                     f.append(RemoveKeyValue(
                         mapping_id=Field.loads(finalize_operation["mapping_id"]),
-                        index=u64(),
+                        key_id=Field.loads(finalize_operation["key_id"]),
                     ))
+                elif finalize_operation["type"] == FinalizeOperation.Type.ReplaceMapping.name:
+                    f.append(ReplaceMapping(mapping_id=Field.loads(finalize_operation["mapping_id"])))
                 elif finalize_operation["type"] == FinalizeOperation.Type.RemoveMapping.name:
                     f.append(RemoveMapping(mapping_id=Field.loads(finalize_operation["mapping_id"])))
                 else:

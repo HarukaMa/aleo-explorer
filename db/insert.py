@@ -1301,6 +1301,13 @@ class DatabaseInsert(DatabaseBase):
                                 elif isinstance(finalize_operation, RemoveKeyValue):
                                     await cur.execute(
                                         "INSERT INTO finalize_operation_remove_kv (finalize_operation_id, "
+                                        "mapping_id, key_id) VALUES (%s, %s, %s)",
+                                        (finalize_operation_db_id, str(finalize_operation.mapping_id),
+                                         str(finalize_operation.key_id))
+                                    )
+                                elif isinstance(finalize_operation, ReplaceMapping):
+                                    await cur.execute(
+                                        "INSERT INTO finalize_operation_replace_mapping (finalize_operation_id, "
                                         "mapping_id) VALUES (%s, %s)",
                                         (finalize_operation_db_id, str(finalize_operation.mapping_id))
                                     )

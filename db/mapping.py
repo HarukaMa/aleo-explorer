@@ -294,11 +294,10 @@ class DatabaseMapping(DatabaseBase):
                                 mapping_id=Field.loads(u["mapping_id"]),
                                 key_id=Field.loads(u["key_id"]),
                                 value_id=Field.loads(u["value_id"]),
-                                index=u64(),
                             ))
                         elif d["type"] == "RemoveKeyValue":
                             await cur.execute(
-                                "SELECT mapping_id FROM finalize_operation_remove_kv fu "
+                                "SELECT mapping_id, key_id FROM finalize_operation_remove_kv fu "
                                 "JOIN explorer.finalize_operation fo on fo.id = fu.finalize_operation_id "
                                 "WHERE fo.id = %s",
                                 (d["id"],)
@@ -306,7 +305,7 @@ class DatabaseMapping(DatabaseBase):
                             u = await cur.fetchone()
                             result.append(RemoveKeyValue(
                                 mapping_id=Field.loads(u["mapping_id"]),
-                                index=u64()
+                                key_id=Field.loads(u["key_id"]),
                             ))
                     return result
                 except Exception as e:
