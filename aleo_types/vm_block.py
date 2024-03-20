@@ -2383,7 +2383,7 @@ class Transition(Serializable):
 
     def __init__(self, *, id_: TransitionID, program_id: ProgramID, function_name: Identifier,
                  inputs: Vec[TransitionInput, u8], outputs: Vec[TransitionOutput, u8],
-                 tpk: Group, tcm: Field):
+                 tpk: Group, tcm: Field, scm: Field):
         self.id = id_
         self.program_id = program_id
         self.function_name = function_name
@@ -2391,6 +2391,7 @@ class Transition(Serializable):
         self.outputs = outputs
         self.tpk = tpk
         self.tcm = tcm
+        self.scm = scm
 
     def dump(self) -> bytes:
         res = b""
@@ -2402,6 +2403,7 @@ class Transition(Serializable):
         res += self.outputs.dump()
         res += self.tpk.dump()
         res += self.tcm.dump()
+        res += self.scm.dump()
         return res
 
     @classmethod
@@ -2416,8 +2418,9 @@ class Transition(Serializable):
         outputs = Vec[TransitionOutput, u8].load(data)
         tpk = Group.load(data)
         tcm = Field.load(data)
+        scm = Field.load(data)
         return cls(id_=id_, program_id=program_id, function_name=function_name, inputs=inputs, outputs=outputs,
-                   tpk=tpk, tcm=tcm)
+                   tpk=tpk, tcm=tcm, scm=scm)
 
 
 class Fee(Serializable):

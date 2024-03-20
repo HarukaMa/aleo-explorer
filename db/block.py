@@ -178,6 +178,7 @@ class DatabaseBlock(DatabaseBase):
                 outputs=Vec[TransitionOutput, u8](transition_outputs),
                 tpk=Group.loads(transition["tpk"]),
                 tcm=Field.loads(transition["tcm"]),
+                scm=Field.loads(transition["scm"]),
             )
 
     async def get_transaction_reject_reason(self, transaction_id: TransactionID | str) -> Optional[str]:

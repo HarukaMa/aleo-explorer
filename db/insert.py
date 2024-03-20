@@ -128,10 +128,10 @@ class DatabaseInsert(DatabaseBase):
                     return
             await cur.execute(
                 "INSERT INTO transition (transition_id, transaction_execute_id, fee_id, program_id, "
-                "function_name, tpk, tcm, index) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                "function_name, tpk, tcm, index, scm) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
                 (str(transition.id), exe_tx_db_id, fee_db_id, str(transition.program_id),
-                 str(transition.function_name), str(transition.tpk), str(transition.tcm), ts_index)
+                 str(transition.function_name), str(transition.tpk), str(transition.tcm), ts_index, str(transition.scm))
             )
             if (res := await cur.fetchone()) is None:
                 raise RuntimeError("failed to insert row into database")

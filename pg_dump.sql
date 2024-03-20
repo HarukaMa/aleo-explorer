@@ -1535,7 +1535,8 @@ CREATE TABLE explorer.transition (
     function_name text NOT NULL,
     tpk text NOT NULL,
     tcm text NOT NULL,
-    index integer NOT NULL
+    index integer NOT NULL,
+    scm text NOT NULL
 );
 
 
