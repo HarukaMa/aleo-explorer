@@ -143,7 +143,7 @@ FROM ats
 JOIN transition ts ON ats.transition_id = ts.id
 JOIN transaction_execute te ON te.id = ts.transaction_execute_id
 JOIN transaction tx ON tx.id = te.transaction_id
-JOIN confirmed_transaction ct ON ct.id = tx.confimed_transaction_id
+JOIN confirmed_transaction ct ON ct.id = tx.confirmed_transaction_id
 JOIN block b ON b.id = ct.block_id
 UNION
 SELECT DISTINCT ts.transition_id,
@@ -153,7 +153,7 @@ FROM ats
 JOIN transition ts ON ats.transition_id = ts.id
 JOIN fee f ON f.id = ts.fee_id
 JOIN transaction tx ON tx.id = f.transaction_id
-JOIN confirmed_transaction ct ON ct.id = tx.confimed_transaction_id
+JOIN confirmed_transaction ct ON ct.id = tx.confirmed_transaction_id
 JOIN block b ON b.id = ct.block_id
 ORDER BY height DESC
 LIMIT 30

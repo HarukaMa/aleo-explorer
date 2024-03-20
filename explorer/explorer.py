@@ -63,9 +63,9 @@ class Explorer:
         height = await self.db.get_latest_height()
         if height is None:
             if self.dev_mode:
-                await self.add_block(Testnet3.dev_genesis_block)
+                await self.add_block(Network.dev_genesis_block)
             else:
-                await self.add_block(Testnet3.genesis_block)
+                await self.add_block(Network.genesis_block)
 
     async def main_loop(self):
         try:
@@ -85,8 +85,8 @@ class Explorer:
             print(f"latest height: {self.latest_height}")
             self.node = Node(explorer_message=self.message, explorer_request=self.node_request)
             await self.node.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4133")))
-            asyncio.create_task(webui.run())
-            asyncio.create_task(api.run())
+            _ = asyncio.create_task(webui.run())
+            _ = asyncio.create_task(api.run())
             while True:
                 msg = await self.message_queue.get()
                 match msg.type:
@@ -113,8 +113,8 @@ class Explorer:
             raise
 
     async def add_block(self, block: Block):
-        if block in [Testnet3.genesis_block, Testnet3.dev_genesis_block]:
-            for program in Testnet3.builtin_programs:
+        if block in [Network.genesis_block, Network.dev_genesis_block]:
+            for program in Network.builtin_programs:
                 await init_builtin_program(self.db, program)
             await self.db.save_block(block)
             return
@@ -139,9 +139,9 @@ class Explorer:
             if db_genesis is None:
                 return
             if self.dev_mode:
-                genesis_block = Testnet3.dev_genesis_block
+                genesis_block = Network.dev_genesis_block
             else:
-                genesis_block = Testnet3.genesis_block
+                genesis_block = Network.genesis_block
             if db_genesis.header.transactions_root != genesis_block.header.transactions_root:
                 await self.clear_database()
 

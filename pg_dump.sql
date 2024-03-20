@@ -24,13 +24,6 @@ CREATE SCHEMA explorer;
 
 
 --
--- Name: pg_hint_plan; Type: EXTENSION; Schema: -; Owner: -
---
-
-CREATE EXTENSION IF NOT EXISTS pg_hint_plan;
-
-
---
 -- Name: argument_type; Type: TYPE; Schema: explorer; Owner: -
 --
 
@@ -159,7 +152,7 @@ begin
     for confirmed_transaction_id, confirmed_transaction_type, index, reject_reason in
         select t.id, t.type, t.index, t.reject_reason from confirmed_transaction t where t.block_id = block_db_id
         loop
-            select t.id, t.transaction_id, t.type from transaction t where t.confimed_transaction_id = confirmed_transaction_id into transaction_db_id, transaction_id, transaction_type;
+            select t.id, t.transaction_id, t.type from transaction t where t.confirmed_transaction_id = confirmed_transaction_id into transaction_db_id, transaction_id, transaction_type;
             if confirmed_transaction_type = 'AcceptedDeploy' or confirmed_transaction_type = 'RejectedDeploy' then
                 if confirmed_transaction_type = 'RejectedDeploy' then
                     select t.id, t.edition, t.verifying_keys, t.program_id, t.owner from transaction_deploy t where t.transaction_id = transaction_db_id order by id limit 1 into transaction_deploy_id, edition, verifying_keys, program_id, owner;
@@ -362,8 +355,40 @@ CREATE TABLE explorer.block (
     last_coinbase_timestamp bigint NOT NULL,
     "timestamp" bigint NOT NULL,
     block_reward numeric(20,0) NOT NULL,
-    coinbase_reward numeric(20,0) NOT NULL
+    coinbase_reward numeric(20,0) NOT NULL,
+    total_supply numeric(40,0) NOT NULL
 );
+
+
+--
+-- Name: block_aborted_solution_id; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.block_aborted_solution_id (
+    id integer NOT NULL,
+    block_id integer NOT NULL,
+    solution_id text NOT NULL
+);
+
+
+--
+-- Name: block_aborted_solution_id_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.block_aborted_solution_id_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: block_aborted_solution_id_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.block_aborted_solution_id_id_seq OWNED BY explorer.block_aborted_solution_id.id;
 
 
 --
@@ -456,7 +481,8 @@ CREATE TABLE explorer.committee_history (
     id integer NOT NULL,
     height bigint NOT NULL,
     starting_round numeric(20,0) NOT NULL,
-    total_stake numeric(20,0) NOT NULL
+    total_stake numeric(20,0) NOT NULL,
+    committee_id text NOT NULL
 );
 
 
@@ -558,7 +584,8 @@ CREATE TABLE explorer.dag_vertex (
     author text NOT NULL,
     "timestamp" bigint NOT NULL,
     author_signature text NOT NULL,
-    index integer NOT NULL
+    index integer NOT NULL,
+    committee_id text NOT NULL
 );
 
 
@@ -1375,6 +1402,39 @@ ALTER SEQUENCE explorer.ratification_genesis_balance_id_seq OWNED BY explorer.ra
 
 
 --
+-- Name: ratification_genesis_bonded; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.ratification_genesis_bonded (
+    id integer NOT NULL,
+    staker text NOT NULL,
+    validator text NOT NULL,
+    withdrawal text NOT NULL,
+    amount numeric(20,0) NOT NULL
+);
+
+
+--
+-- Name: ratification_genesis_bonded_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.ratification_genesis_bonded_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: ratification_genesis_bonded_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.ratification_genesis_bonded_id_seq OWNED BY explorer.ratification_genesis_bonded.id;
+
+
+--
 -- Name: ratification_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
 --
 
@@ -1400,7 +1460,7 @@ ALTER SEQUENCE explorer.ratification_id_seq OWNED BY explorer.ratification.id;
 
 CREATE TABLE explorer.transaction (
     id integer NOT NULL,
-    confimed_transaction_id integer,
+    confirmed_transaction_id integer,
     transaction_id text NOT NULL,
     type explorer.transaction_type NOT NULL,
     first_seen bigint DEFAULT EXTRACT(epoch FROM now()),
@@ -1852,6 +1912,13 @@ ALTER TABLE ONLY explorer.block ALTER COLUMN id SET DEFAULT nextval('explorer.bl
 
 
 --
+-- Name: block_aborted_solution_id id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.block_aborted_solution_id ALTER COLUMN id SET DEFAULT nextval('explorer.block_aborted_solution_id_id_seq'::regclass);
+
+
+--
 -- Name: block_aborted_transaction_id id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -2048,6 +2115,13 @@ ALTER TABLE ONLY explorer.ratification_genesis_balance ALTER COLUMN id SET DEFAU
 
 
 --
+-- Name: ratification_genesis_bonded id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.ratification_genesis_bonded ALTER COLUMN id SET DEFAULT nextval('explorer.ratification_genesis_bonded_id_seq'::regclass);
+
+
+--
 -- Name: transaction id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -2158,6 +2232,14 @@ ALTER TABLE ONLY explorer.transition_output_record ALTER COLUMN id SET DEFAULT n
 
 ALTER TABLE ONLY explorer.authority
     ADD CONSTRAINT authority_pk PRIMARY KEY (id);
+
+
+--
+-- Name: block_aborted_solution_id block_aborted_solution_id_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.block_aborted_solution_id
+    ADD CONSTRAINT block_aborted_solution_id_pk PRIMARY KEY (id);
 
 
 --
@@ -2581,6 +2663,13 @@ CREATE INDEX authority_type_index ON explorer.authority USING btree (type);
 
 
 --
+-- Name: block_aborted_solution_id_block_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX block_aborted_solution_id_block_id_index ON explorer.block_aborted_solution_id USING btree (block_id);
+
+
+--
 -- Name: block_aborted_transaction_id_block_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -3001,10 +3090,10 @@ CREATE INDEX ratification_type_index ON explorer.ratification USING btree (type)
 
 
 --
--- Name: transaction_confimed_transaction_id_index; Type: INDEX; Schema: explorer; Owner: -
+-- Name: transaction_confirmed_transaction_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-CREATE INDEX transaction_confimed_transaction_id_index ON explorer.transaction USING btree (confimed_transaction_id);
+CREATE INDEX transaction_confirmed_transaction_id_index ON explorer.transaction USING btree (confirmed_transaction_id);
 
 
 --
@@ -3175,6 +3264,14 @@ ALTER TABLE ONLY explorer.address_transition
 
 ALTER TABLE ONLY explorer.authority
     ADD CONSTRAINT authority_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id) ON DELETE CASCADE;
+
+
+--
+-- Name: block_aborted_solution_id block_aborted_solution_id_block_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.block_aborted_solution_id
+    ADD CONSTRAINT block_aborted_solution_id_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id);
 
 
 --
@@ -3390,7 +3487,7 @@ ALTER TABLE ONLY explorer.ratification
 --
 
 ALTER TABLE ONLY explorer.transaction
-    ADD CONSTRAINT transaction_confirmed_transaction_id_fk FOREIGN KEY (confimed_transaction_id) REFERENCES explorer.confirmed_transaction(id) ON DELETE CASCADE;
+    ADD CONSTRAINT transaction_confirmed_transaction_id_fk FOREIGN KEY (confirmed_transaction_id) REFERENCES explorer.confirmed_transaction(id) ON DELETE CASCADE;
 
 
 --

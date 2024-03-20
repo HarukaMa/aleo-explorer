@@ -143,14 +143,14 @@ class DatabaseUtil(DatabaseBase):
                                             "UPDATE transaction SET "
                                             "transaction_id = %s, "
                                             "original_transaction_id = NULL, "
-                                            "confimed_transaction_id = NULL,"
+                                            "confirmed_transaction_id = NULL,"
                                             "type = %s "
                                             "WHERE transaction_id = %s",
                                             (original_transaction_id, original_type, str(t.id))
                                         )
                                 else:
                                     await cur.execute(
-                                        "UPDATE transaction SET confimed_transaction_id = NULL WHERE transaction_id = %s",
+                                        "UPDATE transaction SET confirmed_transaction_id = NULL WHERE transaction_id = %s",
                                         (str(t.id),)
                                     )
                                 # decrease program called counter

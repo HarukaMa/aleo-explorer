@@ -186,7 +186,7 @@ class DatabaseBlock(DatabaseBase):
                 try:
                     await cur.execute(
                         "SELECT reject_reason FROM confirmed_transaction ct "
-                        "JOIN transaction t on ct.id = t.confimed_transaction_id "
+                        "JOIN transaction t on ct.id = t.confirmed_transaction_id "
                         "WHERE t.transaction_id = %s",
                         (str(transaction_id),)
                     )
@@ -204,7 +204,7 @@ class DatabaseBlock(DatabaseBase):
                     await cur.execute(
                         "SELECT b.* FROM block b "
                         "JOIN confirmed_transaction ct ON b.id = ct.block_id "
-                        "JOIN transaction t ON ct.id = t.confimed_transaction_id WHERE t.transaction_id = %s",
+                        "JOIN transaction t ON ct.id = t.confirmed_transaction_id WHERE t.transaction_id = %s",
                         (str(transaction_id),)
                     )
                     block = await cur.fetchone()
@@ -296,13 +296,13 @@ class DatabaseBlock(DatabaseBase):
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT confimed_transaction_id FROM transaction WHERE transaction_id = %s",
+                        "SELECT confirmed_transaction_id FROM transaction WHERE transaction_id = %s",
                         (transaction_id,)
                     )
                     res = await cur.fetchone()
                     if res is None:
                         return None
-                    return res["confimed_transaction_id"] is not None
+                    return res["confirmed_transaction_id"] is not None
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
@@ -312,14 +312,14 @@ class DatabaseBlock(DatabaseBase):
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT id, transaction_id, type, confimed_transaction_id FROM transaction "
+                        "SELECT id, transaction_id, type, confirmed_transaction_id FROM transaction "
                         "WHERE transaction_id = %s",
                         (transaction_id,)
                     )
                     transaction = await cur.fetchone()
                     if transaction is None:
                         return None
-                    if transaction["confimed_transaction_id"] is not None:
+                    if transaction["confirmed_transaction_id"] is not None:
                         raise ValueError("transaction is confirmed")
                     if transaction["type"] == Transaction.Type.Deploy.name:
                         await cur.execute(
@@ -474,7 +474,7 @@ class DatabaseBlock(DatabaseBase):
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
-                    await cur.execute("SELECT COUNT(*) FROM transaction WHERE confimed_transaction_id IS NULL")
+                    await cur.execute("SELECT COUNT(*) FROM transaction WHERE confirmed_transaction_id IS NULL")
                     res = await cur.fetchone()
                     if res is None:
                         raise RuntimeError("database inconsistent")
@@ -488,7 +488,7 @@ class DatabaseBlock(DatabaseBase):
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT transaction_id FROM transaction WHERE confimed_transaction_id IS NULL "
+                        "SELECT transaction_id FROM transaction WHERE confirmed_transaction_id IS NULL "
                         "ORDER BY first_seen DESC LIMIT %s OFFSET %s",
                         (end - start, start)
                     )
@@ -539,7 +539,7 @@ class DatabaseBlock(DatabaseBase):
                     raise NotImplementedError
 
             transaction = confirmed_transaction
-            # TODO: store full program on rejected deploy so we dont need dummy data
+            # TODO: store full program on rejected deploy so we dont need dummy data - should we?
             match confirmed_transaction["confirmed_transaction_type"]:
                 case ConfirmedTransaction.Type.AcceptedDeploy.name | ConfirmedTransaction.Type.RejectedDeploy.name:
                     deploy_transaction = transaction
@@ -700,7 +700,7 @@ class DatabaseBlock(DatabaseBase):
                         "SELECT t.id as transaction_db_id,  t.transaction_id, t.type as transaction_type, "
                         "ct.id as confirmed_transaction_id, ct.type as confirmed_transaction_type, ct.index, ct.reject_reason "
                         "FROM transaction t "
-                        "JOIN confirmed_transaction ct ON t.confimed_transaction_id = ct.id "
+                        "JOIN confirmed_transaction ct ON t.confirmed_transaction_id = ct.id "
                         "WHERE transaction_id = %s", (transaction_id,))
                     confirmed_transaction = await cur.fetchone()
                     if confirmed_transaction is None:
@@ -779,6 +779,7 @@ class DatabaseBlock(DatabaseBase):
                                 bool_(committee_history_member["is_open"]))
                             ))
                         committee = Committee(
+                            id_=Field.loads(committee_history["committee_id"]),
                             starting_round=u64(committee_history["starting_round"]),
                             members=Vec[Tuple[Address, u64, bool_], u16](members),
                             total_stake=u64(committee_history["total_stake"]),
@@ -788,9 +789,22 @@ class DatabaseBlock(DatabaseBase):
                         balances: list[Tuple[Address, u64]] = []
                         for public_balance in public_balances:
                             balances.append(Tuple[Address, u64]((Address.loads(public_balance["address"]), u64(public_balance["amount"]))))
+                        await cur.execute("SELECT * FROM ratification_genesis_bonded")
+                        bonded_balances = await cur.fetchall()
+                        bonded: list[Tuple[Address, Address, Address, u64]]
+                        for bonded_balance in bonded_balances:
+                            bonded.append(
+                                Tuple[Address, Address, Address, u64]((
+                                    Address.loads(bonded_balance["staker"]),
+                                    Address.loads(bonded_balance["validator"]),
+                                    Address.loads(bonded_balance["withdrawal"]),
+                                    u64(bonded_balance["amount"])
+                                ))
+                            )
                         rs.append(GenesisRatify(
                             committee=committee,
                             public_balances=Vec[Tuple[Address, u64], u16](balances),
+                            bonded_balances=Vec[Tuple[Address, Address, Address, u64], u16](bonded),
                         ))
                     case Ratify.Type.BlockReward.name:
                         rs.append(BlockRewardRatify(
@@ -853,19 +867,9 @@ class DatabaseBlock(DatabaseBase):
                     # )
                     # dag_vertex_signatures = await cur.fetchall()
 
-                    if dag_vertex["batch_certificate_id"] is not None:
-                        signatures: list[Tuple[Signature, i64]] = []
-                        # for signature in dag_vertex_signatures:
-                        #     signatures.append(
-                        #         Tuple[Signature, i64]((
-                        #             Signature.loads(signature["signature"]),
-                        #             i64(signature["timestamp"]),
-                        #         ))
-                        #     )
-                    else:
-                        signatures: list[Signature] = []
-                        # for signature in dag_vertex_signatures:
-                        #     signatures.append(Signature.loads(signature["signature"]))
+                    signatures: list[Signature] = []
+                    # for signature in dag_vertex_signatures:
+                    #     signatures.append(Signature.loads(signature["signature"]))
 
                     # await cur.execute(
                     #     "SELECT previous_vertex_id FROM dag_vertex_adjacency WHERE vertex_id = %s ORDER BY index",
@@ -873,7 +877,7 @@ class DatabaseBlock(DatabaseBase):
                     # )
                     # previous_ids = [x["previous_vertex_id"] for x in await cur.fetchall()]
 
-                    # TODO: use batch id after next reset
+                    # TODO: use batch id after next reset - do we still want to keep this? would be way too expensive
                     # await cur.execute(
                     #     "SELECT batch_certificate_id FROM dag_vertex v "
                     #     "JOIN UNNEST(%s) WITH ORDINALITY q(id, ord) ON q.id = v.id "
@@ -896,46 +900,38 @@ class DatabaseBlock(DatabaseBase):
                         elif tid["type"] == TransmissionID.Type.Transaction:
                             tids.append(TransactionTransmissionID(id_=TransactionID.loads(tid["transaction_id"])))
 
-                    if dag_vertex["batch_certificate_id"] is not None:
-                        certificates.append(
-                            BatchCertificate1(
-                                certificate_id=Field.loads(dag_vertex["batch_certificate_id"]),
-                                batch_header=BatchHeader1(
-                                    batch_id=Field.loads(dag_vertex["batch_id"]),
-                                    author=Address.loads(dag_vertex["author"]),
-                                    round_=u64(dag_vertex["round"]),
-                                    timestamp=i64(dag_vertex["timestamp"]),
-                                    transmission_ids=Vec[TransmissionID, u32](tids),
-                                    previous_certificate_ids=Vec[Field, u32]([Field.loads(x) for x in previous_cert_ids]),
-                                    signature=Signature.loads(dag_vertex["author_signature"]),
-                                ),
-                                signatures=Vec[Tuple[Signature, i64], u32](signatures),
-                            )
+                    certificates.append(
+                        BatchCertificate(
+                            batch_header=BatchHeader(
+                                batch_id=Field.loads(dag_vertex["batch_id"]),
+                                author=Address.loads(dag_vertex["author"]),
+                                round_=u64(dag_vertex["round"]),
+                                timestamp=i64(dag_vertex["timestamp"]),
+                                committee_id=Field.loads(dag_vertex["committee_id"]),
+                                transmission_ids=Vec[TransmissionID, u32](tids),
+                                previous_certificate_ids=Vec[Field, u32]([Field.loads(x) for x in previous_cert_ids]),
+                                signature=Signature.loads(dag_vertex["author_signature"]),
+                            ),
+                            signatures=Vec[Signature, u16](signatures),
                         )
-                    else:
-                        certificates.append(
-                            BatchCertificate2(
-                                batch_header=BatchHeader1(
-                                    batch_id=Field.loads(dag_vertex["batch_id"]),
-                                    author=Address.loads(dag_vertex["author"]),
-                                    round_=u64(dag_vertex["round"]),
-                                    timestamp=i64(dag_vertex["timestamp"]),
-                                    transmission_ids=Vec[TransmissionID, u32](tids),
-                                    previous_certificate_ids=Vec[Field, u32]([Field.loads(x) for x in previous_cert_ids]),
-                                    signature=Signature.loads(dag_vertex["author_signature"]),
-                                ),
-                                signatures=Vec[Signature, u16](signatures),
-                            )
-                        )
+                    )
                 subdags: dict[u64, Vec[BatchCertificate, u32]] = defaultdict(lambda: Vec[BatchCertificate, u32]([]))
                 for certificate in certificates:
                     subdags[certificate.batch_header.round].append(certificate)
-                subdag = Subdag1(
+                subdag = Subdag(
                     subdag=subdags
                 )
                 auth = QuorumAuthority(subdag=subdag)
             else:
                 raise NotImplementedError
+
+            await cur.execute("SELECT * FROM block_aborted_solution_id WHERE block_id = %s", (block["id"],))
+            aborted_solution_ids = await cur.fetchall()
+            aborted_solution_ids = [PuzzleCommitment.loads(x["solution_id"]) for x in aborted_solution_ids]
+
+            await cur.execute("SELECT * FROM block_aborted_transaction_id WHERE block_id = %s", (block["id"],))
+            aborted_transaction_ids = await cur.fetchall()
+            aborted_transaction_ids = [TransactionID.loads(x["transaction_id"]) for x in aborted_transaction_ids]
 
             return Block(
                 block_hash=BlockHash.loads(block['block_hash']),
@@ -946,9 +942,9 @@ class DatabaseBlock(DatabaseBase):
                     transactions=Vec[ConfirmedTransaction, u32](ctxs),
                 ),
                 ratifications=Ratifications(ratifications=Vec[Ratify, u32](rs)),
-                solutions=Option[CoinbaseSolution](coinbase_solution),
-                # TODO: save and fill in
-                aborted_transactions_ids=Vec[TransactionID, u32]([]),
+                solutions=Solutions(solutions=Option[CoinbaseSolution](coinbase_solution)),
+                aborted_solution_ids=Vec[PuzzleCommitment, u32](aborted_solution_ids),
+                aborted_transactions_ids=Vec[TransactionID, u32](aborted_transaction_ids),
             )
 
     @staticmethod

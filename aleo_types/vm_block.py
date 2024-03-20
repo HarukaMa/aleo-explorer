@@ -3217,6 +3217,11 @@ class Committee(Serializable):
         total_stake = u64.load(data)
         return cls(id_=id_, starting_round=starting_round, members=members, total_stake=total_stake)
 
+    @staticmethod
+    def compute_committee_id(starting_round: u64, members: Vec[Tuple[Address, u64, bool_], u16], total_stake: u64) -> Field:
+        data: bytes = starting_round.dump() + members.dump() + total_stake.dump()
+        return Field.load(BytesIO(aleo_explorer_rust.hash_bytes_to_field(data, "bhp1024")))
+
 
 class GenesisRatify(Ratify):
     type = Ratify.Type.Genesis
@@ -3383,63 +3388,24 @@ class TransactionTransmissionID(TransmissionID):
 
 
 class BatchHeader(Serializable):
-
-    @classmethod
-    def load(cls, data: BytesIO) -> Self:
-        version = u8.load(data)
-        if BatchHeader1.version == version:
-            return BatchHeader1.load(data)
-        elif BatchHeader2.version == version:
-            return BatchHeader2.load(data)
-
-class BatchHeader1(BatchHeader):
     version = u8(1)
 
-    def __init__(self, *, batch_id: Field, author: Address, round_: u64, timestamp: i64, transmission_ids: Vec[TransmissionID, u32],
-                 previous_certificate_ids: Vec[Field, u32], signature: Signature):
+    def __init__(self, *, batch_id: Field, author: Address, round_: u64, timestamp: i64, committee_id: Field,
+                 transmission_ids: Vec[TransmissionID, u32], previous_certificate_ids: Vec[Field, u32],
+                 signature: Signature):
         self.batch_id = batch_id
         self.author = author
         self.round = round_
         self.timestamp = timestamp
+        self.committee_id = committee_id
         self.transmission_ids = transmission_ids
         self.previous_certificate_ids = previous_certificate_ids
-        self.signature = signature
-
-    def dump(self) -> bytes:
-        return self.version.dump() + self.batch_id.dump() + self.author.dump() + self.round.dump() + self.timestamp.dump() \
-            + self.transmission_ids.dump() + self.previous_certificate_ids.dump() + self.signature.dump()
-
-    @classmethod
-    def load(cls, data: BytesIO):
-        batch_id = Field.load(data)
-        author = Address.load(data)
-        round_ = u64.load(data)
-        timestamp = i64.load(data)
-        transmission_ids = Vec[TransmissionID, u32].load(data)
-        previous_certificate_ids = Vec[Field, u32].load(data)
-        signature = Signature.load(data)
-        return cls(batch_id=batch_id, author=author, round_=round_, timestamp=timestamp,
-                   transmission_ids=transmission_ids, previous_certificate_ids=previous_certificate_ids,
-                   signature=signature)
-
-class BatchHeader2(BatchHeader):
-    version = u8(2)
-
-    def __init__(self, *, batch_id: Field, author: Address, round_: u64, timestamp: i64, transmission_ids: Vec[TransmissionID, u32],
-                 previous_certificate_ids: Vec[Field, u32], last_election_certificate_ids: Vec[Field, u16], signature: Signature):
-        self.batch_id = batch_id
-        self.author = author
-        self.round = round_
-        self.timestamp = timestamp
-        self.transmission_ids = transmission_ids
-        self.previous_certificate_ids = previous_certificate_ids
-        self.last_election_certificate_ids = last_election_certificate_ids
         self.signature = signature
 
     def dump(self) -> bytes:
         return (self.version.dump() + self.batch_id.dump() + self.author.dump() + self.round.dump() + self.timestamp.dump()
-            + self.transmission_ids.dump() + self.previous_certificate_ids.dump() + self.last_election_certificate_ids.dump()
-            + self.signature.dump())
+                + self.committee_id.dump() + self.transmission_ids.dump() + self.previous_certificate_ids.dump()
+                + self.signature.dump())
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -3447,48 +3413,17 @@ class BatchHeader2(BatchHeader):
         author = Address.load(data)
         round_ = u64.load(data)
         timestamp = i64.load(data)
+        committee_id = Field.load(data)
         transmission_ids = Vec[TransmissionID, u32].load(data)
         previous_certificate_ids = Vec[Field, u32].load(data)
-        last_election_certificate_ids = Vec[Field, u16].load(data)
         signature = Signature.load(data)
-        return cls(batch_id=batch_id, author=author, round_=round_, timestamp=timestamp,
+        return cls(batch_id=batch_id, author=author, round_=round_, timestamp=timestamp, committee_id=committee_id,
                    transmission_ids=transmission_ids, previous_certificate_ids=previous_certificate_ids,
-                   last_election_certificate_ids=last_election_certificate_ids, signature=signature)
+                   signature=signature)
 
 
 class BatchCertificate(Serializable):
-
-    batch_header: BatchHeader
-
-    @classmethod
-    def load(cls, data: BytesIO) -> Self:
-        version = u8.load(data)
-        if version == BatchCertificate1.version:
-            return BatchCertificate1.load(data)
-        elif version == BatchCertificate2.version:
-            return BatchCertificate2.load(data)
-
-class BatchCertificate1(BatchCertificate):
     version = u8(1)
-
-    def __init__(self, *, certificate_id: Field, batch_header: BatchHeader, signatures: Vec[Tuple[Signature, i64], u32]):
-        self.certificate_id = certificate_id
-        self.batch_header = batch_header
-        self.signatures = signatures
-
-    def dump(self) -> bytes:
-        return self.version.dump() + self.certificate_id.dump() + self.batch_header.dump() + self.signatures.dump()
-
-    @classmethod
-    def load(cls, data: BytesIO):
-        certificate_id = Field.load(data)
-        batch_header = BatchHeader.load(data)
-        signatures = Vec[Tuple[Signature, i64], u32].load(data)
-        return cls(certificate_id=certificate_id, batch_header=batch_header, signatures=signatures)
-
-
-class BatchCertificate2(BatchCertificate):
-    version = u8(2)
 
     def __init__(self, *, batch_header: BatchHeader, signatures: Vec[Signature, u16]):
         self.batch_header = batch_header
@@ -3505,18 +3440,6 @@ class BatchCertificate2(BatchCertificate):
 
 
 class Subdag(Serializable):
-
-    subdag: dict[u64, Vec[BatchCertificate, u32]]
-
-    @classmethod
-    def load(cls, data: BytesIO) -> Self:
-        version = u8.load(data)
-        if version == Subdag1.version:
-            return Subdag1.load(data)
-        elif version == Subdag2.version:
-            return Subdag2.load(data)
-
-class Subdag1(Serializable):
     version = u8(1)
 
     def __init__(self, *, subdag: dict[u64, Vec[BatchCertificate, u32]]):
@@ -3537,33 +3460,6 @@ class Subdag1(Serializable):
             certificates = Vec[BatchCertificate, u32].load(data)
             subdag[round_] = certificates
         return cls(subdag=subdag)
-
-
-class Subdag2(Serializable):
-    version = u8(2)
-
-    def __init__(self, *, subdag: dict[u64, Vec[BatchCertificate, u32]],
-                 election_certificate_ids: Vec[Field, u16]):
-        self.subdag = subdag
-        self.election_certificate_ids = election_certificate_ids
-
-    def dump(self) -> bytes:
-        res = self.version.dump()
-        res += len(self.subdag).to_bytes(4, 'little')
-        for round_, certificates in self.subdag.items():
-            res += round_.dump() + certificates.dump()
-        res += self.election_certificate_ids.dump()
-        return res
-
-    @classmethod
-    def load(cls, data: BytesIO):
-        subdag = {}
-        for _ in range(u32.load(data)):
-            round_ = u64.load(data)
-            certificates = Vec[BatchCertificate, u32].load(data)
-            subdag[round_] = certificates
-        election_certificate_ids = Vec[Field, u16].load(data)
-        return cls(subdag=subdag, election_certificate_ids=election_certificate_ids)
 
 
 class QuorumAuthority(Authority):
@@ -3601,26 +3497,55 @@ class Ratifications(Serializable):
     def __iter__(self):
         return iter(self.ratifications)
 
+class Solutions(Serializable):
+    version = u8(1)
+
+    def __init__(self, *, solutions: Option[CoinbaseSolution]):
+        self.solutions = solutions
+
+    def dump(self) -> bytes:
+        return self.version.dump() + self.solutions.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        version = u8.load(data)
+        solutions = Option[CoinbaseSolution].load(data)
+        if version != cls.version:
+            raise ValueError("invalid solutions version")
+        return cls(solutions=solutions)
+
+    @property
+    def value(self):
+        return self.solutions.value
+
 
 class Block(Serializable):
     version = u8(1)
 
     def __init__(self, *, block_hash: BlockHash, previous_hash: BlockHash, header: BlockHeader, authority: Authority,
-                 ratifications: Ratifications, transactions: Transactions, solutions: Option[CoinbaseSolution],
-                 aborted_transactions_ids: Vec[TransactionID, u32]):
+                 ratifications: Ratifications, solutions: Solutions, aborted_solution_ids: Vec[PuzzleCommitment, u32],
+                 transactions: Transactions, aborted_transactions_ids: Vec[TransactionID, u32]):
         self.block_hash = block_hash
         self.previous_hash = previous_hash
         self.header = header
         self.authority = authority
         self.ratifications = ratifications
-        self.transactions = transactions
         self.solutions = solutions
+        self.aborted_solution_ids = aborted_solution_ids
+        self.transactions = transactions
         self.aborted_transactions_ids = aborted_transactions_ids
 
     def dump(self) -> bytes:
-        return (self.version.dump() + self.block_hash.dump() + self.previous_hash.dump() + self.header.dump() +
-                self.authority.dump() + self.transactions.dump() + self.ratifications.dump() + self.solutions.dump() +
-                self.aborted_transactions_ids.dump())
+        return (self.version.dump()
+                + self.block_hash.dump()
+                + self.previous_hash.dump()
+                + self.header.dump()
+                + self.authority.dump()
+                + self.ratifications.dump()
+                + self.solutions.dump()
+                + self.aborted_solution_ids.dump()
+                + self.transactions.dump()
+                + self.aborted_transactions_ids.dump())
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -3630,14 +3555,15 @@ class Block(Serializable):
         header = BlockHeader.load(data)
         authority = Authority.load(data)
         ratifications = Ratifications.load(data)
-        solutions = Option[CoinbaseSolution].load(data)
+        solutions = Solutions.load(data)
+        aborted_solution_ids = Vec[PuzzleCommitment, u32].load(data)
         transactions = Transactions.load(data)
         aborted_transactions_ids = Vec[TransactionID, u32].load(data)
         if version != cls.version:
             raise ValueError("invalid block version")
         return cls(block_hash=block_hash, previous_hash=previous_hash, header=header, authority=authority,
-                   ratifications=ratifications, transactions=transactions, solutions=solutions,
-                   aborted_transactions_ids=aborted_transactions_ids)
+                   ratifications=ratifications, solutions=solutions, aborted_solution_ids=aborted_solution_ids,
+                   transactions=transactions, aborted_transactions_ids=aborted_transactions_ids)
 
 
     def __str__(self):
