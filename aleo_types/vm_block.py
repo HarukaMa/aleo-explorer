@@ -1452,9 +1452,11 @@ class Proof(Serializable):
     def loads(cls, data: str):
         return cls.load(bech32_to_bytes(data))
 
-
     def __str__(self):
         return str(Bech32m(self.dump(), "proof"))
+
+    def __repr__(self):
+        return str(self)
 
 
 class Ciphertext(Serializable):
@@ -2577,7 +2579,7 @@ class Transaction(EnumBaseSerialize, RustEnum, Serializable):
             return FeeComponent(storage_cost, namespace_cost, [], priority_fee, burnt)
         elif isinstance(self, ExecuteTransaction):
             execution = self.execution
-            fee = self.additional_fee.value
+            fee = self.fee.value
             storage_cost = execution.storage_cost
             finalize_costs = await execution.finalize_costs(db)
             if fee is not None:
@@ -2638,20 +2640,20 @@ class DeployTransaction(Transaction):
 class ExecuteTransaction(Transaction):
     type = Transaction.Type.Execute
 
-    def __init__(self, *, id_: TransactionID, execution: Execution, additional_fee: Option[Fee]):
+    def __init__(self, *, id_: TransactionID, execution: Execution, fee: Option[Fee]):
         self.id = id_
         self.execution = execution
-        self.additional_fee = additional_fee
+        self.fee = fee
 
     def dump(self) -> bytes:
-        return self.version.dump() + self.type.dump() + self.id.dump() + self.execution.dump() + self.additional_fee.dump()
+        return self.version.dump() + self.type.dump() + self.id.dump() + self.execution.dump() + self.fee.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
         id_ = TransactionID.load(data)
         execution = Execution.load(data)
-        additional_fee = Option[Fee].load(data)
-        return cls(id_=id_, execution=execution, additional_fee=additional_fee)
+        fee = Option[Fee].load(data)
+        return cls(id_=id_, execution=execution, fee=fee)
 
 class FeeTransaction(Transaction):
     type = Transaction.Type.Fee
@@ -2749,7 +2751,7 @@ class ConfirmedTransaction(EnumBaseSerialize, RustEnum, Serializable):
         elif isinstance(tx, ExecuteTransaction) or isinstance(self, RejectedExecute):
             if isinstance(tx, ExecuteTransaction):
                 execution = tx.execution
-                fee = tx.additional_fee.value
+                fee = tx.fee.value
             elif isinstance(self, RejectedExecute):
                 if not isinstance(self.rejected, RejectedExecution):
                     raise RuntimeError("bad transaction data")

@@ -156,8 +156,8 @@ class DatabaseUtil(DatabaseBase):
                                 # decrease program called counter
                                 if isinstance(t, ExecuteTransaction):
                                     transitions = list(t.execution.transitions)
-                                    if t.additional_fee.value is not None:
-                                        transitions.append(t.additional_fee.value.transition)
+                                    if t.fee.value is not None:
+                                        transitions.append(t.fee.value.transition)
                                 elif isinstance(t, DeployTransaction):
                                     transitions = [t.fee.transition]
                                     program = t.deployment.program

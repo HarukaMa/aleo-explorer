@@ -107,9 +107,9 @@ async def block_route(request: Request):
             tx = ct.transaction
             if not isinstance(tx, ExecuteTransaction):
                 raise HTTPException(status_code=550, detail="Invalid transaction type")
-            additional_fee = tx.additional_fee.value
-            if additional_fee is not None:
-                base_fee, priority_fee = additional_fee.amount
+            fee = tx.fee.value
+            if fee is not None:
+                base_fee, priority_fee = fee.amount
             else:
                 base_fee, priority_fee = 0, 0
             root_transition = tx.execution.transitions[-1]
@@ -118,7 +118,7 @@ async def block_route(request: Request):
                 "index": ct.index,
                 "type": "Execute",
                 "state": "Accepted",
-                "transitions_count": len(tx.execution.transitions) + bool(tx.additional_fee.value is not None),
+                "transitions_count": len(tx.execution.transitions) + bool(tx.fee.value is not None),
                 "base_fee": base_fee - burnt_fee,
                 "priority_fee": priority_fee,
                 "burnt_fee": burnt_fee,
@@ -286,9 +286,9 @@ async def transaction_route(request: Request):
                 "transition_id": transition.id,
                 "action":f"{transition.program_id}/{transition.function_name}",
             })
-        if transaction.additional_fee.value is not None:
-            additional_fee = transaction.additional_fee.value
-            transition = additional_fee.transition
+        if transaction.fee.value is not None:
+            fee = transaction.fee.value
+            transition = fee.transition
             fee_transition = {
                 "transition_id": transition.id,
                 "action":f"{transition.program_id}/{transition.function_name}",
@@ -487,8 +487,8 @@ async def transition_route(request: Request):
                         transition = ts
                         transaction_id = tx.id
                         break
-                if transaction_id is None and tx.additional_fee.value is not None:
-                    ts = tx.additional_fee.value.transition
+                if transaction_id is None and tx.fee.value is not None:
+                    ts = tx.fee.value.transition
                     if str(ts.id) == ts_id:
                         transition = ts
                         transaction_id = tx.id

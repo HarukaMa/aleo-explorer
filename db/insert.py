@@ -408,7 +408,7 @@ class DatabaseInsert(DatabaseBase):
                             (find_transition_ids,)
                         )
                         res = await cur.fetchall()
-                        if (fee := transaction.additional_fee.value) is not None:
+                        if (fee := transaction.fee.value) is not None:
                             await cur.execute(
                                 "SELECT tx.id, tx.transaction_id FROM transaction tx "
                                 "JOIN fee f on tx.id = f.transaction_id "
@@ -490,7 +490,7 @@ class DatabaseInsert(DatabaseBase):
                     )
 
                 elif isinstance(transaction, ExecuteTransaction): # accepted execute / unconfirmed
-                    await DatabaseInsert._insert_execute_transaction(conn, redis, transaction.execution, transaction.additional_fee.value, transaction_db_id)
+                    await DatabaseInsert._insert_execute_transaction(conn, redis, transaction.execution, transaction.fee.value, transaction_db_id)
 
                 elif isinstance(transaction, FeeTransaction) and not prior_tx: # first seen rejected tx
                     if isinstance(confirmed_transaction, RejectedDeploy):

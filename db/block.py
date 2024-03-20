@@ -395,12 +395,10 @@ class DatabaseBlock(DatabaseBase):
                             (transaction["id"],)
                         )
                         fee = await cur.fetchone()
-                        if fee is None:
-                            additional_fee = None
-                        else:
+                        if fee is not None:
                             await cur.execute("SELECT * FROM transition WHERE fee_id = %s", (fee["id"],))
                             fee_transition = await cur.fetchone()
-                            additional_fee = Fee(
+                            fee = Fee(
                                 transition=await self._get_transition_from_dict(fee_transition, conn),
                                 global_state_root=StateRoot.loads(fee["global_state_root"]),
                                 proof=Option[Proof](Proof.loads(fee["proof"])),
@@ -412,7 +410,7 @@ class DatabaseBlock(DatabaseBase):
                                 global_state_root=StateRoot.loads(execute["global_state_root"]),
                                 proof=Option[Proof](Proof.loads(execute["proof"])),
                             ),
-                            additional_fee=Option[Fee](additional_fee),
+                            fee=Option[Fee](fee),
                         )
                     elif transaction["type"] == Transaction.Type.Fee.name:
                         raise ValueError("transaction is confirmed")
@@ -633,24 +631,24 @@ class DatabaseBlock(DatabaseBase):
                     tss: list[Transition] = []
                     for transition in transitions:
                         tss.append(await DatabaseBlock._get_transition_from_dict(transition, conn))
-                    additional_fee = transaction
-                    if additional_fee["fee_id"] is None:
+                    fee = transaction
+                    if fee["fee_id"] is None:
                         fee = None
                     else:
                         await cur.execute(
                             "SELECT * FROM transition WHERE fee_id = %s",
-                            (additional_fee["fee_id"],)
+                            (fee["fee_id"],)
                         )
                         fee_transition = await cur.fetchone()
                         if fee_transition is None:
                             print(transaction)
                             raise ValueError("fee transition not found")
                         proof = None
-                        if additional_fee["fee_proof"] is not None:
-                            proof = Proof.loads(additional_fee["fee_proof"])
+                        if fee["fee_proof"] is not None:
+                            proof = Proof.loads(fee["fee_proof"])
                         fee = Fee(
                             transition=await DatabaseBlock._get_transition_from_dict(fee_transition, conn),
-                            global_state_root=StateRoot.loads(additional_fee["fee_global_state_root"]),
+                            global_state_root=StateRoot.loads(fee["fee_global_state_root"]),
                             proof=Option[Proof](proof),
                         )
                     if execute_transaction["proof"] is None:
@@ -667,7 +665,7 @@ class DatabaseBlock(DatabaseBase):
                                     global_state_root=StateRoot.loads(execute_transaction["global_state_root"]),
                                     proof=Option[Proof](proof),
                                 ),
-                                additional_fee=Option[Fee](fee),
+                                fee=Option[Fee](fee),
                             ),
                             finalize=Vec[FinalizeOperation, u16](f),
                         )
