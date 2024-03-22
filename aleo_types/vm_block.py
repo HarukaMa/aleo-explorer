@@ -3,7 +3,7 @@ from __future__ import annotations
 import io
 import json
 import re
-from hashlib import sha256
+from hashlib import sha256, md5
 from typing import TYPE_CHECKING, NamedTuple
 
 from .vm_instruction import *
