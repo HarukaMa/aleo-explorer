@@ -27,4 +27,7 @@ class Canary:
 
     deployment_fee_multiplier = 1000
 
-    ans_registry = ""
+    cast_per_byte_cost = 30
+    cast_base_cost = 500
+
+    ans_registry = "placeholder.aleo"

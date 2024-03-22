@@ -17,7 +17,7 @@ from aleo_types import u32, Transition, ExecuteTransaction, PrivateTransitionInp
     FeeTransaction, RejectedDeploy, RejectedExecution, Identifier, Entry, FutureTransitionOutput, Future, \
     PlaintextArgument, FutureArgument, StructPlaintext, Finalize, \
     PlaintextFinalizeType, StructPlaintextType, UpdateKeyValue, Value, Plaintext, RemoveKeyValue, FinalizeOperation, \
-    NodeType, cached_get_mapping_id, cached_get_key_id
+    NodeType, cached_get_mapping_id, cached_get_key_id, FeeComponent, Fee
 from db import Database
 from node.light_node import LightNodeState
 from util.global_cache import get_program
@@ -80,7 +80,17 @@ async def block_route(request: Request):
     total_priority_fee = 0
     total_burnt_fee = 0
     for ct in block.transactions.transactions:
-        fee_breakdown = await ct.get_fee_breakdown(db)
+        # TODO: use proper fee calculation
+        # fee_breakdown = await ct.get_fee_breakdown(db)
+        fee = ct.transaction.fee
+        if isinstance(fee, Fee):
+            base_fee, priority_fee = fee.amount
+        elif fee.value is not None:
+            base_fee, priority_fee = fee.value.amount
+        else:
+            base_fee, priority_fee = 0, 0
+        fee_breakdown = FeeComponent(base_fee, 0, [0], priority_fee, 0)
+        print(fee_breakdown)
         base_fee = fee_breakdown.storage_cost + fee_breakdown.namespace_cost + sum(fee_breakdown.finalize_costs)
         priority_fee = fee_breakdown.priority_fee
         burnt_fee = fee_breakdown.burnt
@@ -232,14 +242,26 @@ async def transaction_route(request: Request):
     else:
         raise HTTPException(status_code=550, detail="Unsupported transaction type")
 
+    # TODO: use proper fee calculation
     if confirmed_transaction is None:
-        storage_cost, namespace_cost, finalize_costs, priority_fee, burnt = await transaction.get_fee_breakdown(db)
+        # storage_cost, namespace_cost, finalize_costs, priority_fee, burnt = await transaction.get_fee_breakdown(db)
         block = None
         block_confirm_time = None
     else:
-        storage_cost, namespace_cost, finalize_costs, priority_fee, burnt = await confirmed_transaction.get_fee_breakdown(db)
+        # storage_cost, namespace_cost, finalize_costs, priority_fee, burnt = await confirmed_transaction.get_fee_breakdown(db)
         block = await db.get_block_from_transaction_id(tx_id)
         block_confirm_time = await db.get_block_confirm_time(block.height)
+
+    fee = transaction.fee
+    if isinstance(fee, Fee):
+        storage_cost, priority_fee = fee.amount
+    elif fee.value is not None:
+        storage_cost, priority_fee = fee.value.amount
+    else:
+        storage_cost, priority_fee = 0, 0
+    namespace_cost = 0
+    finalize_costs = []
+    burnt = 0
 
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx: dict[str, Any] = {

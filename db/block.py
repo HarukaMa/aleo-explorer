@@ -248,6 +248,12 @@ class DatabaseBlock(DatabaseBase):
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
+                    if height == 0:
+                        await cur.execute("SELECT timestamp FROM block WHERE height = 0")
+                        res = await cur.fetchone()
+                        if res is None:
+                            return None
+                        return res["timestamp"]
                     await cur.execute(
                         "SELECT max(dv.timestamp) FROM dag_vertex dv "
                         "JOIN authority a on dv.authority_id = a.id "
@@ -791,7 +797,7 @@ class DatabaseBlock(DatabaseBase):
                             balances.append(Tuple[Address, u64]((Address.loads(public_balance["address"]), u64(public_balance["amount"]))))
                         await cur.execute("SELECT * FROM ratification_genesis_bonded")
                         bonded_balances = await cur.fetchall()
-                        bonded: list[Tuple[Address, Address, Address, u64]]
+                        bonded: list[Tuple[Address, Address, Address, u64]] = []
                         for bonded_balance in bonded_balances:
                             bonded.append(
                                 Tuple[Address, Address, Address, u64]((

@@ -149,11 +149,13 @@ CREATE FUNCTION explorer.get_confirmed_transactions(block_db_id integer) RETURNS
     AS $$
 declare
     transaction_db_id transaction.id%type;
+    confirmed_transaction_db_id confirmed_transaction.id%type;
 begin
-    for confirmed_transaction_id, confirmed_transaction_type, index, reject_reason in
+    for confirmed_transaction_db_id, confirmed_transaction_type, index, reject_reason in
         select t.id, t.type, t.index, t.reject_reason from confirmed_transaction t where t.block_id = block_db_id
         loop
-            select t.id, t.transaction_id, t.type from transaction t where t.confirmed_transaction_id = confirmed_transaction_id into transaction_db_id, transaction_id, transaction_type;
+            confirmed_transaction_id := confirmed_transaction_db_id;
+            select t.id, t.transaction_id, t.type from transaction t where t.confirmed_transaction_id = confirmed_transaction_db_id into transaction_db_id, transaction_id, transaction_type;
             if confirmed_transaction_type = 'AcceptedDeploy' or confirmed_transaction_type = 'RejectedDeploy' then
                 if confirmed_transaction_type = 'RejectedDeploy' then
                     select t.id, t.edition, t.verifying_keys, t.program_id, t.owner from transaction_deploy t where t.transaction_id = transaction_db_id order by id limit 1 into transaction_deploy_id, edition, verifying_keys, program_id, owner;
@@ -287,6 +289,16 @@ SET default_table_access_method = heap;
 
 CREATE TABLE explorer._migration (
     migrated_id integer NOT NULL
+);
+
+
+--
+-- Name: address_puzzle_reward; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.address_puzzle_reward (
+    address text NOT NULL,
+    total_reward numeric(20,0) DEFAULT 0 NOT NULL
 );
 
 
@@ -1071,26 +1083,6 @@ ALTER SEQUENCE explorer.future_id_seq OWNED BY explorer.future.id;
 
 
 --
--- Name: leaderboard; Type: TABLE; Schema: explorer; Owner: -
---
-
-CREATE TABLE explorer.leaderboard (
-    address text NOT NULL,
-    total_reward numeric(20,0) DEFAULT 0 NOT NULL,
-    total_incentive numeric(20,0) DEFAULT 0 NOT NULL
-);
-
-
---
--- Name: leaderboard_total; Type: TABLE; Schema: explorer; Owner: -
---
-
-CREATE TABLE explorer.leaderboard_total (
-    total_credit numeric(20,0) DEFAULT 0 NOT NULL
-);
-
-
---
 -- Name: mapping; Type: TABLE; Schema: explorer; Owner: -
 --
 
@@ -1485,6 +1477,16 @@ CREATE SEQUENCE explorer.ratification_id_seq
 --
 
 ALTER SEQUENCE explorer.ratification_id_seq OWNED BY explorer.ratification.id;
+
+
+--
+-- Name: stats; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.stats (
+    name text NOT NULL,
+    value integer NOT NULL
+);
 
 
 --
@@ -2268,6 +2270,14 @@ ALTER TABLE ONLY explorer.transition_output_record ALTER COLUMN id SET DEFAULT n
 
 
 --
+-- Name: address_puzzle_reward address_puzzle_reward_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.address_puzzle_reward
+    ADD CONSTRAINT address_puzzle_reward_pk PRIMARY KEY (address);
+
+
+--
 -- Name: authority authority_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -2444,14 +2454,6 @@ ALTER TABLE ONLY explorer.future
 
 
 --
--- Name: leaderboard leaderboard_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.leaderboard
-    ADD CONSTRAINT leaderboard_pk PRIMARY KEY (address);
-
-
---
 -- Name: mapping_bonded_history mapping_bonded_history_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -2553,6 +2555,14 @@ ALTER TABLE ONLY explorer.program
 
 ALTER TABLE ONLY explorer.ratification
     ADD CONSTRAINT ratification_pk PRIMARY KEY (id);
+
+
+--
+-- Name: stats stats_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.stats
+    ADD CONSTRAINT stats_pk PRIMARY KEY (name);
 
 
 --
@@ -2681,6 +2691,13 @@ ALTER TABLE ONLY explorer.transition_output_record
 
 ALTER TABLE ONLY explorer.transition
     ADD CONSTRAINT transition_pk PRIMARY KEY (id);
+
+
+--
+-- Name: address_puzzle_reward_total_reward_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX address_puzzle_reward_total_reward_index ON explorer.address_puzzle_reward USING btree (total_reward);
 
 
 --
@@ -2982,27 +2999,6 @@ CREATE INDEX future_transition_output_future_id_index ON explorer.future USING b
 --
 
 CREATE INDEX future_type_index ON explorer.future USING btree (type);
-
-
---
--- Name: leaderboard_address_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX leaderboard_address_index ON explorer.leaderboard USING btree (address text_pattern_ops);
-
-
---
--- Name: leaderboard_total_incentive_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX leaderboard_total_incentive_index ON explorer.leaderboard USING btree (total_incentive);
-
-
---
--- Name: leaderboard_total_reward_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX leaderboard_total_reward_index ON explorer.leaderboard USING btree (total_reward);
 
 
 --

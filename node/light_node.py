@@ -140,11 +140,12 @@ class LightNode:
             msg = frame.message
             if msg.version < Network.version:
                 raise ValueError("peer is outdated")
-            nonce = msg.nonce
             self.state.node_connected(self.ip, self.port, str(msg.address))
+            resp_nonce = u64(random.randint(0, 2 ** 64 - 1))
             response = ChallengeResponse(
                 genesis_header=Network.genesis_block.header,
-                signature=Data[Signature](Signature.load(BytesIO(bytes(aleo_explorer_rust.sign_nonce("APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH", nonce.dump()))))),
+                signature=Data[Signature](Signature.load(BytesIO(aleo_explorer_rust.sign_nonce("APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH", msg.nonce.dump() + resp_nonce.dump())))),
+                nonce=resp_nonce,
             )
             await self.send_message(response)
             await self.send_ping()
@@ -157,9 +158,7 @@ class LightNode:
             self.ping_task = asyncio.create_task(ping_task())
 
         elif isinstance(frame.message, ChallengeResponse):
-            msg = frame.message
-            if msg.genesis_header.transactions_root != Network.genesis_block.header.transactions_root:
-                raise ValueError("peer has wrong genesis block")
+            pass
 
         elif isinstance(frame.message, Ping):
             msg = frame.message

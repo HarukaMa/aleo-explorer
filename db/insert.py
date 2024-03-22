@@ -17,6 +17,26 @@ from .base import DatabaseBase, profile
 from .util import DatabaseUtil
 
 
+class _SupplyTracker:
+
+    def __init__(self, previous_supply: int):
+        self.supply = previous_supply
+        self.actual_block_reward = 0
+        self.actual_puzzle_reward = 0
+
+    def mint(self, delta: int):
+        self.supply += delta
+
+    def tally_block_reward(self, reward: int):
+        self.actual_block_reward += reward
+
+    def tally_puzzle_reward(self, reward: int):
+        self.actual_puzzle_reward += reward
+
+    def burn(self, delta: int):
+        self.supply -= delta
+
+
 class DatabaseInsert(DatabaseBase):
 
     def __init__(self, *args, **kwargs):
@@ -508,7 +528,6 @@ class DatabaseInsert(DatabaseBase):
                 )
                 reject_reasons = cast(list[Optional[str]], reject_reasons)
                 ct_index = cast(int, ct_index)
-                ignore_deploy_txids = cast(list[str], ignore_deploy_txids)
                 if isinstance(confirmed_transaction, AcceptedDeploy):
                     transaction = cast(DeployTransaction, transaction)
                     if reject_reasons[ct_index] is not None:
@@ -692,14 +711,16 @@ class DatabaseInsert(DatabaseBase):
                 (committee_db_id, str(address), stake, bool(is_open))
             )
 
-    async def _pre_ratify(self, cur: psycopg.AsyncCursor[dict[str, Any]], ratification: GenesisRatify):
+    async def _pre_ratify(self, cur: psycopg.AsyncCursor[dict[str, Any]], ratification: GenesisRatify,
+                          supply_tracker: _SupplyTracker):
         from interpreter.interpreter import global_mapping_cache
         committee = ratification.committee
         await DatabaseInsert._save_committee_history(cur, 0, committee)
 
+        bonded_balances = ratification.bonded_balances
         stakers: dict[Address, tuple[Address, u64]] = {}
-        for validator, amount, _ in committee.members:
-            stakers[validator] = validator, amount
+        for staker, validator, _, amount in bonded_balances:
+            stakers[staker] = validator, amount
         committee_members = {address: (amount, is_open) for address, amount, is_open in committee.members}
         await DatabaseInsert._update_committee_bonded_map(cur, self.redis, committee_members, stakers, 0)
 
@@ -735,8 +756,8 @@ class DatabaseInsert(DatabaseBase):
                 "mapping_name": "account",
                 "from_transaction": False,
             })
+            supply_tracker.mint(balance)
 
-        bonded_balances = ratification.bonded_balances
         for staker, validator, withdrawal, amount in bonded_balances:
             key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=staker))
             key_id = Field.loads(cached_get_key_id("credits.aleo", "bonded", key.dump()))
@@ -791,6 +812,8 @@ class DatabaseInsert(DatabaseBase):
                 "mapping_name": "withdraw",
                 "from_transaction": False,
             })
+
+            supply_tracker.mint(amount)
 
         key = LiteralPlaintext(
             literal=Literal(
@@ -920,7 +943,7 @@ class DatabaseInsert(DatabaseBase):
     @staticmethod
     @profile
     def _stake_rewards(committee_members: dict[Address, tuple[u64, bool_]],
-                       stakers: dict[Address, tuple[Address, u64]], block_reward: u64):
+                       stakers: dict[Address, tuple[Address, u64]], block_reward: u64, supply_tracker: _SupplyTracker):
         total_stake = sum(x[0] for x in committee_members.values())
         stake_rewards: dict[Address, int] = {}
         if not stakers or total_stake == 0 or block_reward == 0:
@@ -958,7 +981,7 @@ class DatabaseInsert(DatabaseBase):
 
     @profile
     async def _post_ratify(self, cur: psycopg.AsyncCursor[dict[str, Any]], redis_conn: Redis[str], height: int, round_: int,
-                           ratifications: list[Ratify], address_puzzle_rewards: dict[str, int]):
+                           ratifications: list[Ratify], address_puzzle_rewards: dict[str, int], supply_tracker: _SupplyTracker):
         from interpreter.interpreter import global_mapping_cache
 
         for ratification in ratifications:
@@ -981,12 +1004,14 @@ class DatabaseInsert(DatabaseBase):
 
                 DatabaseInsert._check_committee_staker_match(committee_members, stakers)
 
-                stakers, stake_rewards = DatabaseInsert._stake_rewards(committee_members, stakers, ratification.amount)
+                stakers, stake_rewards = DatabaseInsert._stake_rewards(committee_members, stakers, ratification.amount, supply_tracker)
                 committee_members = DatabaseInsert._next_committee_members(committee_members, stakers)
 
                 pipe = self.redis.pipeline()
                 for address, amount in stake_rewards.items():
                     pipe.hincrby("address_stake_reward", str(address), amount)
+                    supply_tracker.mint(amount)
+                    supply_tracker.tally_block_reward(amount)
                 await pipe.execute()
 
                 await DatabaseInsert._update_committee_bonded_map(cur, self.redis, committee_members, stakers, height)
@@ -1046,6 +1071,8 @@ class DatabaseInsert(DatabaseBase):
                         "height": height,
                         "from_transaction": False,
                     })
+                    supply_tracker.mint(amount)
+                    supply_tracker.tally_puzzle_reward(amount)
                 from interpreter.interpreter import execute_operations
                 await execute_operations(cast(Database, self), cur, operations)
 
@@ -1106,20 +1133,39 @@ class DatabaseInsert(DatabaseBase):
                                 await cast("Database", self).get_latest_cumulative_proof_target()
                             )
                             puzzle_reward = coinbase_reward // 2
+
+                            await cur.execute("SELECT total_supply FROM block ORDER BY id DESC LIMIT 1")
+                            if (res := await cur.fetchone()) is None:
+                                raise RuntimeError("failed to retrieve total supply")
+                            supply_tracker = _SupplyTracker(res["total_supply"])
                         else:
                             block_reward, coinbase_reward, puzzle_reward = 0, 0, 0
+                            supply_tracker = _SupplyTracker(0)
 
-                        block_reward += await block.get_total_priority_fee(cast("Database", self))
+                        # TODO: use data from proper fee calculation
+                        # supply_tracker.burn(await block.get_total_burnt_fee(cast("Database", self)))
+                        for ct in block.transactions:
+                            ct: ConfirmedTransaction
+                            fee = ct.transaction.fee
+                            if isinstance(fee, Fee):
+                                supply_tracker.burn(fee.amount[0])
+                            elif fee.value is not None:
+                                supply_tracker.burn(fee.value.amount[0])
+
+                        # TODO: use data from fee calculation
+                        # block_reward += await block.get_total_priority_fee(cast("Database", self))
 
                         for ratification in block.ratifications:
                             if isinstance(ratification, BlockRewardRatify):
+                                # TODO: remove this
+                                block_reward = ratification.amount
                                 if ratification.amount != block_reward:
                                     raise RuntimeError("invalid block reward")
                             elif isinstance(ratification, PuzzleRewardRatify):
                                 if ratification.amount != puzzle_reward:
                                     raise RuntimeError("invalid puzzle reward")
                             elif isinstance(ratification, GenesisRatify):
-                                await self._pre_ratify(cur, ratification)
+                                await self._pre_ratify(cur, ratification, supply_tracker)
 
                         from interpreter.interpreter import finalize_block
                         reject_reasons = await finalize_block(cast("Database", self), cur, block)
@@ -1137,8 +1183,8 @@ class DatabaseInsert(DatabaseBase):
                              block.header.metadata.cumulative_weight, block.header.metadata.cumulative_proof_target,
                              block.header.metadata.coinbase_target, block.header.metadata.proof_target,
                              block.header.metadata.last_coinbase_target, block.header.metadata.last_coinbase_timestamp,
-                             block.header.metadata.timestamp, block_reward, coinbase_reward)
-                        )
+                             block.header.metadata.timestamp, block_reward, coinbase_reward, supply_tracker.supply)
+                        ) # total supply will be rewritten after everything
                         if (res := await cur.fetchone()) is None:
                             raise RuntimeError("failed to insert row into database")
                         block_db_id = res["id"]
@@ -1160,7 +1206,7 @@ class DatabaseInsert(DatabaseBase):
                                 raise RuntimeError("failed to insert row into database")
                             authority_db_id = res["id"]
                             subdag = block.authority.subdag
-                            subdag_copy_data: list[tuple[int, int, str, str, int, str, int]] = []
+                            subdag_copy_data: list[tuple[int, int, str, str, int, str, int, str]] = []
                             for round_, certificates in subdag.subdag.items():
                                 for index, certificate in enumerate(certificates):
                                     if round_ != certificate.batch_header.round:
@@ -1168,7 +1214,7 @@ class DatabaseInsert(DatabaseBase):
                                     subdag_copy_data.append((
                                         authority_db_id, round_, str(certificate.batch_header.batch_id),
                                         str(certificate.batch_header.author), certificate.batch_header.timestamp,
-                                        str(certificate.batch_header.signature), index
+                                        str(certificate.batch_header.signature), index, str(certificate.batch_header.committee_id)
                                     ))
                                         # await cur.execute(
                                         #     "INSERT INTO dag_vertex (authority_id, round, batch_certificate_id, batch_id, "
@@ -1236,7 +1282,7 @@ class DatabaseInsert(DatabaseBase):
                         if subdag_copy_data:
                             async with cur.copy(
                                 "COPY dag_vertex (authority_id, round, batch_id, "
-                                "author, timestamp, author_signature, index) FROM STDIN"
+                                "author, timestamp, author_signature, index, committee_id) FROM STDIN"
                             ) as copy:
                                 for row in subdag_copy_data:
                                     await copy.write_row(row)
@@ -1398,7 +1444,31 @@ class DatabaseInsert(DatabaseBase):
                                 (block_db_id, str(aborted))
                             )
 
-                        await self._post_ratify(cur, self.redis, block.height, block.round, block.ratifications.ratifications, address_puzzle_rewards)
+                        await self._post_ratify(
+                            cur, self.redis, block.height, block.round, block.ratifications.ratifications,
+                            address_puzzle_rewards, supply_tracker
+                        )
+
+                        await cur.execute(
+                            "UPDATE block SET total_supply = %s WHERE id = %s",
+                            (supply_tracker.supply, block_db_id)
+                        )
+
+                        puzzle_diff = puzzle_reward - supply_tracker.actual_puzzle_reward
+                        if puzzle_diff != 0:
+                            await cur.execute(
+                                "INSERT INTO stats (name, value) VALUES ('puzzle_reward_diff', %s) "
+                                "ON CONFLICT (name) DO UPDATE SET value = stats.value + %s",
+                                (puzzle_diff, puzzle_diff)
+                            )
+
+                        block_diff = block_reward - supply_tracker.actual_block_reward
+                        if block_diff != 0:
+                            await cur.execute(
+                                "INSERT INTO stats (name, value) VALUES ('block_reward_diff', %s) "
+                                "ON CONFLICT (name) DO UPDATE SET value = stats.value + %s",
+                                (block_diff, block_diff)
+                            )
 
                         if block.height % 100 == 0:
                             await self.cleanup_unconfirmed_transactions()

@@ -3,7 +3,7 @@ from __future__ import annotations
 import io
 import json
 import re
-from hashlib import sha256, md5
+from hashlib import sha256
 from typing import TYPE_CHECKING, NamedTuple
 
 from .vm_instruction import *
@@ -298,16 +298,16 @@ class Command(EnumBaseSerialize, RustEnum, Serializable):
 
     fee_map = {
         Type.Instruction: 0,
-        Type.Await: 2_000,
-        Type.Contains: 12_500,
-        Type.Get: 25_000,
-        Type.GetOrUse: 25_000,
+        Type.Await: 500,
+        Type.Contains: -2,
+        Type.Get: -2,
+        Type.GetOrUse: -2,
         Type.RandChaCha: 25_000,
-        Type.Remove: 10_000,
-        Type.Set: 100_000,
-        Type.BranchEq: 5_000,
-        Type.BranchNeq: 5_000,
-        Type.Position: 1_000,
+        Type.Remove: -2,
+        Type.Set: -2,
+        Type.BranchEq: 500,
+        Type.BranchNeq: 500,
+        Type.Position: 100,
     }
 
     @classmethod
@@ -338,10 +338,9 @@ class Command(EnumBaseSerialize, RustEnum, Serializable):
         else:
             raise ValueError("Invalid variant")
 
-    @property
-    def cost(self) -> int:
+    def cost(self, program: Program) -> int:
         if isinstance(self, InstructionCommand):
-            return self.instruction.cost
+            return self.instruction.cost(program)
         return self.fee_map[self.type]
 
     def __str__(self):
@@ -701,9 +700,8 @@ class Finalize(Serializable):
         commands = Vec[Command, u16].load(data)
         return cls(name=name, inputs=inputs, commands=commands)
 
-    @property
-    def cost(self) -> int:
-        return sum(command.cost for command in self.commands)
+    def cost(self, program: Program) -> int:
+        return sum(command.cost(program) for command in self.commands)
 
 
 class ValueType(EnumBaseSerialize, RustEnum, Serializable):
@@ -890,11 +888,10 @@ class Function(Serializable):
     def instruction_feature_string(self) -> str:
         return feature_string_from_instructions(self.instructions)
 
-    @property
-    def finalize_cost(self):
+    def finalize_cost(self, program: Program):
         if self.finalize.value is None:
             return 0
-        return self.finalize.value.cost
+        return self.finalize.value.cost(program)
 
 class ProgramDefinition(IntEnumu8):
     Mapping = 0
@@ -2532,7 +2529,7 @@ class Execution(Serializable):
             program = await get_program(db, str(transition.program_id))
             if program is None:
                 raise RuntimeError("program not found")
-            finalize_costs.append(program.functions[transition.function_name].finalize_cost)
+            finalize_costs.append(await program.functions[transition.function_name].finalize_cost(program))
         return finalize_costs
 
 FeeComponent = NamedTuple("FeeComponent", [
@@ -2553,6 +2550,7 @@ class Transaction(EnumBaseSerialize, RustEnum, Serializable):
 
     id: TransactionID
     type: Type
+    fee: Fee | Option[Fee]
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -3412,7 +3410,7 @@ class BatchHeader(Serializable):
     version = u8(1)
 
     def __init__(self, *, batch_id: Field, author: Address, round_: u64, timestamp: i64, committee_id: Field,
-                 transmission_ids: Vec[TransmissionID, u32], previous_certificate_ids: Vec[Field, u32],
+                 transmission_ids: Vec[TransmissionID, u32], previous_certificate_ids: Vec[Field, u16],
                  signature: Signature):
         self.batch_id = batch_id
         self.author = author
@@ -3430,13 +3428,16 @@ class BatchHeader(Serializable):
 
     @classmethod
     def load(cls, data: BytesIO):
+        version = u8.load(data)
+        if version != cls.version:
+            raise ValueError("invalid batch header version")
         batch_id = Field.load(data)
         author = Address.load(data)
         round_ = u64.load(data)
         timestamp = i64.load(data)
         committee_id = Field.load(data)
         transmission_ids = Vec[TransmissionID, u32].load(data)
-        previous_certificate_ids = Vec[Field, u32].load(data)
+        previous_certificate_ids = Vec[Field, u16].load(data)
         signature = Signature.load(data)
         return cls(batch_id=batch_id, author=author, round_=round_, timestamp=timestamp, committee_id=committee_id,
                    transmission_ids=transmission_ids, previous_certificate_ids=previous_certificate_ids,
@@ -3455,6 +3456,9 @@ class BatchCertificate(Serializable):
 
     @classmethod
     def load(cls, data: BytesIO):
+        version = u8.load(data)
+        if version != cls.version:
+            raise ValueError("invalid certificate version")
         batch_header = BatchHeader.load(data)
         signatures = Vec[Signature, u16].load(data)
         return cls(batch_header=batch_header, signatures=signatures)
@@ -3463,7 +3467,7 @@ class BatchCertificate(Serializable):
 class Subdag(Serializable):
     version = u8(1)
 
-    def __init__(self, *, subdag: dict[u64, Vec[BatchCertificate, u32]]):
+    def __init__(self, *, subdag: dict[u64, Vec[BatchCertificate, u16]]):
         self.subdag = subdag
 
     def dump(self) -> bytes:
@@ -3475,10 +3479,13 @@ class Subdag(Serializable):
 
     @classmethod
     def load(cls, data: BytesIO):
+        version = u8.load(data)
+        if version != cls.version:
+            raise ValueError("invalid subdag version")
         subdag = {}
         for _ in range(u32.load(data)):
             round_ = u64.load(data)
-            certificates = Vec[BatchCertificate, u32].load(data)
+            certificates = Vec[BatchCertificate, u16].load(data)
             subdag[round_] = certificates
         return cls(subdag=subdag)
 
@@ -3635,3 +3642,11 @@ class Block(Serializable):
 
     async def get_total_priority_fee(self, db: "Database"):
         return sum([(await t.get_fee_breakdown(db)).priority_fee for t in self.transactions])
+
+    async def get_total_burnt_fee(self, db: "Database"):
+        """Includes both explicitly burnt fee and costs"""
+        fees: list[FeeComponent] = [await t.get_fee_breakdown(db) for t in self.transactions]
+        total = 0
+        for fee in fees:
+            total += fee.burnt + fee.storage_cost + fee.namespace_cost + sum(fee.finalize_costs)
+        return total

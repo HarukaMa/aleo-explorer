@@ -147,18 +147,20 @@ class ChallengeRequest(Message):
 class ChallengeResponse(Message):
     type = Message.Type.ChallengeResponse
 
-    def __init__(self, *, genesis_header: BlockHeader, signature: Data[Signature]):
+    def __init__(self, *, genesis_header: BlockHeader, signature: Data[Signature], nonce: u64):
         self.genesis_header = genesis_header
         self.signature = signature
+        self.nonce = nonce
 
     def dump(self) -> bytes:
-        return self.type.dump() + self.genesis_header.dump() + self.signature.dump()
+        return self.type.dump() + self.genesis_header.dump() + self.signature.dump() + self.nonce.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
         genesis_header = BlockHeader.load(data)
         signature = Data[Signature].load(data)
-        return cls(genesis_header=genesis_header, signature=signature)
+        nonce = u64.load(data)
+        return cls(genesis_header=genesis_header, signature=signature, nonce=nonce)
 
 
 class DisconnectReason(IntEnumu8):

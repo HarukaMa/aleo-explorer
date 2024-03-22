@@ -118,14 +118,15 @@ class Node:
             msg = frame.message
             if msg.version < Network.version:
                 raise ValueError("peer is outdated")
-            nonce = msg.nonce
             if await self.explorer_request(explorer.Request.GetDevMode()):
                 genesis = Network.dev_genesis_block.header
             else:
                 genesis = Network.genesis_block.header
+            resp_nonce = u64(random.randint(0, 2 ** 64 - 1))
             response = ChallengeResponse(
                 genesis_header=genesis,
-                signature=Data[Signature](Signature.load(BytesIO(aleo_explorer_rust.sign_nonce("APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH", nonce.dump())))),
+                signature=Data[Signature](Signature.load(BytesIO(aleo_explorer_rust.sign_nonce("APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH", msg.nonce.dump() + resp_nonce.dump())))),
+                nonce=resp_nonce,
             )
             self.handshake_state = 1
             await self.send_message(response)
@@ -141,13 +142,6 @@ class Node:
         elif isinstance(frame.message, ChallengeResponse):
             if self.handshake_state != 0:
                 raise Exception("incorrect handshake state")
-            msg = frame.message
-            if await self.explorer_request(explorer.Request.GetDevMode()):
-                genesis = Network.dev_genesis_block.header.transactions_root
-            else:
-                genesis = Network.genesis_block.header.transactions_root
-            if msg.genesis_header.transactions_root != genesis:
-                raise ValueError("peer has wrong genesis block")
             self.handshake_state = 2
 
         elif isinstance(frame.message, Ping):

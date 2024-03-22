@@ -98,9 +98,11 @@ def htmx_template(template: str):
                 return templates.TemplateResponse(t, context, headers=headers)
             except Exception as e:
                 tb = e.__traceback__
-                while tb.tb_next and tb.tb_next.tb_next:
-                    tb = tb.tb_next
                 frame = tb.tb_frame
+                while tb.tb_next:
+                    tb = tb.tb_next
+                    if tb.tb_frame.f_code.co_filename.endswith(".jinja2"):
+                        frame = tb.tb_frame
                 raise HTTPException(status_code=550, detail=f"template error at {frame.f_code.co_filename.rsplit('/', 1)[-1]}:{frame.f_lineno}: {e.__class__.__name__}: {str(e)}") from e
         return wrapper
     return decorator
