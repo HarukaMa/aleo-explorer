@@ -118,7 +118,7 @@ class LightNode:
                 nonce=self.nonce,
             )
             await self.send_message(challenge_request)
-            self.aiohttp_session = aiohttp.ClientSession(f"http://{self.ip}:3033", timeout=aiohttp.ClientTimeout(total=1))
+            self.aiohttp_session = aiohttp.ClientSession(f"http://{self.ip}:3030", timeout=aiohttp.ClientTimeout(total=1))
             while True:
                 try:
                     size = await self.reader.readexactly(4)
