@@ -29,7 +29,7 @@ def get_relative_time(timestamp: int):
 
 async def get_remote_height(session: aiohttp.ClientSession, rpc_root: str) -> str:
     try:
-        async with session.get(f"{rpc_root}/testnet3/latest/height") as resp:
+        async with session.get(f"{rpc_root}/mainnet/latest/height") as resp:
             if resp.status == 200:
                 remote_height = await resp.text()
             else:
