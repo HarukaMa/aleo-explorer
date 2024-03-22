@@ -898,6 +898,8 @@ async def nodes_route(request: Request):
     nodes = lns.states
     res = {}
     for k, v in nodes.items():
+        if k.startswith("127.0.0.1"):
+            continue
         res[k] = copy.deepcopy(v)
         res[k]["last_ping"] = get_relative_time(v["last_ping"])
     validators = 0
