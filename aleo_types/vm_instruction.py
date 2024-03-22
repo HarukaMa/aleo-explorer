@@ -545,7 +545,7 @@ class Locator(Serializable):
         return f"{self.id}/{self.resource}"
 
 
-class CallOperator(EnumBaseSerialize, Serialize, RustEnum):
+class CallOperator(EnumBaseSerialize, RustEnum, Serializable):
 
     class Type(IntEnumu8):
         Locator = 0

@@ -206,7 +206,7 @@ async def run():
     server = UvicornServer(config=config)
     # noinspection PyUnresolvedReferences
     app.state.lns = LightNodeState()
-    app.state.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=1))
+    app.state.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=3))
 
     server.start()
     while True:
