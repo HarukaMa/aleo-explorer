@@ -36,7 +36,7 @@ class DatabaseUtil(DatabaseBase):
                 await conn.execute("TRUNCATE TABLE mapping RESTART IDENTITY CASCADE")
                 await conn.execute("TRUNCATE TABLE committee_history RESTART IDENTITY CASCADE")
                 await conn.execute("TRUNCATE TABLE committee_history_member RESTART IDENTITY CASCADE")
-                await conn.execute("TRUNCATE TABLE leaderboard RESTART IDENTITY CASCADE")
+                await conn.execute("TRUNCATE TABLE address_puzzle_reward RESTART IDENTITY CASCADE")
                 await conn.execute("TRUNCATE TABLE mapping_bonded_history RESTART IDENTITY CASCADE")
                 await conn.execute("TRUNCATE TABLE ratification_genesis_balance RESTART IDENTITY CASCADE")
                 await self.redis.flushall()
@@ -200,7 +200,7 @@ class DatabaseUtil(DatabaseBase):
                                 address = item["address"]
                                 reward = item["reward"]
                                 await cur.execute(
-                                    "UPDATE leaderboard SET total_reward = total_reward - %s WHERE address = %s",
+                                    "UPDATE address_puzzle_reward SET total_reward = total_reward - %s WHERE address = %s",
                                     (reward, address)
                                 )
                         await cur.execute(

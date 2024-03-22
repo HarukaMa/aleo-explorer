@@ -51,7 +51,7 @@ class DatabaseSearch(DatabaseBase):
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT DISTINCT address FROM leaderboard WHERE address LIKE %s", (f"{address}%",)
+                        "SELECT DISTINCT address FROM address_puzzle_reward WHERE address LIKE %s", (f"{address}%",)
                     )
                     res = set(map(lambda x: x['address'], await cur.fetchall()))
                     await cur.execute(
