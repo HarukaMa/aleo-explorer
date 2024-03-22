@@ -575,6 +575,9 @@ class LocatorCallOperator(CallOperator):
     def load(cls, data: BytesIO):
         return cls(locator=Locator.load(data))
 
+    def __str__(self):
+        return str(self.locator)
+
 
 class ResourceCallOperator(CallOperator):
     type = CallOperator.Type.Resource
@@ -588,6 +591,9 @@ class ResourceCallOperator(CallOperator):
     @classmethod
     def load(cls, data: BytesIO):
         return cls(resource=Identifier.load(data))
+
+    def __str__(self):
+        return str(self.resource)
 
 
 class CallInstruction(Serializable):
