@@ -121,7 +121,7 @@ class DatabaseProgram(DatabaseBase):
                     height = await cur.fetchone()
                     if height is None:
                         return None
-                    return await cast(Database, self).get_block_by_height(height["height"])
+                    return await cast("Database", self).get_block_by_height(height["height"])
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
