@@ -140,11 +140,12 @@ class LightNode:
             msg = frame.message
             if msg.version < Testnet3.version:
                 raise ValueError("peer is outdated")
-            nonce = msg.nonce
             self.state.node_connected(self.ip, self.port, str(msg.address))
+            resp_nonce = u64(random.randint(0, 2 ** 64 - 1))
             response = ChallengeResponse(
                 genesis_header=Testnet3.genesis_block.header,
-                signature=Data[Signature](Signature.load(BytesIO(bytes(aleo_explorer_rust.sign_nonce("APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH", nonce.dump()))))),
+                signature=Data[Signature](Signature.load(BytesIO(aleo_explorer_rust.sign_nonce("APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH", msg.nonce.dump() + resp_nonce.dump())))),
+                nonce=resp_nonce,
             )
             await self.send_message(response)
             await self.send_ping()
