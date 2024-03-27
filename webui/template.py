@@ -91,7 +91,8 @@ def htmx_template(template: str):
                 print(frame.f_locals)
                 msg = f"uncaught exception at {frame.f_code.co_filename.rsplit('/', 1)[-1]}:{frame.f_lineno}: {e.__class__.__name__}: {str(e)}\n"
                 for k, v in frame.f_locals.items():
-                    msg += f"  {k} = {v}\n"
+                    msg += f"  {k} = {str(v)[:50]}{'...' if len(str(v)) > 50 else ''}\n"
+                print(msg)
                 raise HTTPException(status_code=550, detail=msg) from e
             if isinstance(result, tuple):
                 context, headers = result
