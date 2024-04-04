@@ -17,6 +17,7 @@ v2
 
 * Changed :ref:`mapping-list-all-values` to support pagination and used a simpler response format.
 * Added :ref:`mapping-get-key-count` endpoint.
+* Added :ref:`status` endpoint.
 
 v1
 ^^

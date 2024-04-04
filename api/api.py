@@ -5,6 +5,7 @@ import os
 import time
 from typing import Any
 
+import aiohttp
 import uvicorn
 from starlette.applications import Starlette
 from starlette.exceptions import HTTPException
@@ -14,8 +15,6 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
-from api.execute_routes import preview_finalize_route
-from api.mapping_routes import mapping_route, mapping_list_route, mapping_value_list_route, mapping_key_count_route
 from db import Database
 from middleware.api_filter import APIFilterMiddleware
 from middleware.api_quota import APIQuotaMiddleware
@@ -23,6 +22,9 @@ from middleware.asgi_logger import AccessLoggerMiddleware
 from middleware.server_timing import ServerTimingMiddleware
 from util.cache import Cache
 from util.set_proc_title import set_proc_title
+from .execute_routes import preview_finalize_route
+from .mapping_routes import mapping_route, mapping_list_route, mapping_value_list_route, mapping_key_count_route
+from .utils import get_remote_height
 
 
 class UvicornServer(multiprocessing.Process):
@@ -48,6 +50,30 @@ async def commitment_route(request: Request):
     return JSONResponse(await db.get_puzzle_commitment(commitment))
 
 
+async def status_route(request: Request):
+    session = request.app.state.session
+    db: Database = request.app.state.db
+    version = request.path_params["version"]
+    if version < 2:
+        return JSONResponse({"error": "This endpoint is not supported in this version"}, status_code=400)
+    node_height = None
+    reference_height = None
+    if rpc_root := os.environ.get("RPC_URL_ROOT"):
+        node_height = await get_remote_height(session, rpc_root)
+    if ref_rpc_root := os.environ.get("REF_RPC_URL_ROOT"):
+        reference_height = await get_remote_height(session, ref_rpc_root)
+    latest_block_height = await db.get_latest_height()
+    latest_block_timestamp = await db.get_latest_block_timestamp()
+    res = {
+        "server_time": int(time.time()),
+        "latest_block_height": latest_block_height,
+        "latest_block_timestamp": latest_block_timestamp,
+        "node_height": node_height,
+        "reference_height": reference_height,
+    }
+    return JSONResponse(res)
+
+
 routes = [
     Route("/commitment", commitment_route),
     Route("/v{version:int}/mapping/get_value/{program_id}/{mapping}/{key}", mapping_route),
@@ -55,6 +81,7 @@ routes = [
     Route("/v{version:int}/mapping/list_program_mapping_values/{program_id}/{mapping}", mapping_value_list_route),
     Route("/v{version:int}/mapping/get_key_count/{program_id}/{mapping}", mapping_key_count_route),
     Route("/v{version:int}/simulate_execution/finalize", preview_finalize_route, methods=["POST"]),
+    Route("/v{version:int}/status", status_route),
 ]
 
 async def startup():
@@ -69,6 +96,7 @@ async def startup():
     await db.connect()
     app.state.db = db
     app.state.program_cache = Cache()
+    app.state.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=1))
     set_proc_title("aleo-explorer: api")
 
 log_format = '\033[92mAPI\033[0m: \033[94m%(client_addr)s\033[0m - - %(t)s \033[96m"%(request_line)s"\033[0m \033[93m%(s)s\033[0m %(B)s "%(f)s" "%(a)s" %(L)s'

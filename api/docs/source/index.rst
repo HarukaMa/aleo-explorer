@@ -11,6 +11,7 @@ Explorer API
 
    version
    quota
+   status
    mapping
    execute
 

@@ -1,6 +1,7 @@
 import time
-from typing import Callable, Coroutine, Any
+from typing import Callable, Coroutine, Any, Optional
 
+import aiohttp
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
@@ -35,3 +36,14 @@ def use_program_cache(func: Callable[..., Coroutine[Any, Any, Response]]):
         kwargs["program_cache"] = program_cache
         return await func(*args, **kwargs)
     return wrapper
+
+async def get_remote_height(session: aiohttp.ClientSession, rpc_root: str) -> Optional[int]:
+    try:
+        async with session.get(f"{rpc_root}/testnet3/latest/height") as resp:
+            if resp.status == 200:
+                remote_height = int(await resp.text())
+            else:
+                remote_height = None
+    except:
+        remote_height = None
+    return remote_height
