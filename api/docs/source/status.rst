@@ -23,7 +23,7 @@ Get Status
 
    .. sourcecode:: http
 
-      GET /api/v1/status HTTP/1.1
+      GET /api/v2/status HTTP/1.1
       Host: testnet3.aleoscan.io
 
    **Example response**:
