@@ -90,7 +90,10 @@ app = Starlette(
 async def run():
     host = os.environ.get("API_HOST", "127.0.0.1")
     port = int(os.environ.get("API_PORT", 8001))
-    config = uvicorn.Config("api:app", reload=True, log_level="info", host=host, port=port)
+    config = uvicorn.Config(
+        "api:app", reload=True, log_level="info", host=host, port=port,
+        forwarded_allow_ips=["127.0.0.1", "::1"]
+    )
     logging.getLogger("uvicorn.access").handlers = []
     server = UvicornServer(config=config)
 
