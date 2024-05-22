@@ -10,7 +10,7 @@ import requests
 
 from aleo_types import ChallengeRequest, NodeType, u16, u64, Frame, Message, ChallengeResponse, \
     PeerRequest, Ping, PeerResponse, Pong, bool_, BlockLocators, Address, Signature, Option, Data
-from .canary import Canary as Network
+from .testnet import Testnet as Network
 
 
 class LightNodeState:

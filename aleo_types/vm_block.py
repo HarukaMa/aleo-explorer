@@ -1139,8 +1139,8 @@ class Deployment(Serializable):
 
     @property
     def cost(self) -> tuple[int, int]:
-        from node.canary import Canary
-        storage_cost = len(self.dump()) * Canary.deployment_fee_multiplier
+        from node.testnet import Testnet as Network
+        storage_cost = len(self.dump()) * Network.deployment_fee_multiplier
         namespace_cost = 10 ** max(0, 10 - len(self.program.id.name.data)) * 1000000
         return storage_cost, namespace_cost
 
@@ -3044,7 +3044,7 @@ class Solution(Serializable):
         self.epoch_hash = epoch_hash
         self.address = address
         self.counter = counter
-        self.target = self.to_target()
+        self._target: Optional[u64] = None
 
     def dump(self) -> bytes:
         return self.epoch_hash.dump() + self.address.dump() + self.counter.dump()
@@ -3057,8 +3057,11 @@ class Solution(Serializable):
         solution_id = SolutionID.load(BytesIO(aleo_explorer_rust.solution_to_id(str(epoch_hash), str(address), counter)))
         return cls(solution_id=solution_id, epoch_hash=epoch_hash, address=address, counter=counter)
 
-    def to_target(self) -> u64:
-        return u64(aleo_explorer_rust.solution_to_target(self.dump()))
+    @property
+    def target(self) -> u64:
+        if self._target is None:
+            self._target = u64(aleo_explorer_rust.solution_to_target(self.dump()))
+        return self._target
 
 
 class PuzzleSolutions(Serializable):

@@ -8,7 +8,8 @@ from db import Database
 from interpreter.interpreter import init_builtin_program
 from node import Node
 # from node.light_node import LightNodeState
-from node.canary import Canary as Network
+from node.testnet import Testnet as Network
+from webui import webui
 from .types import Request, Message, ExplorerRequest
 
 
@@ -69,6 +70,7 @@ class Explorer:
         try:
             await self.db.connect()
             await self.db.migrate()
+            await self.check_clear()
             await self.check_dev_mode()
             await self.check_genesis()
             await self.check_revert()
@@ -83,7 +85,7 @@ class Explorer:
             print(f"latest height: {self.latest_height}")
             self.node = Node(explorer_message=self.message, explorer_request=self.node_request)
             await self.node.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4133")))
-            # _ = asyncio.create_task(webui.run())
+            _ = asyncio.create_task(webui.run())
             # _ = asyncio.create_task(api.run())
             while True:
                 msg = await self.message_queue.get()
@@ -162,3 +164,11 @@ class Explorer:
             except OSError as e:
                 print("Cannot remove revert_flag:", e)
             await self.db.revert_to_last_backup()
+
+    async def check_clear(self):
+        if os.path.exists("clear_flag") and os.path.isfile("clear_flag"):
+            try:
+                os.remove("clear_flag")
+            except OSError as e:
+                print("Cannot remove clear_flag:", e)
+            await self.db.clear_database()

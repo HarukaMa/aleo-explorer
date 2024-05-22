@@ -34,6 +34,7 @@ class DatabaseUtil(DatabaseBase):
             try:
                 await conn.execute("TRUNCATE TABLE block RESTART IDENTITY CASCADE")
                 await conn.execute("TRUNCATE TABLE mapping RESTART IDENTITY CASCADE")
+                await conn.execute("TRUNCATE TABLE mapping_history_last_id RESTART IDENTITY CASCADE")
                 await conn.execute("TRUNCATE TABLE committee_history RESTART IDENTITY CASCADE")
                 await conn.execute("TRUNCATE TABLE committee_history_member RESTART IDENTITY CASCADE")
                 await conn.execute("TRUNCATE TABLE mapping_bonded_history RESTART IDENTITY CASCADE")

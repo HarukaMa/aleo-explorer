@@ -9,7 +9,7 @@ from typing import Awaitable
 import explorer.types as explorer
 from aleo_types import *  # too many types
 # from .light_node import LightNodeState
-from .canary import Canary as Network
+from .testnet import Testnet as Network
 
 # Do not open PR about this value.
 # The deviation from the node's behavior is for lower sync delays.

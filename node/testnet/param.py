@@ -9,9 +9,9 @@ from aleo_types import u16, Block, u32, Program
 def load_program(program_id: str) -> Program:
     return Program.load(BytesIO(aleo_explorer_rust.parse_program(open(os.path.join(os.path.dirname(__file__), program_id)).read())))
 
-class Testnet3:
+class Testnet:
     edition = u16()
-    network_id = u16(3)
+    network_id = u16(1)
     version = u32(15)
 
     genesis_block = Block.load(BytesIO(open(os.path.join(os.path.dirname(__file__), "block.genesis"), "rb").read()))

@@ -293,16 +293,6 @@ CREATE TABLE explorer._migration (
 
 
 --
--- Name: address_puzzle_reward; Type: TABLE; Schema: explorer; Owner: -
---
-
-CREATE TABLE explorer.address_puzzle_reward (
-    address text NOT NULL,
-    total_reward numeric(20,0) DEFAULT 0 NOT NULL
-);
-
-
---
 -- Name: address_transition; Type: TABLE; Schema: explorer; Owner: -
 --
 
@@ -456,10 +446,10 @@ ALTER SEQUENCE explorer.block_id_seq OWNED BY explorer.block.id;
 
 
 --
--- Name: coinbase_solution; Type: TABLE; Schema: explorer; Owner: -
+-- Name: puzzle_solution; Type: TABLE; Schema: explorer; Owner: -
 --
 
-CREATE TABLE explorer.coinbase_solution (
+CREATE TABLE explorer.puzzle_solution (
     id integer NOT NULL,
     block_id integer NOT NULL,
     target_sum numeric(20,0) DEFAULT 0 NOT NULL
@@ -483,7 +473,7 @@ CREATE SEQUENCE explorer.coinbase_solution_id_seq
 -- Name: coinbase_solution_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
 --
 
-ALTER SEQUENCE explorer.coinbase_solution_id_seq OWNED BY explorer.coinbase_solution.id;
+ALTER SEQUENCE explorer.coinbase_solution_id_seq OWNED BY explorer.puzzle_solution.id;
 
 
 --
@@ -1225,19 +1215,17 @@ ALTER SEQUENCE explorer.mapping_value_id_seq OWNED BY explorer.mapping_value.id;
 
 
 --
--- Name: prover_solution; Type: TABLE; Schema: explorer; Owner: -
+-- Name: solution; Type: TABLE; Schema: explorer; Owner: -
 --
 
-CREATE TABLE explorer.prover_solution (
+CREATE TABLE explorer.solution (
     id bigint NOT NULL,
-    coinbase_solution_id integer NOT NULL,
+    puzzle_solution_id integer NOT NULL,
     address text NOT NULL,
-    nonce numeric(20,0) NOT NULL,
-    commitment text NOT NULL,
+    counter numeric(20,0) NOT NULL,
     target numeric(20,0) NOT NULL,
     reward integer NOT NULL,
-    proof_x text NOT NULL,
-    proof_y_is_positive boolean NOT NULL
+    epoch_hash text NOT NULL
 );
 
 
@@ -1257,7 +1245,7 @@ CREATE SEQUENCE explorer.partial_solution_id_seq
 -- Name: partial_solution_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
 --
 
-ALTER SEQUENCE explorer.partial_solution_id_seq OWNED BY explorer.prover_solution.id;
+ALTER SEQUENCE explorer.partial_solution_id_seq OWNED BY explorer.solution.id;
 
 
 --
@@ -1962,13 +1950,6 @@ ALTER TABLE ONLY explorer.block_aborted_transaction_id ALTER COLUMN id SET DEFAU
 
 
 --
--- Name: coinbase_solution id; Type: DEFAULT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.coinbase_solution ALTER COLUMN id SET DEFAULT nextval('explorer.coinbase_solution_id_seq'::regclass);
-
-
---
 -- Name: committee_history id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -2137,10 +2118,10 @@ ALTER TABLE ONLY explorer.program_function ALTER COLUMN id SET DEFAULT nextval('
 
 
 --
--- Name: prover_solution id; Type: DEFAULT; Schema: explorer; Owner: -
+-- Name: puzzle_solution id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
-ALTER TABLE ONLY explorer.prover_solution ALTER COLUMN id SET DEFAULT nextval('explorer.partial_solution_id_seq'::regclass);
+ALTER TABLE ONLY explorer.puzzle_solution ALTER COLUMN id SET DEFAULT nextval('explorer.coinbase_solution_id_seq'::regclass);
 
 
 --
@@ -2162,6 +2143,13 @@ ALTER TABLE ONLY explorer.ratification_genesis_balance ALTER COLUMN id SET DEFAU
 --
 
 ALTER TABLE ONLY explorer.ratification_genesis_bonded ALTER COLUMN id SET DEFAULT nextval('explorer.ratification_genesis_bonded_id_seq'::regclass);
+
+
+--
+-- Name: solution id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.solution ALTER COLUMN id SET DEFAULT nextval('explorer.partial_solution_id_seq'::regclass);
 
 
 --
@@ -2270,14 +2258,6 @@ ALTER TABLE ONLY explorer.transition_output_record ALTER COLUMN id SET DEFAULT n
 
 
 --
--- Name: address_puzzle_reward address_puzzle_reward_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.address_puzzle_reward
-    ADD CONSTRAINT address_puzzle_reward_pk PRIMARY KEY (address);
-
-
---
 -- Name: authority authority_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -2307,14 +2287,6 @@ ALTER TABLE ONLY explorer.block_aborted_transaction_id
 
 ALTER TABLE ONLY explorer.block
     ADD CONSTRAINT block_pk PRIMARY KEY (id);
-
-
---
--- Name: coinbase_solution coinbase_solution_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.coinbase_solution
-    ADD CONSTRAINT coinbase_solution_pk PRIMARY KEY (id);
 
 
 --
@@ -2518,14 +2490,6 @@ ALTER TABLE ONLY explorer.mapping_value
 
 
 --
--- Name: prover_solution partial_solution_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.prover_solution
-    ADD CONSTRAINT partial_solution_pk PRIMARY KEY (id);
-
-
---
 -- Name: program_function program_function_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -2550,11 +2514,27 @@ ALTER TABLE ONLY explorer.program
 
 
 --
+-- Name: puzzle_solution puzzle_solution_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.puzzle_solution
+    ADD CONSTRAINT puzzle_solution_pk PRIMARY KEY (id);
+
+
+--
 -- Name: ratification ratification_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
 ALTER TABLE ONLY explorer.ratification
     ADD CONSTRAINT ratification_pk PRIMARY KEY (id);
+
+
+--
+-- Name: solution solution_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.solution
+    ADD CONSTRAINT solution_pk PRIMARY KEY (id);
 
 
 --
@@ -2694,13 +2674,6 @@ ALTER TABLE ONLY explorer.transition
 
 
 --
--- Name: address_puzzle_reward_total_reward_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX address_puzzle_reward_total_reward_index ON explorer.address_puzzle_reward USING btree (total_reward);
-
-
---
 -- Name: address_transition_address_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -2761,13 +2734,6 @@ CREATE UNIQUE INDEX block_height_uindex ON explorer.block USING btree (height);
 --
 
 CREATE INDEX block_timestamp_index ON explorer.block USING btree ("timestamp");
-
-
---
--- Name: coinbase_solution_block_id_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX coinbase_solution_block_id_index ON explorer.coinbase_solution USING btree (block_id);
 
 
 --
@@ -3051,20 +3017,6 @@ CREATE INDEX mapping_value_mapping_id_index ON explorer.mapping_value USING btre
 
 
 --
--- Name: partial_solution_address_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX partial_solution_address_index ON explorer.prover_solution USING btree (address text_pattern_ops);
-
-
---
--- Name: partial_solution_coinbase_solution_id_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX partial_solution_coinbase_solution_id_index ON explorer.prover_solution USING btree (coinbase_solution_id);
-
-
---
 -- Name: program_address_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -3135,6 +3087,13 @@ CREATE INDEX program_transaction_deploy_id_index ON explorer.program USING btree
 
 
 --
+-- Name: puzzle_solution_block_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX puzzle_solution_block_id_index ON explorer.puzzle_solution USING btree (block_id);
+
+
+--
 -- Name: ratification_block_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -3146,6 +3105,20 @@ CREATE INDEX ratification_block_id_index ON explorer.ratification USING btree (b
 --
 
 CREATE INDEX ratification_type_index ON explorer.ratification USING btree (type);
+
+
+--
+-- Name: solution_address_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX solution_address_index ON explorer.solution USING btree (address text_pattern_ops);
+
+
+--
+-- Name: solution_puzzle_solution_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX solution_puzzle_solution_id_index ON explorer.solution USING btree (puzzle_solution_id);
 
 
 --
@@ -3342,14 +3315,6 @@ ALTER TABLE ONLY explorer.block_aborted_transaction_id
 
 
 --
--- Name: coinbase_solution coinbase_solution_block_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.coinbase_solution
-    ADD CONSTRAINT coinbase_solution_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id) ON DELETE CASCADE;
-
-
---
 -- Name: committee_history_member committee_history_member_committee_history_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -3518,14 +3483,6 @@ ALTER TABLE ONLY explorer.mapping_value
 
 
 --
--- Name: prover_solution partial_solution_coinbase_solution_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.prover_solution
-    ADD CONSTRAINT partial_solution_coinbase_solution_id_fk FOREIGN KEY (coinbase_solution_id) REFERENCES explorer.coinbase_solution(id) ON DELETE CASCADE;
-
-
---
 -- Name: program_function program_function_program_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -3542,11 +3499,27 @@ ALTER TABLE ONLY explorer.program
 
 
 --
+-- Name: puzzle_solution puzzle_solution_block_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.puzzle_solution
+    ADD CONSTRAINT puzzle_solution_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id) ON DELETE CASCADE;
+
+
+--
 -- Name: ratification ratification_block_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
 ALTER TABLE ONLY explorer.ratification
     ADD CONSTRAINT ratification_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id) ON DELETE CASCADE;
+
+
+--
+-- Name: solution solution_puzzle_solution_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.solution
+    ADD CONSTRAINT solution_puzzle_solution_id_fk FOREIGN KEY (puzzle_solution_id) REFERENCES explorer.puzzle_solution(id) ON DELETE CASCADE;
 
 
 --
