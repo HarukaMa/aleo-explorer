@@ -2,17 +2,13 @@ import asyncio
 import logging
 import multiprocessing
 import os
-import time
 from typing import Any
 
 import aiohttp
 import uvicorn
 from starlette.applications import Starlette
-from starlette.exceptions import HTTPException
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
-from starlette.requests import Request
-from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 from db import Database
@@ -40,16 +36,6 @@ class UvicornServer(multiprocessing.Process):
     def run(self, *args: Any, **kwargs: Any):
         self.server.run()
 
-async def commitment_route(request: Request):
-    db: Database = request.app.state.db
-    if time.time() >= 1675209600:
-        return JSONResponse(None)
-    commitment = request.query_params.get("commitment")
-    if not commitment:
-        return HTTPException(400, "Missing commitment")
-    return JSONResponse(await db.get_puzzle_commitment(commitment))
-
-
 async def status_route(request: Request):
     session = request.app.state.session
     db: Database = request.app.state.db
@@ -75,7 +61,6 @@ async def status_route(request: Request):
 
 
 routes = [
-    Route("/commitment", commitment_route),
     Route("/v{version:int}/mapping/get_value/{program_id}/{mapping}/{key}", mapping_route),
     Route("/v{version:int}/mapping/list_program_mappings/{program_id}", mapping_list_route),
     Route("/v{version:int}/mapping/list_program_mapping_values/{program_id}/{mapping}", mapping_value_list_route),
@@ -118,7 +103,10 @@ app = Starlette(
 async def run():
     host = os.environ.get("API_HOST", "127.0.0.1")
     port = int(os.environ.get("API_PORT", 8001))
-    config = uvicorn.Config("api:app", reload=True, log_level="info", host=host, port=port)
+    config = uvicorn.Config(
+        "api:app", reload=True, log_level="info", host=host, port=port,
+        forwarded_allow_ips=["127.0.0.1", "::1"]
+    )
     logging.getLogger("uvicorn.access").handlers = []
     server = UvicornServer(config=config)
 

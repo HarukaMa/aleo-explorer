@@ -103,9 +103,18 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
                     raise
 
             elif isinstance(c, ContainsCommand):
-                mapping_id = await load_mapping_cache_id(program.id, c.mapping)
+                operator = c.mapping
+                if isinstance(operator, LocatorCallOperator):
+                    program_id = operator.locator.id
+                    mapping = operator.locator.resource
+                elif isinstance(operator, ResourceCallOperator):
+                    program_id = program.id
+                    mapping = operator.resource
+                else:
+                    raise TypeError("invalid locator type")
+                mapping_id = await load_mapping_cache_id(program_id, mapping)
                 key = load_plaintext_from_operand(c.key, registers, finalize_state)
-                key_id = Field.loads(cached_get_key_id(str(program.id), str(c.mapping), key.dump()))
+                key_id = Field.loads(cached_get_key_id(str(program_id), str(mapping), key.dump()))
                 if not allow_state_change and key_id in local_mapping_cache[mapping_id]:
                     contains = local_mapping_cache[mapping_id][key_id]["value"] is not None
                 else:
@@ -123,13 +132,13 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
                 store_plaintext_to_register(value.plaintext, destination, registers)
 
             elif isinstance(c, GetCommand | GetOrUseCommand):
-                locator = c.mapping
-                if isinstance(locator, LocatorMappingLocator):
-                    program_id = locator.locator.id
-                    mapping = locator.locator.resource
-                elif isinstance(locator, ResourceMappingLocator):
+                operator = c.mapping
+                if isinstance(operator, LocatorCallOperator):
+                    program_id = operator.locator.id
+                    mapping = operator.locator.resource
+                elif isinstance(operator, ResourceCallOperator):
                     program_id = program.id
-                    mapping = locator.resource
+                    mapping = operator.resource
                 else:
                     raise TypeError("invalid locator type")
                 mapping_id = await load_mapping_cache_id(program_id, mapping)

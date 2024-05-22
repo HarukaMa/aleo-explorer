@@ -51,7 +51,7 @@ class DatabaseProgram(DatabaseBase):
                         "FROM program p "
                         "JOIN transaction_deploy td on p.transaction_deploy_id = td.id "
                         "JOIN transaction t on td.transaction_id = t.id "
-                        "JOIN confirmed_transaction ct on t.confimed_transaction_id = ct.id "
+                        "JOIN confirmed_transaction ct on t.confirmed_transaction_id = ct.id "
                         "JOIN block b on ct.block_id = b.id "
                         "JOIN program_function pf on p.id = pf.program_id "
                         f"{where}"
@@ -90,7 +90,7 @@ class DatabaseProgram(DatabaseBase):
                         "FROM program p "
                         "JOIN transaction_deploy td on p.transaction_deploy_id = td.id "
                         "JOIN transaction t on td.transaction_id = t.id "
-                        "JOIN confirmed_transaction ct on t.confimed_transaction_id = ct.id "
+                        "JOIN confirmed_transaction ct on t.confirmed_transaction_id = ct.id "
                         "JOIN block b on ct.block_id = b.id "
                         "JOIN program_function pf on p.id = pf.program_id "
                         "WHERE feature_hash = %s "
@@ -113,7 +113,7 @@ class DatabaseProgram(DatabaseBase):
                         "SELECT height FROM transaction tx "
                         "JOIN transaction_deploy td on tx.id = td.transaction_id "
                         "JOIN program p on td.id = p.transaction_deploy_id "
-                        "JOIN confirmed_transaction ct on ct.id = tx.confimed_transaction_id "
+                        "JOIN confirmed_transaction ct on ct.id = tx.confirmed_transaction_id "
                         "JOIN block b on ct.block_id = b.id "
                         "WHERE p.program_id = %s",
                         (program_id,)
@@ -121,7 +121,7 @@ class DatabaseProgram(DatabaseBase):
                     height = await cur.fetchone()
                     if height is None:
                         return None
-                    return await self.get_block_by_height(height["height"])
+                    return await cast("Database", self).get_block_by_height(height["height"])
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
@@ -133,7 +133,7 @@ class DatabaseProgram(DatabaseBase):
                     await cur.execute(
                         "SELECT b.height, b.timestamp, t.transaction_id FROM block b "
                         "JOIN confirmed_transaction ct on b.id = ct.block_id "
-                        "JOIN transaction t on ct.id = t.confimed_transaction_id "
+                        "JOIN transaction t on ct.id = t.confirmed_transaction_id "
                         "JOIN transaction_deploy td on t.id = td.transaction_id "
                         "JOIN program p on td.id = p.transaction_deploy_id "
                         "WHERE p.program_id = %s",
@@ -175,7 +175,7 @@ class DatabaseProgram(DatabaseBase):
                         "FROM transition ts "
                         "JOIN transaction_execute te on te.id = ts.transaction_execute_id "
                         "JOIN transaction t on te.transaction_id = t.id "
-                        "JOIN confirmed_transaction ct on t.confimed_transaction_id = ct.id "
+                        "JOIN confirmed_transaction ct on t.confirmed_transaction_id = ct.id "
                         "JOIN block b on ct.block_id = b.id "
                         "WHERE ts.program_id = %s "
                         "ORDER BY b.height DESC "

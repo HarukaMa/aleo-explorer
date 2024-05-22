@@ -2,6 +2,7 @@ import math
 import struct
 from decimal import Decimal
 from ipaddress import IPv4Address, IPv6Address
+from typing import overload, Optional
 
 from .traits import *
 
@@ -179,7 +180,15 @@ class Int(int, Serializable, IntProtocol):
     def rem_wrapped(self, other: int | Self):
         return self.__mod__(other)
 
-    def __pow__(self, power: int | Self, mod: None = None):
+    @overload
+    def __pow__(self, power: int, mod: None) -> Self: ...
+
+    @overload
+    def __pow__(self, power: int, mod: int) -> Self: ...
+
+    def __pow__(self, power: int | Self, mod: Optional[int] = None):
+        if mod:
+            raise TypeError("mod is not supported")
         if isinstance(power, Int) and not isinstance(power, (u8, u16, u32)):
             raise TypeError(f"unsupported operand type(s) for **: '{type(self)}' and '{type(power)}'")
         power = int(power)

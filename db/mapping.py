@@ -212,7 +212,9 @@ class DatabaseMapping(DatabaseBase):
                     "RETURNING id",
                     (mapping_id, height, key_id, key, value, from_transaction, previous_id)
                 )
-                latest_id = (await cur.fetchone())['id']
+                if (res := await cur.fetchone()) is None:
+                    raise ValueError("failed to insert mapping history")
+                latest_id = res['id']
                 await cur.execute(
                     "INSERT INTO mapping_history_last_id (key_id, last_history_id) VALUES (%s, %s) "
                     "ON CONFLICT (key_id) DO UPDATE SET last_history_id = %s",
@@ -256,7 +258,9 @@ class DatabaseMapping(DatabaseBase):
                     "RETURNING id",
                     (mapping_id, height, key_id, key, from_transaction, previous_id)
                 )
-                latest_id = (await cur.fetchone())['id']
+                if (res := await cur.fetchone()) is None:
+                    raise ValueError("failed to insert mapping history")
+                latest_id = res['id']
                 await cur.execute(
                     "INSERT INTO mapping_history_last_id (key_id, last_history_id) VALUES (%s, %s) "
                     "ON CONFLICT (key_id) DO UPDATE SET last_history_id = %s",
@@ -290,23 +294,26 @@ class DatabaseMapping(DatabaseBase):
                                 (d["id"],)
                             )
                             u = await cur.fetchone()
+                            if u is None:
+                                raise ValueError(f"finalize operation {d['id']} not found")
                             result.append(UpdateKeyValue(
                                 mapping_id=Field.loads(u["mapping_id"]),
                                 key_id=Field.loads(u["key_id"]),
                                 value_id=Field.loads(u["value_id"]),
-                                index=u64(),
                             ))
                         elif d["type"] == "RemoveKeyValue":
                             await cur.execute(
-                                "SELECT mapping_id FROM finalize_operation_remove_kv fu "
+                                "SELECT mapping_id, key_id FROM finalize_operation_remove_kv fu "
                                 "JOIN explorer.finalize_operation fo on fo.id = fu.finalize_operation_id "
                                 "WHERE fo.id = %s",
                                 (d["id"],)
                             )
                             u = await cur.fetchone()
+                            if u is None:
+                                raise ValueError(f"finalize operation {d['id']} not found")
                             result.append(RemoveKeyValue(
                                 mapping_id=Field.loads(u["mapping_id"]),
-                                index=u64()
+                                key_id=Field.loads(u["key_id"]),
                             ))
                     return result
                 except Exception as e:

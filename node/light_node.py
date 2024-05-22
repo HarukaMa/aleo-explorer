@@ -2,7 +2,7 @@ import asyncio
 import random
 import time
 from io import BytesIO
-from typing import Optional
+from typing import Optional, Any, cast
 
 import aiohttp
 import aleo_explorer_rust
@@ -10,12 +10,12 @@ import requests
 
 from aleo_types import ChallengeRequest, NodeType, u16, u64, Frame, Message, ChallengeResponse, \
     PeerRequest, Ping, PeerResponse, Pong, bool_, BlockLocators, Address, Signature, Option, Data
-from .testnet3 import Testnet3
+from .canary import Canary as Network
 
 
 class LightNodeState:
     def __init__(self):
-        self.states: dict[str, dict] = {}
+        self.states: dict[str, dict[str, Any]] = {}
         self.nodes: dict[str, LightNode] = {}
         self.last_connect_attempt: dict[str, float] = {}
 
@@ -55,7 +55,7 @@ class LightNodeState:
             self.states[key]["address"] = address
             self.states[key]["last_ping"] = time.time()
 
-    def node_ping(self, ip: str, port: int, node_type: NodeType, height: int):
+    def node_ping(self, ip: str, port: int, node_type: NodeType, height: Optional[int]):
         key = ":".join([ip, str(port)])
         if key in self.states:
             self.states[key]["last_ping"] = time.time()
@@ -73,7 +73,7 @@ class LightNodeState:
             del self.nodes[key]
 
     def cleanup(self):
-        outdated = []
+        outdated: list[str] = []
         for k, v in self.states.items():
             if time.time() - v["last_ping"] > 300:
                 outdated.append(k)
@@ -92,8 +92,8 @@ class LightNode:
 
         self.reader: Optional[asyncio.StreamReader] = None
         self.writer: Optional[asyncio.StreamWriter] = None
-        self.ping_task: Optional[asyncio.Task] = None
-        self.worker_task: Optional[asyncio.Task] = None
+        self.ping_task: Optional[asyncio.Task[None]] = None
+        self.worker_task: Optional[asyncio.Task[None]] = None
 
         self.aiohttp_session: Optional[aiohttp.ClientSession] = None
         self.last_rest_query = 0
@@ -111,14 +111,14 @@ class LightNode:
             return
         try:
             challenge_request = ChallengeRequest(
-                version=Testnet3.version,
+                version=Network.version,
                 listener_port=u16(14134),
                 node_type=NodeType.Prover,
                 address=Address.loads("aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px"),
                 nonce=self.nonce,
             )
             await self.send_message(challenge_request)
-            self.aiohttp_session = aiohttp.ClientSession(f"http://{self.ip}:3033", timeout=aiohttp.ClientTimeout(total=1))
+            self.aiohttp_session = aiohttp.ClientSession(f"http://{self.ip}:3030", timeout=aiohttp.ClientTimeout(total=1))
             while True:
                 try:
                     size = await self.reader.readexactly(4)
@@ -130,7 +130,7 @@ class LightNode:
                 except:
                     raise Exception("connection closed")
                 await self.parse_message(Frame.load(BytesIO(frame)))
-        except Exception as e:
+        except Exception:
             await self.close()
             return
 
@@ -138,12 +138,12 @@ class LightNode:
 
         if isinstance(frame.message, ChallengeRequest):
             msg = frame.message
-            if msg.version < Testnet3.version:
+            if msg.version < Network.version:
                 raise ValueError("peer is outdated")
             self.state.node_connected(self.ip, self.port, str(msg.address))
             resp_nonce = u64(random.randint(0, 2 ** 64 - 1))
             response = ChallengeResponse(
-                genesis_header=Testnet3.genesis_block.header,
+                genesis_header=Network.genesis_block.header,
                 signature=Data[Signature](Signature.load(BytesIO(aleo_explorer_rust.sign_nonce("APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH", msg.nonce.dump() + resp_nonce.dump())))),
                 nonce=resp_nonce,
             )
@@ -158,15 +158,12 @@ class LightNode:
             self.ping_task = asyncio.create_task(ping_task())
 
         elif isinstance(frame.message, ChallengeResponse):
-            msg = frame.message
-            if msg.genesis_header.transactions_root != Testnet3.genesis_block.header.transactions_root:
-                raise ValueError("peer has wrong genesis block")
+            pass
 
         elif isinstance(frame.message, Ping):
             msg = frame.message
             locators = msg.block_locators.value
             if locators is not None:
-                locators: BlockLocators
                 height = max(locators.recents.keys())
             else:
                 height = None
@@ -194,11 +191,11 @@ class LightNode:
         elif isinstance(frame.message, PeerResponse):
             msg = frame.message
             self.state.node_peer_count(self.ip, self.port, len(msg.peers))
-            peer_types = {}
+            peer_types: dict[str, NodeType] = {}
             if time.time() - self.last_rest_query > 300:
                 self.last_rest_query = time.time()
                 try:
-                    r = await self.aiohttp_session.get("/testnet3/peers/all/metrics")
+                    r = await cast(aiohttp.ClientSession, self.aiohttp_session).get("/mainnet/peers/all/metrics")
                     if r.ok:
                         data = await r.json()
                         for p in data:
@@ -217,7 +214,7 @@ class LightNode:
 
     async def send_ping(self):
         ping = Ping(
-            version=Testnet3.version,
+            version=Network.version,
             node_type=NodeType.Prover,
             block_locators=Option[BlockLocators](None),
         )

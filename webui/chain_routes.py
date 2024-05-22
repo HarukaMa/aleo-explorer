@@ -17,7 +17,7 @@ from aleo_types import u32, Transition, ExecuteTransaction, PrivateTransitionInp
     FeeTransaction, RejectedDeploy, RejectedExecution, Identifier, Entry, FutureTransitionOutput, Future, \
     PlaintextArgument, FutureArgument, StructPlaintext, Finalize, \
     PlaintextFinalizeType, StructPlaintextType, UpdateKeyValue, Value, Plaintext, RemoveKeyValue, FinalizeOperation, \
-    NodeType, cached_get_mapping_id, cached_get_key_id
+    NodeType, cached_get_mapping_id, cached_get_key_id, FeeComponent, Fee
 from db import Database
 from node.light_node import LightNodeState
 from util.global_cache import get_program
@@ -68,8 +68,7 @@ async def block_route(request: Request):
             css.append({
                 "address": solution["address"],
                 "address_trunc": solution["address"][:15] + "..." + solution["address"][-10:],
-                "nonce": solution["nonce"],
-                "commitment": solution["commitment"][:13] + "..." + solution["commitment"][-10:],
+                "counter": solution["counter"],
                 "target": solution["target"],
                 "reward": solution["reward"],
             })
@@ -80,7 +79,17 @@ async def block_route(request: Request):
     total_priority_fee = 0
     total_burnt_fee = 0
     for ct in block.transactions.transactions:
-        fee_breakdown = await ct.get_fee_breakdown(db)
+        # TODO: use proper fee calculation
+        # fee_breakdown = await ct.get_fee_breakdown(db)
+        fee = ct.transaction.fee
+        if isinstance(fee, Fee):
+            base_fee, priority_fee = fee.amount
+        elif fee.value is not None:
+            base_fee, priority_fee = fee.value.amount
+        else:
+            base_fee, priority_fee = 0, 0
+        fee_breakdown = FeeComponent(base_fee, 0, [0], priority_fee, 0)
+        print(fee_breakdown)
         base_fee = fee_breakdown.storage_cost + fee_breakdown.namespace_cost + sum(fee_breakdown.finalize_costs)
         priority_fee = fee_breakdown.priority_fee
         burnt_fee = fee_breakdown.burnt
@@ -107,9 +116,9 @@ async def block_route(request: Request):
             tx = ct.transaction
             if not isinstance(tx, ExecuteTransaction):
                 raise HTTPException(status_code=550, detail="Invalid transaction type")
-            additional_fee = tx.additional_fee.value
-            if additional_fee is not None:
-                base_fee, priority_fee = additional_fee.amount
+            fee = tx.fee.value
+            if fee is not None:
+                base_fee, priority_fee = fee.amount
             else:
                 base_fee, priority_fee = 0, 0
             root_transition = tx.execution.transitions[-1]
@@ -118,7 +127,7 @@ async def block_route(request: Request):
                 "index": ct.index,
                 "type": "Execute",
                 "state": "Accepted",
-                "transitions_count": len(tx.execution.transitions) + bool(tx.additional_fee.value is not None),
+                "transitions_count": len(tx.execution.transitions) + bool(tx.fee.value is not None),
                 "base_fee": base_fee - burnt_fee,
                 "priority_fee": priority_fee,
                 "burnt_fee": burnt_fee,
@@ -232,14 +241,26 @@ async def transaction_route(request: Request):
     else:
         raise HTTPException(status_code=550, detail="Unsupported transaction type")
 
+    # TODO: use proper fee calculation
     if confirmed_transaction is None:
-        storage_cost, namespace_cost, finalize_costs, priority_fee, burnt = await transaction.get_fee_breakdown(db)
+        # storage_cost, namespace_cost, finalize_costs, priority_fee, burnt = await transaction.get_fee_breakdown(db)
         block = None
         block_confirm_time = None
     else:
-        storage_cost, namespace_cost, finalize_costs, priority_fee, burnt = await confirmed_transaction.get_fee_breakdown(db)
+        # storage_cost, namespace_cost, finalize_costs, priority_fee, burnt = await confirmed_transaction.get_fee_breakdown(db)
         block = await db.get_block_from_transaction_id(tx_id)
         block_confirm_time = await db.get_block_confirm_time(block.height)
+
+    fee = transaction.fee
+    if isinstance(fee, Fee):
+        storage_cost, priority_fee = fee.amount
+    elif fee.value is not None:
+        storage_cost, priority_fee = fee.value.amount
+    else:
+        storage_cost, priority_fee = 0, 0
+    namespace_cost = 0
+    finalize_costs = []
+    burnt = 0
 
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx: dict[str, Any] = {
@@ -286,9 +307,9 @@ async def transaction_route(request: Request):
                 "transition_id": transition.id,
                 "action":f"{transition.program_id}/{transition.function_name}",
             })
-        if transaction.additional_fee.value is not None:
-            additional_fee = transaction.additional_fee.value
-            transition = additional_fee.transition
+        if transaction.fee.value is not None:
+            fee = transaction.fee.value
+            transition = fee.transition
             fee_transition = {
                 "transition_id": transition.id,
                 "action":f"{transition.program_id}/{transition.function_name}",
@@ -487,8 +508,8 @@ async def transition_route(request: Request):
                         transition = ts
                         transaction_id = tx.id
                         break
-                if transaction_id is None and tx.additional_fee.value is not None:
-                    ts = tx.additional_fee.value.transition
+                if transaction_id is None and tx.fee.value is not None:
+                    ts = tx.fee.value.transition
                     if str(ts.id) == ts_id:
                         transition = ts
                         transaction_id = tx.id
@@ -876,6 +897,8 @@ async def nodes_route(request: Request):
     nodes = lns.states
     res = {}
     for k, v in nodes.items():
+        if k.startswith("127.0.0.1"):
+            continue
         res[k] = copy.deepcopy(v)
         res[k]["last_ping"] = get_relative_time(v["last_ping"])
     validators = 0

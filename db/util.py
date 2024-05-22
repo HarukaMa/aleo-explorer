@@ -36,7 +36,6 @@ class DatabaseUtil(DatabaseBase):
                 await conn.execute("TRUNCATE TABLE mapping RESTART IDENTITY CASCADE")
                 await conn.execute("TRUNCATE TABLE committee_history RESTART IDENTITY CASCADE")
                 await conn.execute("TRUNCATE TABLE committee_history_member RESTART IDENTITY CASCADE")
-                await conn.execute("TRUNCATE TABLE leaderboard RESTART IDENTITY CASCADE")
                 await conn.execute("TRUNCATE TABLE mapping_bonded_history RESTART IDENTITY CASCADE")
                 await conn.execute("TRUNCATE TABLE ratification_genesis_balance RESTART IDENTITY CASCADE")
                 await self.redis.flushall()
@@ -54,6 +53,7 @@ class DatabaseUtil(DatabaseBase):
                             "credits.aleo:bonded",
                             "credits.aleo:committee",
                             "address_stake_reward",
+                            "address_puzzle_reward",
                             "address_transfer_in",
                             "address_transfer_out",
                             "address_fee",
@@ -88,8 +88,8 @@ class DatabaseUtil(DatabaseBase):
                         await cur.execute(
                             "TRUNCATE TABLE mapping_history_last_id"
                         )
-                        mapping_value_copy_data = []
-                        mapping_history_last_id_copy_data = []
+                        mapping_value_copy_data: list[tuple[str, str, str, bytes, bytes]] = []
+                        mapping_history_last_id_copy_data: list[tuple[str, int]] = []
                         print("processing old mapping values")
                         total = len(mapping_snapshot)
                         count = 0
@@ -143,23 +143,25 @@ class DatabaseUtil(DatabaseBase):
                                             "UPDATE transaction SET "
                                             "transaction_id = %s, "
                                             "original_transaction_id = NULL, "
-                                            "confimed_transaction_id = NULL,"
+                                            "confirmed_transaction_id = NULL,"
                                             "type = %s "
                                             "WHERE transaction_id = %s",
                                             (original_transaction_id, original_type, str(t.id))
                                         )
                                 else:
                                     await cur.execute(
-                                        "UPDATE transaction SET confimed_transaction_id = NULL WHERE transaction_id = %s",
+                                        "UPDATE transaction SET confirmed_transaction_id = NULL WHERE transaction_id = %s",
                                         (str(t.id),)
                                     )
                                 # decrease program called counter
                                 if isinstance(t, ExecuteTransaction):
                                     transitions = list(t.execution.transitions)
-                                    if t.additional_fee.value is not None:
-                                        transitions.append(t.additional_fee.value.transition)
+                                    fee = cast(Option[Fee], t.fee)
+                                    if fee.value is not None:
+                                        transitions.append(fee.value.transition)
                                 elif isinstance(t, DeployTransaction):
-                                    transitions = [t.fee.transition]
+                                    fee = cast(Fee, t.fee)
+                                    transitions = [fee.transition]
                                     program = t.deployment.program
                                     await cur.execute(
                                         "DELETE FROM program WHERE program_id = %s",
@@ -170,16 +172,19 @@ class DatabaseUtil(DatabaseBase):
                                         (str(program.id),)
                                     )
                                 elif isinstance(t, FeeTransaction):
+                                    fee = cast(Fee, t.fee)
                                     if isinstance(ct, RejectedDeploy):
-                                        transitions = [t.fee.transition]
+                                        transitions = [fee.transition]
                                     elif isinstance(ct, RejectedExecute):
                                         rejected = ct.rejected
                                         if not isinstance(rejected, RejectedExecution):
                                             raise RuntimeError("wrong transaction data")
                                         transitions = list(rejected.execution.transitions)
-                                        transitions.append(t.fee.transition)
+                                        transitions.append(fee.transition)
                                     else:
                                         raise RuntimeError("wrong transaction type")
+                                else:
+                                    raise NotImplementedError
                                 for ts in transitions:
                                     await cur.execute(
                                         "UPDATE program_function pf SET called = called - 1 "
@@ -187,22 +192,6 @@ class DatabaseUtil(DatabaseBase):
                                         "WHERE p.program_id = %s AND p.id = pf.program_id AND pf.name = %s",
                                         (str(ts.program_id), str(ts.function_name))
                                     )
-                            # TODO: change leaderboard to something else, we dont need that on mainnet
-                            # revert leaderboard
-                            await cur.execute(
-                                "SELECT address, reward FROM prover_solution ps "
-                                "JOIN coinbase_solution cs on ps.coinbase_solution_id = cs.id "
-                                "JOIN explorer.block b on b.id = cs.block_id "
-                                "WHERE b.height = %s",
-                                (block.height,)
-                            )
-                            for item in await cur.fetchall():
-                                address = item["address"]
-                                reward = item["reward"]
-                                await cur.execute(
-                                    "UPDATE leaderboard SET total_reward = total_reward - %s WHERE address = %s",
-                                    (reward, address)
-                                )
                         await cur.execute(
                             "DELETE FROM block WHERE height > %s",
                             (last_backup_height,)

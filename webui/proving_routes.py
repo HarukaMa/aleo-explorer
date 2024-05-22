@@ -25,6 +25,7 @@ async def calc_route(request: Request):
     return ctx, {'Cache-Control': 'public, max-age=60'}
 
 
+# TODO: reconsider what to show here
 @htmx_template("leaderboard.jinja2")
 async def leaderboard_route(request: Request):
     db: Database = request.app.state.db
@@ -36,12 +37,12 @@ async def leaderboard_route(request: Request):
             page = int(page)
     except:
         raise HTTPException(status_code=400, detail="Invalid page")
-    address_count = await db.get_leaderboard_size()
+    address_count = await db.get_puzzle_reward_address_count()
     total_pages = (address_count // 50) + 1
     if page < 1 or page > total_pages:
         raise HTTPException(status_code=400, detail="Invalid page")
     start = 50 * (page - 1)
-    leaderboard_data = await db.get_leaderboard(start, start + 50)
+    leaderboard_data = await db.get_puzzle_rewards(start, start + 50)
     data: list[dict[str, Any]] = []
     for line in leaderboard_data:
         data.append({
@@ -50,17 +51,13 @@ async def leaderboard_route(request: Request):
             "total_incentive": line["total_incentive"],
         })
     now = int(time.time())
-    total_credit = await db.get_leaderboard_total()
     target_credit = 37_500_000_000_000
-    ratio = total_credit / target_credit * 100
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
         "leaderboard": data,
         "page": page,
         "total_pages": total_pages,
-        "total_credit": total_credit,
         "target_credit": target_credit,
-        "ratio": ratio,
         "now": now,
         "sync_info": sync_info,
     }
@@ -113,7 +110,7 @@ async def address_route(request: Request):
         raise HTTPException(status_code=404, detail="Address not found")
     if len(solutions) > 0:
         solution_count = await db.get_solution_count_by_address(address)
-        total_rewards, total_incentive = await db.get_leaderboard_rewards_by_address(address)
+        total_rewards, total_incentive = await db.get_puzzle_reward_by_address(address)
         speed, interval = await db.get_address_speed(address)
     else:
         solution_count = 0
@@ -137,7 +134,7 @@ async def address_route(request: Request):
             "height": solution["height"],
             "timestamp": solution["timestamp"],
             "reward": solution["reward"],
-            "nonce": solution["nonce"],
+            "counter": solution["counter"],
             "target": solution["target"],
             "target_sum": solution["target_sum"],
         })
@@ -280,7 +277,7 @@ async def address_solution_route(request: Request):
             "height": solution["height"],
             "timestamp": solution["timestamp"],
             "reward": solution["reward"],
-            "nonce": solution["nonce"],
+            "counter": solution["counter"],
             "target": solution["target"],
             "target_sum": solution["target_sum"],
         })

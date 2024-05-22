@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from enum import auto, EnumType
 
 from .vm_basic import *
@@ -160,6 +162,9 @@ class Identifier(Serializable):
 
     def __hash__(self):
         return hash(self.data)
+
+    def __len__(self):
+        return len(self.data)
 
 class ProgramID(Serializable):
 
@@ -540,7 +545,7 @@ class Locator(Serializable):
         return f"{self.id}/{self.resource}"
 
 
-class CallOperator(EnumBaseSerialize, Serialize, RustEnum):
+class CallOperator(EnumBaseSerialize, RustEnum, Serializable):
 
     class Type(IntEnumu8):
         Locator = 0
@@ -570,6 +575,9 @@ class LocatorCallOperator(CallOperator):
     def load(cls, data: BytesIO):
         return cls(locator=Locator.load(data))
 
+    def __str__(self):
+        return str(self.locator)
+
 
 class ResourceCallOperator(CallOperator):
     type = CallOperator.Type.Resource
@@ -583,6 +591,9 @@ class ResourceCallOperator(CallOperator):
     @classmethod
     def load(cls, data: BytesIO):
         return cls(resource=Identifier.load(data))
+
+    def __str__(self):
+        return str(self.resource)
 
 
 class CallInstruction(Serializable):
@@ -685,6 +696,8 @@ class PlaintextType(EnumBaseSerialize, Serialize, RustEnum):
             return ArrayPlaintextType.load(data)
         raise ValueError("unknown type")
 
+    size_in_bytes: Callable[["Program"], int]
+
 
 class LiteralPlaintextType(PlaintextType):
     type = PlaintextType.Type.Literal
@@ -703,6 +716,9 @@ class LiteralPlaintextType(PlaintextType):
     def __str__(self):
         return str(self.literal_type)
 
+    def size_in_bytes(self, _: "Program"):
+        return self.literal_type.primitive_type.size
+
 
 class StructPlaintextType(PlaintextType):
     type = PlaintextType.Type.Struct
@@ -720,6 +736,12 @@ class StructPlaintextType(PlaintextType):
 
     def __str__(self):
         return str(self.struct)
+
+    def size_in_bytes(self, program: "Program"):
+        struct_ = program.structs[self.struct]
+        size_of_name = len(struct_.name)
+        size_of_members = sum(map(lambda t: t[1].size_in_bytes(program), struct_.members))
+        return size_of_name + size_of_members
 
 class ArrayType(Serializable):
 
@@ -771,6 +793,9 @@ class ArrayType(Serializable):
 
     def __str__(self):
         return f"[{self.element_type}; {self.length}u32]"
+
+    def size_in_bytes(self, program: "Program"):
+        return self.element_type.size_in_bytes(program) * self.length
 
 class ArrayPlaintextType(PlaintextType):
     type = PlaintextType.Type.Array
@@ -1321,83 +1346,74 @@ class Instruction(Serializable):
     }
 
     fee_map = {
-        Type.Abs: 2_000,
-        Type.AbsWrapped: 2_000,
-        Type.Add: 2_000,
-        Type.AddWrapped: 2_000,
-        Type.And: 2_000,
-        Type.AssertEq: 2_000,
-        Type.AssertNeq: 2_000,
+        Type.Abs: 500,
+        Type.AbsWrapped: 500,
+        Type.Add: 500,
+        Type.AddWrapped: 500,
+        Type.And: 500,
+        Type.AssertEq: 500,
+        Type.AssertNeq: 500,
         Type.Async: -1,
         Type.Call: -1,
-        Type.Cast: 2_000,
-        Type.CastLossy: 2_000,
-        Type.CommitBHP256: 200_000,
-        Type.CommitBHP512: 200_000,
-        Type.CommitBHP768: 200_000,
-        Type.CommitBHP1024: 200_000,
-        Type.CommitPED64: 100_000,
-        Type.CommitPED128: 100_000,
-        Type.Div: 10_000,
-        Type.DivWrapped: 2_000,
-        Type.Double: 2_000,
-        Type.GreaterThan: 2_000,
-        Type.GreaterThanOrEqual: 2_000,
-        Type.HashBHP256: 100_000,
-        Type.HashBHP512: 100_000,
-        Type.HashBHP768: 100_000,
-        Type.HashBHP1024: 100_000,
-        Type.HashKeccak256: 100_000,
-        Type.HashKeccak384: 100_000,
-        Type.HashKeccak512: 100_000,
-        Type.HashPED64: 20_000,
-        Type.HashPED128: 30_000,
-        Type.HashPSD2: {
-            "high": 600_000,
-            "low": 60_000,
-        },
-        Type.HashPSD4: {
-            "high": 700_000,
-            "low": 100_000,
-        },
-        Type.HashPSD8: {
-            "high": 800_000,
-            "low": 200_000,
-        },
-        Type.HashSha3_256: 100_000,
-        Type.HashSha3_384: 100_000,
-        Type.HashSha3_512: 100_000,
+        Type.Cast: -2,
+        Type.CastLossy: -2,
+        Type.CommitBHP256: -2,
+        Type.CommitBHP512: -2,
+        Type.CommitBHP768: -2,
+        Type.CommitBHP1024: -2,
+        Type.CommitPED64: -2,
+        Type.CommitPED128: -2,
+        Type.Div: -2,
+        Type.DivWrapped: 500,
+        Type.Double: 500,
+        Type.GreaterThan: 500,
+        Type.GreaterThanOrEqual: 500,
+        Type.HashBHP256: -2,
+        Type.HashBHP512: -2,
+        Type.HashBHP768: -2,
+        Type.HashBHP1024: -2,
+        Type.HashKeccak256: -2,
+        Type.HashKeccak384: -2,
+        Type.HashKeccak512: -2,
+        Type.HashPED64: -2,
+        Type.HashPED128: -2,
+        Type.HashPSD2: -2,
+        Type.HashPSD4: -2,
+        Type.HashPSD8: -2,
+        Type.HashSha3_256: -2,
+        Type.HashSha3_384: -2,
+        Type.HashSha3_512: -2,
         Type.HashManyPSD2: -1,
         Type.HashManyPSD4: -1,
         Type.HashManyPSD8: -1,
-        Type.Inv: 10_000,
-        Type.IsEq: 2_000,
-        Type.IsNeq: 2_000,
-        Type.LessThan: 2_000,
-        Type.LessThanOrEqual: 2_000,
-        Type.Modulo: 2_000,
-        Type.Mul: 150_000,
-        Type.MulWrapped: 2_000,
-        Type.Nand: 2_000,
-        Type.Neg: 2_000,
-        Type.Nor: 2_000,
-        Type.Not: 2_000,
-        Type.Or: 2_000,
-        Type.Pow: 20_000,
-        Type.PowWrapped: 2_000,
-        Type.Rem: 2_000,
-        Type.RemWrapped: 2_000,
-        Type.Shl: 2_000,
-        Type.ShlWrapped: 2_000,
-        Type.Shr: 2_000,
-        Type.ShrWrapped: 2_000,
-        Type.SignVerify: 250_000,
-        Type.Square: 2_000,
-        Type.SquareRoot: 120_000,
-        Type.Sub: 10_000,
-        Type.SubWrapped: 2_000,
-        Type.Ternary: 2_000,
-        Type.Xor: 2_000,
+        Type.Inv: 2_500,
+        Type.IsEq: 500,
+        Type.IsNeq: 500,
+        Type.LessThan: 500,
+        Type.LessThanOrEqual: 500,
+        Type.Modulo: 500,
+        Type.Mul: -2,
+        Type.MulWrapped: 500,
+        Type.Nand: 500,
+        Type.Neg: 500,
+        Type.Nor: 500,
+        Type.Not: 500,
+        Type.Or: 500,
+        Type.Pow: -2,
+        Type.PowWrapped: 500,
+        Type.Rem: 500,
+        Type.RemWrapped: 500,
+        Type.Shl: 500,
+        Type.ShlWrapped: 500,
+        Type.Shr: 500,
+        Type.ShrWrapped: 500,
+        Type.SignVerify: -2,
+        Type.Square: 500,
+        Type.SquareRoot: 2_500,
+        Type.Sub: 500,
+        Type.SubWrapped: 500,
+        Type.Ternary: 500,
+        Type.Xor: 500,
     }
 
     def __init__(self, *, type_: Type, literals: Literals[Any] | AssertInstruction[Any] | CallInstruction | CastInstruction[Any] | CommitInstruction[Any] | HashInstruction[Any] | AsyncInstruction):
@@ -1414,22 +1430,25 @@ class Instruction(Serializable):
         literals = instruction_type.load(data)
         return cls(type_=type_, literals=literals)
 
-    @property
-    def cost(self) -> int:
-        if self.type in (self.Type.HashPSD2, self.Type.HashPSD4, self.Type.HashPSD8):
-            if not isinstance(self.literals, HashInstruction):
-                raise ValueError(f"expected HashInstruction, got {self}")
-            inst = self.literals
-            # need to redesign the fee map to go fully static
-            fee_dict: dict[str, int] = Instruction.fee_map[self.type] # type: ignore[reportGeneralTypeIssues]
-            if not isinstance(inst.destination_type, LiteralPlaintextType):
-                raise ValueError(f"expected LiteralPlaintextType, got {inst.destination_type}")
-            literal_type = inst.destination_type.literal_type
-            if literal_type in (LiteralType.Address, LiteralType.Group):
-                return fee_dict["high"]
-            else:
-                return fee_dict["low"]
+    def cost(self, program: "Program") -> int:
+        # TODO: huge todo here
         cost = Instruction.fee_map[self.type]
         if cost == -1:
             raise ValueError(f"instruction {self.type} is not supported in finalize")
+        if cost == -2:
+            if self.type == self.Type.Cast:
+                instruction = cast(CastInstruction[Any], self.literals)
+                if isinstance(instruction.cast_type, PlaintextCastType):
+                    if isinstance(instruction.cast_type.plaintext_type, LiteralPlaintextType):
+                        cost = 500
+                    else:
+                        from node.canary import Canary as Network
+                        cost = instruction.cast_type.plaintext_type.size_in_bytes(program) * Network.cast_per_byte_cost + Network.cast_base_cost
+                else:
+                    cost = 500
+            elif self.type in [self.Type.CommitBHP256, self.Type.CommitBHP512, self.Type.CommitBHP768, self.Type.CommitBHP1024, self.Type.CommitPED64, self.Type.CommitPED128]:
+                instruction = cast(CommitInstruction[Any], self.literals)
+
+
+
         return cost # type: ignore[reportGeneralTypeIssues]

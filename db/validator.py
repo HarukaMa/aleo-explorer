@@ -191,7 +191,7 @@ class DatabaseValidator(DatabaseBase):
                         "WHERE b.height = %s ",
                         (height,)
                     )
-                    validators = []
+                    validators: list[str] = []
                     for row in await cur.fetchall():
                         validators.append(row["author"])
                     await cur.execute(

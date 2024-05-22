@@ -88,7 +88,7 @@ async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]
         execution = transaction.execution
         allow_state_change = True
         local_mapping_cache = mapping_cache
-        fee = transaction.additional_fee.value
+        fee = transaction.fee.value
     elif isinstance(confirmed_transaction, RejectedExecute):
         if not isinstance(confirmed_transaction.rejected, RejectedExecution):
             raise TypeError("invalid rejected execute transaction")
@@ -174,10 +174,10 @@ async def finalize_block(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]],
                     pass
                 elif isinstance(e, UpdateKeyValue):
                     if e.key_id != o["key_id"] or e.value_id != o["value_id"]:
-                        raise TypeError("invalid finalize operation")
+                        raise TypeError("invalid finalize update key operation")
                 elif isinstance(e, RemoveKeyValue):
-                    # snarkVM #2114
-                    pass
+                    if e.key_id != o["key_id"]:
+                        raise TypeError("invalid finalize remove key operation")
                 else:
                     raise NotImplementedError
             except TypeError:

@@ -17,9 +17,29 @@ from .base import DatabaseBase, profile
 from .util import DatabaseUtil
 
 
+class _SupplyTracker:
+
+    def __init__(self, previous_supply: int):
+        self.supply = previous_supply
+        self.actual_block_reward = 0
+        self.actual_puzzle_reward = 0
+
+    def mint(self, delta: int):
+        self.supply += delta
+
+    def tally_block_reward(self, reward: int):
+        self.actual_block_reward += reward
+
+    def tally_puzzle_reward(self, reward: int):
+        self.actual_puzzle_reward += reward
+
+    def burn(self, delta: int):
+        self.supply -= delta
+
+
 class DatabaseInsert(DatabaseBase):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs): # type: ignore
         super().__init__(*args, **kwargs)
         self.redis_last_history_time = time.monotonic() - 21600
 
@@ -128,10 +148,10 @@ class DatabaseInsert(DatabaseBase):
                     return
             await cur.execute(
                 "INSERT INTO transition (transition_id, transaction_execute_id, fee_id, program_id, "
-                "function_name, tpk, tcm, index) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                "function_name, tpk, tcm, index, scm) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
                 (str(transition.id), exe_tx_db_id, fee_db_id, str(transition.program_id),
-                 str(transition.function_name), str(transition.tpk), str(transition.tcm), ts_index)
+                 str(transition.function_name), str(transition.tpk), str(transition.tcm), ts_index, str(transition.scm))
             )
             if (res := await cur.fetchone()) is None:
                 raise RuntimeError("failed to insert row into database")
@@ -154,7 +174,7 @@ class DatabaseInsert(DatabaseBase):
                          transition_input.plaintext.dump_nullable())
                     )
                     if transition_input.plaintext.value is not None:
-                        plaintext = cast(Plaintext, transition_input.plaintext.value)
+                        plaintext = transition_input.plaintext.value
                         if isinstance(plaintext, LiteralPlaintext) and plaintext.literal.type == Literal.Type.Address:
                             address = str(plaintext.literal.primitive)
                             await cur.execute(
@@ -295,10 +315,10 @@ class DatabaseInsert(DatabaseBase):
         async with conn.cursor() as cur:
             if is_unconfirmed or is_rejected:
                 program_id = str(deployment.program.id)
-                owner = str(owner.address)
+                owner_db = str(owner.address)
             else:
                 program_id = None
-                owner = None
+                owner_db = None
             await cur.execute(
                 "SELECT id FROM transaction_deploy WHERE transaction_id = %s", (transaction_db_id,)
             )
@@ -310,7 +330,7 @@ class DatabaseInsert(DatabaseBase):
             await cur.execute(
                 "INSERT INTO transaction_deploy (transaction_id, edition, verifying_keys, program_id, owner) "
                 "VALUES (%s, %s, %s, %s, %s) RETURNING id",
-                (transaction_db_id, deployment.edition, deployment.verifying_keys.dump(), program_id, owner)
+                (transaction_db_id, deployment.edition, deployment.verifying_keys.dump(), program_id, owner_db)
             )
             if await cur.fetchone() is None:
                 raise RuntimeError("failed to insert row into database")
@@ -387,12 +407,13 @@ class DatabaseInsert(DatabaseBase):
                     if isinstance(confirmed_transaction, AcceptedDeploy):
                         if not isinstance(transaction, DeployTransaction):
                             raise RuntimeError("expected a deploy transaction for accepted deploy")
-                        find_transition_id = transaction.fee.transition.id
+                        fee = cast(Fee, transaction.fee)
+                        find_transition_id = fee.transition.id
                         await cur.execute(
                             "SELECT tx.id, tx.transaction_id FROM transaction tx "
                             "JOIN fee f on tx.id = f.transaction_id "
                             "JOIN transition t on f.id = t.fee_id "
-                            "WHERE t.transition_id = %s AND tx.confimed_transaction_id IS NULL",
+                            "WHERE t.transition_id = %s AND tx.confirmed_transaction_id IS NULL",
                             (str(find_transition_id),)
                         )
                         res = await cur.fetchall()
@@ -404,16 +425,17 @@ class DatabaseInsert(DatabaseBase):
                             "SELECT tx.id, tx.transaction_id FROM transaction tx "
                             "JOIN transaction_execute te on tx.id = te.transaction_id "
                             "JOIN transition t on te.id = t.transaction_execute_id "
-                            "WHERE t.transition_id = ANY(%s::text[]) AND tx.confimed_transaction_id IS NULL",
+                            "WHERE t.transition_id = ANY(%s::text[]) AND tx.confirmed_transaction_id IS NULL",
                             (find_transition_ids,)
                         )
                         res = await cur.fetchall()
-                        if (fee := transaction.additional_fee.value) is not None:
+                        fee = cast(Option[Fee], transaction.fee)
+                        if (fee := fee.value) is not None:
                             await cur.execute(
                                 "SELECT tx.id, tx.transaction_id FROM transaction tx "
                                 "JOIN fee f on tx.id = f.transaction_id "
                                 "JOIN transition t on f.id = t.fee_id "
-                                "WHERE t.transition_id = %s AND tx.confimed_transaction_id IS NULL",
+                                "WHERE t.transition_id = %s AND tx.confirmed_transaction_id IS NULL",
                                 (str(fee.transition.id),)
                             )
                             for row in await cur.fetchall():
@@ -433,7 +455,8 @@ class DatabaseInsert(DatabaseBase):
                         raise RuntimeError("expected a confirmed transaction for fee transaction")
                     if isinstance(confirmed_transaction, RejectedDeploy):
                         rejected_deployment = cast(RejectedDeployment, confirmed_transaction.rejected)
-                        ref_transition_id = transaction.fee.transition.id
+                        fee = cast(Fee, transaction.fee)
+                        ref_transition_id = fee.transition.id
                         await cur.execute(
                             "SELECT tx.id, tx.transaction_id FROM transaction tx "
                             "JOIN fee f on tx.id = f.transaction_id "
@@ -449,7 +472,7 @@ class DatabaseInsert(DatabaseBase):
                                 "UPDATE transaction SET transaction_id = %s, original_transaction_id = %s, type = 'Fee' WHERE id = %s",
                                 (str(transaction.id), original_transaction_id, transaction_db_id)
                             )
-                            await DatabaseInsert._insert_deploy_transaction(conn, redis, rejected_deployment.deploy, rejected_deployment.program_owner, transaction.fee, transaction_db_id, is_rejected=True, fee_should_exist=True)
+                            await DatabaseInsert._insert_deploy_transaction(conn, redis, rejected_deployment.deploy, rejected_deployment.program_owner, fee, transaction_db_id, is_rejected=True, fee_should_exist=True)
 
                     elif isinstance(confirmed_transaction, RejectedExecute):
                         rejected_execution = cast(RejectedExecution, confirmed_transaction.rejected)
@@ -469,7 +492,7 @@ class DatabaseInsert(DatabaseBase):
                                 "UPDATE transaction SET transaction_id = %s, original_transaction_id = %s, type = 'Fee' WHERE id = %s",
                                 (str(transaction.id), original_transaction_id, transaction_db_id)
                             )
-                            await DatabaseInsert._insert_execute_transaction(conn, redis, rejected_execution.execution, transaction.fee, transaction_db_id, is_rejected=True, ts_should_exist=True)
+                            await DatabaseInsert._insert_execute_transaction(conn, redis, rejected_execution.execution, cast(Fee, transaction.fee), transaction_db_id, is_rejected=True, ts_should_exist=True)
 
                 if not prior_tx:
                     await cur.execute(
@@ -485,46 +508,43 @@ class DatabaseInsert(DatabaseBase):
 
                 if isinstance(transaction, DeployTransaction): # accepted deploy / unconfirmed
                     await DatabaseInsert._insert_deploy_transaction(
-                        conn, redis, transaction.deployment, transaction.owner, transaction.fee, transaction_db_id,
+                        conn, redis, transaction.deployment, transaction.owner, cast(Fee, transaction.fee), transaction_db_id,
                         is_unconfirmed=(confirmed_transaction is None)
                     )
 
                 elif isinstance(transaction, ExecuteTransaction): # accepted execute / unconfirmed
-                    await DatabaseInsert._insert_execute_transaction(conn, redis, transaction.execution, transaction.additional_fee.value, transaction_db_id)
+                    await DatabaseInsert._insert_execute_transaction(conn, redis, transaction.execution, cast(Option[Fee], transaction.fee).value, transaction_db_id)
 
                 elif isinstance(transaction, FeeTransaction) and not prior_tx: # first seen rejected tx
                     if isinstance(confirmed_transaction, RejectedDeploy):
                         rejected_deployment = cast(RejectedDeployment, confirmed_transaction.rejected)
-                        await DatabaseInsert._insert_deploy_transaction(conn, redis, rejected_deployment.deploy, rejected_deployment.program_owner, transaction.fee, transaction_db_id, is_rejected=True)
+                        await DatabaseInsert._insert_deploy_transaction(conn, redis, rejected_deployment.deploy, rejected_deployment.program_owner, cast(Fee, transaction.fee), transaction_db_id, is_rejected=True)
                     elif isinstance(confirmed_transaction, RejectedExecute):
                         rejected_execution = cast(RejectedExecution, confirmed_transaction.rejected)
-                        await DatabaseInsert._insert_execute_transaction(conn, redis, rejected_execution.execution, transaction.fee, transaction_db_id, is_rejected=True)
+                        await DatabaseInsert._insert_execute_transaction(conn, redis, rejected_execution.execution, cast(Fee, transaction.fee), transaction_db_id, is_rejected=True)
 
             # confirming tx
             if confirmed_transaction is not None:
                 await cur.execute(
-                    "UPDATE transaction SET confimed_transaction_id = %s WHERE transaction_id = %s",
+                    "UPDATE transaction SET confirmed_transaction_id = %s WHERE transaction_id = %s",
                     (confirmed_transaction_db_id, str(transaction.id))
                 )
                 reject_reasons = cast(list[Optional[str]], reject_reasons)
                 ct_index = cast(int, ct_index)
-                ignore_deploy_txids = cast(list[str], ignore_deploy_txids)
                 if isinstance(confirmed_transaction, AcceptedDeploy):
                     transaction = cast(DeployTransaction, transaction)
                     if reject_reasons[ct_index] is not None:
                         raise RuntimeError("expected no rejected reason for accepted deploy transaction")
-                    # TODO: remove bug workaround
-                    if str(transaction.id) not in ignore_deploy_txids:
-                        await cur.execute(
-                            "SELECT td.id FROM transaction_deploy td "
-                            "JOIN transaction t on td.transaction_id = t.id "
-                            "WHERE t.transaction_id = %s",
-                            (str(transaction.id),)
-                        )
-                        if (res := await cur.fetchone()) is None:
-                            raise RuntimeError("database inconsistent")
-                        deploy_transaction_db_id = res["id"]
-                        await DatabaseInsert._save_program(cur, transaction.deployment.program, deploy_transaction_db_id, transaction)
+                    await cur.execute(
+                        "SELECT td.id FROM transaction_deploy td "
+                        "JOIN transaction t on td.transaction_id = t.id "
+                        "WHERE t.transaction_id = %s",
+                        (str(transaction.id),)
+                    )
+                    if (res := await cur.fetchone()) is None:
+                        raise RuntimeError("database inconsistent")
+                    deploy_transaction_db_id = res["id"]
+                    await DatabaseInsert._save_program(cur, transaction.deployment.program, deploy_transaction_db_id, transaction)
 
                 elif isinstance(confirmed_transaction, AcceptedExecute):
                     if reject_reasons[ct_index] is not None:
@@ -680,9 +700,9 @@ class DatabaseInsert(DatabaseBase):
     @staticmethod
     async def _save_committee_history(cur: psycopg.AsyncCursor[dict[str, Any]], height: int, committee: Committee):
         await cur.execute(
-            "INSERT INTO committee_history (height, starting_round, total_stake) "
-            "VALUES (%s, %s, %s) RETURNING id",
-            (height, committee.starting_round, committee.total_stake)
+            "INSERT INTO committee_history (height, starting_round, total_stake, committee_id) "
+            "VALUES (%s, %s, %s, %s) RETURNING id",
+            (height, committee.starting_round, committee.total_stake, str(committee.id))
         )
         if (res := await cur.fetchone()) is None:
             raise RuntimeError("failed to insert row into database")
@@ -694,20 +714,29 @@ class DatabaseInsert(DatabaseBase):
                 (committee_db_id, str(address), stake, bool(is_open))
             )
 
-    async def _pre_ratify(self, cur: psycopg.AsyncCursor[dict[str, Any]], ratification: GenesisRatify):
+    async def _pre_ratify(self, cur: psycopg.AsyncCursor[dict[str, Any]], ratification: GenesisRatify,
+                          supply_tracker: _SupplyTracker):
         from interpreter.interpreter import global_mapping_cache
         committee = ratification.committee
         await DatabaseInsert._save_committee_history(cur, 0, committee)
 
+        bonded_balances = ratification.bonded_balances
         stakers: dict[Address, tuple[Address, u64]] = {}
-        for validator, amount, _ in committee.members:
-            stakers[validator] = validator, amount
+        for staker, validator, _, amount in bonded_balances:
+            stakers[staker] = validator, amount
         committee_members = {address: (amount, is_open) for address, amount, is_open in committee.members}
         await DatabaseInsert._update_committee_bonded_map(cur, self.redis, committee_members, stakers, 0)
 
         account_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "account"))
-        public_balances = ratification.public_balances
         global_mapping_cache[account_mapping_id] = {}
+        bonded_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "bonded"))
+        global_mapping_cache[bonded_mapping_id] = {}
+        withdraw_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "withdraw"))
+        global_mapping_cache[withdraw_mapping_id] = {}
+        metadata_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "metadata"))
+        global_mapping_cache[metadata_mapping_id] = {}
+
+        public_balances = ratification.public_balances
         operations: list[dict[str, Any]] = []
         for address, balance in public_balances:
             key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=address))
@@ -730,8 +759,119 @@ class DatabaseInsert(DatabaseBase):
                 "mapping_name": "account",
                 "from_transaction": False,
             })
+            supply_tracker.mint(balance)
+
+        for staker, validator, withdrawal, amount in bonded_balances:
+            key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=staker))
+            key_id = Field.loads(cached_get_key_id("credits.aleo", "bonded", key.dump()))
+            k = Tuple[Identifier, Plaintext]((
+                Identifier.loads("validator"),
+                LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=validator))
+            ))
+            v = Tuple[Identifier, Plaintext]((
+                Identifier.loads("microcredits"),
+                LiteralPlaintext(literal=Literal(type_=Literal.Type.U64, primitive=amount))
+            ))
+            value = PlaintextValue(
+                plaintext=StructPlaintext(
+                    members=Vec[Tuple[Identifier, Plaintext], u8]([k, v])
+                )
+            )
+            value_id = Field.loads(aleo_explorer_rust.get_value_id(str(key_id), value.dump()))
+            global_mapping_cache[bonded_mapping_id][key_id] = {
+                "key": key,
+                "value": value,
+            }
+            operations.append({
+                "type": FinalizeOperation.Type.UpdateKeyValue,
+                "mapping_id": bonded_mapping_id,
+                "key_id": key_id,
+                "value_id": value_id,
+                "key": key,
+                "value": value,
+                "height": 0,
+                "program_name": "credits.aleo",
+                "mapping_name": "bonded",
+                "from_transaction": False,
+            })
+
+            key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=staker))
+            key_id = Field.loads(cached_get_key_id("credits.aleo", "withdraw", key.dump()))
+            value = PlaintextValue(plaintext=LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=withdrawal)))
+            value_id = Field.loads(aleo_explorer_rust.get_value_id(str(key_id), value.dump()))
+            global_mapping_cache[withdraw_mapping_id][key_id] = {
+                "key": key,
+                "value": value,
+            }
+            operations.append({
+                "type": FinalizeOperation.Type.UpdateKeyValue,
+                "mapping_id": withdraw_mapping_id,
+                "key_id": key_id,
+                "value_id": value_id,
+                "key": key,
+                "value": value,
+                "height": 0,
+                "program_name": "credits.aleo",
+                "mapping_name": "withdraw",
+                "from_transaction": False,
+            })
+
+            supply_tracker.mint(amount)
+
+        key = LiteralPlaintext(
+            literal=Literal(
+                type_=Literal.Type.Address,
+                primitive=Address.loads("aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc")
+            )
+        )
+        key_id = Field.loads(cached_get_key_id("credits.aleo", "metadata", key.dump()))
+        value = PlaintextValue(plaintext=LiteralPlaintext(literal=Literal(type_=Literal.Type.U32, primitive=u32(len(committee_members)))))
+        value_id = Field.loads(aleo_explorer_rust.get_value_id(str(key_id), value.dump()))
+        global_mapping_cache[metadata_mapping_id][key_id] = {
+            "key": key,
+            "value": value,
+        }
+        operations.append({
+            "type": FinalizeOperation.Type.UpdateKeyValue,
+            "mapping_id": metadata_mapping_id,
+            "key_id": key_id,
+            "value_id": value_id,
+            "key": key,
+            "value": value,
+            "height": 0,
+            "program_name": "credits.aleo",
+            "mapping_name": "metadata",
+            "from_transaction": False,
+        })
+
+        key = LiteralPlaintext(
+            literal=Literal(
+                type_=Literal.Type.Address,
+                primitive=Address.loads("aleo1qgqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqanmpl0")
+            )
+        )
+        key_id = Field.loads(cached_get_key_id("credits.aleo", "metadata", key.dump()))
+        value = PlaintextValue(plaintext=LiteralPlaintext(literal=Literal(type_=Literal.Type.U32, primitive=u32(len(bonded_balances) - len(committee_members)))))
+        value_id = Field.loads(aleo_explorer_rust.get_value_id(str(key_id), value.dump()))
+        global_mapping_cache[metadata_mapping_id][key_id] = {
+            "key": key,
+            "value": value,
+        }
+        operations.append({
+            "type": FinalizeOperation.Type.UpdateKeyValue,
+            "mapping_id": metadata_mapping_id,
+            "key_id": key_id,
+            "value_id": value_id,
+            "key": key,
+            "value": value,
+            "height": 0,
+            "program_name": "credits.aleo",
+            "mapping_name": "metadata",
+            "from_transaction": False,
+        })
+
         from interpreter.interpreter import execute_operations
-        await execute_operations(self, cur, operations)
+        await execute_operations(cast("Database", self), cur, operations)
 
     @staticmethod
     async def _get_committee_mapping(redis_conn: Redis[str]) -> dict[Address, tuple[u64, bool_]]:
@@ -806,7 +946,7 @@ class DatabaseInsert(DatabaseBase):
     @staticmethod
     @profile
     def _stake_rewards(committee_members: dict[Address, tuple[u64, bool_]],
-                       stakers: dict[Address, tuple[Address, u64]], block_reward: u64):
+                       stakers: dict[Address, tuple[Address, u64]], block_reward: u64, supply_tracker: _SupplyTracker):
         total_stake = sum(x[0] for x in committee_members.values())
         stake_rewards: dict[Address, int] = {}
         if not stakers or total_stake == 0 or block_reward == 0:
@@ -844,7 +984,7 @@ class DatabaseInsert(DatabaseBase):
 
     @profile
     async def _post_ratify(self, cur: psycopg.AsyncCursor[dict[str, Any]], redis_conn: Redis[str], height: int, round_: int,
-                           ratifications: list[Ratify], address_puzzle_rewards: dict[str, int]):
+                           ratifications: list[Ratify], address_puzzle_rewards: dict[str, int], supply_tracker: _SupplyTracker):
         from interpreter.interpreter import global_mapping_cache
 
         for ratification in ratifications:
@@ -867,21 +1007,27 @@ class DatabaseInsert(DatabaseBase):
 
                 DatabaseInsert._check_committee_staker_match(committee_members, stakers)
 
-                stakers, stake_rewards = DatabaseInsert._stake_rewards(committee_members, stakers, ratification.amount)
+                stakers, stake_rewards = DatabaseInsert._stake_rewards(committee_members, stakers, ratification.amount, supply_tracker)
                 committee_members = DatabaseInsert._next_committee_members(committee_members, stakers)
 
                 pipe = self.redis.pipeline()
                 for address, amount in stake_rewards.items():
                     pipe.hincrby("address_stake_reward", str(address), amount)
+                    supply_tracker.mint(amount)
+                    supply_tracker.tally_block_reward(amount)
                 await pipe.execute()
 
                 await DatabaseInsert._update_committee_bonded_map(cur, self.redis, committee_members, stakers, height)
+                starting_round = u64(round_)
+                members = Vec[Tuple[Address, u64, bool_], u16]([
+                    Tuple[Address, u64, bool_]((address, amount, is_open)) for address, (amount, is_open) in committee_members.items()
+                ])
+                total_stake = u64(sum(x[0] for x in committee_members.values()))
                 await DatabaseInsert._save_committee_history(cur, height, Committee(
-                    starting_round=u64(round_),
-                    members=Vec[Tuple[Address, u64, bool_], u16]([
-                        Tuple[Address, u64, bool_]((address, amount, is_open)) for address, (amount, is_open) in committee_members.items()
-                    ]),
-                    total_stake=u64(sum(x[0] for x in committee_members.values()))
+                    id_=Committee.compute_committee_id(starting_round, members, total_stake),
+                    starting_round=starting_round,
+                    members=members,
+                    total_stake=total_stake,
                 ))
             elif isinstance(ratification, PuzzleRewardRatify):
                 if ratification.amount == 0:
@@ -890,7 +1036,7 @@ class DatabaseInsert(DatabaseBase):
 
                 if account_mapping_id not in global_mapping_cache:
                     from interpreter.finalizer import mapping_cache_read
-                    global_mapping_cache[account_mapping_id] = await mapping_cache_read(self, "credits.aleo", "account")
+                    global_mapping_cache[account_mapping_id] = await mapping_cache_read(cast(Database, self), "credits.aleo", "account")
 
                 current_balances: dict[Field, dict[str, Any]] = global_mapping_cache[account_mapping_id]
 
@@ -928,8 +1074,10 @@ class DatabaseInsert(DatabaseBase):
                         "height": height,
                         "from_transaction": False,
                     })
+                    supply_tracker.mint(amount)
+                    supply_tracker.tally_puzzle_reward(amount)
                 from interpreter.interpreter import execute_operations
-                await execute_operations(self, cur, operations)
+                await execute_operations(cast(Database, self), cur, operations)
 
     @staticmethod
     async def _backup_redis_hash_key(redis_conn: Redis[str], keys: list[str], height: int):
@@ -974,6 +1122,7 @@ class DatabaseInsert(DatabaseBase):
                         "credits.aleo:bonded",
                         "credits.aleo:committee",
                         "address_stake_reward",
+                        "address_puzzle_reward",
                         "address_transfer_in",
                         "address_transfer_out",
                         "address_fee",
@@ -984,34 +1133,53 @@ class DatabaseInsert(DatabaseBase):
                     try:
                         if block.height != 0:
                             block_reward, coinbase_reward = block.compute_rewards(
-                                await self.get_latest_coinbase_target(),
-                                await self.get_latest_cumulative_proof_target()
+                                await cast("Database", self).get_latest_coinbase_target(),
+                                await cast("Database", self).get_latest_cumulative_proof_target()
                             )
                             puzzle_reward = coinbase_reward // 2
+
+                            await cur.execute("SELECT total_supply FROM block ORDER BY id DESC LIMIT 1")
+                            if (res := await cur.fetchone()) is None:
+                                raise RuntimeError("failed to retrieve total supply")
+                            supply_tracker = _SupplyTracker(res["total_supply"])
                         else:
                             block_reward, coinbase_reward, puzzle_reward = 0, 0, 0
+                            supply_tracker = _SupplyTracker(0)
 
-                        block_reward += await block.get_total_priority_fee(self)
+                        # TODO: use data from proper fee calculation
+                        # supply_tracker.burn(await block.get_total_burnt_fee(cast("Database", self)))
+                        for ct in block.transactions:
+                            ct: ConfirmedTransaction
+                            fee = ct.transaction.fee
+                            if isinstance(fee, Fee):
+                                supply_tracker.burn(fee.amount[0])
+                            elif fee.value is not None:
+                                supply_tracker.burn(fee.value.amount[0])
+
+                        # TODO: use data from fee calculation
+                        # block_reward += await block.get_total_priority_fee(cast("Database", self))
 
                         for ratification in block.ratifications:
                             if isinstance(ratification, BlockRewardRatify):
+                                # TODO: remove this
+                                block_reward = ratification.amount
                                 if ratification.amount != block_reward:
                                     raise RuntimeError("invalid block reward")
                             elif isinstance(ratification, PuzzleRewardRatify):
                                 if ratification.amount != puzzle_reward:
                                     raise RuntimeError("invalid puzzle reward")
                             elif isinstance(ratification, GenesisRatify):
-                                await self._pre_ratify(cur, ratification)
+                                await self._pre_ratify(cur, ratification, supply_tracker)
 
                         from interpreter.interpreter import finalize_block
-                        reject_reasons = await finalize_block(self, cur, block)
+                        reject_reasons = await finalize_block(cast("Database", self), cur, block)
 
                         await cur.execute(
                             "INSERT INTO block (height, block_hash, previous_hash, previous_state_root, transactions_root, "
                             "finalize_root, ratifications_root, solutions_root, subdag_root, round, cumulative_weight, "
                             "cumulative_proof_target, coinbase_target, proof_target, last_coinbase_target, "
-                            "last_coinbase_timestamp, timestamp, block_reward, coinbase_reward) "
-                            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                            "last_coinbase_timestamp, timestamp, block_reward, coinbase_reward, total_supply) "
+                            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
                             "RETURNING id",
                             (block.height, str(block.block_hash), str(block.previous_hash), str(block.header.previous_state_root),
                              str(block.header.transactions_root), str(block.header.finalize_root), str(block.header.ratifications_root),
@@ -1019,8 +1187,8 @@ class DatabaseInsert(DatabaseBase):
                              block.header.metadata.cumulative_weight, block.header.metadata.cumulative_proof_target,
                              block.header.metadata.coinbase_target, block.header.metadata.proof_target,
                              block.header.metadata.last_coinbase_target, block.header.metadata.last_coinbase_timestamp,
-                             block.header.metadata.timestamp, block_reward, coinbase_reward)
-                        )
+                             block.header.metadata.timestamp, block_reward, coinbase_reward, supply_tracker.supply)
+                        ) # total supply will be rewritten after everything
                         if (res := await cur.fetchone()) is None:
                             raise RuntimeError("failed to insert row into database")
                         block_db_id = res["id"]
@@ -1032,7 +1200,7 @@ class DatabaseInsert(DatabaseBase):
                                 "INSERT INTO authority (block_id, type, signature) VALUES (%s, %s, %s)",
                                 (block_db_id, block.authority.type.name, str(block.authority.signature))
                             )
-                            subdag_copy_data = None
+                            subdag_copy_data = []
                         elif isinstance(block.authority, QuorumAuthority):
                             await cur.execute(
                                 "INSERT INTO authority (block_id, type) VALUES (%s, %s) RETURNING id",
@@ -1042,17 +1210,16 @@ class DatabaseInsert(DatabaseBase):
                                 raise RuntimeError("failed to insert row into database")
                             authority_db_id = res["id"]
                             subdag = block.authority.subdag
-                            subdag_copy_data: list[tuple[int, int, Optional[str], str, str, int, str, int]] = []
+                            subdag_copy_data: list[tuple[int, int, str, str, int, str, int, str]] = []
                             for round_, certificates in subdag.subdag.items():
                                 for index, certificate in enumerate(certificates):
                                     if round_ != certificate.batch_header.round:
                                         raise ValueError("invalid subdag round")
-                                    if isinstance(certificate, BatchCertificate1):
-                                        subdag_copy_data.append((
-                                            authority_db_id, round_, str(certificate.certificate_id), str(certificate.batch_header.batch_id),
-                                            str(certificate.batch_header.author), certificate.batch_header.timestamp,
-                                            str(certificate.batch_header.signature), index
-                                        ))
+                                    subdag_copy_data.append((
+                                        authority_db_id, round_, str(certificate.batch_header.batch_id),
+                                        str(certificate.batch_header.author), certificate.batch_header.timestamp,
+                                        str(certificate.batch_header.signature), index, str(certificate.batch_header.committee_id)
+                                    ))
                                         # await cur.execute(
                                         #     "INSERT INTO dag_vertex (authority_id, round, batch_certificate_id, batch_id, "
                                         #     "author, timestamp, author_signature, index) "
@@ -1061,21 +1228,6 @@ class DatabaseInsert(DatabaseBase):
                                         #      str(certificate.batch_header.author), certificate.batch_header.timestamp,
                                         #      str(certificate.batch_header.signature), index)
                                         # )
-                                    elif isinstance(certificate, BatchCertificate2):
-                                        subdag_copy_data.append((
-                                            authority_db_id, round_, None, str(certificate.batch_header.batch_id),
-                                            str(certificate.batch_header.author), certificate.batch_header.timestamp,
-                                            str(certificate.batch_header.signature), index
-                                        ))
-                                        # await cur.execute(
-                                        #     "INSERT INTO dag_vertex (authority_id, round, batch_id, "
-                                        #     "author, timestamp, author_signature, index) "
-                                        #     "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
-                                        #     (authority_db_id, round_, str(certificate.batch_header.batch_id),
-                                        #      str(certificate.batch_header.author), certificate.batch_header.timestamp,
-                                        #      str(certificate.batch_header.signature), index)
-                                        # )
-
                                     # if (res := await cur.fetchone()) is None:
                                     #     raise RuntimeError("failed to insert row into database")
                                     # vertex_db_id = res["id"]
@@ -1130,11 +1282,12 @@ class DatabaseInsert(DatabaseBase):
                                     # async with cur.copy("COPY dag_vertex_transmission_id (vertex_id, type, index, commitment, transaction_id) FROM STDIN") as copy:
                                     #     for row in tid_copy_data:
                                     #         await copy.write_row(row)
-
+                        else:
+                            raise NotImplementedError
                         if subdag_copy_data:
                             async with cur.copy(
-                                "COPY dag_vertex (authority_id, round, batch_certificate_id, batch_id, "
-                                "author, timestamp, author_signature, index) FROM STDIN"
+                                "COPY dag_vertex (authority_id, round, batch_id, "
+                                "author, timestamp, author_signature, index, committee_id) FROM STDIN"
                             ) as copy:
                                 for row in subdag_copy_data:
                                     await copy.write_row(row)
@@ -1154,6 +1307,7 @@ class DatabaseInsert(DatabaseBase):
                                     raise ValueError("expected deploy transaction")
 
                         for ct_index, confirmed_transaction in enumerate(block.transactions):
+                            confirmed_transaction: ConfirmedTransaction
                             await cur.execute(
                                 "INSERT INTO confirmed_transaction (block_id, index, type) VALUES (%s, %s, %s) RETURNING id",
                                 (block_db_id, confirmed_transaction.index, confirmed_transaction.type.name)
@@ -1198,6 +1352,13 @@ class DatabaseInsert(DatabaseBase):
                                 elif isinstance(finalize_operation, RemoveKeyValue):
                                     await cur.execute(
                                         "INSERT INTO finalize_operation_remove_kv (finalize_operation_id, "
+                                        "mapping_id, key_id) VALUES (%s, %s, %s)",
+                                        (finalize_operation_db_id, str(finalize_operation.mapping_id),
+                                         str(finalize_operation.key_id))
+                                    )
+                                elif isinstance(finalize_operation, ReplaceMapping):
+                                    await cur.execute(
+                                        "INSERT INTO finalize_operation_replace_mapping (finalize_operation_id, "
                                         "mapping_id) VALUES (%s, %s)",
                                         (finalize_operation_db_id, str(finalize_operation.mapping_id))
                                     )
@@ -1236,62 +1397,41 @@ class DatabaseInsert(DatabaseBase):
 
                         if block.solutions.value is not None:
                             prover_solutions = block.solutions.value.solutions
-                            solutions: list[tuple[ProverSolution, int, int]] = []
+                            solutions: list[tuple[Solution, int, int]] = []
                             prover_solutions_target = list(zip(
                                 prover_solutions,
-                                [prover_solution.partial_solution.commitment.to_target() for prover_solution
-                                 in prover_solutions]
+                                [solution.target for solution in prover_solutions]
                             ))
                             target_sum = sum(target for _, target in prover_solutions_target)
                             for prover_solution, target in prover_solutions_target:
                                 solutions.append((prover_solution, target, puzzle_reward * target // target_sum))
 
                             await cur.execute(
-                                "INSERT INTO coinbase_solution (block_id, target_sum) "
+                                "INSERT INTO puzzle_solution (block_id, target_sum) "
                                 "VALUES (%s, %s) RETURNING id",
                                 (block_db_id, target_sum)
                             )
                             if (res := await cur.fetchone()) is None:
                                 raise RuntimeError("failed to insert row into database")
-                            coinbase_solution_db_id = res["id"]
-                            await cur.execute("SELECT total_credit FROM leaderboard_total")
-                            current_total_credit = await cur.fetchone()
-                            if current_total_credit is None:
-                                await cur.execute("INSERT INTO leaderboard_total (total_credit) VALUES (0)")
-                                current_total_credit = 0
-                            else:
-                                current_total_credit = current_total_credit["total_credit"]
-                            copy_data: list[tuple[None, int, str, u64, str, int, int, str, bool]] = []
-                            for prover_solution, target, reward in solutions:
-                                partial_solution = prover_solution.partial_solution
+                            puzzle_solution_db_id = res["id"]
+                            copy_data: list[tuple[int, str, u64, int, int, str]] = []
+                            for solution, target, reward in solutions:
+                                solution: Solution
                                 # dag_vertex_db_id = dag_transmission_ids[0][str(partial_solution.commitment)]
                                 copy_data.append(
-                                    (None, coinbase_solution_db_id, str(partial_solution.address), partial_solution.nonce,
-                                     str(partial_solution.commitment), partial_solution.commitment.to_target(), reward,
-                                     str(prover_solution.proof.w.x), prover_solution.proof.w.y_is_positive)
+                                    (puzzle_solution_db_id, str(solution.address), solution.counter,
+                                     solution.target, reward, str(solution.epoch_hash))
                                 )
                                 if reward > 0:
-                                    address_puzzle_rewards[str(partial_solution.address)] += reward
+                                    address_puzzle_rewards[str(solution.address)] += reward
                             if not os.environ.get("DEBUG_SKIP_COINBASE"):
-                                async with cur.copy("COPY prover_solution (dag_vertex_id, coinbase_solution_id, address, nonce, commitment, target, reward, proof_x, proof_y_is_positive) FROM STDIN") as copy:
+                                async with cur.copy("COPY solution (puzzle_solution_id, address, counter, target, reward, epoch_hash) FROM STDIN") as copy:
                                     for row in copy_data:
                                         await copy.write_row(row)
-                                if block.header.metadata.height >= 130888 and block.header.metadata.timestamp < 1675209600 and current_total_credit < 37_500_000_000_000:
-                                    await cur.execute(
-                                        "UPDATE leaderboard_total SET total_credit = leaderboard_total.total_credit + %s",
-                                        (sum(reward for _, _, reward in solutions),)
-                                    )
                                 for address, reward in address_puzzle_rewards.items():
-                                    await cur.execute(
-                                        "INSERT INTO leaderboard (address, total_reward) VALUES (%s, %s) "
-                                        "ON CONFLICT (address) DO UPDATE SET total_reward = leaderboard.total_reward + %s",
-                                        (address, reward, reward)
-                                    )
-                                    if block.header.metadata.height >= 130888 and block.header.metadata.timestamp < 1675209600 and current_total_credit < 37_500_000_000_000:
-                                        await cur.execute(
-                                            "UPDATE leaderboard SET total_incentive = leaderboard.total_incentive + %s WHERE address = %s",
-                                            (reward, address)
-                                        )
+                                    pipe = self.redis.pipeline()
+                                    pipe.hincrby("address_puzzle_reward", address, reward)
+                                    await pipe.execute()
 
                         for aborted in block.aborted_transactions_ids:
                             await cur.execute(
@@ -1299,7 +1439,37 @@ class DatabaseInsert(DatabaseBase):
                                 (block_db_id, str(aborted))
                             )
 
-                        await self._post_ratify(cur, self.redis, block.height, block.round, block.ratifications.ratifications, address_puzzle_rewards)
+                        for aborted in block.aborted_solution_ids:
+                            await cur.execute(
+                                "INSERT INTO block_aborted_solution_id (block_id, solution_id) VALUES (%s, %s)",
+                                (block_db_id, str(aborted))
+                            )
+
+                        await self._post_ratify(
+                            cur, self.redis, block.height, block.round, block.ratifications.ratifications,
+                            address_puzzle_rewards, supply_tracker
+                        )
+
+                        await cur.execute(
+                            "UPDATE block SET total_supply = %s WHERE id = %s",
+                            (supply_tracker.supply, block_db_id)
+                        )
+
+                        puzzle_diff = puzzle_reward - supply_tracker.actual_puzzle_reward
+                        if puzzle_diff != 0:
+                            await cur.execute(
+                                "INSERT INTO stats (name, value) VALUES ('puzzle_reward_diff', %s) "
+                                "ON CONFLICT (name) DO UPDATE SET value = stats.value + %s",
+                                (puzzle_diff, puzzle_diff)
+                            )
+
+                        block_diff = block_reward - supply_tracker.actual_block_reward
+                        if block_diff != 0:
+                            await cur.execute(
+                                "INSERT INTO stats (name, value) VALUES ('block_reward_diff', %s) "
+                                "ON CONFLICT (name) DO UPDATE SET value = stats.value + %s",
+                                (block_diff, block_diff)
+                            )
 
                         if block.height % 100 == 0:
                             await self.cleanup_unconfirmed_transactions()
@@ -1320,7 +1490,7 @@ class DatabaseInsert(DatabaseBase):
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 await cur.execute(
-                    "DELETE FROM transaction WHERE first_seen < %s AND confimed_transaction_id IS NULL",
+                    "DELETE FROM transaction WHERE first_seen < %s AND confirmed_transaction_id IS NULL",
                     (int(time.time()) - 86400 * 7,)
                 )
 
@@ -1329,10 +1499,9 @@ class DatabaseInsert(DatabaseBase):
 
     async def save_unconfirmed_transaction(self, transaction: Transaction):
         async with self.pool.connection() as conn:
-            async with conn.cursor() as cur:
-                if isinstance(transaction, FeeTransaction):
-                    raise RuntimeError("rejected transaction cannot be unconfirmed")
-                await self._insert_transaction(conn, self.redis, transaction)
+            if isinstance(transaction, FeeTransaction):
+                raise RuntimeError("rejected transaction cannot be unconfirmed")
+            await self._insert_transaction(conn, self.redis, transaction)
 
     async def save_feedback(self, contact: str, content: str):
         async with self.pool.connection() as conn:
