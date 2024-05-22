@@ -346,7 +346,7 @@ class PuzzleResponse(Message):
 class UnconfirmedSolution(Message):
     type = Message.Type.UnconfirmedSolution
 
-    def __init__(self, *, solution_id: PuzzleCommitment, solution: Data[ProverSolution]):
+    def __init__(self, *, solution_id: SolutionID, solution: Data[Solution]):
         self.solution_id = solution_id
         self.solution = solution
 
@@ -355,8 +355,8 @@ class UnconfirmedSolution(Message):
 
     @classmethod
     def load(cls, data: BytesIO):
-        solution_id = PuzzleCommitment.load(data)
-        solution = Data[ProverSolution].load(data)
+        solution_id = SolutionID.load(data)
+        solution = Data[Solution].load(data)
         return cls(solution_id=solution_id, solution=solution)
 
 

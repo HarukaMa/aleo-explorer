@@ -420,6 +420,8 @@ class DatabaseBlock(DatabaseBase):
                         )
                     elif transaction["type"] == Transaction.Type.Fee.name:
                         raise ValueError("transaction is confirmed")
+                    else:
+                        raise NotImplementedError
                     return tx
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
@@ -498,7 +500,7 @@ class DatabaseBlock(DatabaseBase):
                         (end - start, start)
                     )
                     transaction_ids = await cur.fetchall()
-                    if transaction_ids is None:
+                    if not transaction_ids:
                         raise RuntimeError("database inconsistent")
                     txs: list[Transaction] = []
                     for transaction_id in transaction_ids:
@@ -578,8 +580,9 @@ class DatabaseBlock(DatabaseBase):
                             ),
                             verifying_keys=Vec[Tuple[Identifier, VerifyingKey, Certificate], u16]([])
                         )
+                        program_data = None
                     fee_dict = transaction
-                    if fee_dict is None:
+                    if not fee_dict:
                         raise RuntimeError("database inconsistent")
                     await cur.execute(
                         "SELECT * FROM transition WHERE fee_id = %s",
@@ -597,6 +600,7 @@ class DatabaseBlock(DatabaseBase):
                         proof=Option[Proof](proof),
                     )
                     if confirmed_transaction["confirmed_transaction_type"] == ConfirmedTransaction.Type.AcceptedDeploy.name:
+                        program_data = cast(dict[str, Any], program_data)
                         tx = DeployTransaction(
                             id_=TransactionID.loads(transaction["transaction_id"]),
                             deployment=deployment,
@@ -823,33 +827,25 @@ class DatabaseBlock(DatabaseBase):
                     case _:
                         raise NotImplementedError
 
-            await cur.execute("SELECT * FROM coinbase_solution WHERE block_id = %s", (block["id"],))
-            coinbase_solution = await cur.fetchone()
-            if coinbase_solution is not None:
+            await cur.execute("SELECT * FROM puzzle_solution WHERE block_id = %s", (block["id"],))
+            puzzle_solution = await cur.fetchone()
+            if puzzle_solution is not None:
                 await cur.execute(
-                    "SELECT * FROM prover_solution WHERE coinbase_solution_id = %s",
-                    (coinbase_solution["id"],)
+                    "SELECT * FROM solution WHERE puzzle_solution_id = %s",
+                    (puzzle_solution["id"],)
                 )
-                prover_solutions = await cur.fetchall()
-                pss: list[ProverSolution] = []
-                for prover_solution in prover_solutions:
-                    pss.append(ProverSolution(
-                        partial_solution=PartialSolution(
-                            address=Address.loads(prover_solution["address"]),
-                            nonce=u64(prover_solution["nonce"]),
-                            commitment=PuzzleCommitment.loads(prover_solution["commitment"]),
-                        ),
-                        proof=KZGProof(
-                            w=G1Affine(
-                                x=Fq(value=int(prover_solution["proof_x"])),
-                                y_is_positive=prover_solution["proof_y_is_positive"],
-                            ),
-                            random_v=Option[Field](None),
-                        )
+                solutions = await cur.fetchall()
+                ss: list[Solution] = []
+                for solution in solutions:
+                    ss.append(Solution(
+                        solution_id=solution["solution_id"],
+                        epoch_hash=solution["epoch_hash"],
+                        address=Address.loads(solution["address"]),
+                        counter=u64(solution["counter"]),
                     ))
-                coinbase_solution = CoinbaseSolution(solutions=Vec[ProverSolution, u16](pss))
+                puzzle_solution = PuzzleSolutions(solutions=Vec[Solution, u8](ss))
             else:
-                coinbase_solution = None
+                puzzle_solution = None
 
             await cur.execute("SELECT * FROM authority WHERE block_id = %s", (block["id"],))
             authority = await cur.fetchone()
@@ -891,7 +887,7 @@ class DatabaseBlock(DatabaseBase):
                     #     (previous_ids,)
                     # )
                     # previous_cert_ids = [x["batch_certificate_id"] for x in await cur.fetchall()]
-                    previous_cert_ids = []
+                    previous_cert_ids: list[str] = []
 
                     await cur.execute(
                         "SELECT * FROM dag_vertex_transmission_id WHERE vertex_id = %s ORDER BY index",
@@ -902,7 +898,7 @@ class DatabaseBlock(DatabaseBase):
                         if tid["type"] == TransmissionID.Type.Ratification:
                             tids.append(RatificationTransmissionID())
                         elif tid["type"] == TransmissionID.Type.Solution:
-                            tids.append(SolutionTransmissionID(id_=PuzzleCommitment.loads(tid["commitment"])))
+                            tids.append(SolutionTransmissionID(id_=SolutionID.loads(tid["commitment"])))
                         elif tid["type"] == TransmissionID.Type.Transaction:
                             tids.append(TransactionTransmissionID(id_=TransactionID.loads(tid["transaction_id"])))
 
@@ -915,13 +911,13 @@ class DatabaseBlock(DatabaseBase):
                                 timestamp=i64(dag_vertex["timestamp"]),
                                 committee_id=Field.loads(dag_vertex["committee_id"]),
                                 transmission_ids=Vec[TransmissionID, u32](tids),
-                                previous_certificate_ids=Vec[Field, u32]([Field.loads(x) for x in previous_cert_ids]),
+                                previous_certificate_ids=Vec[Field, u16]([Field.loads(x) for x in previous_cert_ids]),
                                 signature=Signature.loads(dag_vertex["author_signature"]),
                             ),
                             signatures=Vec[Signature, u16](signatures),
                         )
                     )
-                subdags: dict[u64, Vec[BatchCertificate, u32]] = defaultdict(lambda: Vec[BatchCertificate, u32]([]))
+                subdags: dict[u64, Vec[BatchCertificate, u16]] = defaultdict(lambda: Vec[BatchCertificate, u16]([]))
                 for certificate in certificates:
                     subdags[certificate.batch_header.round].append(certificate)
                 subdag = Subdag(
@@ -933,7 +929,7 @@ class DatabaseBlock(DatabaseBase):
 
             await cur.execute("SELECT * FROM block_aborted_solution_id WHERE block_id = %s", (block["id"],))
             aborted_solution_ids = await cur.fetchall()
-            aborted_solution_ids = [PuzzleCommitment.loads(x["solution_id"]) for x in aborted_solution_ids]
+            aborted_solution_ids = [SolutionID.loads(x["solution_id"]) for x in aborted_solution_ids]
 
             await cur.execute("SELECT * FROM block_aborted_transaction_id WHERE block_id = %s", (block["id"],))
             aborted_transaction_ids = await cur.fetchall()
@@ -948,8 +944,8 @@ class DatabaseBlock(DatabaseBase):
                     transactions=Vec[ConfirmedTransaction, u32](ctxs),
                 ),
                 ratifications=Ratifications(ratifications=Vec[Ratify, u32](rs)),
-                solutions=Solutions(solutions=Option[CoinbaseSolution](coinbase_solution)),
-                aborted_solution_ids=Vec[PuzzleCommitment, u32](aborted_solution_ids),
+                solutions=Solutions(solutions=Option[PuzzleSolutions](puzzle_solution)),
+                aborted_solution_ids=Vec[SolutionID, u32](aborted_solution_ids),
                 aborted_transactions_ids=Vec[TransactionID, u32](aborted_transaction_ids),
             )
 
@@ -975,9 +971,9 @@ class DatabaseBlock(DatabaseBase):
             else:
                 transaction_count = res["count"]
             await cur.execute(
-                "SELECT COUNT(*) FROM prover_solution ps "
-                "JOIN coinbase_solution cs on ps.coinbase_solution_id = cs.id "
-                "WHERE cs.block_id = %s",
+                "SELECT COUNT(*) FROM solution s "
+                "JOIN puzzle_solution ps on s.puzzle_solution_id = ps.id "
+                "WHERE ps.block_id = %s",
                 (block["id"],)
             )
             if (res := await cur.fetchone()) is None:
@@ -1177,8 +1173,8 @@ class DatabaseBlock(DatabaseBase):
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT target_sum FROM coinbase_solution "
-                        "JOIN block b on coinbase_solution.block_id = b.id "
+                        "SELECT target_sum FROM puzzle_solution ps "
+                        "JOIN block b on ps.block_id = b.id "
                         "WHERE height = %s ",
                         (height,)
                     )

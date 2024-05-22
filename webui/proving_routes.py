@@ -134,7 +134,7 @@ async def address_route(request: Request):
             "height": solution["height"],
             "timestamp": solution["timestamp"],
             "reward": solution["reward"],
-            "nonce": solution["nonce"],
+            "counter": solution["counter"],
             "target": solution["target"],
             "target_sum": solution["target_sum"],
         })
@@ -277,7 +277,7 @@ async def address_solution_route(request: Request):
             "height": solution["height"],
             "timestamp": solution["timestamp"],
             "reward": solution["reward"],
-            "nonce": solution["nonce"],
+            "counter": solution["counter"],
             "target": solution["target"],
             "target_sum": solution["target_sum"],
         })

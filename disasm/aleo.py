@@ -129,7 +129,7 @@ def disasm_assert(value: AssertInstruction[Any]) -> str:
 def disasm_call(value: CallInstruction) -> str:
     return f"{disasm_call_operator(value.operator)} {' '.join(map(disasm_operand, value.operands))} into {' '.join(map(disasm_register, value.destinations))}"
 
-def disasm_cast(value: CastInstruction) -> str:
+def disasm_cast(value: CastInstruction[Any]) -> str:
     cast_type: CastType = value.cast_type
     if isinstance(cast_type, GroupXCoordinateCastType):
         destination_type = "group.x"
@@ -175,7 +175,7 @@ def disasm_instruction(value: Instruction) -> str:
         return inst_str + disasm_commit(literals)
     elif isinstance(literals, AsyncInstruction):
         return inst_str + disasm_async(literals)
-    elif isinstance(literals, HashInstruction):
+    elif isinstance(literals, HashInstruction): # type: ignore
         return inst_str + disasm_hash(literals)
     else:
         raise ValueError("unknown instruction type")

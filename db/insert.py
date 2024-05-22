@@ -39,7 +39,7 @@ class _SupplyTracker:
 
 class DatabaseInsert(DatabaseBase):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs): # type: ignore
         super().__init__(*args, **kwargs)
         self.redis_last_history_time = time.monotonic() - 21600
 
@@ -174,7 +174,7 @@ class DatabaseInsert(DatabaseBase):
                          transition_input.plaintext.dump_nullable())
                     )
                     if transition_input.plaintext.value is not None:
-                        plaintext = cast(Plaintext, transition_input.plaintext.value)
+                        plaintext = transition_input.plaintext.value
                         if isinstance(plaintext, LiteralPlaintext) and plaintext.literal.type == Literal.Type.Address:
                             address = str(plaintext.literal.primitive)
                             await cur.execute(
@@ -315,10 +315,10 @@ class DatabaseInsert(DatabaseBase):
         async with conn.cursor() as cur:
             if is_unconfirmed or is_rejected:
                 program_id = str(deployment.program.id)
-                owner = str(owner.address)
+                owner_db = str(owner.address)
             else:
                 program_id = None
-                owner = None
+                owner_db = None
             await cur.execute(
                 "SELECT id FROM transaction_deploy WHERE transaction_id = %s", (transaction_db_id,)
             )
@@ -330,7 +330,7 @@ class DatabaseInsert(DatabaseBase):
             await cur.execute(
                 "INSERT INTO transaction_deploy (transaction_id, edition, verifying_keys, program_id, owner) "
                 "VALUES (%s, %s, %s, %s, %s) RETURNING id",
-                (transaction_db_id, deployment.edition, deployment.verifying_keys.dump(), program_id, owner)
+                (transaction_db_id, deployment.edition, deployment.verifying_keys.dump(), program_id, owner_db)
             )
             if await cur.fetchone() is None:
                 raise RuntimeError("failed to insert row into database")
@@ -407,7 +407,8 @@ class DatabaseInsert(DatabaseBase):
                     if isinstance(confirmed_transaction, AcceptedDeploy):
                         if not isinstance(transaction, DeployTransaction):
                             raise RuntimeError("expected a deploy transaction for accepted deploy")
-                        find_transition_id = transaction.fee.transition.id
+                        fee = cast(Fee, transaction.fee)
+                        find_transition_id = fee.transition.id
                         await cur.execute(
                             "SELECT tx.id, tx.transaction_id FROM transaction tx "
                             "JOIN fee f on tx.id = f.transaction_id "
@@ -428,7 +429,8 @@ class DatabaseInsert(DatabaseBase):
                             (find_transition_ids,)
                         )
                         res = await cur.fetchall()
-                        if (fee := transaction.fee.value) is not None:
+                        fee = cast(Option[Fee], transaction.fee)
+                        if (fee := fee.value) is not None:
                             await cur.execute(
                                 "SELECT tx.id, tx.transaction_id FROM transaction tx "
                                 "JOIN fee f on tx.id = f.transaction_id "
@@ -453,7 +455,8 @@ class DatabaseInsert(DatabaseBase):
                         raise RuntimeError("expected a confirmed transaction for fee transaction")
                     if isinstance(confirmed_transaction, RejectedDeploy):
                         rejected_deployment = cast(RejectedDeployment, confirmed_transaction.rejected)
-                        ref_transition_id = transaction.fee.transition.id
+                        fee = cast(Fee, transaction.fee)
+                        ref_transition_id = fee.transition.id
                         await cur.execute(
                             "SELECT tx.id, tx.transaction_id FROM transaction tx "
                             "JOIN fee f on tx.id = f.transaction_id "
@@ -469,7 +472,7 @@ class DatabaseInsert(DatabaseBase):
                                 "UPDATE transaction SET transaction_id = %s, original_transaction_id = %s, type = 'Fee' WHERE id = %s",
                                 (str(transaction.id), original_transaction_id, transaction_db_id)
                             )
-                            await DatabaseInsert._insert_deploy_transaction(conn, redis, rejected_deployment.deploy, rejected_deployment.program_owner, transaction.fee, transaction_db_id, is_rejected=True, fee_should_exist=True)
+                            await DatabaseInsert._insert_deploy_transaction(conn, redis, rejected_deployment.deploy, rejected_deployment.program_owner, fee, transaction_db_id, is_rejected=True, fee_should_exist=True)
 
                     elif isinstance(confirmed_transaction, RejectedExecute):
                         rejected_execution = cast(RejectedExecution, confirmed_transaction.rejected)
@@ -489,7 +492,7 @@ class DatabaseInsert(DatabaseBase):
                                 "UPDATE transaction SET transaction_id = %s, original_transaction_id = %s, type = 'Fee' WHERE id = %s",
                                 (str(transaction.id), original_transaction_id, transaction_db_id)
                             )
-                            await DatabaseInsert._insert_execute_transaction(conn, redis, rejected_execution.execution, transaction.fee, transaction_db_id, is_rejected=True, ts_should_exist=True)
+                            await DatabaseInsert._insert_execute_transaction(conn, redis, rejected_execution.execution, cast(Fee, transaction.fee), transaction_db_id, is_rejected=True, ts_should_exist=True)
 
                 if not prior_tx:
                     await cur.execute(
@@ -505,20 +508,20 @@ class DatabaseInsert(DatabaseBase):
 
                 if isinstance(transaction, DeployTransaction): # accepted deploy / unconfirmed
                     await DatabaseInsert._insert_deploy_transaction(
-                        conn, redis, transaction.deployment, transaction.owner, transaction.fee, transaction_db_id,
+                        conn, redis, transaction.deployment, transaction.owner, cast(Fee, transaction.fee), transaction_db_id,
                         is_unconfirmed=(confirmed_transaction is None)
                     )
 
                 elif isinstance(transaction, ExecuteTransaction): # accepted execute / unconfirmed
-                    await DatabaseInsert._insert_execute_transaction(conn, redis, transaction.execution, transaction.fee.value, transaction_db_id)
+                    await DatabaseInsert._insert_execute_transaction(conn, redis, transaction.execution, cast(Option[Fee], transaction.fee).value, transaction_db_id)
 
                 elif isinstance(transaction, FeeTransaction) and not prior_tx: # first seen rejected tx
                     if isinstance(confirmed_transaction, RejectedDeploy):
                         rejected_deployment = cast(RejectedDeployment, confirmed_transaction.rejected)
-                        await DatabaseInsert._insert_deploy_transaction(conn, redis, rejected_deployment.deploy, rejected_deployment.program_owner, transaction.fee, transaction_db_id, is_rejected=True)
+                        await DatabaseInsert._insert_deploy_transaction(conn, redis, rejected_deployment.deploy, rejected_deployment.program_owner, cast(Fee, transaction.fee), transaction_db_id, is_rejected=True)
                     elif isinstance(confirmed_transaction, RejectedExecute):
                         rejected_execution = cast(RejectedExecution, confirmed_transaction.rejected)
-                        await DatabaseInsert._insert_execute_transaction(conn, redis, rejected_execution.execution, transaction.fee, transaction_db_id, is_rejected=True)
+                        await DatabaseInsert._insert_execute_transaction(conn, redis, rejected_execution.execution, cast(Fee, transaction.fee), transaction_db_id, is_rejected=True)
 
             # confirming tx
             if confirmed_transaction is not None:
@@ -1119,6 +1122,7 @@ class DatabaseInsert(DatabaseBase):
                         "credits.aleo:bonded",
                         "credits.aleo:committee",
                         "address_stake_reward",
+                        "address_puzzle_reward",
                         "address_transfer_in",
                         "address_transfer_out",
                         "address_fee",
@@ -1278,7 +1282,8 @@ class DatabaseInsert(DatabaseBase):
                                     # async with cur.copy("COPY dag_vertex_transmission_id (vertex_id, type, index, commitment, transaction_id) FROM STDIN") as copy:
                                     #     for row in tid_copy_data:
                                     #         await copy.write_row(row)
-
+                        else:
+                            raise NotImplementedError
                         if subdag_copy_data:
                             async with cur.copy(
                                 "COPY dag_vertex (authority_id, round, batch_id, "
@@ -1392,45 +1397,41 @@ class DatabaseInsert(DatabaseBase):
 
                         if block.solutions.value is not None:
                             prover_solutions = block.solutions.value.solutions
-                            solutions: list[tuple[ProverSolution, int, int]] = []
+                            solutions: list[tuple[Solution, int, int]] = []
                             prover_solutions_target = list(zip(
                                 prover_solutions,
-                                [prover_solution.partial_solution.commitment.to_target() for prover_solution
-                                 in prover_solutions]
+                                [solution.target for solution in prover_solutions]
                             ))
                             target_sum = sum(target for _, target in prover_solutions_target)
                             for prover_solution, target in prover_solutions_target:
                                 solutions.append((prover_solution, target, puzzle_reward * target // target_sum))
 
                             await cur.execute(
-                                "INSERT INTO coinbase_solution (block_id, target_sum) "
+                                "INSERT INTO puzzle_solution (block_id, target_sum) "
                                 "VALUES (%s, %s) RETURNING id",
                                 (block_db_id, target_sum)
                             )
                             if (res := await cur.fetchone()) is None:
                                 raise RuntimeError("failed to insert row into database")
-                            coinbase_solution_db_id = res["id"]
-                            copy_data: list[tuple[None, int, str, u64, str, int, int, str, bool]] = []
-                            for prover_solution, target, reward in solutions:
-                                partial_solution = prover_solution.partial_solution
+                            puzzle_solution_db_id = res["id"]
+                            copy_data: list[tuple[int, str, u64, int, int, str]] = []
+                            for solution, target, reward in solutions:
+                                solution: Solution
                                 # dag_vertex_db_id = dag_transmission_ids[0][str(partial_solution.commitment)]
                                 copy_data.append(
-                                    (None, coinbase_solution_db_id, str(partial_solution.address), partial_solution.nonce,
-                                     str(partial_solution.commitment), partial_solution.commitment.to_target(), reward,
-                                     str(prover_solution.proof.w.x), prover_solution.proof.w.y_is_positive)
+                                    (puzzle_solution_db_id, str(solution.address), solution.counter,
+                                     solution.target, reward, str(solution.epoch_hash))
                                 )
                                 if reward > 0:
-                                    address_puzzle_rewards[str(partial_solution.address)] += reward
+                                    address_puzzle_rewards[str(solution.address)] += reward
                             if not os.environ.get("DEBUG_SKIP_COINBASE"):
-                                async with cur.copy("COPY prover_solution (dag_vertex_id, coinbase_solution_id, address, nonce, commitment, target, reward, proof_x, proof_y_is_positive) FROM STDIN") as copy:
+                                async with cur.copy("COPY solution (puzzle_solution_id, address, counter, target, reward, epoch_hash) FROM STDIN") as copy:
                                     for row in copy_data:
                                         await copy.write_row(row)
                                 for address, reward in address_puzzle_rewards.items():
-                                    await cur.execute(
-                                        "INSERT INTO address_puzzle_reward (address, total_reward) VALUES (%s, %s) "
-                                        "ON CONFLICT (address) DO UPDATE SET total_reward = total_reward + %s",
-                                        (address, reward, reward)
-                                    )
+                                    pipe = self.redis.pipeline()
+                                    pipe.hincrby("address_puzzle_reward", address, reward)
+                                    await pipe.execute()
 
                         for aborted in block.aborted_transactions_ids:
                             await cur.execute(
@@ -1498,10 +1499,9 @@ class DatabaseInsert(DatabaseBase):
 
     async def save_unconfirmed_transaction(self, transaction: Transaction):
         async with self.pool.connection() as conn:
-            async with conn.cursor() as cur:
-                if isinstance(transaction, FeeTransaction):
-                    raise RuntimeError("rejected transaction cannot be unconfirmed")
-                await self._insert_transaction(conn, self.redis, transaction)
+            if isinstance(transaction, FeeTransaction):
+                raise RuntimeError("rejected transaction cannot be unconfirmed")
+            await self._insert_transaction(conn, self.redis, transaction)
 
     async def save_feedback(self, contact: str, content: str):
         async with self.pool.connection() as conn:

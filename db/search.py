@@ -50,10 +50,8 @@ class DatabaseSearch(DatabaseBase):
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
-                    await cur.execute(
-                        "SELECT DISTINCT address FROM address_puzzle_reward WHERE address LIKE %s", (f"{address}%",)
-                    )
-                    res = set(map(lambda x: x['address'], await cur.fetchall()))
+                    puzzle_rewards = await self.redis.hgetall("address_puzzle_reward")
+                    res = set(filter(lambda x: x.startswith(address), puzzle_rewards.keys()))
                     await cur.execute(
                         "SELECT DISTINCT owner FROM program WHERE owner LIKE %s", (f"{address}%",)
                     )

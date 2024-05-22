@@ -3,8 +3,6 @@ import os
 import traceback
 from sys import stdout
 
-import api
-import webui
 from aleo_types import Block, BlockHash
 from db import Database
 from interpreter.interpreter import init_builtin_program
@@ -85,8 +83,8 @@ class Explorer:
             print(f"latest height: {self.latest_height}")
             self.node = Node(explorer_message=self.message, explorer_request=self.node_request)
             await self.node.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4133")))
-            _ = asyncio.create_task(webui.run())
-            _ = asyncio.create_task(api.run())
+            # _ = asyncio.create_task(webui.run())
+            # _ = asyncio.create_task(api.run())
             while True:
                 msg = await self.message_queue.get()
                 match msg.type:

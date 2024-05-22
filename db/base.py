@@ -21,6 +21,7 @@ except ImportError:
                 return await func(*args, **kwargs)
             return wrapper
         else:
+            func = cast(Callable[P, R], func)
             def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
                 return func(*args, **kwargs)
             return wrapper

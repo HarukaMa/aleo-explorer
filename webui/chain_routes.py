@@ -68,8 +68,7 @@ async def block_route(request: Request):
             css.append({
                 "address": solution["address"],
                 "address_trunc": solution["address"][:15] + "..." + solution["address"][-10:],
-                "nonce": solution["nonce"],
-                "commitment": solution["commitment"][:13] + "..." + solution["commitment"][-10:],
+                "counter": solution["counter"],
                 "target": solution["target"],
                 "reward": solution["reward"],
             })
