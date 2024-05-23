@@ -195,7 +195,7 @@ class LightNode:
             if time.time() - self.last_rest_query > 300:
                 self.last_rest_query = time.time()
                 try:
-                    r = await cast(aiohttp.ClientSession, self.aiohttp_session).get("/mainnet/peers/all/metrics")
+                    r = await cast(aiohttp.ClientSession, self.aiohttp_session).get("/testnet/peers/all/metrics")
                     if r.ok:
                         data = await r.json()
                         for p in data:
