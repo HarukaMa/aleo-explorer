@@ -838,7 +838,7 @@ class DatabaseBlock(DatabaseBase):
                 ss: list[Solution] = []
                 for solution in solutions:
                     ss.append(Solution(
-                        solution_id=solution["solution_id"],
+                        solution_id=solution["puzzle_solution_id"],
                         epoch_hash=solution["epoch_hash"],
                         address=Address.loads(solution["address"]),
                         counter=u64(solution["counter"]),

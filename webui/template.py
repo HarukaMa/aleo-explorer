@@ -1,6 +1,7 @@
 import datetime
 import functools
 import os
+import traceback
 from decimal import Decimal
 from typing import Callable, Coroutine, Any
 
@@ -93,6 +94,7 @@ def htmx_template(template: str):
                 for k, v in frame.f_locals.items():
                     msg += f"  {k} = {str(v)[:50]}{'...' if len(str(v)) > 50 else ''}\n"
                 print(msg)
+                traceback.print_exc()
                 raise HTTPException(status_code=550, detail=msg) from e
             if isinstance(result, tuple):
                 context, headers = result

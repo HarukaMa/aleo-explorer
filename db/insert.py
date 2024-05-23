@@ -1036,7 +1036,7 @@ class DatabaseInsert(DatabaseBase):
 
                 if account_mapping_id not in global_mapping_cache:
                     from interpreter.finalizer import mapping_cache_read
-                    global_mapping_cache[account_mapping_id] = await mapping_cache_read(cast(Database, self), "credits.aleo", "account")
+                    global_mapping_cache[account_mapping_id] = await mapping_cache_read(cast("Database", self), "credits.aleo", "account")
 
                 current_balances: dict[Field, dict[str, Any]] = global_mapping_cache[account_mapping_id]
 
@@ -1077,7 +1077,7 @@ class DatabaseInsert(DatabaseBase):
                     supply_tracker.mint(amount)
                     supply_tracker.tally_puzzle_reward(amount)
                 from interpreter.interpreter import execute_operations
-                await execute_operations(cast(Database, self), cur, operations)
+                await execute_operations(cast("Database", self), cur, operations)
 
     @staticmethod
     async def _backup_redis_hash_key(redis_conn: Redis[str], keys: list[str], height: int):
@@ -1136,7 +1136,7 @@ class DatabaseInsert(DatabaseBase):
                                 await cast("Database", self).get_latest_coinbase_target(),
                                 await cast("Database", self).get_latest_cumulative_proof_target()
                             )
-                            puzzle_reward = coinbase_reward // 2
+                            puzzle_reward = coinbase_reward * 2 // 3
 
                             await cur.execute("SELECT total_supply FROM block ORDER BY id DESC LIMIT 1")
                             if (res := await cur.fetchone()) is None:

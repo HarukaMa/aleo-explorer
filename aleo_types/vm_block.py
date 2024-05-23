@@ -2954,6 +2954,18 @@ class Transactions(Serializable):
     def __iter__(self):
         return iter(self.transactions)
 
+    @property
+    def total_priority_fee(self):
+        total = 0
+        for ctx in self:
+            tx = ctx.transaction
+            if isinstance(tx, (DeployTransaction, FeeTransaction)):
+                total += cast(Fee, tx.fee).amount[1]
+            elif isinstance(tx, ExecuteTransaction):
+                fee = cast(Option[Fee], tx.fee)
+                if fee.value is not None:
+                    total += fee.value.amount[1]
+        return total
 
 class BlockHeaderMetadata(Serializable):
     version = u8(1)
@@ -3279,8 +3291,14 @@ class SolutionID(Serializable):
         return cls(nonce=nonce)
 
     @classmethod
-    def loads(cls, data: int):
-        return cls(nonce=u64(data))
+    def loads(cls, data: str):
+        hrp, raw = aleo_explorer_rust.bech32_decode(data)
+        if hrp != "solution":
+            raise ValueError("invalid hrp")
+        return cls.load(BytesIO(raw))
+
+    def __str__(self):
+        return str(Bech32m(self.dump(), "solution"))
 
 
 class SolutionTransmissionID(TransmissionID):
@@ -3511,7 +3529,7 @@ class Block(Serializable):
         if self.solutions.value is None:
             combined_proof_target = 0
         else:
-            combined_proof_target = sum(s.to_target() for s in self.solutions.value.solutions)
+            combined_proof_target = sum(s.target for s in self.solutions.value.solutions)
 
         remaining_coinbase_target = max(0, last_coinbase_target - last_cumulative_proof_target)
         remaining_proof_target = min(combined_proof_target, remaining_coinbase_target)
@@ -3523,9 +3541,9 @@ class Block(Serializable):
 
         block_height_at_year_1 = 31536000 // 10
         annual_reward = starting_supply // 1000 * 50
-        block_reward = annual_reward // block_height_at_year_1 + coinbase_reward // 2
+        block_reward = annual_reward // block_height_at_year_1 + coinbase_reward // 3 + self.transactions.total_priority_fee
 
-        return block_reward, coinbase_reward
+        return block_reward, int(coinbase_reward)
 
     def get_epoch_number(self) -> int:
         return self.header.metadata.height // 256

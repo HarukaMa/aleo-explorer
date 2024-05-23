@@ -110,12 +110,11 @@ async def address_route(request: Request):
         raise HTTPException(status_code=404, detail="Address not found")
     if len(solutions) > 0:
         solution_count = await db.get_solution_count_by_address(address)
-        total_rewards, total_incentive = await db.get_puzzle_reward_by_address(address)
+        total_rewards = await db.get_puzzle_reward_by_address(address)
         speed, interval = await db.get_address_speed(address)
     else:
         solution_count = 0
         total_rewards = 0
-        total_incentive = 0
         speed = 0
         interval = 0
     program_count = await db.get_program_count_by_address(address)
@@ -229,7 +228,6 @@ async def address_route(request: Request):
         "solutions": recent_solutions,
         "programs": recent_programs,
         "total_rewards": total_rewards,
-        "total_incentive": total_incentive,
         "total_solutions": solution_count,
         "total_programs": program_count,
         "speed": speed,
