@@ -50,7 +50,7 @@ class DatabaseBase:
         try:
             self.pool = AsyncConnectionPool(
                 f"host={self.server} user={self.user} password={self.password} dbname={self.database} "
-                f"options=-csearch_path={self.schema}",
+                f"options=-csearch_path={self.schema} application_name=aleo-explorer",
                 kwargs={
                     "row_factory": dict_row,
                     "autocommit": True,
