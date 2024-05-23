@@ -1473,7 +1473,7 @@ ALTER SEQUENCE explorer.ratification_id_seq OWNED BY explorer.ratification.id;
 
 CREATE TABLE explorer.stats (
     name text NOT NULL,
-    value integer NOT NULL
+    value numeric(20,0) NOT NULL
 );
 
 
