@@ -1020,32 +1020,42 @@ class SonicVerifierKey(Serializable):
                    supported_degree=supported_degree, max_degree=max_degree)
 
 
-class VerifyingKey(Serializable):
-    version = u8(1)
+class CircuitVerifyingKey(Serializable):
 
-    # Skipping a layer of marlin::CircuitVerifyingKey
     def __init__(self, *, circuit_info: CircuitInfo, circuit_commitments: Vec[KZGCommitment, u64], id_: Vec[u8, FixedSize[32]]):
         self.circuit_info = circuit_info
         self.circuit_commitments = circuit_commitments
         self.id = id_
 
     def dump(self) -> bytes:
-        res = b""
-        res += self.version.dump()
-        res += self.circuit_info.dump()
-        res += self.circuit_commitments.dump()
-        res += self.id.dump()
-        return res
+        return self.circuit_info.dump() + self.circuit_commitments.dump() + self.id.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        circuit_info = CircuitInfo.load(data)
+        circuit_commitments = Vec[KZGCommitment, u64].load(data)
+        id_ = Vec[u8, FixedSize[32]].load(data)
+        return cls(circuit_info=circuit_info, circuit_commitments=circuit_commitments, id_=id_)
+
+
+class VerifyingKey(Serializable):
+    version = u8(1)
+
+    def __init__(self, *, verifying_key: CircuitVerifyingKey, num_variables: u64):
+        self.verifying_key = verifying_key
+        self.num_variables = num_variables
+
+    def dump(self) -> bytes:
+        return self.version.dump() + self.verifying_key.dump() + self.num_variables.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
         version = u8.load(data)
         if version != cls.version:
             raise ValueError("Invalid version")
-        circuit_info = CircuitInfo.load(data)
-        circuit_commitments = Vec[KZGCommitment, u64].load(data)
-        id_ = Vec[u8, FixedSize[32]].load(data)
-        return cls(circuit_info=circuit_info, circuit_commitments=circuit_commitments, id_=id_)
+        verifying_key = CircuitVerifyingKey.load(data)
+        num_variables = u64.load(data)
+        return cls(verifying_key=verifying_key, num_variables=num_variables)
 
 
 class KZGProof(Serializable):
