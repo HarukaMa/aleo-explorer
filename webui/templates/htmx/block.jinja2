@@ -43,7 +43,7 @@
             {{ block.header.metadata.cumulative_proof_target | format_number | safe }} ({{ (block.header.metadata.cumulative_proof_target / block.header.metadata.coinbase_target * 100) | format_number | safe }}% coinbase target reached)
         {% endcall %}
         {% call data_line("Coinbase reward") %}
-            {% if coinbase_reward %}{{ (coinbase_reward // 2) | format_aleo_credit | safe }}{% else %}-{% endif %}
+            {% if coinbase_reward %}{{ (coinbase_reward * 2 // 3) | format_aleo_credit | safe }}{% else %}-{% endif %}
         {% endcall %}
         {% call data_line("Total fee") %}
             {{ (total_base_fee + total_priority_fee + total_burnt_fee) | format_aleo_credit | safe }} Aleo credits
