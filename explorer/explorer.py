@@ -4,6 +4,7 @@ import traceback
 from sys import stdout
 
 from aleo_types import Block, BlockHash
+from api import api
 from db import Database
 from interpreter.interpreter import init_builtin_program
 from node import Node
@@ -87,7 +88,7 @@ class Explorer:
             self.node = Node(explorer_message=self.message, explorer_request=self.node_request)
             await self.node.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4133")))
             _ = asyncio.create_task(webui.run())
-            # _ = asyncio.create_task(api.run())
+            _ = asyncio.create_task(api.run())
             while True:
                 msg = await self.message_queue.get()
                 match msg.type:
