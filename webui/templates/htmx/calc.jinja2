@@ -6,6 +6,10 @@
         <h3>Calculator</h3>
 
         <p>
+            <strong>The calculator below is disabled as more data is needed on new Testnet Beta.</strong>
+        </p>
+
+        <p>
             The network difficulty is constantly changing, so the calculation below cannot be used as earning prediction.
             <br>
             "Average credit per day" assumes 2 credit per solution on average<span class="sup">*</span>.
@@ -22,18 +26,18 @@
             </div>
             <div class="grid-x grid-padding-x">
                 <div class="cell small-2">
-                    <label for="proof_input" class="text-right middle">Prover speed: </label>
+                    <label for="proof_input" class="text-right middle">Prover solution rate: </label>
                 </div>
                 <div class="cell small-2">
                     <div class="input-group">
                         <input class="input-group-field" id="proof_input" type="number" name="ps" placeholder="">
-                        <span class="input-group-label">c/s</span>
+                        <span class="input-group-label">s/s</span>
                     </div>
                 </div>
             </div>
             <div class="grid-x grid-padding-x">
                 <div class="cell small-3 small-offset-2">
-                    <button class="button" value="Calculate" onclick="calculate(event)">Calculate</button>
+                    <button class="button" value="Calculate" onclick="calculate(event)" disabled>Calculate</button>
                 </div>
             </div>
         </form>

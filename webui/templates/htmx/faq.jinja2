@@ -14,29 +14,32 @@
             <li>An address deploys a program</li>
             <li>An address receives public credits</li>
             <li>An address appears in any public or finalize input</li>
+            <li>Other actions that include the address publicly</li>
         </ul>
         <p>
             The explorer could only track what's included in the blocks, so if your address hasn't interacted with the
             blockchain in the above situations, you won't find it in the explorer.</p>
         <br>
 
-        <h4>What exactly is "c/s"?</h4>
-        <p>If the
-            <span data-tippy-content='commitments per second, also known as "p/s" or "s/s"'>tooltip</span> can't satisfy you:
+        <h4>What exactly is "s/s"?</h4>
+        <p>
+            With the release of Testnet Beta, snarkVM has added a new flexible coinbase puzzle system, which allows
+            easier switches between puzzle contents when necessary. As the underlying algorithm could be different during
+            different time periods, the explorer now uses "s/s" (solutions per second) to represent the computing power
+            of provers and the network.
         </p>
         <p>
-            When solving a coinbase puzzle, the prover is actually grinding KZG10 commitments (you can read more about KZG10
+            During testnet3, the prover was grinding KZG10 commitments (you can read more about KZG10
             <a href="https://taoa.io/posts/Understanding-KZG10-Polynomial-Commitments" target="_blank">here</a>). In the complete scheme
             of KZG10 PCS, the prover would generate a commitment, then a proof of the evaluation. However, as the hashed
             value of the commitment is used to check if a solution is valid, the prover will skip the proof generation
             if the commitment doesn't satisfy the network requirement, and will continue to try the next nonce value.
-            This is why the explorer is using "c/s" to represent the computing power of the address.
+            This is why the explorer (and most provers) was using "c/s" to represent the computing power of the address.
         </p>
         <p>
-            "p/s" was "invented" during testnet2, as at that time the miners were grinding Marlin proofs instead. "s/s"
-            simply means "solutions per second" (which is also correct if you take "solutions" as "partial solutions").
-            Those units are also being used by different provers and websites, but they all should represent the same
-            thing.
+            "p/s" was "invented" during testnet2, as at that time the miners were grinding Marlin proofs instead.
+            Those units are also being used by different provers and websites, but they are outdated and could have
+            different meanings depending on the context.
         </p>
         <br>
 
