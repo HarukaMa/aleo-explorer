@@ -3303,7 +3303,7 @@ ALTER TABLE ONLY explorer.authority
 --
 
 ALTER TABLE ONLY explorer.block_aborted_solution_id
-    ADD CONSTRAINT block_aborted_solution_id_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id);
+    ADD CONSTRAINT block_aborted_solution_id_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id) ON DELETE CASCADE;
 
 
 --
@@ -3423,7 +3423,7 @@ ALTER TABLE ONLY explorer.finalize_operation_remove_mapping
 --
 
 ALTER TABLE ONLY explorer.finalize_operation_replace_mapping
-    ADD CONSTRAINT finalize_operation_replace_mapping_finalize_operation_id_fk FOREIGN KEY (finalize_operation_id) REFERENCES explorer.finalize_operation(id);
+    ADD CONSTRAINT finalize_operation_replace_mapping_finalize_operation_id_fk FOREIGN KEY (finalize_operation_id) REFERENCES explorer.finalize_operation(id) ON DELETE CASCADE;
 
 
 --
