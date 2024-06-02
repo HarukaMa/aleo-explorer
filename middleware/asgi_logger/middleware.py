@@ -125,7 +125,7 @@ class AccessLogAtoms(dict):
                 "D": int(request_time * 1_000_000),
                 "L": f"{request_time:.6f}",
                 "p": f"<{os.getpid()}>",
-                "htmx": self["{HX-Request}i"],
+                "htmx": self.get("{HX-Request}i", False),
             }
         )
 

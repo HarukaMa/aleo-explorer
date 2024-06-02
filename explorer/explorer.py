@@ -10,6 +10,7 @@ from interpreter.interpreter import init_builtin_program
 from node import Node
 # from node.light_node import LightNodeState
 from node.testnet import Testnet as Network
+from webapi import webapi
 from webui import webui
 from .types import Request, Message, ExplorerRequest
 
@@ -87,6 +88,7 @@ class Explorer:
             print(f"latest height: {self.latest_height}")
             self.node = Node(explorer_message=self.message, explorer_request=self.node_request)
             await self.node.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4133")))
+            _ = asyncio.create_task(webapi.run())
             _ = asyncio.create_task(webui.run())
             _ = asyncio.create_task(api.run())
             while True:
