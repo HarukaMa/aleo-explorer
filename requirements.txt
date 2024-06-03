@@ -1,12 +1,13 @@
-aiohttp~=3.9.0
+aiohttp~=3.9.2
 jinja2~=3.1.2
 psycopg[binary,pool]~=3.1.9
 python-dotenv~=1.0.0
 requests~=2.31.0
-starlette~=0.28.0
+starlette~=0.36.2
 uvicorn~=0.22.0
 python_multipart~=0.0.6
 minify-html~=0.11.1
 asgiref~=3.7.2
 redis[hiredis]~=5.0.1
 types-redis~=4.6.0
+simplejson~=3.19.2

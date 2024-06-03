@@ -10,7 +10,6 @@ from dotenv import load_dotenv
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 from db import Database
@@ -18,7 +17,9 @@ from middleware.asgi_logger import AccessLoggerMiddleware
 from middleware.auth import AuthMiddleware
 from middleware.server_timing import ServerTimingMiddleware
 from util.set_proc_title import set_proc_title
+from .block_routes import recent_blocks_route
 from .error_routes import bad_request, not_found, internal_error
+from .utils import out_of_sync_check, SJSONResponse
 
 load_dotenv()
 
@@ -36,10 +37,18 @@ class UvicornServer(multiprocessing.Process):
         self.server.run()
 
 async def index_route(request: Request):
-    return JSONResponse({"hello": "world"})
+    return SJSONResponse({"hello": "world"})
+
+async def sync_info_route(request: Request):
+    db = request.app.state.db
+    sync_info = await out_of_sync_check(request.app.state.session, db)
+    return SJSONResponse(sync_info)
 
 routes = [
     Route("/", index_route),
+    Route("/sync", sync_info_route),
+
+    Route("/block/recent", recent_blocks_route),
 ]
 
 exc_handlers = {
@@ -76,7 +85,7 @@ app = Starlette(
     middleware=[
         Middleware(AccessLoggerMiddleware, format=log_format),
         Middleware(ServerTimingMiddleware),
-        Middleware(AuthMiddleware, token=os.environ.get("WEBAPI_TOKEN")),
+        Middleware(AuthMiddleware, token=os.environ.get("WEBAPI_TOKEN", "")),
     ]
 )
 

@@ -1127,13 +1127,13 @@ class DatabaseBlock(DatabaseBase):
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_recent_blocks_fast(self):
+    async def get_recent_blocks_fast(self, limit: int = 30):
         async with self.pool.connection() as conn:
             try:
                 latest_height = await self.get_latest_height()
                 if latest_height is None:
                     raise RuntimeError("no blocks in database")
-                return await DatabaseBlock._get_fast_block_range(latest_height, latest_height - 30, conn)
+                return await DatabaseBlock._get_fast_block_range(latest_height, latest_height - limit, conn)
             except Exception as e:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise

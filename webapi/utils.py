@@ -1,11 +1,27 @@
 import asyncio
 import os
 import time
+from typing import Any
 
 import aiohttp
+import simplejson
+from starlette.responses import Response
 
 from db import Database
 
+
+class SJSONResponse(Response):
+    media_type = "application/json"
+
+    def render(self, content: Any):
+        return simplejson.dumps(
+            content,
+            ensure_ascii=False,
+            allow_nan=False,
+            indent=None,
+            separators=(",", ":"),
+            use_decimal=True
+        ).encode("utf-8")
 
 async def get_remote_height(session: aiohttp.ClientSession, rpc_root: str) -> str:
     try:
