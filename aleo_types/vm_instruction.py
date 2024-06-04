@@ -354,6 +354,7 @@ class Operand(EnumBaseSerialize, Serialize, RustEnum):
         Signer = 3
         Caller = 4
         BlockHeight = 5
+        NetworkID = 6
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -370,6 +371,8 @@ class Operand(EnumBaseSerialize, Serialize, RustEnum):
             return CallerOperand.load(data)
         elif type_ == cls.Type.BlockHeight:
             return BlockHeightOperand.load(data)
+        elif type_ == cls.Type.NetworkID:
+            return NetworkIDOperand.load(data)
         else:
             raise ValueError("unknown operand type")
 
@@ -455,6 +458,18 @@ class BlockHeightOperand(Operand):
     def load(cls, data: BytesIO):
         return cls()
 
+class NetworkIDOperand(Operand):
+    type = Operand.Type.NetworkID
+
+    def __init__(self):
+        pass
+
+    def dump(self) -> bytes:
+        return self.type.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        return cls()
 
 
 N = TypeVar("N", bound=FixedSize)

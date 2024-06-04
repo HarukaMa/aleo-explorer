@@ -261,8 +261,8 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
                     if not call_program:
                         raise RuntimeError("program not found")
 
-                    from interpreter.interpreter import _load_input_from_arguments
-                    call_inputs: list[Value] = _load_input_from_arguments(call_future.arguments)
+                    from interpreter.interpreter import load_input_from_arguments
+                    call_inputs: list[Value] = load_input_from_arguments(call_future.arguments)
                     operations.extend(
                         await execute_finalizer(db, cur, finalize_state, transition_id, call_program, call_future.function_name, call_inputs, mapping_cache, local_mapping_cache, allow_state_change)
                     )

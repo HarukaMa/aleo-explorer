@@ -30,7 +30,7 @@ async def _execute_public_fee(db: Database, cur: psycopg.AsyncCursor[dict[str, A
     if not program:
         raise RuntimeError("program not found")
 
-    inputs: list[Value] = _load_input_from_arguments(future.arguments)
+    inputs: list[Value] = load_input_from_arguments(future.arguments)
     return await execute_finalizer(db, cur, finalize_state, fee_transition.id, program, future.function_name, inputs,
                                    mapping_cache, local_mapping_cache, allow_state_change)
 
@@ -65,7 +65,7 @@ async def finalize_deploy(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]]
         rejected_reason = "(detailed reason not available)"
     return expected_operations, operations, rejected_reason
 
-def _load_input_from_arguments(arguments: list[Argument]) -> list[Value]:
+def load_input_from_arguments(arguments: list[Argument]) -> list[Value]:
     inputs: list[Value] = []
     for argument in arguments:
         if isinstance(argument, PlaintextArgument):
@@ -116,7 +116,7 @@ async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]
             if not program:
                 raise RuntimeError("program not found")
 
-            inputs: list[Value] = _load_input_from_arguments(future.arguments)
+            inputs: list[Value] = load_input_from_arguments(future.arguments)
             try:
                 operations.extend(
                     await execute_finalizer(db, cur, finalize_state, transition.id, program, future.function_name, inputs, mapping_cache, local_mapping_cache, allow_state_change)

@@ -1,5 +1,7 @@
 from aleo_types import *
+from node.testnet import Testnet as Network
 from .environment import Registers
+
 
 class FinalizeState:
     def __init__(self, block: Block):
@@ -46,6 +48,20 @@ def load_plaintext_from_operand(operand: Operand, registers: Registers, finalize
             literal=Literal(
                 type_=Literal.Type.U32,
                 primitive=finalize_state.block_height
+            )
+        )
+    elif isinstance(operand, ProgramIDOperand):
+        return LiteralPlaintext(
+            literal=Literal(
+                type_=Literal.Type.Address,
+                primitive=Address.loads(aleo_explorer_rust.program_id_to_address(str(operand.program_id)))
+            )
+        )
+    elif isinstance(operand, NetworkIDOperand):
+        return LiteralPlaintext(
+            literal=Literal(
+                type_=Literal.Type.U16,
+                primitive=Network.network_id
             )
         )
     else:
