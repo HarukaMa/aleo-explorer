@@ -3,3 +3,4 @@ starlette~=0.20.3
 uvicorn~=0.18.2
 requests~=2.28.0
 python-dotenv~=0.20.0
+anyio>=4.4.0 # not directly required, pinned by Snyk to avoid a vulnerability
