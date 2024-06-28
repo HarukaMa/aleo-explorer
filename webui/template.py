@@ -65,11 +65,22 @@ def format_aleo_credit(mc: int | Decimal):
         return "-"
     return format_number(Decimal(mc) / 1_000_000, 6)
 
+def network_tag(_: str):
+    names = {
+        "testnet": "Testnet Beta",
+        "canary": "Canary",
+    }
+    network = os.environ.get("NETWORK", "unknown")
+    if network not in names:
+        return network
+    return names[network]
+
 templates.env.filters["get_env"] = get_env # type: ignore
 templates.env.filters["format_time"] = format_time # type: ignore
 templates.env.filters["format_time_delta"] = format_time_delta # type: ignore
 templates.env.filters["format_aleo_credit"] = format_aleo_credit # type: ignore
 templates.env.filters["format_number"] = format_number # type: ignore
+templates.env.filters["network_tag"] = network_tag # type: ignore
 
 def htmx_template(template: str):
     def decorator(func: Callable[[Request], Coroutine[Any, Any, dict[str, Any]]]):
