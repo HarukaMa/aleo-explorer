@@ -28,6 +28,6 @@ class Testnet:
     deployment_fee_multiplier = 1000
     synthesis_fee_multiplier = 25
 
-    ans_registry = "aleo_name_service_registry_v3.aleo"
+    ans_registry = "aleo_name_service_registry_v1.aleo"
 
     restrictions_id = Field(7562506206353711030068167991213732850758501012603348777370400520506564970105)
