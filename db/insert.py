@@ -1443,11 +1443,11 @@ class DatabaseInsert(DatabaseBase):
                                 solution: Solution
                                 # dag_vertex_db_id = dag_transmission_ids[0][str(partial_solution.commitment)]
                                 copy_data.append(
-                                    (puzzle_solution_db_id, str(solution.address), solution.counter,
-                                     solution.target, reward, str(solution.epoch_hash))
+                                    (puzzle_solution_db_id, str(solution.partial_solution.address), solution.partial_solution.counter,
+                                     solution.target, reward, str(solution.partial_solution.epoch_hash))
                                 )
                                 if reward > 0:
-                                    address_puzzle_rewards[str(solution.address)] += reward
+                                    address_puzzle_rewards[str(solution.partial_solution.address)] += reward
                             if not os.environ.get("DEBUG_SKIP_COINBASE"):
                                 async with cur.copy("COPY solution (puzzle_solution_id, address, counter, target, reward, epoch_hash) FROM STDIN") as copy:
                                     for row in copy_data:
@@ -1518,7 +1518,7 @@ class DatabaseInsert(DatabaseBase):
                                 "WHERE m.program_id = 'credits.aleo' AND m.mapping = 'account'"
                             )
                             account_data = await cur.fetchall()
-                            res: list[tuple[str, str]] = []
+                            values: list[tuple[str, str]] = []
                             for ad in account_data:
                                 key = str(Plaintext.load(BytesIO(ad["key"])))
                                 value = Value.load(BytesIO(ad["value"]))
@@ -1537,9 +1537,9 @@ class DatabaseInsert(DatabaseBase):
                                         s = str(plaintext)
                                 else:
                                     s = str(value)
-                                res.append((key, s))
+                                values.append((key, s))
 
-                            write_mapping_debug(sorted(res, key=lambda x: x[0]), f"/tmp/mapping_debug/{block.height}/self/account")
+                            write_mapping_debug(sorted(values, key=lambda x: x[0]), f"/tmp/mapping_debug/{block.height}/self/account")
 
 
                         await cur.execute(

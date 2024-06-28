@@ -3,7 +3,7 @@
 --
 
 -- Dumped from database version 15.4 (Debian 15.4-3)
--- Dumped by pg_dump version 16.0
+-- Dumped by pg_dump version 16.3
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -21,6 +21,20 @@ SET row_security = off;
 --
 
 CREATE SCHEMA explorer;
+
+
+--
+-- Name: hint_plan; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA hint_plan;
+
+
+--
+-- Name: pg_hint_plan; Type: EXTENSION; Schema: -; Owner: -
+--
+
+CREATE EXTENSION IF NOT EXISTS pg_hint_plan WITH SCHEMA hint_plan;
 
 
 --
@@ -518,7 +532,8 @@ CREATE TABLE explorer.committee_history_member (
     committee_id integer NOT NULL,
     address text NOT NULL,
     stake numeric(20,0) NOT NULL,
-    is_open boolean NOT NULL
+    is_open boolean NOT NULL,
+    commission integer NOT NULL
 );
 
 
@@ -3303,7 +3318,7 @@ ALTER TABLE ONLY explorer.authority
 --
 
 ALTER TABLE ONLY explorer.block_aborted_solution_id
-    ADD CONSTRAINT block_aborted_solution_id_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id) ON DELETE CASCADE;
+    ADD CONSTRAINT block_aborted_solution_id_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id);
 
 
 --
@@ -3423,7 +3438,7 @@ ALTER TABLE ONLY explorer.finalize_operation_remove_mapping
 --
 
 ALTER TABLE ONLY explorer.finalize_operation_replace_mapping
-    ADD CONSTRAINT finalize_operation_replace_mapping_finalize_operation_id_fk FOREIGN KEY (finalize_operation_id) REFERENCES explorer.finalize_operation(id) ON DELETE CASCADE;
+    ADD CONSTRAINT finalize_operation_replace_mapping_finalize_operation_id_fk FOREIGN KEY (finalize_operation_id) REFERENCES explorer.finalize_operation(id);
 
 
 --

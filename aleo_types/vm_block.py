@@ -3059,14 +3059,13 @@ class BlockHeader(Serializable):
                    solutions_root=solutions_root, subdag_root=subdag_root, metadata=metadata)
 
 
-class Solution(Serializable):
+class PartialSolution(Serializable):
 
     def __init__(self, *, solution_id: SolutionID, epoch_hash: BlockHash, address: Address, counter: u64):
         self.solution_id = solution_id
         self.epoch_hash = epoch_hash
         self.address = address
         self.counter = counter
-        self._target: Optional[u64] = None
 
     def dump(self) -> bytes:
         return self.epoch_hash.dump() + self.address.dump() + self.counter.dump()
@@ -3079,11 +3078,21 @@ class Solution(Serializable):
         solution_id = SolutionID.load(BytesIO(aleo_explorer_rust.solution_to_id(str(epoch_hash), str(address), counter)))
         return cls(solution_id=solution_id, epoch_hash=epoch_hash, address=address, counter=counter)
 
-    @property
-    def target(self) -> u64:
-        if self._target is None:
-            self._target = u64(aleo_explorer_rust.solution_to_target(self.dump()))
-        return self._target
+
+class Solution(Serializable):
+
+    def __init__(self, *, partial_solution: PartialSolution, target: u64):
+        self.partial_solution = partial_solution
+        self.target = target
+
+    def dump(self) -> bytes:
+        return self.partial_solution.dump() + self.target.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        partial_solution = PartialSolution.load(data)
+        target = u64.load(data)
+        return cls(partial_solution=partial_solution, target=target)
 
 
 class PuzzleSolutions(Serializable):
