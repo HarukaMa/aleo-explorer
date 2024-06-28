@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from asyncio import iscoroutinefunction
 from typing import Awaitable, ParamSpec
 
@@ -50,7 +51,7 @@ class DatabaseBase:
         try:
             self.pool = AsyncConnectionPool(
                 f"host={self.server} user={self.user} password={self.password} dbname={self.database} "
-                f"options=-csearch_path={self.schema} application_name=aleo-explorer",
+                f"options=-csearch_path={self.schema} application_name=aleo-explorer-{os.environ.get('NETWORK', 'unknown')}",
                 kwargs={
                     "row_factory": dict_row,
                     "autocommit": True,
