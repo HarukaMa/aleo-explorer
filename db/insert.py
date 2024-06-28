@@ -144,6 +144,57 @@ class DatabaseInsert(DatabaseBase):
                     raise NotImplementedError
 
     @staticmethod
+    async def _update_address_stats(redis_conn: Redis[str], transaction: Transaction):
+
+        if isinstance(transaction, DeployTransaction):
+            transitions = [cast(Fee, transaction.fee).transition]
+        elif isinstance(transaction, ExecuteTransaction):
+            transitions = list(transaction.execution.transitions)
+            fee = cast(Option[Fee], transaction.fee)
+            if fee.value is not None:
+                transitions.append(fee.value.transition)
+        elif isinstance(transaction, FeeTransaction):
+            transitions = [cast(Fee, transaction.fee).transition]
+        else:
+            raise NotImplementedError
+
+        for transition in transitions:
+            if transition.program_id == "credits.aleo":
+                transfer_from = None
+                transfer_to = None
+                fee_from = None
+                if str(transition.function_name) in ("transfer_public", "transfer_public_as_signer"):
+                    output = cast(FutureTransitionOutput, transition.outputs[0])
+                    future = cast(Future, output.future.value)
+                    transfer_from = str(DatabaseUtil.get_primitive_from_argument_unchecked(future.arguments[0]))
+                    transfer_to = str(DatabaseUtil.get_primitive_from_argument_unchecked(future.arguments[1]))
+                    amount = int(cast(u64, DatabaseUtil.get_primitive_from_argument_unchecked(future.arguments[2])))
+                elif transition.function_name == "transfer_private_to_public":
+                    output = cast(FutureTransitionOutput, transition.outputs[1])
+                    future = cast(Future, output.future.value)
+                    transfer_to = str(DatabaseUtil.get_primitive_from_argument_unchecked(future.arguments[0]))
+                    amount = int(cast(u64, DatabaseUtil.get_primitive_from_argument_unchecked(future.arguments[1])))
+                elif transition.function_name == "transfer_public_to_private":
+                    output = cast(FutureTransitionOutput, transition.outputs[1])
+                    future = cast(Future, output.future.value)
+                    transfer_from = str(DatabaseUtil.get_primitive_from_argument_unchecked(future.arguments[0]))
+                    amount = int(cast(u64, DatabaseUtil.get_primitive_from_argument_unchecked(future.arguments[1])))
+                elif transition.function_name == "fee_public":
+                    output = cast(FutureTransitionOutput, transition.outputs[0])
+                    future = cast(Future, output.future.value)
+                    fee_from = str(DatabaseUtil.get_primitive_from_argument_unchecked(future.arguments[0]))
+                    amount = int(cast(u64, DatabaseUtil.get_primitive_from_argument_unchecked(future.arguments[1])))
+
+                if transfer_from != transfer_to:
+                    if transfer_from is not None:
+                        await redis_conn.hincrby("address_transfer_out", transfer_from, amount) # type: ignore
+                    if transfer_to is not None:
+                        await redis_conn.hincrby("address_transfer_in", transfer_to, amount) # type: ignore
+
+                if fee_from is not None:
+                    await redis_conn.hincrby("address_fee", fee_from, amount) # type: ignore
+
+    @staticmethod
     async def _insert_transition(conn: psycopg.AsyncConnection[dict[str, Any]], redis_conn: Redis[str],
                                  exe_tx_db_id: Optional[int], fee_db_id: Optional[int],
                                  transition: Transition, ts_index: int, is_rejected: bool = False, should_exist: bool = False):
@@ -283,40 +334,6 @@ class DatabaseInsert(DatabaseBase):
                 (program_db_id, str(transition.function_name))
             )
 
-            if not is_rejected and transition.program_id == "credits.aleo":
-                transfer_from = None
-                transfer_to = None
-                fee_from = None
-                if transition.function_name == "transfer_public":
-                    output = cast(FutureTransitionOutput, transition.outputs[0])
-                    future = cast(Future, output.future.value)
-                    transfer_from = str(DatabaseUtil.get_primitive_from_argument_unchecked(future.arguments[0]))
-                    transfer_to = str(DatabaseUtil.get_primitive_from_argument_unchecked(future.arguments[1]))
-                    amount = int(cast(int, DatabaseUtil.get_primitive_from_argument_unchecked(future.arguments[2])))
-                elif transition.function_name == "transfer_private_to_public":
-                    output = cast(FutureTransitionOutput, transition.outputs[1])
-                    future = cast(Future, output.future.value)
-                    transfer_to = str(DatabaseUtil.get_primitive_from_argument_unchecked(future.arguments[0]))
-                    amount = int(cast(int, DatabaseUtil.get_primitive_from_argument_unchecked(future.arguments[1])))
-                elif transition.function_name == "transfer_public_to_private":
-                    output = cast(FutureTransitionOutput, transition.outputs[1])
-                    future = cast(Future, output.future.value)
-                    transfer_from = str(DatabaseUtil.get_primitive_from_argument_unchecked(future.arguments[0]))
-                    amount = int(cast(int, DatabaseUtil.get_primitive_from_argument_unchecked(future.arguments[1])))
-                elif transition.function_name == "fee_public":
-                    output = cast(FutureTransitionOutput, transition.outputs[0])
-                    future = cast(Future, output.future.value)
-                    fee_from = str(DatabaseUtil.get_primitive_from_argument_unchecked(future.arguments[0]))
-                    amount = int(cast(int, DatabaseUtil.get_primitive_from_argument_unchecked(future.arguments[1])))
-
-                if transfer_from != transfer_to:
-                    if transfer_from is not None:
-                        await redis_conn.hincrby("address_transfer_out", transfer_from, amount) # type: ignore
-                    if transfer_to is not None:
-                        await redis_conn.hincrby("address_transfer_in", transfer_to, amount) # type: ignore
-
-                if fee_from is not None:
-                    await redis_conn.hincrby("address_fee", fee_from, amount) # type: ignore
 
     @staticmethod
     async def _insert_deploy_transaction(conn: psycopg.AsyncConnection[dict[str, Any]], redis: Redis[str],
@@ -502,7 +519,10 @@ class DatabaseInsert(DatabaseBase):
                                 "UPDATE transaction SET transaction_id = %s, original_transaction_id = %s, type = 'Fee' WHERE id = %s",
                                 (str(transaction.id), original_transaction_id, transaction_db_id)
                             )
-                            await DatabaseInsert._insert_execute_transaction(conn, redis, rejected_execution.execution, cast(Fee, transaction.fee), transaction_db_id, is_rejected=True, ts_should_exist=True)
+                            await DatabaseInsert._insert_execute_transaction(conn, redis, rejected_execution.execution,
+                                                                             cast(Fee, transaction.fee),
+                                                                             transaction_db_id, is_rejected=True,
+                                                                             ts_should_exist=True)
 
                 if not prior_tx:
                     await cur.execute(
@@ -523,7 +543,9 @@ class DatabaseInsert(DatabaseBase):
                     )
 
                 elif isinstance(transaction, ExecuteTransaction): # accepted execute / unconfirmed
-                    await DatabaseInsert._insert_execute_transaction(conn, redis, transaction.execution, cast(Option[Fee], transaction.fee).value, transaction_db_id)
+                    await DatabaseInsert._insert_execute_transaction(conn, redis, transaction.execution,
+                                                                     cast(Option[Fee], transaction.fee).value,
+                                                                     transaction_db_id)
 
                 elif isinstance(transaction, FeeTransaction) and not prior_tx: # first seen rejected tx
                     if isinstance(confirmed_transaction, RejectedDeploy):
@@ -531,7 +553,9 @@ class DatabaseInsert(DatabaseBase):
                         await DatabaseInsert._insert_deploy_transaction(conn, redis, rejected_deployment.deploy, rejected_deployment.program_owner, cast(Fee, transaction.fee), transaction_db_id, is_rejected=True)
                     elif isinstance(confirmed_transaction, RejectedExecute):
                         rejected_execution = cast(RejectedExecution, confirmed_transaction.rejected)
-                        await DatabaseInsert._insert_execute_transaction(conn, redis, rejected_execution.execution, cast(Fee, transaction.fee), transaction_db_id, is_rejected=True)
+                        await DatabaseInsert._insert_execute_transaction(conn, redis, rejected_execution.execution,
+                                                                         cast(Fee, transaction.fee), transaction_db_id,
+                                                                         is_rejected=True)
 
             # confirming tx
             if confirmed_transaction is not None:
@@ -565,6 +589,8 @@ class DatabaseInsert(DatabaseBase):
                         raise RuntimeError("expected a rejected reason for rejected transaction")
                     await cur.execute("UPDATE confirmed_transaction SET reject_reason = %s WHERE id = %s",
                                       (reject_reasons[ct_index], confirmed_transaction_db_id))
+
+                await DatabaseInsert._update_address_stats(redis, transaction)
 
     async def save_builtin_program(self, program: Program):
         async with self.pool.connection() as conn:
