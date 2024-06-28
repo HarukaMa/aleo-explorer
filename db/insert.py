@@ -42,6 +42,16 @@ class DatabaseInsert(DatabaseBase):
     def __init__(self, *args, **kwargs): # type: ignore
         super().__init__(*args, **kwargs)
         self.redis_last_history_time = time.monotonic() - 21600
+        self.redis_keys = [
+            "credits.aleo:bonded",
+            "credits.aleo:delegated",
+            "credits.aleo:committee",
+            "address_stake_reward",
+            "address_puzzle_reward",
+            "address_transfer_in",
+            "address_transfer_out",
+            "address_fee",
+        ]
 
     @staticmethod
     async def _insert_future(conn: psycopg.AsyncConnection[dict[str, Any]], future: Future,
@@ -620,31 +630,32 @@ class DatabaseInsert(DatabaseBase):
                 (program_db_id, str(function.name), inputs, input_modes, outputs, output_modes, finalizes)
             )
 
-    @staticmethod
     @profile
-    async def _update_committee_bonded_map(cur: psycopg.AsyncCursor[dict[str, Any]],
-                                           redis_conn: Redis[str],
-                                           committee_members: dict[Address, tuple[u64, bool_]],
-                                           stakers: dict[Address, tuple[Address, u64]],
-                                           height: int):
+    async def _update_committee_bonded_delegated_map(
+        self,
+        committee_members: dict[Address, tuple[u64, bool_, u8]],
+        stakers: dict[Address, tuple[Address, u64]],
+        delegated: dict[Address, u64],
+    ):
         committee_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "committee"))
         bonded_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "bonded"))
+        delegated_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "delegated"))
 
         global_mapping_cache[committee_mapping_id] = {}
-        committee_mapping: dict[str, dict[str, Any]] = {}
-        for address, (amount, is_open) in committee_members.items():
+        committee_mapping: dict[str, dict[str, str]] = {}
+        for address, (_, is_open, commission) in committee_members.items():
             key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=address))
             key_id = Field.loads(cached_get_key_id("credits.aleo", "committee", key.dump()))
             value = PlaintextValue(
                 plaintext=StructPlaintext(
                     members=Vec[Tuple[Identifier, Plaintext], u8]([
                         Tuple[Identifier, Plaintext]((
-                            Identifier.loads("microcredits"),
-                            LiteralPlaintext(literal=Literal(type_=Literal.Type.U64, primitive=amount))
-                        )),
-                        Tuple[Identifier, Plaintext]((
                             Identifier.loads("is_open"),
                             LiteralPlaintext(literal=Literal(type_=Literal.Type.Boolean, primitive=is_open))
+                        )),
+                        Tuple[Identifier, Plaintext]((
+                            Identifier.loads("commission"),
+                            LiteralPlaintext(literal=Literal(type_=Literal.Type.U8, primitive=commission))
                         ))
                     ])
                 )
@@ -657,13 +668,13 @@ class DatabaseInsert(DatabaseBase):
                 "key": key,
                 "value": value,
             }
-        await redis_conn.execute_command("MULTI")
-        await redis_conn.delete("credits.aleo:committee")
-        await redis_conn.hset("credits.aleo:committee", mapping={k: json.dumps(v) for k, v in committee_mapping.items()})
-        await redis_conn.execute_command("EXEC")
+        await self.redis.execute_command("MULTI")
+        await self.redis.delete("credits.aleo:committee")
+        await self.redis.hset("credits.aleo:committee", mapping={k: json.dumps(v) for k, v in committee_mapping.items()})
+        await self.redis.execute_command("EXEC")
 
         global_mapping_cache[bonded_mapping_id] = {}
-        bonded_mapping: dict[str, dict[str, Any]] = {}
+        bonded_mapping: dict[str, dict[str, str]] = {}
         for address, (validator, amount) in stakers.items():
             key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=address))
             key_id = Field.loads(cached_get_key_id("credits.aleo", "bonded", key.dump()))
@@ -688,14 +699,29 @@ class DatabaseInsert(DatabaseBase):
                 "key": key,
                 "value": value,
             }
-        await redis_conn.execute_command("MULTI")
-        await redis_conn.delete("credits.aleo:bonded")
-        await redis_conn.hset("credits.aleo:bonded", mapping={k: json.dumps(v) for k, v in bonded_mapping.items()})
-        await redis_conn.execute_command("EXEC")
-        # await cur.execute(
-        #     "INSERT INTO mapping_bonded_history (height, content) VALUES (%s, %s)",
-        #     (height, Jsonb(bonded_mapping))
-        # )
+        await self.redis.execute_command("MULTI")
+        await self.redis.delete("credits.aleo:bonded")
+        await self.redis.hset("credits.aleo:bonded", mapping={k: json.dumps(v) for k, v in bonded_mapping.items()})
+        await self.redis.execute_command("EXEC")
+
+        global_mapping_cache[delegated_mapping_id] = {}
+        delegated_mapping: dict[str, dict[str, str]] = {}
+        for validator, amount in delegated.items():
+            key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=validator))
+            key_id = Field.loads(cached_get_key_id("credits.aleo", "delegated", key.dump()))
+            value = PlaintextValue(plaintext=LiteralPlaintext(literal=Literal(type_=Literal.Type.U64, primitive=amount)))
+            delegated_mapping[str(key_id)] = {
+                "key": key.dump().hex(),
+                "value": value.dump().hex(),
+            }
+            global_mapping_cache[delegated_mapping_id][key_id] = {
+                "key": key,
+                "value": value,
+            }
+        await self.redis.execute_command("MULTI")
+        await self.redis.delete("credits.aleo:delegated")
+        await self.redis.hset("credits.aleo:delegated", mapping={k: json.dumps(v) for k, v in delegated_mapping.items()})
+        await self.redis.execute_command("EXEC")
 
     @staticmethod
     async def _save_committee_history(cur: psycopg.AsyncCursor[dict[str, Any]], height: int, committee: Committee):
@@ -707,25 +733,28 @@ class DatabaseInsert(DatabaseBase):
         if (res := await cur.fetchone()) is None:
             raise RuntimeError("failed to insert row into database")
         committee_db_id = res["id"]
-        for address, stake, is_open in committee.members:
+        for address, stake, is_open, commission in committee.members:
             await cur.execute(
-                "INSERT INTO committee_history_member (committee_id, address, stake, is_open) "
-                "VALUES (%s, %s, %s, %s)",
-                (committee_db_id, str(address), stake, bool(is_open))
+                "INSERT INTO committee_history_member (committee_id, address, stake, is_open, commission) "
+                "VALUES (%s, %s, %s, %s, %s)",
+                (committee_db_id, str(address), stake, bool(is_open), commission)
             )
+
+    @staticmethod
+    def _stakers_to_delegated(stakers: dict[Address, tuple[Address, u64]]):
+        delegated: dict[Address, u64] = {}
+        for validator, amount in stakers.values():
+            if validator in delegated:
+                delegated[validator] += amount
+            else:
+                delegated[validator] = amount
+        return delegated
 
     async def _pre_ratify(self, cur: psycopg.AsyncCursor[dict[str, Any]], ratification: GenesisRatify,
                           supply_tracker: _SupplyTracker):
         from interpreter.interpreter import global_mapping_cache
         committee = ratification.committee
         await DatabaseInsert._save_committee_history(cur, 0, committee)
-
-        bonded_balances = ratification.bonded_balances
-        stakers: dict[Address, tuple[Address, u64]] = {}
-        for staker, validator, _, amount in bonded_balances:
-            stakers[staker] = validator, amount
-        committee_members = {address: (amount, is_open) for address, amount, is_open in committee.members}
-        await DatabaseInsert._update_committee_bonded_map(cur, self.redis, committee_members, stakers, 0)
 
         account_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "account"))
         global_mapping_cache[account_mapping_id] = {}
@@ -735,6 +764,15 @@ class DatabaseInsert(DatabaseBase):
         global_mapping_cache[withdraw_mapping_id] = {}
         metadata_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "metadata"))
         global_mapping_cache[metadata_mapping_id] = {}
+
+        bonded_balances = ratification.bonded_balances
+        stakers: dict[Address, tuple[Address, u64]] = {}
+        for staker, validator, _, amount in bonded_balances:
+            stakers[staker] = validator, amount
+        delegated: dict[Address, u64] = self._stakers_to_delegated(stakers)
+
+        committee_members = {address: (amount, is_open, commission) for address, amount, is_open, commission in committee.members}
+        await self._update_committee_bonded_delegated_map(committee_members, stakers, delegated)
 
         public_balances = ratification.public_balances
         operations: list[dict[str, Any]] = []
@@ -762,39 +800,6 @@ class DatabaseInsert(DatabaseBase):
             supply_tracker.mint(balance)
 
         for staker, validator, withdrawal, amount in bonded_balances:
-            key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=staker))
-            key_id = Field.loads(cached_get_key_id("credits.aleo", "bonded", key.dump()))
-            k = Tuple[Identifier, Plaintext]((
-                Identifier.loads("validator"),
-                LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=validator))
-            ))
-            v = Tuple[Identifier, Plaintext]((
-                Identifier.loads("microcredits"),
-                LiteralPlaintext(literal=Literal(type_=Literal.Type.U64, primitive=amount))
-            ))
-            value = PlaintextValue(
-                plaintext=StructPlaintext(
-                    members=Vec[Tuple[Identifier, Plaintext], u8]([k, v])
-                )
-            )
-            value_id = Field.loads(aleo_explorer_rust.get_value_id(str(key_id), value.dump()))
-            global_mapping_cache[bonded_mapping_id][key_id] = {
-                "key": key,
-                "value": value,
-            }
-            operations.append({
-                "type": FinalizeOperation.Type.UpdateKeyValue,
-                "mapping_id": bonded_mapping_id,
-                "key_id": key_id,
-                "value_id": value_id,
-                "key": key,
-                "value": value,
-                "height": 0,
-                "program_name": "credits.aleo",
-                "mapping_name": "bonded",
-                "from_transaction": False,
-            })
-
             key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=staker))
             key_id = Field.loads(cached_get_key_id("credits.aleo", "withdraw", key.dump()))
             value = PlaintextValue(plaintext=LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=withdrawal)))
@@ -874,34 +879,33 @@ class DatabaseInsert(DatabaseBase):
         await execute_operations(cast("Database", self), cur, operations)
 
     @staticmethod
-    async def _get_committee_mapping(redis_conn: Redis[str]) -> dict[Address, tuple[u64, bool_]]:
+    async def _get_committee_mapping_unchecked(redis_conn: Redis[str]) -> dict[Address, tuple[bool_, u8]]:
         data = await redis_conn.hgetall("credits.aleo:committee")
-        committee_members: dict[Address, tuple[u64, bool_]] = {}
+        committee_members: dict[Address, tuple[bool_, u8]] = {}
         for d in data.values():
             d = json.loads(d)
-            key = Plaintext.load(BytesIO(bytes.fromhex(d["key"])))
-            if not isinstance(key, LiteralPlaintext):
-                raise RuntimeError("invalid committee key")
-            if not isinstance(key.literal.primitive, Address):
-                raise RuntimeError("invalid committee key")
-            value = Value.load(BytesIO(bytes.fromhex(d["value"])))
-            if not isinstance(value, PlaintextValue):
-                raise RuntimeError("invalid committee value")
-            plaintext = value.plaintext
-            if not isinstance(plaintext, StructPlaintext):
-                raise RuntimeError("invalid committee value")
-            amount = plaintext["microcredits"]
-            if not isinstance(amount, LiteralPlaintext):
-                raise RuntimeError("invalid committee value")
-            if not isinstance(amount.literal.primitive, u64):
-                raise RuntimeError("invalid committee value")
-            is_open = plaintext["is_open"]
-            if not isinstance(is_open, LiteralPlaintext):
-                raise RuntimeError("invalid committee value")
-            if not isinstance(is_open.literal.primitive, bool_):
-                raise RuntimeError("invalid committee value")
-            committee_members[key.literal.primitive] = amount.literal.primitive, is_open.literal.primitive
+            key = cast(LiteralPlaintext, Plaintext.load(BytesIO(bytes.fromhex(d["key"]))))
+            value = cast(PlaintextValue, Value.load(BytesIO(bytes.fromhex(d["value"]))))
+            plaintext = cast(StructPlaintext, value.plaintext)
+            is_open = cast(LiteralPlaintext, plaintext["is_open"])
+            commission = cast(LiteralPlaintext, plaintext["commission"])
+            committee_members[cast(Address, key.literal.primitive)] = (
+                cast(bool_, is_open.literal.primitive),
+                cast(u8, commission.literal.primitive),
+            )
         return committee_members
+
+    @staticmethod
+    async def _get_delegated_mapping_unchecked(redis_conn: Redis[str]) -> dict[Address, u64]:
+        data = await redis_conn.hgetall("credits.aleo:delegated")
+        delegators: dict[Address, u64] = {}
+        for d in data.values():
+            d = json.loads(d)
+            key = cast(LiteralPlaintext, Plaintext.load(BytesIO(bytes.fromhex(d["key"]))))
+            value = cast(PlaintextValue, Value.load(BytesIO(bytes.fromhex(d["value"]))))
+            plaintext = cast(LiteralPlaintext, value.plaintext)
+            delegators[cast(Address, key.literal.primitive)] = cast(u64, plaintext.literal.primitive)
+        return delegators
 
     async def get_bonded_mapping_unchecked(self) -> dict[Address, tuple[Address, u64]]:
         data = await self.redis.hgetall("credits.aleo:bonded")
@@ -922,7 +926,7 @@ class DatabaseInsert(DatabaseBase):
 
     @staticmethod
     @profile
-    def _check_committee_staker_match(committee_members: dict[Address, tuple[u64, bool_]],
+    def _check_committee_staker_match(committee_members: dict[Address, tuple[u64, bool_, u8]],
                                       stakers: dict[Address, tuple[Address, u64]]):
         address_stakes: dict[Address, u64] = defaultdict(lambda: u64())
         for _, (validator, amount) in stakers.items():
@@ -930,7 +934,7 @@ class DatabaseInsert(DatabaseBase):
         if len(address_stakes) != len(committee_members):
             raise RuntimeError("size mismatch between stakers and committee members")
 
-        committee_total_stake = sum(amount for amount, _ in committee_members.values())
+        committee_total_stake = sum(amount for amount, _, _ in committee_members.values())
         stakers_total_stake = sum(address_stakes.values())
         if committee_total_stake != stakers_total_stake:
             print(committee_total_stake, stakers_total_stake)
@@ -945,8 +949,8 @@ class DatabaseInsert(DatabaseBase):
 
     @staticmethod
     @profile
-    def _stake_rewards(committee_members: dict[Address, tuple[u64, bool_]],
-                       stakers: dict[Address, tuple[Address, u64]], block_reward: u64, supply_tracker: _SupplyTracker):
+    def _stake_rewards(committee_members: dict[Address, tuple[u64, bool_, u8]],
+                       stakers: dict[Address, tuple[Address, u64]], block_reward: u64):
         total_stake = sum(x[0] for x in committee_members.values())
         stake_rewards: dict[Address, int] = {}
         if not stakers or total_stake == 0 or block_reward == 0:
@@ -955,14 +959,24 @@ class DatabaseInsert(DatabaseBase):
         new_stakers: dict[Address, tuple[Address, u64]] = {}
 
         for staker, (validator, stake) in stakers.items():
+            if validator not in committee_members:
+                new_stakers[staker] = validator, stake
+                continue
             if committee_members[validator][0] > total_stake // 4:
                 new_stakers[staker] = validator, stake
                 continue
-            if stake < 10_000_000:
+            if stake < 10_000_000_000 and staker != validator:
                 new_stakers[staker] = validator, stake
                 continue
 
             reward = int(block_reward) * stake // total_stake
+            if staker == validator:
+                delegated_stake = committee_members[validator][0] - stake
+                commission = int(block_reward) * delegated_stake // total_stake * committee_members[validator][2] // 100
+                reward += commission
+            else:
+                commission = reward * committee_members[validator][2] // 100
+                reward -= commission
             stake_rewards[staker] = reward
 
             new_stake = stake + reward
@@ -972,15 +986,32 @@ class DatabaseInsert(DatabaseBase):
 
     @staticmethod
     @profile
-    def _next_committee_members(committee_members: dict[Address, tuple[u64, bool_]],
-                                stakers: dict[Address, tuple[Address, u64]]) -> dict[Address, tuple[u64, bool_]]:
+    def _next_committee_members(committee_members: dict[Address, tuple[u64, bool_, u8]],
+                                stakers: dict[Address, tuple[Address, u64]]) -> dict[Address, tuple[u64, bool_, u8]]:
         validators: dict[Address, u64] = defaultdict(lambda: u64())
         for _, (validator, amount) in stakers.items():
             validators[validator] += amount # type: ignore[reportGeneralTypeIssues]
-        new_committee_members: dict[Address, tuple[u64, bool_]] = {}
+        new_committee_members: dict[Address, tuple[u64, bool_, u8]] = {}
         for validator, amount in validators.items():
-            new_committee_members[validator] = amount, committee_members[validator][1]
+            if validator in committee_members:
+                new_committee_members[validator] = amount, committee_members[validator][1], committee_members[validator][2]
         return new_committee_members
+
+    @staticmethod
+    def _committee_delegated_to_members(committee: dict[Address, tuple[bool_, u8]],
+                                        delegated: dict[Address, u64]) -> dict[Address, tuple[u64, bool_, u8]]:
+        committee_members: dict[Address, tuple[u64, bool_, u8]] = {}
+        for address, (is_open, commission) in committee.items():
+            committee_members[address] = delegated[address], is_open, commission
+
+        return committee_members
+
+    @staticmethod
+    def _next_delegated(stakers: dict[Address, tuple[Address, u64]]) -> dict[Address, u64]:
+        delegated: dict[Address, u64] = defaultdict(u64)
+        for _, (validator, amount) in stakers.items():
+            delegated[validator] += amount
+        return delegated
 
     @profile
     async def _post_ratify(self, cur: psycopg.AsyncCursor[dict[str, Any]], redis_conn: Redis[str], height: int, round_: int,
@@ -989,7 +1020,8 @@ class DatabaseInsert(DatabaseBase):
 
         for ratification in ratifications:
             if isinstance(ratification, BlockRewardRatify):
-                committee_members = await DatabaseInsert._get_committee_mapping(redis_conn)
+                committee = await self._get_committee_mapping_unchecked(redis_conn)
+                delegated = await self._get_delegated_mapping_unchecked(redis_conn)
                 mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "bonded"))
                 if mapping_id in global_mapping_cache:
                     data = global_mapping_cache[mapping_id]
@@ -1005,10 +1037,11 @@ class DatabaseInsert(DatabaseBase):
                 else:
                     stakers = await self.get_bonded_mapping_unchecked()
 
-                DatabaseInsert._check_committee_staker_match(committee_members, stakers)
+                committee_members = self._committee_delegated_to_members(committee, delegated)
 
-                stakers, stake_rewards = DatabaseInsert._stake_rewards(committee_members, stakers, ratification.amount, supply_tracker)
-                committee_members = DatabaseInsert._next_committee_members(committee_members, stakers)
+                stakers, stake_rewards = self._stake_rewards(committee_members, stakers, ratification.amount)
+                delegated = self._next_delegated(stakers)
+                committee_members = self._next_committee_members(committee_members, stakers)
 
                 pipe = self.redis.pipeline()
                 for address, amount in stake_rewards.items():
@@ -1017,13 +1050,13 @@ class DatabaseInsert(DatabaseBase):
                     supply_tracker.tally_block_reward(amount)
                 await pipe.execute()
 
-                await DatabaseInsert._update_committee_bonded_map(cur, self.redis, committee_members, stakers, height)
+                await self._update_committee_bonded_delegated_map(committee_members, stakers, delegated)
                 starting_round = u64(round_)
-                members = Vec[Tuple[Address, u64, bool_], u16]([
-                    Tuple[Address, u64, bool_]((address, amount, is_open)) for address, (amount, is_open) in committee_members.items()
+                members = Vec[Tuple[Address, u64, bool_, u8], u16]([
+                    Tuple[Address, u64, bool_, u8]((address, amount, is_open, commission)) for address, (amount, is_open, commission) in committee_members.items()
                 ])
                 total_stake = u64(sum(x[0] for x in committee_members.values()))
-                await DatabaseInsert._save_committee_history(cur, height, Committee(
+                await self._save_committee_history(cur, height, Committee(
                     id_=Committee.compute_committee_id(starting_round, members, total_stake),
                     starting_round=starting_round,
                     members=members,
@@ -1086,9 +1119,9 @@ class DatabaseInsert(DatabaseBase):
                 backup_key = f"{key}:rollback_backup:{height}"
                 if await redis_conn.exists(backup_key) == 0:
                     if await redis_conn.exists(key) == 1:
-                        await redis_conn.copy(key, backup_key)
+                        await redis_conn.copy(key, backup_key) # type: ignore[arg-type]
                 else:
-                    await redis_conn.copy(backup_key, key, replace=True)
+                    await redis_conn.copy(backup_key, key, replace=True) # type: ignore[arg-type]
 
     async def _redis_cleanup(self, redis_conn: Redis[str], keys: list[str], height: int, rollback: bool):
         if height != 0:
@@ -1118,16 +1151,7 @@ class DatabaseInsert(DatabaseBase):
                 async with conn.cursor() as cur:
                     height = block.height
                     # redis is not protected by transaction so manually saving here
-                    redis_keys = [
-                        "credits.aleo:bonded",
-                        "credits.aleo:committee",
-                        "address_stake_reward",
-                        "address_puzzle_reward",
-                        "address_transfer_in",
-                        "address_transfer_out",
-                        "address_fee",
-                    ]
-                    await self._backup_redis_hash_key(self.redis, redis_keys, height)
+                    await self._backup_redis_hash_key(self.redis, self.redis_keys, height)
                     signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGINT})
 
                     try:
@@ -1330,7 +1354,7 @@ class DatabaseInsert(DatabaseBase):
                                 )
                                 if (res := await cur.fetchone()) is None:
                                     raise RuntimeError("failed to insert row into database")
-                                finalize_operation_db_id = res["id"]
+                                finalize_operation_db_id: int = res["id"]
                                 if isinstance(finalize_operation, InitializeMapping):
                                     await cur.execute(
                                         "INSERT INTO finalize_operation_initialize_mapping (finalize_operation_id, "
@@ -1450,6 +1474,74 @@ class DatabaseInsert(DatabaseBase):
                             address_puzzle_rewards, supply_tracker
                         )
 
+                        if os.environ.get("DEBUG_MAPPING_DUMP", False):
+                            async def read_redis_mapping(key: str) -> list[tuple[str, str]]:
+                                data = await self.redis.hgetall(key)
+                                r: list[tuple[str, str]] = []
+                                for d in data.values():
+                                    d = json.loads(d)
+                                    key = str(Plaintext.load(BytesIO(bytes.fromhex(d["key"]))))
+                                    value = Value.load(BytesIO(bytes.fromhex(d["value"])))
+                                    if isinstance(value, PlaintextValue):
+                                        plaintext = value.plaintext
+                                        if isinstance(plaintext, StructPlaintext):
+                                            s = ""
+                                            members = plaintext.members
+                                            for k, v in members:
+                                                if not s:
+                                                    s += f"{{\n  {str(k)}: {str(v)}"
+                                                else:
+                                                    s += f",\n  {str(k)}: {str(v)}"
+                                            s += "\n}"
+                                        else:
+                                            s = str(plaintext)
+                                    else:
+                                        s = str(value)
+                                    r.append((key, s))
+                                return sorted(r, key=lambda x: x[0])
+
+                            def write_mapping_debug(data: list[tuple[str, str]], path: str):
+                                with open(path, "w") as f:
+                                    for key, value in data:
+                                        f.write(f"{key} -> {value}\n")
+
+                            os.makedirs(f"/tmp/mapping_debug/{block.height}/self", exist_ok=True)
+                            committee_data = await read_redis_mapping("credits.aleo:committee")
+                            write_mapping_debug(committee_data, f"/tmp/mapping_debug/{block.height}/self/committee")
+                            delegated_data = await read_redis_mapping("credits.aleo:delegated")
+                            write_mapping_debug(delegated_data, f"/tmp/mapping_debug/{block.height}/self/delegated")
+                            bonded_data = await read_redis_mapping("credits.aleo:bonded")
+                            write_mapping_debug(bonded_data, f"/tmp/mapping_debug/{block.height}/self/bonded")
+                            await cur.execute(
+                                "SELECT key, value FROM mapping_value mv "
+                                "JOIN mapping m ON mv.mapping_id = m.id "
+                                "WHERE m.program_id = 'credits.aleo' AND m.mapping = 'account'"
+                            )
+                            account_data = await cur.fetchall()
+                            res: list[tuple[str, str]] = []
+                            for ad in account_data:
+                                key = str(Plaintext.load(BytesIO(ad["key"])))
+                                value = Value.load(BytesIO(ad["value"]))
+                                if isinstance(value, PlaintextValue):
+                                    plaintext = value.plaintext
+                                    if isinstance(plaintext, StructPlaintext):
+                                        s = ""
+                                        members = plaintext.members
+                                        for k, v in members:
+                                            if not s:
+                                                s += f"{{\n  {str(k)}: {str(v)}"
+                                            else:
+                                                s += f",\n  {str(k)}: {str(v)}"
+                                        s += "\n}"
+                                    else:
+                                        s = str(plaintext)
+                                else:
+                                    s = str(value)
+                                res.append((key, s))
+
+                            write_mapping_debug(sorted(res, key=lambda x: x[0]), f"/tmp/mapping_debug/{block.height}/self/account")
+
+
                         await cur.execute(
                             "UPDATE block SET total_supply = %s WHERE id = %s",
                             (supply_tracker.supply, block_db_id)
@@ -1463,7 +1555,7 @@ class DatabaseInsert(DatabaseBase):
                                 (puzzle_diff, puzzle_diff)
                             )
 
-                        block_diff = block_reward - supply_tracker.actual_block_reward
+                        block_diff = int(block_reward) - supply_tracker.actual_block_reward
                         if block_diff != 0:
                             await cur.execute(
                                 "INSERT INTO stats (name, value) VALUES ('block_reward_diff', %s) "
@@ -1475,12 +1567,12 @@ class DatabaseInsert(DatabaseBase):
                             await self.cleanup_unconfirmed_transactions()
 
                         signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT})
-                        await self._redis_cleanup(self.redis, redis_keys, block.height, False)
+                        await self._redis_cleanup(self.redis, self.redis_keys, block.height, False)
 
                         await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseBlockAdded, block.header.metadata.height))
                     except Exception as e:
                         signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT})
-                        await self._redis_cleanup(self.redis, redis_keys, block.height, True)
+                        await self._redis_cleanup(self.redis, self.redis_keys, block.height, True)
                         signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGINT})
                         await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                         raise

@@ -6,7 +6,7 @@ import aleo_explorer_rust
 from aleo_types import Address, Field, StructPlaintext, Vec, Tuple, Identifier, Plaintext, u8, LiteralType, Value, \
     PlaintextValue, LiteralPlaintext, Literal, cached_get_mapping_id, cached_get_key_id, ArrayPlaintext
 from db import Database
-from node.testnet import Testnet as Network
+from node import Network
 from util.aleo_strings import string_to_u128_array_le, string_from_u128_array_le
 from util.global_cache import global_mapping_cache
 

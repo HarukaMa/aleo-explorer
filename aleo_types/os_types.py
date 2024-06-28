@@ -147,20 +147,22 @@ class ChallengeRequest(Message):
 class ChallengeResponse(Message):
     type = Message.Type.ChallengeResponse
 
-    def __init__(self, *, genesis_header: BlockHeader, signature: Data[Signature], nonce: u64):
+    def __init__(self, *, genesis_header: BlockHeader, restrictions_id: Field, signature: Data[Signature], nonce: u64):
         self.genesis_header = genesis_header
+        self.restrictions_id = restrictions_id
         self.signature = signature
         self.nonce = nonce
 
     def dump(self) -> bytes:
-        return self.type.dump() + self.genesis_header.dump() + self.signature.dump() + self.nonce.dump()
+        return self.type.dump() + self.genesis_header.dump() + self.restrictions_id.dump() + self.signature.dump() + self.nonce.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
         genesis_header = BlockHeader.load(data)
+        restrictions_id = Field.load(data)
         signature = Data[Signature].load(data)
         nonce = u64.load(data)
-        return cls(genesis_header=genesis_header, signature=signature, nonce=nonce)
+        return cls(genesis_header=genesis_header, restrictions_id=restrictions_id, signature=signature, nonce=nonce)
 
 
 class DisconnectReason(IntEnumu8):
@@ -178,7 +180,7 @@ class DisconnectReason(IntEnumu8):
     TooManyFailures = 11
     TooManyPeers = 12
     YouNeedToSyncFirst = 13
-    YourPortIsClosed = 14,
+    YourPortIsClosed = 14
 
     @classmethod
     def load(cls, data: BytesIO):

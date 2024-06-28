@@ -11,7 +11,7 @@ from .base import DatabaseBase
 class DatabaseMapping(DatabaseBase):
     async def get_mapping_cache_with_cur(self, cur: psycopg.AsyncCursor[dict[str, Any]], program_name: str,
                                          mapping_name: str) -> dict[Field, Any]:
-        if program_name == "credits.aleo" and mapping_name in ["committee", "bonded"]:
+        if program_name == "credits.aleo" and mapping_name in ["committee", "bonded", "delegated"]:
             def transform(d: dict[str, Any]):
                 return {
                     "key": Plaintext.load(BytesIO(bytes.fromhex(d["key"]))),
@@ -48,7 +48,7 @@ class DatabaseMapping(DatabaseBase):
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
-                    if program_id == "credits.aleo" and mapping in ["committee", "bonded"]:
+                    if program_id == "credits.aleo" and mapping in ["committee", "bonded", "delegated"]:
                         conn = self.redis
                         data = await conn.hget(f"{program_id}:{mapping}", key_id)
                         if data is None:
@@ -90,7 +90,7 @@ class DatabaseMapping(DatabaseBase):
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
-                    if program_id == "credits.aleo" and mapping in ["committee", "bonded"]:
+                    if program_id == "credits.aleo" and mapping in ["committee", "bonded", "delegated"]:
                         def transform(d: dict[str, Any]):
                             return {
                                 "key": Plaintext.load(BytesIO(bytes.fromhex(d["key"]))),
@@ -132,7 +132,7 @@ class DatabaseMapping(DatabaseBase):
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
-                    if program_id == "credits.aleo" and mapping in ["committee", "bonded"]:
+                    if program_id == "credits.aleo" and mapping in ["committee", "bonded", "delegated"]:
                         conn = self.redis
                         return await conn.hlen(f"{program_id}:{mapping}")
                     else:
@@ -176,7 +176,7 @@ class DatabaseMapping(DatabaseBase):
                                        mapping_name: str, mapping_id: str, key_id: str, value_id: str,
                                        key: bytes, value: bytes, height: int, from_transaction: bool):
         try:
-            limited_tracking = program_name == "credits.aleo" and mapping_name in ["committee", "bonded"]
+            limited_tracking = program_name == "credits.aleo" and mapping_name in ["committee", "bonded", "delegated"]
             if limited_tracking:
                 conn = self.redis
                 data = {
@@ -229,7 +229,7 @@ class DatabaseMapping(DatabaseBase):
                                        mapping_name: str, mapping_id: str, key_id: str, key: bytes, height: int,
                                        from_transaction: bool):
         try:
-            limited_tracking = program_name == "credits.aleo" and mapping_name in ["committee", "bonded"]
+            limited_tracking = program_name == "credits.aleo" and mapping_name in ["committee", "bonded", "delegated"]
             if limited_tracking:
                 conn = self.redis
                 await conn.hdel(f"{program_name}:{mapping_name}", key_id)

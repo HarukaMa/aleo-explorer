@@ -12,6 +12,8 @@ from .block import DatabaseBlock
 
 class DatabaseUtil(DatabaseBase):
 
+    redis_keys: list[str]
+
     @staticmethod
     def get_addresses_from_struct(plaintext: StructPlaintext):
         addresses: set[str] = set()
@@ -50,16 +52,7 @@ class DatabaseUtil(DatabaseBase):
             async with conn.transaction():
                 async with conn.cursor() as cur:
                     try:
-                        redis_keys = [
-                            "credits.aleo:bonded",
-                            "credits.aleo:committee",
-                            "address_stake_reward",
-                            "address_puzzle_reward",
-                            "address_transfer_in",
-                            "address_transfer_out",
-                            "address_fee",
-                        ]
-                        cursor, keys = await self.redis.scan(0, f"{redis_keys[0]}:history:*", 100)
+                        cursor, keys = await self.redis.scan(0, f"{self.redis_keys[0]}:history:*", 100)
                         if cursor != 0:
                             raise RuntimeError("unsupported configuration")
                         if not keys:
@@ -67,7 +60,7 @@ class DatabaseUtil(DatabaseBase):
                         keys = sorted(keys, key=lambda x: int(x.split(":")[-1]))
                         last_backup = keys[-1]
                         last_backup_height = int(last_backup.split(":")[-1])
-                        for redis_key in redis_keys:
+                        for redis_key in self.redis_keys:
                             backup_key = f"{redis_key}:history:{last_backup_height}"
                             if not await self.redis.exists(backup_key):
                                 raise RuntimeError(f"backup key not found: {backup_key}")
@@ -202,9 +195,9 @@ class DatabaseUtil(DatabaseBase):
                             (last_backup_height,)
                         )
 
-                        for redis_key in redis_keys:
+                        for redis_key in self.redis_keys:
                             backup_key = f"{redis_key}:history:{last_backup_height}"
-                            await self.redis.copy(backup_key, redis_key, replace=True)
+                            await self.redis.copy(backup_key, redis_key, replace=True) # type: ignore[arg-type]
                             await self.redis.persist(redis_key)
                             await self.redis.expire(backup_key, 259200)
 

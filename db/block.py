@@ -781,17 +781,18 @@ class DatabaseBlock(DatabaseBase):
                             raise RuntimeError("database inconsistent")
                         await cur.execute("SELECT * FROM committee_history_member WHERE committee_id = %s", (committee_history["id"],))
                         committee_history_members = await cur.fetchall()
-                        members: list[Tuple[Address, u64, bool_]] = []
+                        members: list[Tuple[Address, u64, bool_, u8]] = []
                         for committee_history_member in committee_history_members:
-                            members.append(Tuple[Address, u64, bool_]((
+                            members.append(Tuple[Address, u64, bool_, u8]((
                                 Address.loads(committee_history_member["address"]),
                                 u64(committee_history_member["stake"]),
-                                bool_(committee_history_member["is_open"]))
-                            ))
+                                bool_(committee_history_member["is_open"]),
+                                u8(committee_history_member["commission"]),
+                            )))
                         committee = Committee(
                             id_=Field.loads(committee_history["committee_id"]),
                             starting_round=u64(committee_history["starting_round"]),
-                            members=Vec[Tuple[Address, u64, bool_], u16](members),
+                            members=Vec[Tuple[Address, u64, bool_, u8], u16](members),
                             total_stake=u64(committee_history["total_stake"]),
                         )
                         await cur.execute("SELECT * FROM ratification_genesis_balance")

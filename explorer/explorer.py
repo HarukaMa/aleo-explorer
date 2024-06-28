@@ -7,9 +7,9 @@ from aleo_types import Block, BlockHash
 from api import api
 from db import Database
 from interpreter.interpreter import init_builtin_program
-from node import Node
 # from node.light_node import LightNodeState
-from node.testnet import Testnet as Network
+from node import Network
+from node import Node
 from webapi import webapi
 from webui import webui
 from .types import Request, Message, ExplorerRequest

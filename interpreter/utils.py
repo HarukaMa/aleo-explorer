@@ -1,5 +1,5 @@
 from aleo_types import *
-from node.testnet import Testnet as Network
+from node import Network
 from .environment import Registers
 
 

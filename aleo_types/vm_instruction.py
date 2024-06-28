@@ -1457,7 +1457,7 @@ class Instruction(Serializable):
                     if isinstance(instruction.cast_type.plaintext_type, LiteralPlaintextType):
                         cost = 500
                     else:
-                        from node.testnet import Testnet as Network
+                        from node import Network
                         cost = instruction.cast_type.plaintext_type.size_in_bytes(program) * Network.cast_per_byte_cost + Network.cast_base_cost
                 else:
                     cost = 500

@@ -1149,7 +1149,7 @@ class Deployment(Serializable):
 
     @property
     def cost(self) -> tuple[int, int]:
-        from node.testnet import Testnet as Network
+        from node import Network
         storage_cost = len(self.dump()) * Network.deployment_fee_multiplier
         namespace_cost = 10 ** max(0, 10 - len(self.program.id.name.data)) * 1000000
         return storage_cost, namespace_cost
@@ -3127,7 +3127,7 @@ class Ratify(EnumBaseSerialize, RustEnum, Serializable):
 class Committee(Serializable):
     version = u8(1)
 
-    def __init__(self, *, id_: Field, starting_round: u64, members: Vec[Tuple[Address, u64, bool_], u16], total_stake: u64):
+    def __init__(self, *, id_: Field, starting_round: u64, members: Vec[Tuple[Address, u64, bool_, u8], u16], total_stake: u64):
         self.id = id_
         self.starting_round = starting_round
         self.members = members
@@ -3143,12 +3143,12 @@ class Committee(Serializable):
             raise ValueError(f"invalid committee version")
         id_ = Field.load(data)
         starting_round = u64.load(data)
-        members = Vec[Tuple[Address, u64, bool_], u16].load(data)
+        members = Vec[Tuple[Address, u64, bool_, u8], u16].load(data)
         total_stake = u64.load(data)
         return cls(id_=id_, starting_round=starting_round, members=members, total_stake=total_stake)
 
     @staticmethod
-    def compute_committee_id(starting_round: u64, members: Vec[Tuple[Address, u64, bool_], u16], total_stake: u64) -> Field:
+    def compute_committee_id(starting_round: u64, members: Vec[Tuple[Address, u64, bool_, u8], u16], total_stake: u64) -> Field:
         data: bytes = starting_round.dump() + members.dump() + total_stake.dump()
         return Field.load(BytesIO(aleo_explorer_rust.hash_bytes_to_field(data, "bhp1024")))
 

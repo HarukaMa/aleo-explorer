@@ -9,7 +9,7 @@ from typing import Awaitable
 import explorer.types as explorer
 from aleo_types import *  # too many types
 # from .light_node import LightNodeState
-from .testnet import Testnet as Network
+from . import Network
 
 # Do not open PR about this value.
 # The deviation from the node's behavior is for lower sync delays.
@@ -125,6 +125,7 @@ class Node:
             resp_nonce = u64(random.randint(0, 2 ** 64 - 1))
             response = ChallengeResponse(
                 genesis_header=genesis,
+                restrictions_id=Network.restrictions_id,
                 signature=Data[Signature](Signature.load(BytesIO(aleo_explorer_rust.sign_nonce("APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH", msg.nonce.dump() + resp_nonce.dump())))),
                 nonce=resp_nonce,
             )
@@ -247,7 +248,7 @@ class Node:
             await self.send_message(msg)
         else:
             latest_height = await self.explorer_request(explorer.Request.GetLatestHeight())
-            if latest_height == self.peer_block_height:
+            if latest_height >= self.peer_block_height:
                 return
 
             start_block_height = latest_height + 1
