@@ -48,11 +48,21 @@
             <div class="tabs-panel is-active" id="stats">
                 {% call data_line("Credits staked") %}
                     {% if bond_state %}
-                        {{ bond_state.amount | format_aleo_credit | safe }} Aleo credits, staked to {% if bond_state.validator == address %}self{% else %}validator <span class="mono"><a href="/address?a={{ bond_state.validator }}">{{ bond_state.validator }}</a></span>{% endif %}
+                        {{ bond_state.amount | format_aleo_credit | safe }} Aleo credits<br>
+                        Staked to {% if bond_state.validator == raw_address %}self{% else %}validator <span class="mono"><a href="/address?a={{ bond_state.validator }}">{{ bond_state.validator }}</a></span>{% endif %}<br>
                     {% else %}
                         0 Aleo credits
                     {% endif %}
                 {% endcall %}
+                {% if bond_state %}
+                    {% call data_line("Withdrawal address") %}
+                        {% if withdrawal_address == raw_address %}
+                            Self
+                        {% else %}
+                            <span class="mono"><a href="/address?a={{ withdrawal_address }}">{{ withdrawal_address }}</a></span>
+                        {% endif %}
+                    {% endcall %}
+                {% endif %}
                 {% if unbond_state %}
                     {% call data_line("Credits unstaking") %}
                         {{ unbond_state.amount | format_aleo_credit | safe }} Aleo credits, withdrawable {% if unbond_state.height > sync_info.explorer_height %}in {{ unbond_state.height - sync_info.explorer_height }} blocks{% else %}now{% endif %}
@@ -93,7 +103,7 @@
             {% if committee_state %}
             <div class="tabs-panel" id="validator">
                 {% call data_line("Credits staked") %}
-                    {{ committee_state.amount | format_aleo_credit | safe }} Aleo credits
+                    {{ delegated | format_aleo_credit | safe }} Aleo credits
                 {% endcall %}
                 {% call data_line("Open for staking") %}
                     {% if committee_state.is_open %}Yes{% else %}No{% endif %}

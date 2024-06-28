@@ -84,10 +84,13 @@ async def address_route(request: Request):
     bonded_key_id = cached_get_key_id("credits.aleo", "bonded", address_key_bytes)
     unbonding_key_id = cached_get_key_id("credits.aleo", "unbonding", address_key_bytes)
     committee_key_id = cached_get_key_id("credits.aleo", "committee", address_key_bytes)
+    delegated_key_id = cached_get_key_id("credits.aleo", "delegated", address_key_bytes)
+    withdraw_key_id = cached_get_key_id("credits.aleo", "withdraw", address_key_bytes)
     public_balance_bytes = await db.get_mapping_value("credits.aleo", "account", account_key_id)
     bond_state_bytes = await db.get_mapping_value("credits.aleo", "bonded", bonded_key_id)
     unbond_state_bytes = await db.get_mapping_value("credits.aleo", "unbonding", unbonding_key_id)
     committee_state_bytes = await db.get_mapping_value("credits.aleo", "committee", committee_key_id)
+    delegated_bytes = await db.get_mapping_value("credits.aleo", "delegated", delegated_key_id)
     stake_reward = await db.get_address_stake_reward(address)
     transfer_in = await db.get_address_transfer_in(address)
     transfer_out = await db.get_address_transfer_out(address)
@@ -156,6 +159,7 @@ async def address_route(request: Request):
         public_balance = int(cast(Int, plaintext.literal.primitive))
     if bond_state_bytes is None:
         bond_state = None
+        withdrawal_address = None
     else:
         value = cast(PlaintextValue, Value.load(BytesIO(bond_state_bytes)))
         plaintext = cast(StructPlaintext, value.plaintext)
@@ -165,6 +169,13 @@ async def address_route(request: Request):
             "validator": str(validator.literal.primitive),
             "amount": int(cast(Int, amount.literal.primitive)),
         }
+        withdraw_bytes = await db.get_mapping_value("credits.aleo", "withdraw", withdraw_key_id)
+        if withdraw_bytes is None:
+            withdrawal_address = None
+        else:
+            value = cast(PlaintextValue, Value.load(BytesIO(withdraw_bytes)))
+            plaintext = cast(LiteralPlaintext, value.plaintext)
+            withdrawal_address = str(plaintext.literal.primitive)
     if unbond_state_bytes is None:
         unbond_state = None
     else:
@@ -183,10 +194,10 @@ async def address_route(request: Request):
     else:
         value = cast(PlaintextValue, Value.load(BytesIO(committee_state_bytes)))
         plaintext = cast(StructPlaintext, value.plaintext)
-        amount = cast(LiteralPlaintext, plaintext["microcredits"])
+        commission = cast(LiteralPlaintext, plaintext["commission"])
         is_open = cast(LiteralPlaintext, plaintext["is_open"])
         committee_state = {
-            "amount": int(cast(Int, amount.literal.primitive)),
+            "commission": int(cast(Int, commission.literal.primitive)),
             "is_open": bool(is_open.literal.primitive),
         }
         bonded_mapping = await db.get_bonded_mapping_unchecked()
@@ -198,7 +209,12 @@ async def address_route(request: Request):
                 if len(address_stakes) >= 50:
                     break
         uptime = await db.get_validator_uptime(address)
-
+    if delegated_bytes is None:
+        delegated = None
+    else:
+        value = cast(PlaintextValue, Value.load(BytesIO(delegated_bytes)))
+        plaintext = cast(LiteralPlaintext, value.plaintext)
+        delegated = int(cast(Int, plaintext.literal.primitive))
     if stake_reward is None:
         stake_reward = 0
     if transfer_in is None:
@@ -224,6 +240,7 @@ async def address_route(request: Request):
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
         "address": await UIAddress(address).resolve(db),
+        "raw_address": address,
         "address_trunc": address[:14] + "..." + address[-6:],
         "solutions": recent_solutions,
         "programs": recent_programs,
@@ -237,6 +254,8 @@ async def address_route(request: Request):
         "unbond_state": unbond_state,
         "committee_state": committee_state,
         "address_stakes": address_stakes,
+        "delegated": delegated,
+        "withdrawal_address": withdrawal_address,
         "uptime": uptime,
         "stake_reward": stake_reward,
         "transfer_in": transfer_in,
