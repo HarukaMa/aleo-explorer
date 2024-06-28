@@ -144,6 +144,7 @@ class LightNode:
             resp_nonce = u64(random.randint(0, 2 ** 64 - 1))
             response = ChallengeResponse(
                 genesis_header=Network.genesis_block.header,
+                restrictions_id=Network.restrictions_id,
                 signature=Data[Signature](Signature.load(BytesIO(aleo_explorer_rust.sign_nonce("APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH", msg.nonce.dump() + resp_nonce.dump())))),
                 nonce=resp_nonce,
             )
