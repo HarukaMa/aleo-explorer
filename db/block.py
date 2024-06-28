@@ -501,7 +501,7 @@ class DatabaseBlock(DatabaseBase):
                     )
                     transaction_ids = await cur.fetchall()
                     if not transaction_ids:
-                        raise RuntimeError("database inconsistent")
+                        return []
                     txs: list[Transaction] = []
                     for transaction_id in transaction_ids:
                         tx = await self.get_unconfirmed_transaction(transaction_id["transaction_id"])
