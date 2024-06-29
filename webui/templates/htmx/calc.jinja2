@@ -6,13 +6,9 @@
         <h3>Calculator</h3>
 
         <p>
-            <strong>The calculator below is disabled as more data is needed on new Testnet Beta.</strong>
-        </p>
-
-        <p>
             The network difficulty is constantly changing, so the calculation below cannot be used as earning prediction.
             <br>
-            "Average credit per day" assumes 2 credit per solution on average<span class="sup">*</span>.
+            "Average credits per day" assumes {{ avg_reward | format_aleo_credit | safe }} credits per solution on average<span class="sup">*</span>.
         </p>
 
         <form action="#">
@@ -37,7 +33,7 @@
             </div>
             <div class="grid-x grid-padding-x">
                 <div class="cell small-3 small-offset-2">
-                    <button class="button" value="Calculate" onclick="calculate(event)" disabled>Calculate</button>
+                    <button class="button" value="Calculate" onclick="calculate(event)">Calculate</button>
                 </div>
             </div>
         </form>
@@ -47,8 +43,7 @@
         </p>
         <br>
         <p class="note">
-            * Mathematical average from all valid solutions during testnet3. While it should be achieveable in the long
-            run, most solutions should have rewards around 0.5 - 1 credit.
+            * Live data calculated from all {{ total_solutions }} solutions submitted to the network.
         </p>
     </div>
 
@@ -73,7 +68,7 @@
         const proof_target = {{ proof_target }}
         const result = document.getElementById("result")
         const average = sec_to_human(proof_target / ps)
-        const daily = 2 * (86400 / (proof_target / ps))
+        const daily = {{ avg_reward }} / 1000000 * (86400 / (proof_target / ps))
 
         const p_inv = 1 - (1 / proof_target)
         let cp = 1
@@ -93,7 +88,7 @@
         const upper_time = sec_to_human(upper / ps)
 
         result.innerHTML = `Average: ${average}<br> CDF [0.2, 0.8]: ${lower_time} - ${upper_time} <br>
-Average testnet credit per day: ${daily.toFixed(6)}`
+Average credits per day: ${daily.toFixed(6)}`
     }
 </script>
 

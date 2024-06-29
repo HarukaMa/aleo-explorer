@@ -17,9 +17,13 @@ from .utils import out_of_sync_check
 async def calc_route(request: Request):
     db: Database = request.app.state.db
     proof_target = (await db.get_latest_block()).header.metadata.proof_target
+    total_solutions = await db.get_total_solution_count()
+    avg_reward = await db.get_average_solution_reward()
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
         "proof_target": proof_target,
+        "total_solutions": total_solutions,
+        "avg_reward": avg_reward,
         "sync_info": sync_info,
     }
     return ctx, {'Cache-Control': 'public, max-age=60'}
