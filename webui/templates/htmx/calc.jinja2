@@ -14,10 +14,12 @@
         <form action="#">
             <div class="grid-x grid-padding-x">
                 <div class="cell small-2">
-                    <label for="proof_input" class="text-right middle">Proof target: </label>
+                    <label for="proof_target_input" class="text-right middle">Proof target: </label>
                 </div>
                 <div class="cell small-2">
-                    <label class="middle">{{ proof_target }}</label>
+                    <div class="input-group">
+                        <input class="input-group-field" id="proof_target_input" type="number" name="pt" placeholder="" value="{{ proof_target }}" min="134217728">
+                    </div>
                 </div>
             </div>
             <div class="grid-x grid-padding-x">
@@ -65,7 +67,15 @@
     function calculate(e) {
         e.preventDefault();
         const ps = parseFloat(document.getElementById("proof_input").value)
-        const proof_target = {{ proof_target }}
+        const proof_target = parseInt(document.getElementById("proof_target_input").value)
+      if (isNaN(ps) || isNaN(proof_target)) {
+        alert("Invalid input")
+        return
+      }
+      if (proof_target < 134217728) {
+        alert("Proof target is less than network minimum target (134217728)")
+        return
+      }
         const result = document.getElementById("result")
         const average = sec_to_human(proof_target / ps)
         const daily = {{ avg_reward }} / 1000000 * (86400 / (proof_target / ps))
