@@ -528,7 +528,7 @@ class DatabaseInsert(DatabaseBase):
                     original_transaction_id = aleo_explorer_rust.rejected_tx_original_id(confirmed_transaction.dump())
                     await cur.execute(
                         "INSERT INTO transaction (transaction_id, type, original_transaction_id) "
-                        "VALUES (%s, %s) RETURNING id",
+                        "VALUES (%s, %s, %s) RETURNING id",
                         (str(transaction.id), transaction.type.name, original_transaction_id)
                     )
                     if (res := await cur.fetchone()) is None:
