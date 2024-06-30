@@ -108,6 +108,9 @@
                 {% call data_line("Open for staking") %}
                     {% if committee_state.is_open %}Yes{% else %}No{% endif %}
                 {% endcall %}
+                {% call data_line("Commission") %}
+                    {{ committee_state.commission }}%
+                {% endcall %}
                 {% call data_line("Uptime in last 24 hours") %}
                     {{ "%0.2f" | format(uptime * 100) }}%
                 {% endcall %}
