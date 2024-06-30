@@ -514,7 +514,7 @@ class DatabaseBlock(DatabaseBase):
                     raise
 
     @staticmethod
-    async def _get_confirmed_transaction_from_dict(conn: psycopg.AsyncConnection[dict[str, Any]], confirmed_transaction: dict[str, Any]) -> ConfirmedTransaction:
+    async def get_confirmed_transaction_from_dict(conn: psycopg.AsyncConnection[dict[str, Any]], confirmed_transaction: dict[str, Any]) -> ConfirmedTransaction:
         async with conn.cursor() as cur:
             await cur.execute("SELECT * FROM get_finalize_operations(%s)", (confirmed_transaction["confirmed_transaction_id"],))
             finalize_operations = await cur.fetchall()
@@ -755,7 +755,7 @@ class DatabaseBlock(DatabaseBase):
                         confirmed_transaction.update({"fee_id": None, "fee_global_state_root": None, "fee_proof": None})
                     else:
                         confirmed_transaction.update(fee)
-                    return await DatabaseBlock._get_confirmed_transaction_from_dict(conn, confirmed_transaction)
+                    return await DatabaseBlock.get_confirmed_transaction_from_dict(conn, confirmed_transaction)
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
@@ -768,7 +768,7 @@ class DatabaseBlock(DatabaseBase):
             confirmed_transactions = await cur.fetchall()
             ctxs: list[ConfirmedTransaction] = []
             for confirmed_transaction in confirmed_transactions:
-                ctxs.append(await DatabaseBlock._get_confirmed_transaction_from_dict(conn, confirmed_transaction))
+                ctxs.append(await DatabaseBlock.get_confirmed_transaction_from_dict(conn, confirmed_transaction))
             await cur.execute("SELECT * FROM ratification WHERE block_id = %s ORDER BY index", (block["id"],))
             ratifications = await cur.fetchall()
             rs: list[Ratify] = []

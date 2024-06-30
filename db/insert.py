@@ -495,6 +495,8 @@ class DatabaseInsert(DatabaseBase):
                             prior_tx = True
                             transaction_db_id = res["id"]
                             original_transaction_id = res["transaction_id"]
+                            if original_transaction_id is None:
+                                original_transaction_id = aleo_explorer_rust.rejected_tx_original_id(confirmed_transaction.dump())
                             await cur.execute(
                                 "UPDATE transaction SET transaction_id = %s, original_transaction_id = %s, type = 'Fee' WHERE id = %s",
                                 (str(transaction.id), original_transaction_id, transaction_db_id)
