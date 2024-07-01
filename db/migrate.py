@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Awaitable
+import os
+from typing import Awaitable, LiteralString
 
 import psycopg
 import psycopg.sql
@@ -17,6 +18,8 @@ class DatabaseMigrate(DatabaseBase):
     async def migrate(self):
         migrations: list[tuple[int, Callable[[psycopg.AsyncConnection[dict[str, Any]]], Awaitable[None]]]] = [
             (1, self.migrate_1_add_rejected_original_id),
+            (2, self.migrate_2_set_on_delete_cascade),
+            (3, self.migrate_3_fix_finalize_operation_function),
         ]
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -57,3 +60,34 @@ class DatabaseMigrate(DatabaseBase):
                             "WHERE confirmed_transaction_id = %s",
                             (str(original_id), row["id"])
                         )
+
+    @staticmethod
+    async def migrate_2_set_on_delete_cascade(conn: psycopg.AsyncConnection[dict[str, Any]]):
+        # https://stackoverflow.com/a/74476119
+        try:
+            await conn.execute("""
+WITH tables(oid) AS (
+   UPDATE pg_constraint
+   SET confdeltype = 'c'
+   WHERE contype = 'f'
+     AND confdeltype <> 'c'
+     AND connamespace = %s::regnamespace
+   RETURNING confrelid
+)
+UPDATE pg_trigger
+SET tgfoid = '"RI_FKey_cascade_del"()'::regprocedure
+FROM tables
+WHERE tables.oid = pg_trigger.tgrelid
+  AND tgtype = 9;
+                """, (os.environ["DB_SCHEMA"],)
+                               )
+        except psycopg.errors.InsufficientPrivilege:
+            print("==========================")
+            print("You need superuser to run this migration")
+            print("If you can't or don't want to add superuser, please run it manually")
+            print("==========================")
+            raise
+
+    @staticmethod
+    async def migrate_3_fix_finalize_operation_function(conn: psycopg.AsyncConnection[dict[str, Any]]):
+        await conn.execute(cast(LiteralString, open("migration_3.sql").read()))
