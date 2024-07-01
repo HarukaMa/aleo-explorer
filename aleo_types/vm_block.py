@@ -2004,6 +2004,12 @@ class Future(Serializable):
         arguments = Vec[Argument, u8].load(data)
         return cls(program_id=program_id, function_name=function_name, arguments=arguments)
 
+    def __str__(self):
+        return f"{self.program_id}.{self.function_name}({', '.join(str(arg) for arg in self.arguments)})"
+
+    def __repr__(self):
+        return f"{self.program_id}.{self.function_name}({', '.join(str(arg) for arg in self.arguments)})"
+
 
 class Argument(EnumBaseSerialize, RustEnum, Serializable):
 
@@ -2040,6 +2046,12 @@ class PlaintextArgument(Argument):
         plaintext = Plaintext.load(data)
         return cls(plaintext=plaintext)
 
+    def __str__(self):
+        return str(self.plaintext)
+
+    def __repr__(self):
+        return str(self.plaintext)
+
 class FutureArgument(Argument):
     type = Argument.Type.Future
 
@@ -2055,6 +2067,12 @@ class FutureArgument(Argument):
         future = Future.load(data)
         return cls(future=future)
 
+    def __str__(self):
+        return str(self.future)
+
+    def __repr__(self):
+        return str(self.future)
+
 class FutureValue(Value):
     type = Value.Type.Future
 
@@ -2068,6 +2086,12 @@ class FutureValue(Value):
     def load(cls, data: BytesIO):
         future = Future.load(data)
         return cls(future=future)
+
+    def __str__(self):
+        return str(self.future)
+
+    def __repr__(self):
+        return str(self.future)
 
 
 class TransitionInput(EnumBaseSerialize, RustEnum, Serializable):
