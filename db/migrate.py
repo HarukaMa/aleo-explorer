@@ -5,6 +5,7 @@ from typing import Awaitable, LiteralString
 
 import psycopg
 import psycopg.sql
+from psycopg.rows import DictRow
 
 from aleo_types import *
 from explorer.types import Message as ExplorerMessage
@@ -16,7 +17,7 @@ class DatabaseMigrate(DatabaseBase):
 
     # migration methods
     async def migrate(self):
-        migrations: list[tuple[int, Callable[[psycopg.AsyncConnection[dict[str, Any]]], Awaitable[None]]]] = [
+        migrations: list[tuple[int, Callable[[psycopg.AsyncConnection[DictRow]], Awaitable[None]]]] = [
             (1, self.migrate_1_add_rejected_original_id),
             (2, self.migrate_2_set_on_delete_cascade),
             (3, self.migrate_3_fix_finalize_operation_function),
@@ -37,7 +38,7 @@ class DatabaseMigrate(DatabaseBase):
                     raise
 
     @staticmethod
-    async def migrate_1_add_rejected_original_id(conn: psycopg.AsyncConnection[dict[str, Any]]):
+    async def migrate_1_add_rejected_original_id(conn: psycopg.AsyncConnection[DictRow]):
         async with conn.cursor() as cur:
             await cur.execute(
                 "SELECT ct.id, b.id as block_id FROM confirmed_transaction ct "
@@ -62,10 +63,11 @@ class DatabaseMigrate(DatabaseBase):
                         )
 
     @staticmethod
-    async def migrate_2_set_on_delete_cascade(conn: psycopg.AsyncConnection[dict[str, Any]]):
+    async def migrate_2_set_on_delete_cascade(conn: psycopg.AsyncConnection[DictRow]):
         # https://stackoverflow.com/a/74476119
         try:
             await conn.execute("""
+-- noinspection SqlResolve
 WITH tables(oid) AS (
    UPDATE pg_constraint
    SET confdeltype = 'c'
@@ -89,5 +91,5 @@ WHERE tables.oid = pg_trigger.tgrelid
             raise
 
     @staticmethod
-    async def migrate_3_fix_finalize_operation_function(conn: psycopg.AsyncConnection[dict[str, Any]]):
+    async def migrate_3_fix_finalize_operation_function(conn: psycopg.AsyncConnection[DictRow]):
         await conn.execute(cast(LiteralString, open("migration_3.sql").read()))

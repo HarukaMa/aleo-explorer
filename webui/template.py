@@ -7,6 +7,7 @@ from typing import Callable, Coroutine, Any
 
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
+from starlette.responses import Response
 from starlette.templating import Jinja2Templates
 
 templates = Jinja2Templates(directory='webui/templates', trim_blocks=True, lstrip_blocks=True)
@@ -83,7 +84,7 @@ templates.env.filters["format_number"] = format_number # type: ignore
 templates.env.filters["network_tag"] = network_tag # type: ignore
 
 def htmx_template(template: str):
-    def decorator(func: Callable[[Request], Coroutine[Any, Any, dict[str, Any]]]):
+    def decorator(func: Callable[[Request], Coroutine[Any, Any, tuple[dict[str, Any], dict[str, str]] | dict[str, str] | Response]]):
         @functools.wraps(func)
         async def wrapper(request: Request):
             is_htmx = request.scope["htmx"].is_htmx()
@@ -97,13 +98,16 @@ def htmx_template(template: str):
                 raise
             except Exception as e:
                 tb = e.__traceback__
-                while tb.tb_next:
-                    tb = tb.tb_next
-                frame = tb.tb_frame
-                print(frame.f_locals)
-                msg = f"uncaught exception at {frame.f_code.co_filename.rsplit('/', 1)[-1]}:{frame.f_lineno}: {e.__class__.__name__}: {str(e)}\n"
-                for k, v in frame.f_locals.items():
-                    msg += f"  {k} = {str(v)[:50]}{'...' if len(str(v)) > 50 else ''}\n"
+                if tb is None:
+                    msg = f"uncaught exception: {e.__class__.__name__}: {str(e)}"
+                else:
+                    while tb.tb_next:
+                        tb = tb.tb_next
+                    frame = tb.tb_frame
+                    print(frame.f_locals)
+                    msg = f"uncaught exception at {frame.f_code.co_filename.rsplit('/', 1)[-1]}:{frame.f_lineno}: {e.__class__.__name__}: {str(e)}\n"
+                    for k, v in frame.f_locals.items():
+                        msg += f"  {k} = {str(v)[:50]}{'...' if len(str(v)) > 50 else ''}\n"
                 print(msg)
                 traceback.print_exc()
                 raise HTTPException(status_code=550, detail=msg) from e
@@ -116,6 +120,8 @@ def htmx_template(template: str):
                 return templates.TemplateResponse(t, context, headers=headers)
             except Exception as e:
                 tb = e.__traceback__
+                if tb is None:
+                    raise HTTPException(status_code=550, detail=f"template error: {e.__class__.__name__}: {str(e)}") from e
                 frame = tb.tb_frame
                 while tb.tb_next:
                     tb = tb.tb_next

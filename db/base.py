@@ -19,9 +19,9 @@ except ImportError:
     R = TypeVar('R')
     def profile(func: Callable[P, Awaitable[R]] | Callable[P, R]) -> Callable[P, Awaitable[R]] | Callable[P, R]:
         if iscoroutinefunction(func):
-            async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+            async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
                 return await func(*args, **kwargs)
-            return wrapper
+            return async_wrapper
         else:
             func = cast(Callable[P, R], func)
             def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:

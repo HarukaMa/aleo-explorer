@@ -4,6 +4,7 @@ from collections import defaultdict
 
 import psycopg
 import psycopg.sql
+from psycopg.rows import DictRow
 
 from aleo_types import *
 from explorer.types import Message as ExplorerMessage
@@ -37,7 +38,7 @@ class DatabaseBlock(DatabaseBase):
 
     @staticmethod
     @profile
-    async def _load_future(conn: psycopg.AsyncConnection[dict[str, Any]], transition_output_db_id: Optional[int],
+    async def _load_future(conn: psycopg.AsyncConnection[DictRow], transition_output_db_id: Optional[int],
                            future_argument_db_id: Optional[int]) -> Optional[Future]:
         async with conn.cursor() as cur:
             if transition_output_db_id:
@@ -85,7 +86,7 @@ class DatabaseBlock(DatabaseBase):
 
     @staticmethod
     @profile
-    async def _get_transition_from_dict(transition: dict[str, Any], conn: psycopg.AsyncConnection[dict[str, Any]]):
+    async def _get_transition_from_dict(transition: dict[str, Any], conn: psycopg.AsyncConnection[DictRow]):
         async with conn.cursor() as cur:
             await cur.execute("SELECT * FROM get_transition_inputs(%s)", (transition["id"],))
             transition_inputs = await cur.fetchall()
@@ -514,7 +515,7 @@ class DatabaseBlock(DatabaseBase):
                     raise
 
     @staticmethod
-    async def get_confirmed_transaction_from_dict(conn: psycopg.AsyncConnection[dict[str, Any]], confirmed_transaction: dict[str, Any]) -> ConfirmedTransaction:
+    async def get_confirmed_transaction_from_dict(conn: psycopg.AsyncConnection[DictRow], confirmed_transaction: dict[str, Any]) -> ConfirmedTransaction:
         async with conn.cursor() as cur:
             await cur.execute("SELECT * FROM get_finalize_operations(%s)", (confirmed_transaction["confirmed_transaction_id"],))
             finalize_operations = await cur.fetchall()
@@ -762,7 +763,7 @@ class DatabaseBlock(DatabaseBase):
 
     @staticmethod
     @profile
-    async def _get_full_block(block: dict[str, Any], conn: psycopg.AsyncConnection[dict[str, Any]]):
+    async def _get_full_block(block: dict[str, Any], conn: psycopg.AsyncConnection[DictRow]):
         async with conn.cursor() as cur:
             await cur.execute("SELECT * FROM get_confirmed_transactions(%s)", (block["id"],))
             confirmed_transactions = await cur.fetchall()
@@ -954,7 +955,7 @@ class DatabaseBlock(DatabaseBase):
             )
 
     @staticmethod
-    async def get_full_block_range(start: int, end: int, conn: psycopg.AsyncConnection[dict[str, Any]]):
+    async def get_full_block_range(start: int, end: int, conn: psycopg.AsyncConnection[DictRow]):
         async with conn.cursor() as cur:
             await cur.execute(
                 "SELECT * FROM block WHERE height <= %s AND height > %s ORDER BY height DESC",
@@ -964,7 +965,7 @@ class DatabaseBlock(DatabaseBase):
             return [await DatabaseBlock._get_full_block(block, conn) for block in blocks]
 
     @staticmethod
-    async def _get_fast_block(block: dict[str, Any], conn: psycopg.AsyncConnection[dict[str, Any]]) -> dict[str, Any]:
+    async def _get_fast_block(block: dict[str, Any], conn: psycopg.AsyncConnection[DictRow]) -> dict[str, Any]:
         async with conn.cursor() as cur:
             await cur.execute(
                 "SELECT COUNT(*) FROM confirmed_transaction WHERE block_id = %s",
@@ -991,7 +992,7 @@ class DatabaseBlock(DatabaseBase):
             }
 
     @staticmethod
-    async def _get_fast_block_range(start: int, end: int, conn: psycopg.AsyncConnection[dict[str, Any]]):
+    async def _get_fast_block_range(start: int, end: int, conn: psycopg.AsyncConnection[DictRow]):
         async with conn.cursor() as cur:
             await cur.execute(
                 "SELECT * FROM block WHERE height <= %s AND height > %s ORDER BY height DESC",

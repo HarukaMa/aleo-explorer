@@ -7,6 +7,7 @@ import time
 from collections import defaultdict
 
 import psycopg.sql
+from psycopg.rows import DictRow
 from redis.asyncio import Redis
 
 from aleo_types import *
@@ -54,7 +55,7 @@ class DatabaseInsert(DatabaseBase):
         ]
 
     @staticmethod
-    async def _insert_future(conn: psycopg.AsyncConnection[dict[str, Any]], future: Future,
+    async def _insert_future(conn: psycopg.AsyncConnection[DictRow], future: Future,
                              transition_output_future_db_id: Optional[int] = None, argument_db_id: Optional[int] = None,):
         async with conn.cursor() as cur:
             if transition_output_future_db_id:
@@ -195,7 +196,7 @@ class DatabaseInsert(DatabaseBase):
                     await redis_conn.hincrby("address_fee", fee_from, amount) # type: ignore
 
     @staticmethod
-    async def _insert_transition(conn: psycopg.AsyncConnection[dict[str, Any]], redis_conn: Redis[str],
+    async def _insert_transition(conn: psycopg.AsyncConnection[DictRow], redis_conn: Redis[str],
                                  exe_tx_db_id: Optional[int], fee_db_id: Optional[int],
                                  transition: Transition, ts_index: int, is_rejected: bool = False, should_exist: bool = False):
         async with conn.cursor() as cur:
@@ -336,7 +337,7 @@ class DatabaseInsert(DatabaseBase):
 
 
     @staticmethod
-    async def _insert_deploy_transaction(conn: psycopg.AsyncConnection[dict[str, Any]], redis: Redis[str],
+    async def _insert_deploy_transaction(conn: psycopg.AsyncConnection[DictRow], redis: Redis[str],
                                          deployment: Deployment, owner: ProgramOwner, fee: Fee, transaction_db_id: int,
                                          is_unconfirmed: bool = False, is_rejected: bool = False, fee_should_exist: bool = False):
         async with conn.cursor() as cur:
@@ -374,7 +375,7 @@ class DatabaseInsert(DatabaseBase):
             await DatabaseInsert._insert_transition(conn, redis, None, fee_db_id, fee.transition, 0, is_rejected, fee_should_exist)
 
     @staticmethod
-    async def _insert_execute_transaction(conn: psycopg.AsyncConnection[dict[str, Any]], redis: Redis[str],
+    async def _insert_execute_transaction(conn: psycopg.AsyncConnection[DictRow], redis: Redis[str],
                                           execution: Execution, fee: Optional[Fee], transaction_db_id: int,
                                           is_rejected: bool = False, ts_should_exist: bool = False):
         async with conn.cursor() as cur:
@@ -411,7 +412,7 @@ class DatabaseInsert(DatabaseBase):
                 await DatabaseInsert._insert_transition(conn, redis, None, fee_db_id, fee.transition, 0, is_rejected, ts_should_exist)
 
     @staticmethod
-    async def _insert_transaction(conn: psycopg.AsyncConnection[dict[str, Any]], redis: Redis[str], transaction: Transaction,
+    async def _insert_transaction(conn: psycopg.AsyncConnection[DictRow], redis: Redis[str], transaction: Transaction,
                                   confirmed_transaction: Optional[ConfirmedTransaction] = None, ct_index: Optional[int] = None,
                                   ignore_deploy_txids: Optional[list[str]] = None, confirmed_transaction_db_id: Optional[int] = None,
                                   reject_reasons: Optional[list[Optional[str]]] = None):
@@ -525,7 +526,9 @@ class DatabaseInsert(DatabaseBase):
                                                                              ts_should_exist=True)
 
                 if not prior_tx:
-                    original_transaction_id = aleo_explorer_rust.rejected_tx_original_id(confirmed_transaction.dump())
+                    original_transaction_id = None
+                    if confirmed_transaction is not None:
+                        original_transaction_id = aleo_explorer_rust.rejected_tx_original_id(confirmed_transaction.dump())
                     await cur.execute(
                         "INSERT INTO transaction (transaction_id, type, original_transaction_id) "
                         "VALUES (%s, %s, %s) RETURNING id",
@@ -695,10 +698,10 @@ class DatabaseInsert(DatabaseBase):
                 "key": key,
                 "value": value,
             }
-        await self.redis.execute_command("MULTI")
+        await self.redis.execute_command("MULTI") # type: ignore
         await self.redis.delete("credits.aleo:committee")
         await self.redis.hset("credits.aleo:committee", mapping={k: json.dumps(v) for k, v in committee_mapping.items()})
-        await self.redis.execute_command("EXEC")
+        await self.redis.execute_command("EXEC") # type: ignore
 
         global_mapping_cache[bonded_mapping_id] = {}
         bonded_mapping: dict[str, dict[str, str]] = {}
@@ -726,10 +729,10 @@ class DatabaseInsert(DatabaseBase):
                 "key": key,
                 "value": value,
             }
-        await self.redis.execute_command("MULTI")
+        await self.redis.execute_command("MULTI") # type: ignore
         await self.redis.delete("credits.aleo:bonded")
         await self.redis.hset("credits.aleo:bonded", mapping={k: json.dumps(v) for k, v in bonded_mapping.items()})
-        await self.redis.execute_command("EXEC")
+        await self.redis.execute_command("EXEC") # type: ignore
 
         global_mapping_cache[delegated_mapping_id] = {}
         delegated_mapping: dict[str, dict[str, str]] = {}
@@ -745,10 +748,10 @@ class DatabaseInsert(DatabaseBase):
                 "key": key,
                 "value": value,
             }
-        await self.redis.execute_command("MULTI")
+        await self.redis.execute_command("MULTI") # type: ignore
         await self.redis.delete("credits.aleo:delegated")
         await self.redis.hset("credits.aleo:delegated", mapping={k: json.dumps(v) for k, v in delegated_mapping.items()})
-        await self.redis.execute_command("EXEC")
+        await self.redis.execute_command("EXEC") # type: ignore
 
     @staticmethod
     async def _save_committee_history(cur: psycopg.AsyncCursor[dict[str, Any]], height: int, committee: Committee):
@@ -1075,7 +1078,7 @@ class DatabaseInsert(DatabaseBase):
                     pipe.hincrby("address_stake_reward", str(address), amount)
                     supply_tracker.mint(amount)
                     supply_tracker.tally_block_reward(amount)
-                await pipe.execute()
+                await pipe.execute() # type: ignore
 
                 await self._update_committee_bonded_delegated_map(committee_members, stakers, delegated)
                 starting_round = u64(round_)
@@ -1161,11 +1164,11 @@ class DatabaseInsert(DatabaseBase):
                 backup_key = f"{key}:rollback_backup:{height}"
                 if rollback:
                     if await redis_conn.exists(backup_key) == 1:
-                        await redis_conn.copy(backup_key, key, replace=True)
+                        await redis_conn.copy(backup_key, key, replace=True) # type: ignore[arg-type]
                 else:
                     if history:
                         history_key = f"{key}:history:{height - 1}"
-                        await redis_conn.rename(backup_key, history_key)
+                        await redis_conn.rename(backup_key, history_key) # type: ignore[arg-type]
                         await redis_conn.expire(history_key, 60 * 60 * 24 * 3)
                     else:
                         await redis_conn.delete(backup_key)
@@ -1482,7 +1485,7 @@ class DatabaseInsert(DatabaseBase):
                                 for address, reward in address_puzzle_rewards.items():
                                     pipe = self.redis.pipeline()
                                     pipe.hincrby("address_puzzle_reward", address, reward)
-                                    await pipe.execute()
+                                    await pipe.execute() # type: ignore
 
                         for aborted in block.aborted_transactions_ids:
                             await cur.execute(
