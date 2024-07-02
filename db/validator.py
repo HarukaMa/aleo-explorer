@@ -128,7 +128,7 @@ class DatabaseValidator(DatabaseBase):
                         "GROUP BY b.height ORDER BY b.height DESC LIMIT 1"
                     )
                     res = await cur.fetchone()
-                    if res:
+                    if res is not None:
                         return res["count"]
                     else:
                         return 0

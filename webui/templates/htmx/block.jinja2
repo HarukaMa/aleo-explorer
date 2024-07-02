@@ -98,6 +98,7 @@
             </div>
 
             <div class="tabs-panel is-active" id="transactions">
+                <h4>Confirmed transactions</h4>
                 <table id="transactions-table" class="unstriped">
                     <thead>
                     <tr>
@@ -132,15 +133,30 @@
                     {% endfor %}
                     </tbody>
                 </table>
+                <h4>Aborted transactions</h4>
+                <table id="aborted-table" class="unstriped">
+                    <thead>
+                    <tr>
+                        <td>Transaction ID</td>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for aborted_tx in aborted_transactions %}
+                    <tr>
+                        <td><span class="mono">{{ aborted_tx }}</span></td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
             </div>
 
             <div class="tabs-panel" id="solutions">
+                <h4>Confirmed solutions</h4>
                 <table id="coinbase-table" class="unstriped">
                     <thead>
                     <tr>
                         <td>Address</td>
-                        <td>Nonce</td>
-                        <td>Commitment</td>
+                        <td>Counter</td>
                         <td>Target / Total</td>
                         <td>Reward</td>
                     </tr>
@@ -149,8 +165,7 @@
                     {% for partial_solution in coinbase_solutions %}
                     <tr>
                         <td><a href="/address?a={{ partial_solution.address }}"><span class="mono">{{ partial_solution.address_trunc }}</span></a></td>
-                        <td><span class="mono">{{ partial_solution.nonce }}</span></td>
-                        <td><span class="mono">{{ partial_solution.commitment }}</span></td>
+                        <td><span class="mono">{{ partial_solution.counter }}</span></td>
                         <td>{{ partial_solution.target | format_number | safe }}<span class="note"> / {{ target_sum | format_number | safe }}</span></td>
                         <td>{{ partial_solution.reward | format_aleo_credit | safe }}</td>
                     </tr>
@@ -158,8 +173,23 @@
                     </tbody>
                 </table>
                 {% if block.solutions.value.solutions | count > 100 %}
-                Showing 100 items. <a href="block_solutions?h={{ block.header.metadata.height }}">Show all</a>
+                Showing 100 items. <a href="/block_solutions?h={{ block.header.metadata.height }}">Show all</a>
                 {% endif %}
+                <h4>Aborted solutions</h4>
+                <table id="aborted-table" class="unstriped">
+                    <thead>
+                    <tr>
+                        <td>Solution ID</td>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for aborted_solution in aborted_solutions %}
+                    <tr>
+                        <td><span class="mono">{{ aborted_solution }}</span></td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
 

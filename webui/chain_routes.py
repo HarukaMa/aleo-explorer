@@ -73,7 +73,7 @@ async def block_route(request: Request):
                 "reward": solution["reward"],
             })
             target_sum += solution["target"]
-
+    ass: list[str] = list(map(str, block.aborted_solution_ids))
     txs: DictList = []
     total_base_fee = 0
     total_priority_fee = 0
@@ -157,7 +157,7 @@ async def block_route(request: Request):
             txs.append(t)
         else:
             raise HTTPException(status_code=550, detail="Unsupported transaction type")
-
+    atxs: list[str] = list(map(str, block.aborted_transactions_ids))
     validators, all_validators_raw = await db.get_validator_by_height(height)
     all_validators = []
     for v in all_validators_raw:
@@ -170,7 +170,9 @@ async def block_route(request: Request):
         "validator": "Not implemented", # await db.get_miner_from_block_hash(block.block_hash),
         "coinbase_reward": coinbase_reward,
         "transactions": txs,
+        "aborted_transactions": atxs,
         "coinbase_solutions": css,
+        "aborted_solutions": ass,
         "target_sum": target_sum,
         "total_base_fee": total_base_fee,
         "total_priority_fee": total_priority_fee,

@@ -4,7 +4,8 @@ import os
 from asyncio import iscoroutinefunction
 from typing import Awaitable, ParamSpec
 
-from psycopg.rows import dict_row
+from psycopg import AsyncConnection
+from psycopg.rows import DictRow, dict_row
 from psycopg_pool import AsyncConnectionPool
 from redis.asyncio import Redis
 
@@ -44,7 +45,7 @@ class DatabaseBase:
         self.redis_user = redis_user
         self.redis_password = redis_password
 
-        self.pool: AsyncConnectionPool
+        self.pool: AsyncConnectionPool[AsyncConnection[DictRow]]
         self.redis: Redis[str]
 
     async def connect(self):
