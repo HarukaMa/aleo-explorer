@@ -1594,7 +1594,9 @@ class DatabaseInsert(DatabaseBase):
                             )
 
                         if block.height % 100 == 0:
-                            await self.cleanup_unconfirmed_transactions()
+                            # temporarily disable this as it seems we don't have lingering unconfirmed tx anymore
+                            pass
+                            # await self.cleanup_unconfirmed_transactions()
 
                         signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT})
                         await self._redis_cleanup(self.redis, self.redis_keys, block.height, False)
