@@ -1,6 +1,7 @@
 import functools
+import sys
 from types import GenericAlias
-from typing import Generic, TypeVar, Optional, TypeVarTuple, TypeGuard, cast, Callable, Hashable
+from typing import Generic, TypeVar, TypeVarTuple, TypeGuard, cast, Callable, Hashable
 
 from .basic import *
 
@@ -39,6 +40,8 @@ def tp_cache(func: Optional[Callable[..., Any]] = None, /, *, typed: bool = Fals
     return decorator
 
 def is_serializable(t: Any) -> TypeGuard[TType[Serializable]]:
+    if sys.version_info >= (3, 12) and isinstance(t, GenericAlias):
+        t = t.__origin__
     return isinstance(t, Serializable)
 
 class Tuple(tuple[*TP], Serializable):
