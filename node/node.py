@@ -264,7 +264,7 @@ class Node:
     async def send_ping(self):
         ping = Ping(
             version=Network.version,
-            node_type=NodeType.Client,
+            node_type=NodeType.Validator,
             block_locators=Option[BlockLocators](
                 BlockLocators(
                     recents=dict[u32, BlockHash]({
