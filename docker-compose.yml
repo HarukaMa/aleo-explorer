@@ -45,6 +45,7 @@ services:
       - DEV_MODE=1
       - TURNSTILE_SITE_KEY=0x0
       - TURNSTILE_SECRET_KEY=0x0
+      - NETWORK=testnet
     restart: unless-stopped
     depends_on:
       - db
