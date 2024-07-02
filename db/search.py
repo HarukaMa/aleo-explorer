@@ -1,6 +1,8 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 from explorer.types import Message as ExplorerMessage
 from .base import DatabaseBase
 
@@ -77,6 +79,27 @@ class DatabaseSearch(DatabaseBase):
                         "SELECT program_id FROM program WHERE program_id LIKE %s", (f"{program_id}%",)
                     )
                     return list(map(lambda x: x['program_id'], await cur.fetchall()))
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def search_solution(self, solution_id: str) -> Optional[int]:
+        """
+        @return: block height if solution exists
+        """
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT b.height FROM block b "
+                        "JOIN explorer.block_aborted_solution_id basi on b.id = basi.block_id "
+                        "WHERE basi.solution_id = %s",
+                        (solution_id,)
+                    )
+                    res = await cur.fetchone()
+                    if res:
+                        return res['height']
+                    return None
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise

@@ -760,6 +760,12 @@ async def search_route(request: Request):
             "too_many": too_many,
         }
         return ctx, {'Cache-Control': 'public, max-age=15'}
+    elif query.startswith("solution1"):
+        # solution id
+        block_height = await db.search_solution(query)
+        if not block_height:
+            raise HTTPException(status_code=404, detail="Solution not found or is confirmed (coming later)")
+        return RedirectResponse(f"/block?h={block_height}{remaining_query}", status_code=302)
     elif query.endswith(".ans"):
         address = await util.arc0137.get_address_from_domain(db, query)
         if address is None:
