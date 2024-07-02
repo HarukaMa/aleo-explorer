@@ -62,7 +62,7 @@ class Node:
             challenge_request = ChallengeRequest(
                 version=Network.version,
                 listener_port=u16(14133),
-                node_type=NodeType.Client,
+                node_type=NodeType.Validator,
                 address=Address.loads("aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px"),
                 nonce=self.nonce,
             )
