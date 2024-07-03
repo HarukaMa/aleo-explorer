@@ -30,7 +30,7 @@
         {% endcall %}
         </div>
 
-        <ul class="tabs" data-tabs id="address-tabs">
+        <ul class="tabs" data-tabs id="address-tabs" data-deep-link="true">
             <li class="tabs-title is-active"><a href="#stats">Address stats</a></li>
             {% if committee_state %}
             <li class="tabs-title"><a href="#validator">Validator stats</a></li>
@@ -216,5 +216,9 @@
         </div>
 
     </div>
+
+<script>
+    {#alert(document.URL)#}
+</script>
 
 {{ htmx_title(request, "Address " ~ address_trunc) }}

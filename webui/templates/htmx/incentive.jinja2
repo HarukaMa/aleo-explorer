@@ -47,7 +47,7 @@
                 {% for line in leaderboard %}
                     <tr>
                         <td>{{ loop.index + (page - 1) * 50 }}</td>
-                        <td class="mono"><a href="/address?a={{ line.address }}">{{ line.address }}</a></td>
+                        <td class="mono"><a href="/address?a={{ line.address }}#solutions">{{ line.address }}</a></td>
                         <td>{{ line.total_rewards | format_aleo_credit | safe }}</td>
                         <td>{{ "%.3f" % (line.total_rewards / total_credit * 100) }}%</td>
                     </tr>
