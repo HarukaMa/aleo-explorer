@@ -30,7 +30,7 @@
         {% endcall %}
         </div>
 
-        <ul class="tabs" data-tabs id="address-tabs" data-deep-link="true">
+        <ul class="tabs" data-tabs id="address-tabs">
             <li class="tabs-title is-active"><a href="#stats">Address stats</a></li>
             {% if committee_state %}
             <li class="tabs-title"><a href="#validator">Validator stats</a></li>
@@ -218,7 +218,19 @@
     </div>
 
 <script>
-    {#alert(document.URL)#}
+  function switch_tab(_) {
+    hash = window.location.hash
+    if (hash) {
+      tab = document.querySelector(`a[href="${hash}"]`)
+        window.history.replaceState(null, null, window.location.pathname + window.location.search)
+      if (tab) {
+        tab.click()
+        setTimeout(() => window.scrollTo(0, 0), 0)
+      }
+    }
+  }
+  document.addEventListener("DOMContentLoaded", switch_tab);
+  document.addEventListener('htmx:load', switch_tab);
 </script>
 
 {{ htmx_title(request, "Address " ~ address_trunc) }}
