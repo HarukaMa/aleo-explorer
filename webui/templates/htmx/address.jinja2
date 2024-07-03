@@ -2,6 +2,7 @@
 {% from "macros.jinja2" import data_line, data_line_safe, htmx_title, sync_notice %}
 {{ sync_notice(sync_info) }}
 
+
     <div class="content" hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
 
         <div id="header">
@@ -217,20 +218,23 @@
 
     </div>
 
+
 <script>
-  function switch_tab(_) {
+  function switch_tab(e) {
+    console.log(e)
     hash = window.location.hash
+    console.log(window.location)
+    console.log(hash)
     if (hash) {
       tab = document.querySelector(`a[href="${hash}"]`)
-        window.history.replaceState(null, null, window.location.pathname + window.location.search)
+      console.log(tab)
+      window.history.replaceState(null, null, window.location.pathname + window.location.search)
       if (tab) {
         tab.click()
         setTimeout(() => window.scrollTo(0, 0), 0)
       }
     }
   }
-  document.addEventListener("DOMContentLoaded", switch_tab);
-  document.addEventListener('htmx:load', switch_tab);
+  document.addEventListener('htmx:pushedIntoHistory', switch_tab)
 </script>
-
 {{ htmx_title(request, "Address " ~ address_trunc) }}
