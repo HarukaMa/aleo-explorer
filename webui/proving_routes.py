@@ -29,9 +29,8 @@ async def calc_route(request: Request):
     return ctx, {'Cache-Control': 'public, max-age=60'}
 
 
-# TODO: reconsider what to show here
-@htmx_template("leaderboard.jinja2")
-async def leaderboard_route(request: Request):
+@htmx_template("incentive.jinja2")
+async def incentive_route(request: Request):
     db: Database = request.app.state.db
     try:
         page = request.query_params.get("p")
@@ -41,28 +40,29 @@ async def leaderboard_route(request: Request):
             page = int(page)
     except:
         raise HTTPException(status_code=400, detail="Invalid page")
-    address_count = await db.get_puzzle_reward_address_count()
+    address_count = await db.get_incentive_address_count()
     total_pages = (address_count // 50) + 1
     if page < 1 or page > total_pages:
         raise HTTPException(status_code=400, detail="Invalid page")
     start = 50 * (page - 1)
-    leaderboard_data = await db.get_puzzle_rewards(start, start + 50)
+    leaderboard_data = await db.get_incentive_addresses(start, start + 50)
     data: list[dict[str, Any]] = []
     for line in leaderboard_data:
         data.append({
             "address": line["address"],
-            "total_rewards": line["total_reward"],
-            "total_incentive": line["total_incentive"],
+            "total_rewards": line["reward"],
         })
     now = int(time.time())
-    target_credit = 37_500_000_000_000
+    total_credit = await db.get_incentive_total_reward()
+    ratio = (now - 1719849600) / (86400 * 15) * 100
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
         "leaderboard": data,
         "page": page,
         "total_pages": total_pages,
-        "target_credit": target_credit,
+        "total_credit": total_credit,
         "now": now,
+        "ratio": ratio,
         "sync_info": sync_info,
     }
     return ctx, {'Cache-Control': 'public, max-age=15'}

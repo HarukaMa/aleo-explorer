@@ -127,6 +127,7 @@ def htmx_template(template: str):
                     tb = tb.tb_next
                     if tb.tb_frame.f_code.co_filename.endswith(".jinja2"):
                         frame = tb.tb_frame
+                traceback.print_exc()
                 raise HTTPException(status_code=550, detail=f"template error at {frame.f_code.co_filename.rsplit('/', 1)[-1]}:{frame.f_lineno}: {e.__class__.__name__}: {str(e)}") from e
         return wrapper
     return decorator

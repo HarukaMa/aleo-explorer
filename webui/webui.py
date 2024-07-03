@@ -144,7 +144,7 @@ routes = [
     Route("/submit_source", submit_source_route, methods=["POST"]),
     # Proving
     Route("/calc", calc_route),
-    Route("/leaderboard", leaderboard_route),
+    Route("/incentive", incentive_route),
     Route("/address", address_route),
     Route("/address_solution", address_solution_route),
     # Other

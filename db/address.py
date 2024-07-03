@@ -246,3 +246,56 @@ LIMIT 30
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
+
+    async def get_incentive_address_count(self) -> int:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT COUNT(DISTINCT address) FROM solution "
+                        "JOIN puzzle_solution ps ON solution.puzzle_solution_id = ps.id "
+                        "JOIN block b ON ps.block_id = b.id "
+                        "WHERE b.timestamp > 1719849600 AND b.timestamp < 1721059200"
+                    )
+                    if (res := await cur.fetchone()) is None:
+                        return 0
+                    return res["count"]
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def get_incentive_addresses(self, start: int, end: int) -> list[dict[str, Any]]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT s.address, sum(s.reward) as reward FROM solution s "
+                        "JOIN puzzle_solution ps ON s.puzzle_solution_id = ps.id "
+                        "JOIN block b ON ps.block_id = b.id "
+                        "WHERE b.timestamp > 1719849600 AND b.timestamp < 1721059200 "
+                        "GROUP BY s.address "
+                        "ORDER BY reward DESC "
+                        "LIMIT %s OFFSET %s",
+                        (end - start, start)
+                    )
+                    return await cur.fetchall()
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def get_incentive_total_reward(self) -> Decimal:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT sum(reward) FROM solution s "
+                        "JOIN puzzle_solution ps ON s.puzzle_solution_id = ps.id "
+                        "JOIN block b ON ps.block_id = b.id "
+                        "WHERE b.timestamp > 1719849600 AND b.timestamp < 1721059200"
+                    )
+                    if (res := await cur.fetchone()) is None:
+                        return Decimal(0)
+                    return res["sum"]
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
