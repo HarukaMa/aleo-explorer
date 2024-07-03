@@ -181,6 +181,7 @@ async def startup():
     app.state.db = db
     # noinspection PyUnresolvedReferences
     app.state.lns.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4133")), None)
+    app.state.lns.start_listener()
     app.state.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=1))
     set_proc_title("aleo-explorer: webui")
 
