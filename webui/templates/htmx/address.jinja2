@@ -144,7 +144,7 @@
                         <th>Block</th>
                         <th>Epoch</th>
                         <th>Timestamp</th>
-                        <th>Nonce</th>
+                        <th>Counter</th>
                         <th>Target / Total</th>
                         <th>Reward</th>
                     </tr>
@@ -155,7 +155,7 @@
                             <td><a href="/block?h={{ solution.height }}">{{ solution.height | format_number | safe }}</a></td>
                             <td>{{ solution.height // 256 }}</td>
                             <td>{{ solution.timestamp | format_time | safe }}</td>
-                            <td>{{ solution.nonce }}</td>
+                            <td>{{ solution.counter }}</td>
                             <td>{{ solution.target | format_number | safe }}<span class="note"> / {{ solution.target_sum | format_number | safe }}</span></td>
                             <td>{{ solution.reward | format_aleo_credit | safe }}</td>
                         </tr>
