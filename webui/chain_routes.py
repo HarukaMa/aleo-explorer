@@ -974,7 +974,7 @@ async def nodes_route(request: Request):
             clients += 1
         elif node_type == NodeType.Prover:
             provers += 1
-        if node.get("peer_count", 0) > 0:
+        if node.get("direction", "") != "disconnected":
             connected += 1
     ctx = {
         "nodes": res,

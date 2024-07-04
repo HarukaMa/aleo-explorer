@@ -54,7 +54,7 @@ async def incentive_route(request: Request):
         })
     now = int(time.time())
     total_credit = await db.get_incentive_total_reward()
-    ratio = (now - 1719849600) / (86400 * 15) * 100
+    ratio = (now - 1719849600) / (86400 * 14) * 100
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
         "leaderboard": data,

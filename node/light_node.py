@@ -89,7 +89,8 @@ class LightNodeState:
     def disconnected(self, ip: str, port: int):
         key = ":".join([ip, str(port)])
         if key in self.states:
-            del self.nodes[key]
+            if key in self.nodes:
+                del self.nodes[key]
             self.states[key]["direction"] = "disconnected"
 
     def cleanup(self):
