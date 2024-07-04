@@ -1,6 +1,6 @@
 import time
 from io import BytesIO
-from typing import Any, cast
+from typing import Any, cast, Optional
 
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
@@ -193,7 +193,7 @@ async def address_route(request: Request):
         }
     if committee_state_bytes is None:
         committee_state = None
-        address_stakes = None
+        address_stakes: Optional[dict[str, int]] = None
         uptime = None
     else:
         value = cast(PlaintextValue, Value.load(BytesIO(committee_state_bytes)))
