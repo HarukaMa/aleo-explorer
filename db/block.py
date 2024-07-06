@@ -1028,7 +1028,7 @@ class DatabaseBlock(DatabaseBase):
                     raise
 
 
-    async def get_latest_block(self):
+    async def get_latest_block(self) -> Block:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:

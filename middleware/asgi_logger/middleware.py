@@ -6,18 +6,17 @@ import os
 import re
 import sys
 import time
-from typing import TypedDict
+from typing import TypedDict, Any, Required
 
-from asgiref.typing import ASGI3Application, ASGIReceiveCallable, ASGISendCallable
-from asgiref.typing import ASGISendEvent, HTTPScope
+from starlette.types import ASGIApp, Receive, Send, Message, Scope
 
 from .utils import get_client_addr, get_path_with_query_string
 
 
 class AccessInfo(TypedDict, total=False):
-    response: ASGISendEvent
-    start_time: float
-    end_time: float
+    response: Required[Message]
+    start_time: Required[float]
+    end_time: Required[float]
 
 
 class AccessLoggerMiddleware:
@@ -25,7 +24,7 @@ class AccessLoggerMiddleware:
 
     def __init__(
         self,
-        app: ASGI3Application,
+        app: ASGIApp,
         format: str | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
@@ -46,14 +45,14 @@ class AccessLoggerMiddleware:
             self.ua_exclude_pattern = None
 
     async def __call__(
-        self, scope: HTTPScope, receive: ASGIReceiveCallable, send: ASGISendCallable
+        self, scope: Scope, receive: Receive, send: Send
     ) -> None:
         if scope["type"] != "http":
             return await self.app(scope, receive, send)  # pragma: no cover
 
         info = AccessInfo(response={})
 
-        async def inner_send(message: ASGISendEvent) -> None:
+        async def inner_send(message: Message) -> None:
             if message["type"] == "http.response.start":
                 info["response"] = message
             await send(message)
@@ -68,14 +67,14 @@ class AccessLoggerMiddleware:
             info["end_time"] = time.time()
             self.log(scope, info)
 
-    def log(self, scope: HTTPScope, info: AccessInfo) -> None:
+    def log(self, scope: Scope, info: AccessInfo) -> None:
         if self.ua_exclude_pattern and re.search(self.ua_exclude_pattern, dict(scope["headers"]).get(b"user-agent", b"")):
             return
         self.logger.info(self.format, AccessLogAtoms(scope, info))
 
 
-class AccessLogAtoms(dict):
-    def __init__(self, scope: HTTPScope, info: AccessInfo) -> None:
+class AccessLogAtoms(dict[str, Any]):
+    def __init__(self, scope: Scope, info: AccessInfo) -> None:
         super().__init__()
         for name, value in scope["headers"]:
             self[f"{{{name.decode('latin1').lower()}}}i"] = value.decode("latin1")

@@ -40,13 +40,31 @@ async def index_route(request: Request):
     return SJSONResponse({"hello": "world"})
 
 async def sync_info_route(request: Request):
-    db = request.app.state.db
+    db: Database = request.app.state.db
     sync_info = await out_of_sync_check(request.app.state.session, db)
     return SJSONResponse(sync_info)
+
+async def summary_route(request: Request):
+    db: Database = request.app.state.db
+    network_speed = await db.get_network_speed()
+    validators = await db.get_current_validator_count()
+    participation_rate = await db.get_network_participation_rate()
+    block = await db.get_latest_block()
+    summary = {
+        "latest_height": block.height,
+        "latest_timestamp": block.header.metadata.timestamp,
+        "proof_target": block.header.metadata.proof_target,
+        "coinbase_target": block.header.metadata.coinbase_target,
+        "network_speed": network_speed,
+        "validators": validators,
+        "participation_rate": participation_rate,
+    }
+    return SJSONResponse(summary)
 
 routes = [
     Route("/", index_route),
     Route("/sync", sync_info_route),
+    Route("/summary", summary_route),
 
     Route("/block/recent", recent_blocks_route),
 ]
