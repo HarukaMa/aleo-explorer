@@ -21,7 +21,7 @@
         {% call data_line("Timestamp", '<i class="fa-regular fa-circle-question" data-tippy-content="Timestamp property in block, which is earlier than block generation time"></i>') %}
             {{ block.header.metadata.timestamp | format_time | safe }}
         {% endcall %}
-        {% call data_line("Validators", '<i class="fa-regular fa-circle-question" data-tippy-content="If the block contains signature from the validator"></i>') %}
+        {% call data_line("Validators", '<i class="fa-regular fa-circle-question" data-tippy-content="If the block contains signed batches from the validator"></i>') %}
             <div class="block-validator">
                 {% for v in all_validators %}
                     {% if v.address in validators %}
