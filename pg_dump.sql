@@ -1240,7 +1240,8 @@ CREATE TABLE explorer.solution (
     counter numeric(20,0) NOT NULL,
     target numeric(20,0) NOT NULL,
     reward integer NOT NULL,
-    epoch_hash text NOT NULL
+    epoch_hash text NOT NULL,
+    solution_id text NOT NULL
 );
 
 

@@ -72,6 +72,7 @@ async def block_route(request: Request):
                 "counter": solution["counter"],
                 "target": solution["target"],
                 "reward": solution["reward"],
+                "solution_id": solution["solution_id"],
             })
             target_sum += solution["target"]
     ass: list[str] = list(map(str, block.aborted_solution_ids))
