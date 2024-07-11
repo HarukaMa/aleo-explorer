@@ -73,7 +73,7 @@ class DatabaseAddress(DatabaseBase):
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT s.address, s.counter, s.target, reward "
+                        "SELECT s.address, s.counter, s.target, reward, s.solution_id "
                         "FROM solution s "
                         "JOIN puzzle_solution ps on s.puzzle_solution_id = ps.id "
                         "JOIN block b on ps.block_id = b.id "

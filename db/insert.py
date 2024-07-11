@@ -1468,18 +1468,18 @@ class DatabaseInsert(DatabaseBase):
                             if (res := await cur.fetchone()) is None:
                                 raise RuntimeError("failed to insert row into database")
                             puzzle_solution_db_id = res["id"]
-                            copy_data: list[tuple[int, str, u64, int, int, str]] = []
+                            copy_data: list[tuple[int, str, u64, int, int, str, str]] = []
                             for solution, target, reward in solutions:
                                 solution: Solution
                                 # dag_vertex_db_id = dag_transmission_ids[0][str(partial_solution.commitment)]
                                 copy_data.append(
                                     (puzzle_solution_db_id, str(solution.partial_solution.address), solution.partial_solution.counter,
-                                     solution.target, reward, str(solution.partial_solution.epoch_hash))
+                                     solution.target, reward, str(solution.partial_solution.epoch_hash), str(solution.partial_solution.solution_id))
                                 )
                                 if reward > 0:
                                     address_puzzle_rewards[str(solution.partial_solution.address)] += reward
                             if not os.environ.get("DEBUG_SKIP_COINBASE"):
-                                async with cur.copy("COPY solution (puzzle_solution_id, address, counter, target, reward, epoch_hash) FROM STDIN") as copy:
+                                async with cur.copy("COPY solution (puzzle_solution_id, address, counter, target, reward, epoch_hash, solution_id) FROM STDIN") as copy:
                                     for row in copy_data:
                                         await copy.write_row(row)
                                 for address, reward in address_puzzle_rewards.items():
