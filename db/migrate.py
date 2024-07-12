@@ -21,6 +21,7 @@ class DatabaseMigrate(DatabaseBase):
             (1, self.migrate_1_add_rejected_original_id),
             (2, self.migrate_2_set_on_delete_cascade),
             (3, self.migrate_3_fix_finalize_operation_function),
+            (4, self.migrate_4_add_solution_id)
         ]
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -93,3 +94,39 @@ WHERE tables.oid = pg_trigger.tgrelid
     @staticmethod
     async def migrate_3_fix_finalize_operation_function(conn: psycopg.AsyncConnection[DictRow]):
         await conn.execute(cast(LiteralString, open("migration_3.sql").read()))
+
+
+    @staticmethod
+    async def migrate_4_add_solution_id(conn: psycopg.AsyncConnection[DictRow]):
+        # add column
+        try:
+            async with conn.transaction():
+                await conn.execute("""
+                    ALTER TABLE solution
+                    ADD COLUMN solution_id TEXT NULL
+                """)
+        except Exception as e:
+            raise RuntimeError(f"Failed to add column 'solution_id' to 'solution': {e}")
+
+        async with conn.transaction():
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "SELECT id, epoch_hash, address, counter FROM solution ",
+                )
+                rows = await cur.fetchall()
+                if not rows:
+                    break
+
+                for row in rows:
+                    solution_id = SolutionID.load(
+                        BytesIO(aleo_explorer_rust.solution_to_id(
+                            str(row["epoch_hash"]),
+                            str(row["address"]),
+                            int(row["counter"])
+                        )
+                        )
+                    )
+                    await cur.execute(
+                        "UPDATE solution SET solution_id = %s WHERE id = %s",
+                        (str(solution_id), row["id"])
+                    )
