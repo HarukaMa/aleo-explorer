@@ -115,7 +115,7 @@ WHERE tables.oid = pg_trigger.tgrelid
                 )
                 rows = await cur.fetchall()
                 if not rows:
-                    break
+                    return
 
                 for row in rows:
                     solution_id = SolutionID.load(
