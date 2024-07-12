@@ -155,21 +155,21 @@
                 <table id="coinbase-table" class="unstriped">
                     <thead>
                     <tr>
+                        <td>Solution ID</td>
                         <td>Address</td>
                         <td>Counter</td>
                         <td>Target / Total</td>
                         <td>Reward</td>
-                        <td>SolutionID</td>
                     </tr>
                     </thead>
                     <tbody>
                     {% for partial_solution in coinbase_solutions %}
                     <tr>
+                        <td><span class="mono">{{ partial_solution.solution_id }}</span></td>
                         <td><a href="/address?a={{ partial_solution.address }}"><span class="mono">{{ partial_solution.address_trunc }}</span></a></td>
                         <td><span class="mono">{{ partial_solution.counter }}</span></td>
                         <td>{{ partial_solution.target | format_number | safe }}<span class="note"> / {{ target_sum | format_number | safe }}</span></td>
                         <td>{{ partial_solution.reward | format_aleo_credit | safe }}</td>
-                        <td> {{ partial_solution.solution_id }}</td>
                     </tr>
                     {% endfor %}
                     </tbody>

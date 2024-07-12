@@ -21,7 +21,7 @@ class DatabaseAddress(DatabaseBase):
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT b.height, b.timestamp, s.counter, s.target, reward, ps.target_sum "
+                        "SELECT b.height, b.timestamp, s.counter, s.target, s.solution_id, reward, ps.target_sum "
                         "FROM solution s "
                         "JOIN puzzle_solution ps ON ps.id = s.puzzle_solution_id "
                         "JOIN block b ON b.id = ps.block_id "
@@ -54,7 +54,7 @@ class DatabaseAddress(DatabaseBase):
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT b.height, b.timestamp, s.counter, s.target, reward, ps.target_sum "
+                        "SELECT b.height, b.timestamp, s.counter, s.target, s.solution_id, reward, ps.target_sum "
                         "FROM solution s "
                         "JOIN puzzle_solution ps ON ps.id = s.puzzle_solution_id "
                         "JOIN block b ON b.id = ps.block_id "

@@ -143,6 +143,7 @@ async def address_route(request: Request):
             "counter": solution["counter"],
             "target": solution["target"],
             "target_sum": solution["target_sum"],
+            "solution_id": solution["solution_id"],
         })
     recent_programs: list[dict[str, Any]] = []
     for program in programs:
@@ -301,6 +302,7 @@ async def address_solution_route(request: Request):
             "counter": solution["counter"],
             "target": solution["target"],
             "target_sum": solution["target_sum"],
+            "solution_id": solution["solution_id"],
         })
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
