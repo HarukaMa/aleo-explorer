@@ -13,8 +13,7 @@ class AleoID(AleoIDProtocol):
 
     def __init__(self, data: bytes):
         if len(self._prefix) != 2:
-            if self._prefix != "solution":
-                raise ValueError("locator_prefix must be 2 bytes")
+            raise ValueError("locator_prefix must be 2 bytes")
         self._data = data
         self._bech32m = Bech32m(data, self._prefix)
 
@@ -100,9 +99,6 @@ class TransactionID(AleoID):
 
 class TransitionID(AleoID):
     _prefix = "au"
-
-class SolutionID(AleoID):
-    _prefix = "solution"
 
 ## Saved for reference
 # class RecordCiphertext(AleoObject):
