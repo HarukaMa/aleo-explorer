@@ -98,12 +98,12 @@ async def function_definition(db: Database, program_id: str, function_name: str)
         return f"Unknown function {program_id}/{function_name}"
     return data
 
-def cache_seconds(seconds: int):
+def public_cache_seconds(seconds: int):
     def decorator(func: Callable[[Request], Coroutine[Any, Any, Response]]):
         @functools.wraps(func)
         async def wrapper(request: Request):
             response = await func(request)
-            response.headers["Cache-Control"] = f"max-age={seconds}"
+            response.headers["Cache-Control"] = f"public, max-age={seconds}"
             return response
         return wrapper
     return decorator

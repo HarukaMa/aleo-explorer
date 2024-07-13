@@ -3,7 +3,7 @@ from typing import Any
 from starlette.requests import Request
 
 from db import Database
-from webapi.utils import SJSONResponse, cache_seconds
+from webapi.utils import SJSONResponse, public_cache_seconds
 
 
 async def get_summary(db: Database):
@@ -22,13 +22,13 @@ async def get_summary(db: Database):
     }
     return summary
 
-@cache_seconds(5)
+@public_cache_seconds(5)
 async def recent_blocks_route(request: Request):
     db: Database = request.app.state.db
     recent_blocks = await db.get_recent_blocks_fast(10)
     return SJSONResponse(recent_blocks)
 
-@cache_seconds(5)
+@public_cache_seconds(5)
 async def index_update_route(request: Request):
     db: Database = request.app.state.db
     last_block = request.query_params.get("last_block")
