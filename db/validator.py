@@ -117,7 +117,7 @@ class DatabaseValidator(DatabaseBase):
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_current_validator_count(self):
+    async def get_current_validator_count(self) -> int:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:

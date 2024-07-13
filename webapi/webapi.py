@@ -17,7 +17,7 @@ from middleware.asgi_logger import AccessLoggerMiddleware
 from middleware.auth import AuthMiddleware
 from middleware.server_timing import ServerTimingMiddleware
 from util.set_proc_title import set_proc_title
-from .block_routes import recent_blocks_route
+from .block_routes import get_summary, recent_blocks_route, index_update_route
 from .error_routes import bad_request, not_found, internal_error
 from .utils import out_of_sync_check, SJSONResponse
 
@@ -46,20 +46,7 @@ async def sync_info_route(request: Request):
 
 async def summary_route(request: Request):
     db: Database = request.app.state.db
-    network_speed = await db.get_network_speed()
-    validators = await db.get_current_validator_count()
-    participation_rate = await db.get_network_participation_rate()
-    block = await db.get_latest_block()
-    summary = {
-        "latest_height": block.height,
-        "latest_timestamp": block.header.metadata.timestamp,
-        "proof_target": block.header.metadata.proof_target,
-        "coinbase_target": block.header.metadata.coinbase_target,
-        "network_speed": network_speed,
-        "validators": validators,
-        "participation_rate": participation_rate,
-    }
-    return SJSONResponse(summary)
+    return SJSONResponse(await get_summary(db))
 
 routes = [
     Route("/", index_route),
@@ -67,6 +54,7 @@ routes = [
     Route("/summary", summary_route),
 
     Route("/block/recent", recent_blocks_route),
+    Route("/block/index_update", index_update_route),
 ]
 
 exc_handlers = {
