@@ -1,10 +1,12 @@
 import asyncio
+import functools
 import os
 import time
-from typing import Any
+from typing import Any, Callable, Coroutine
 
 import aiohttp
 import simplejson
+from starlette.requests import Request
 from starlette.responses import Response
 
 from db import Database
@@ -95,3 +97,13 @@ async def function_definition(db: Database, program_id: str, function_name: str)
     if data is None:
         return f"Unknown function {program_id}/{function_name}"
     return data
+
+def cache_seconds(seconds: int):
+    def decorator(func: Callable[[Request], Coroutine[Any, Any, Response]]):
+        @functools.wraps(func)
+        async def wrapper(request: Request):
+            response = await func(request)
+            response.headers["Cache-Control"] = f"max-age={seconds}"
+            return response
+        return wrapper
+    return decorator

@@ -19,7 +19,7 @@ from middleware.server_timing import ServerTimingMiddleware
 from util.set_proc_title import set_proc_title
 from .block_routes import get_summary, recent_blocks_route, index_update_route
 from .error_routes import bad_request, not_found, internal_error
-from .utils import out_of_sync_check, SJSONResponse
+from .utils import cache_seconds, out_of_sync_check, SJSONResponse
 
 load_dotenv()
 
@@ -39,11 +39,13 @@ class UvicornServer(multiprocessing.Process):
 async def index_route(request: Request):
     return SJSONResponse({"hello": "world"})
 
+@cache_seconds(10)
 async def sync_info_route(request: Request):
     db: Database = request.app.state.db
     sync_info = await out_of_sync_check(request.app.state.session, db)
     return SJSONResponse(sync_info)
 
+@cache_seconds(5)
 async def summary_route(request: Request):
     db: Database = request.app.state.db
     return SJSONResponse(await get_summary(db))
