@@ -144,8 +144,7 @@ class DatabaseInsert(DatabaseBase):
                 else:
                     raise NotImplementedError
 
-    @staticmethod
-    async def _update_address_stats(redis_conn: Redis[str], transaction: Transaction):
+    async def _update_address_stats(self, transaction: Transaction):
 
         if isinstance(transaction, DeployTransaction):
             transitions = [cast(Fee, transaction.fee).transition]
@@ -185,6 +184,33 @@ class DatabaseInsert(DatabaseBase):
                     future = cast(Future, output.future.value)
                     fee_from = str(DatabaseUtil.get_primitive_from_argument_unchecked(future.arguments[0]))
                     amount = int(cast(u64, DatabaseUtil.get_primitive_from_argument_unchecked(future.arguments[1])))
+                elif transition.function_name == "bond_validator":
+                    output = cast(FutureTransitionOutput, transition.outputs[0])
+                    future = cast(Future, output.future.value)
+                    transfer_from = str(DatabaseUtil.get_primitive_from_argument_unchecked(future.arguments[0]))
+                    amount = int(cast(u64, DatabaseUtil.get_primitive_from_argument_unchecked(future.arguments[2])))
+                elif transition.function_name == "bond_public":
+                    output = cast(FutureTransitionOutput, transition.outputs[0])
+                    future = cast(Future, output.future.value)
+                    transfer_from = str(DatabaseUtil.get_primitive_from_argument_unchecked(future.arguments[0]))
+                    amount = int(cast(u64, DatabaseUtil.get_primitive_from_argument_unchecked(future.arguments[3])))
+                elif transition.function_name == "claim_unbond_public":
+                    output = cast(FutureTransitionOutput, transition.outputs[0])
+                    future = cast(Future, output.future.value)
+                    staker_plaintext = cast(LiteralPlaintext, cast(PlaintextArgument, future.arguments[0]).plaintext)
+                    unbonding_key_id = cached_get_key_id("credits.aleo", "unbonding", staker_plaintext.dump())
+                    withdraw_key_id = cached_get_key_id("credits.aleo", "withdraw", staker_plaintext.dump())
+                    from db.mapping import DatabaseMapping
+                    unbonding_bytes = await cast(DatabaseMapping, self).get_mapping_value("credits.aleo", "unbonding", unbonding_key_id)
+                    if unbonding_bytes is None:
+                        raise RuntimeError("unbonding key not found")
+                    unbonding = cast(StructPlaintext, cast(PlaintextValue, Value.load(BytesIO(unbonding_bytes))).plaintext)
+                    withdraw_bytes = await cast(DatabaseMapping, self).get_mapping_value("credits.aleo", "withdraw", withdraw_key_id)
+                    if withdraw_bytes is None:
+                        raise RuntimeError("withdraw key not found")
+                    withdraw = cast(LiteralPlaintext, cast(PlaintextValue, Value.load(BytesIO(withdraw_bytes))).plaintext)
+                    transfer_to = str(withdraw.literal.primitive)
+                    amount = int(cast(u64, cast(LiteralPlaintext, unbonding["microcredits"]).literal.primitive))
 
                 if transfer_from != transfer_to:
                     if transfer_from is not None:
@@ -411,8 +437,7 @@ class DatabaseInsert(DatabaseBase):
                 fee_db_id = res["id"]
                 await DatabaseInsert._insert_transition(conn, redis, None, fee_db_id, fee.transition, 0, is_rejected, ts_should_exist)
 
-    @staticmethod
-    async def _insert_transaction(conn: psycopg.AsyncConnection[DictRow], redis: Redis[str], transaction: Transaction,
+    async def _insert_transaction(self, conn: psycopg.AsyncConnection[DictRow], redis: Redis[str], transaction: Transaction,
                                   confirmed_transaction: Optional[ConfirmedTransaction] = None, ct_index: Optional[int] = None,
                                   ignore_deploy_txids: Optional[list[str]] = None, confirmed_transaction_db_id: Optional[int] = None,
                                   reject_reasons: Optional[list[Optional[str]]] = None):
@@ -594,7 +619,7 @@ class DatabaseInsert(DatabaseBase):
                     await cur.execute("UPDATE confirmed_transaction SET reject_reason = %s WHERE id = %s",
                                       (reject_reasons[ct_index], confirmed_transaction_db_id))
 
-                await DatabaseInsert._update_address_stats(redis, transaction)
+                await self._update_address_stats(transaction)
 
     async def save_builtin_program(self, program: Program):
         async with self.pool.connection() as conn:
