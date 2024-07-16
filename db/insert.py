@@ -211,15 +211,17 @@ class DatabaseInsert(DatabaseBase):
                     withdraw = cast(LiteralPlaintext, cast(PlaintextValue, Value.load(BytesIO(withdraw_bytes))).plaintext)
                     transfer_to = str(withdraw.literal.primitive)
                     amount = int(cast(u64, cast(LiteralPlaintext, unbonding["microcredits"]).literal.primitive))
+                else:
+                    return
 
                 if transfer_from != transfer_to:
                     if transfer_from is not None:
-                        await redis_conn.hincrby("address_transfer_out", transfer_from, amount) # type: ignore
+                        await self.redis.hincrby("address_transfer_out", transfer_from, amount) # type: ignore
                     if transfer_to is not None:
-                        await redis_conn.hincrby("address_transfer_in", transfer_to, amount) # type: ignore
+                        await self.redis.hincrby("address_transfer_in", transfer_to, amount) # type: ignore
 
                 if fee_from is not None:
-                    await redis_conn.hincrby("address_fee", fee_from, amount) # type: ignore
+                    await self.redis.hincrby("address_fee", fee_from, amount) # type: ignore
 
     @staticmethod
     async def _insert_transition(conn: psycopg.AsyncConnection[DictRow], redis_conn: Redis[str],
