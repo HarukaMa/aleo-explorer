@@ -3,6 +3,7 @@ import time
 from typing import ParamSpec, Awaitable
 
 import psycopg
+from aleo_explorer_rust import RustExecuteError
 
 from aleo_types import *
 from db import Database
@@ -97,7 +98,7 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
                 instruction = c.instruction
                 try:
                     execute_instruction(instruction, program, registers, finalize_state)
-                except (AssertionError, OverflowError, ZeroDivisionError) as e:
+                except (AssertionError, OverflowError, ZeroDivisionError, RustExecuteError) as e:
                     raise ExecuteError(str(e), e, disasm_instruction(instruction), transition_id, str(program.id), str(function_name))
                 except Exception:
                     registers.dump()
