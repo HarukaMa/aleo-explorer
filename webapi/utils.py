@@ -59,6 +59,7 @@ async def out_of_sync_check(session: aiohttp.ClientSession, db: Database):
         "explorer_height": last_height,
         "node_height": node_height,
         "reference_height": reference_height,
+        "last_timestamp": last_timestamp,
     }
 
 
