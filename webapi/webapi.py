@@ -17,7 +17,7 @@ from middleware.asgi_logger import AccessLoggerMiddleware
 from middleware.auth import AuthMiddleware
 from middleware.server_timing import ServerTimingMiddleware
 from util.set_proc_title import set_proc_title
-from .block_routes import get_summary, recent_blocks_route, index_update_route
+from .block_routes import blocks_route, get_summary, recent_blocks_route, index_update_route
 from .error_routes import bad_request, not_found, internal_error
 from .utils import public_cache_seconds, out_of_sync_check, SJSONResponse
 
@@ -57,6 +57,8 @@ routes = [
 
     Route("/block/recent", recent_blocks_route),
     Route("/block/index_update", index_update_route),
+
+    Route("/blocks", blocks_route)
 ]
 
 exc_handlers = {

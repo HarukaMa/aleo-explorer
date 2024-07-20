@@ -53,3 +53,26 @@ async def index_update_route(request: Request):
     recent_blocks = await db.get_recent_blocks_fast(block_count)
     result["recent_blocks"] = recent_blocks
     return SJSONResponse(result)
+
+@public_cache_seconds(5)
+async def blocks_route(request: Request):
+    db: Database = request.app.state.db
+    try:
+        page = request.query_params.get("p")
+        if page is None:
+            page = 1
+        else:
+            page = int(page)
+    except:
+        return SJSONResponse({"error": "Invalid page"}, status_code=400)
+    total_blocks = await db.get_latest_height()
+    if not total_blocks:
+        return SJSONResponse({"error": "No blocks found"}, status_code=550)
+    total_blocks += 1
+    total_pages = (total_blocks // 50) + 1
+    if page < 1 or page > total_pages:
+        return SJSONResponse({"error": "Invalid page"}, status_code=400)
+    start = total_blocks - 50 * (page - 1)
+    blocks = await db.get_blocks_range_fast(start, start - 50)
+
+    return SJSONResponse({"blocks": blocks, "total_blocks": total_blocks, "total_pages": total_pages})
