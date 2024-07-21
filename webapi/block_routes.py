@@ -69,10 +69,10 @@ async def blocks_route(request: Request):
     if not total_blocks:
         return SJSONResponse({"error": "No blocks found"}, status_code=550)
     total_blocks += 1
-    total_pages = (total_blocks // 50) + 1
+    total_pages = (total_blocks // 20) + 1
     if page < 1 or page > total_pages:
         return SJSONResponse({"error": "Invalid page"}, status_code=400)
-    start = total_blocks - 50 * (page - 1)
-    blocks = await db.get_blocks_range_fast(start, start - 50)
+    start = total_blocks - 20 * (page - 1)
+    blocks = await db.get_blocks_range_fast(start, start - 20)
 
     return SJSONResponse({"blocks": blocks, "total_blocks": total_blocks, "total_pages": total_pages})
