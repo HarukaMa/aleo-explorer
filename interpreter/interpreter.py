@@ -139,7 +139,9 @@ async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]
                 reject_reason = f"execute error: {e}, at fee transition, instruction \"{e.instruction}\""
                 operations = []
             else:
-                raise RuntimeError("rejected execute transaction should not finalize without ExecuteError")
+                # well we don't really know the reason, but have to continue
+                reject_reason = "unknown reason"
+                operations = []
 
     if fee:
         transition = fee.transition
