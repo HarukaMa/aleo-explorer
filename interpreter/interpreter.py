@@ -142,6 +142,10 @@ async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]
                 # well we don't really know the reason, but have to continue
                 reject_reason = "unknown reason"
                 operations = []
+        else:
+            # same as above but for private fee
+            reject_reason = "unknown reason"
+            operations = []
 
     if fee:
         transition = fee.transition
