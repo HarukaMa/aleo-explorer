@@ -3589,7 +3589,7 @@ class Block(Serializable):
         return block_reward, int(coinbase_reward)
 
     def get_epoch_number(self) -> int:
-        return self.header.metadata.height // 256
+        return self.header.metadata.height // 360
 
     @property
     def height(self) -> u32:
