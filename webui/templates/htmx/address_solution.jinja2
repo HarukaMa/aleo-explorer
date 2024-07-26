@@ -27,7 +27,7 @@
                 {% for solution in solutions %}
                     <tr>
                         <td><a href="/block?h={{ solution.height }}">{{ solution.height }}</a></td>
-                        <td>{{ solution.height // 256 }}</td>
+                        <td>{{ solution.height // 360 }}</td>
                         <td>{{ solution.timestamp | format_time | safe }}</td>
                         <td><span class="mono">{{ solution.solution_id }}</span></td>
                         <td>{{ solution.counter }}</td>
