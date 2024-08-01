@@ -11,6 +11,7 @@ from psycopg.rows import DictRow
 from redis.asyncio import Redis
 
 from aleo_types import *
+from aleo_types.cached import cached_get_key_id, cached_get_mapping_id, cached_compute_key_to_address
 from disasm.utils import value_type_to_mode_type_str, plaintext_type_to_str
 from explorer.types import Message as ExplorerMessage
 from util.global_cache import global_mapping_cache
@@ -1293,6 +1294,7 @@ class DatabaseInsert(DatabaseBase):
                             authority_db_id = res["id"]
                             subdag = block.authority.subdag
                             subdag_copy_data: list[tuple[int, int, str, str, int, str, int, str]] = []
+                            committee = await self._get_committee_mapping_unchecked(self.redis)
                             validators: set[str] = set()
                             validators_copy_data: list[tuple[int, str]] = []
                             for round_, certificates in subdag.subdag.items():
@@ -1304,9 +1306,10 @@ class DatabaseInsert(DatabaseBase):
                                         str(certificate.batch_header.author), certificate.batch_header.timestamp,
                                         str(certificate.batch_header.signature), index, str(certificate.batch_header.committee_id)
                                     ))
-                                    for signature in certificate.signatures:
-                                        validators.add(aleo_explorer_rust.signature_to_address(str(signature)))
-                                    validators.add(str(certificate.batch_header.author))
+                                    if len(validators) != len(committee):
+                                        for signature in certificate.signatures:
+                                            validators.add(cached_compute_key_to_address(signature.compute_key))
+                                        validators.add(str(certificate.batch_header.author))
 
                             for validator in validators:
                                 validators_copy_data.append((block_db_id, validator))

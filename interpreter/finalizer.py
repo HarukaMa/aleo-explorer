@@ -6,6 +6,7 @@ import psycopg
 from aleo_explorer_rust import RustExecuteError
 
 from aleo_types import *
+from aleo_types.cached import cached_get_key_id, cached_get_mapping_id
 from db import Database
 from disasm.aleo import disasm_instruction, disasm_command
 from util.global_cache import MappingCacheDict, get_program

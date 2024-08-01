@@ -1,6 +1,7 @@
 import psycopg
 
 from aleo_types import *
+from aleo_types.cached import cached_get_key_id, cached_get_mapping_id
 from db import Database
 from interpreter.finalizer import execute_finalizer, ExecuteError, mapping_cache_read, profile
 from interpreter.utils import FinalizeState

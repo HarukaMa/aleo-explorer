@@ -12,7 +12,7 @@ def load_program(program_id: str) -> Program:
 class Canary:
     edition = u16()
     network_id = u16(2)
-    version = u32(15)
+    version = u32(16)
 
     genesis_block = Block.load(BytesIO(open(os.path.join(os.path.dirname(__file__), "block.genesis"), "rb").read()))
     dev_genesis_block = Block.load(BytesIO(open(os.path.join(os.path.dirname(__file__), "dev.genesis"), "rb").read()))

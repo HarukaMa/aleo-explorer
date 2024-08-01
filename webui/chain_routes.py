@@ -17,7 +17,8 @@ from aleo_types import u32, Transition, ExecuteTransaction, PrivateTransitionInp
     FeeTransaction, RejectedDeploy, RejectedExecution, Identifier, Entry, FutureTransitionOutput, Future, \
     PlaintextArgument, FutureArgument, StructPlaintext, Finalize, \
     PlaintextFinalizeType, StructPlaintextType, UpdateKeyValue, Value, Plaintext, RemoveKeyValue, FinalizeOperation, \
-    NodeType, cached_get_mapping_id, cached_get_key_id, FeeComponent, Fee, Option
+    NodeType, FeeComponent, Fee, Option
+from aleo_types.cached import cached_get_key_id, cached_get_mapping_id
 from db import Database
 from node.light_node import LightNodeState
 from util.global_cache import get_program

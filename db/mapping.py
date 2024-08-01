@@ -4,6 +4,7 @@ import psycopg
 import psycopg.sql
 
 from aleo_types import *
+from aleo_types.cached import cached_get_mapping_id
 from explorer.types import Message as ExplorerMessage
 from .base import DatabaseBase
 

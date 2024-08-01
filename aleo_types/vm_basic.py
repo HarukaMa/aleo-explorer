@@ -259,6 +259,14 @@ class Group(Serializable, Add, Sub, Mul, Neg, Cast):
             raise ValueError("invalid type")
         return destination_type.primitive_type.load(BytesIO(aleo_explorer_rust.cast(str(self), LiteralType.Group, destination_type, lossy)))
 
+    def __eq__(self, value: object) -> bool:
+        if not isinstance(value, Group):
+            return False
+        return self.data == value.data
+
+    def __hash__(self):
+        return hash(self.data)
+
 
 class Scalar(Serializable, Add, Sub, Mul, Compare, Cast):
     # Could be wrong as well
@@ -289,7 +297,7 @@ class Scalar(Serializable, Add, Sub, Mul, Compare, Cast):
     def __sub__(self, other: Self):
         return Scalar.load(BytesIO(aleo_explorer_rust.scalar_ops(self, other, "sub")))
 
-    def __mul__(self, other: Group):
+    def __mul__(self, other: Group):  # pyright: ignore [reportIncompatibleMethodOverride]
         return Group.load(BytesIO(aleo_explorer_rust.scalar_ops(self, other, "mul")))
 
     def __gt__(self, other: Self):
@@ -304,7 +312,9 @@ class Scalar(Serializable, Add, Sub, Mul, Compare, Cast):
     def __le__(self, other: Self):
         return bool_.load(BytesIO(aleo_explorer_rust.scalar_ops(self, other, "lte"))).value
 
-    def __eq__(self, other: Self):
+    def __eq__(self, other: object):
+        if not isinstance(other, Scalar):
+            return False
         return self.data == other.data
 
     def cast(self, destination_type: Any, *, lossy: bool) -> Any:
@@ -415,6 +425,14 @@ class ComputeKey(Serializable):
         pk_sig = Group.load(data)
         pr_sig = Group.load(data)
         return cls(pk_sig=pk_sig, pr_sig=pr_sig)
+
+    def __eq__(self, value: object) -> bool:
+        if not isinstance(value, ComputeKey):
+            return False
+        return self.pk_sig == value.pk_sig and self.pr_sig == value.pr_sig
+
+    def __hash__(self):
+        return hash(self.pk_sig) ^ hash(self.pr_sig)
 
 
 class Signature(Serializable):
