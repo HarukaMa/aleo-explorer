@@ -56,7 +56,11 @@ class DatabaseValidator(DatabaseBase):
                     res = await cur.fetchall()
                     validator_counts = {v["validator"]: v["count"] for v in res}
                     await cur.execute(
-                        "SELECT count(*) FROM block WHERE timestamp > %s",
+                        "SELECT address, count(chm.address) FROM committee_history_member chm "
+                        "JOIN committee_history ch ON chm.committee_id = ch.id "
+                        "JOIN block b ON ch.height = b.height "
+                        "WHERE b.timestamp > %s "
+                        "GROUP BY address",
                         (timestamp - 86400,)
                     )
                     res = await cur.fetchone()
