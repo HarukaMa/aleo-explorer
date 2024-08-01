@@ -24,20 +24,6 @@ CREATE SCHEMA explorer;
 
 
 --
--- Name: hint_plan; Type: SCHEMA; Schema: -; Owner: -
---
-
-CREATE SCHEMA hint_plan;
-
-
---
--- Name: pg_hint_plan; Type: EXTENSION; Schema: -; Owner: -
---
-
-CREATE EXTENSION IF NOT EXISTS pg_hint_plan WITH SCHEMA hint_plan;
-
-
---
 -- Name: argument_type; Type: TYPE; Schema: explorer; Owner: -
 --
 
@@ -200,26 +186,26 @@ declare
 begin
     for finalize_operation_db_id, type, index in
         select t.id, t.type, t.index from finalize_operation t where t.confirmed_transaction_id = confirmed_transaction_db_id
-    loop
-        if type = 'InitializeMapping' then
-            select t.mapping_id from finalize_operation_initialize_mapping t where t.finalize_operation_id = finalize_operation_db_id into mapping_id;
-            return next;
-        elsif type = 'InsertKeyValue' then
-            select t.mapping_id, t.key_id, t.value_id from finalize_operation_insert_kv t where t.finalize_operation_id = finalize_operation_db_id into mapping_id, key_id, value_id;
-            return next;
-        elsif type = 'UpdateKeyValue' then
-            select t.mapping_id, t.key_id, t.value_id from finalize_operation_update_kv t where t.finalize_operation_id = finalize_operation_db_id into mapping_id, key_id, value_id;
-            return next;
-        elsif type = 'RemoveKeyValue' then
-            select t.mapping_id from finalize_operation_remove_kv t where t.finalize_operation_id = finalize_operation_db_id into mapping_id;
-            return next;
-        elsif type = 'RemoveMapping' then
-            select t.mapping_id from finalize_operation_remove_mapping t where t.finalize_operation_id = finalize_operation_db_id into mapping_id;
-            return next;
-        else
-            raise exception 'unsupported finalize operation type: %', type;
-        end if;
-    end loop;
+        loop
+            if type = 'InitializeMapping' then
+                select t.mapping_id from finalize_operation_initialize_mapping t where t.finalize_operation_id = finalize_operation_db_id into mapping_id;
+                return next;
+            elsif type = 'InsertKeyValue' then
+                select t.mapping_id, t.key_id, t.value_id from finalize_operation_insert_kv t where t.finalize_operation_id = finalize_operation_db_id into mapping_id, key_id, value_id;
+                return next;
+            elsif type = 'UpdateKeyValue' then
+                select t.mapping_id, t.key_id, t.value_id from finalize_operation_update_kv t where t.finalize_operation_id = finalize_operation_db_id into mapping_id, key_id, value_id;
+                return next;
+            elsif type = 'RemoveKeyValue' then
+                select t.mapping_id, t.key_id from finalize_operation_remove_kv t where t.finalize_operation_id = finalize_operation_db_id into mapping_id, key_id;
+                return next;
+            elsif type = 'RemoveMapping' then
+                select t.mapping_id from finalize_operation_remove_mapping t where t.finalize_operation_id = finalize_operation_db_id into mapping_id;
+                return next;
+            else
+                raise exception 'unsupported finalize operation type: %', type;
+            end if;
+        end loop;
 end;
 $$;
 
@@ -457,6 +443,36 @@ CREATE SEQUENCE explorer.block_id_seq
 --
 
 ALTER SEQUENCE explorer.block_id_seq OWNED BY explorer.block.id;
+
+
+--
+-- Name: block_validator; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.block_validator (
+    id bigint NOT NULL,
+    block_id integer NOT NULL,
+    validator text NOT NULL
+);
+
+
+--
+-- Name: block_validator_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.block_validator_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: block_validator_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.block_validator_id_seq OWNED BY explorer.block_validator.id;
 
 
 --
@@ -1241,7 +1257,7 @@ CREATE TABLE explorer.solution (
     target numeric(20,0) NOT NULL,
     reward integer NOT NULL,
     epoch_hash text NOT NULL,
-    solution_id text NOT NULL
+    solution_id text
 );
 
 
@@ -1966,6 +1982,13 @@ ALTER TABLE ONLY explorer.block_aborted_transaction_id ALTER COLUMN id SET DEFAU
 
 
 --
+-- Name: block_validator id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.block_validator ALTER COLUMN id SET DEFAULT nextval('explorer.block_validator_id_seq'::regclass);
+
+
+--
 -- Name: committee_history id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -2303,6 +2326,14 @@ ALTER TABLE ONLY explorer.block_aborted_transaction_id
 
 ALTER TABLE ONLY explorer.block
     ADD CONSTRAINT block_pk PRIMARY KEY (id);
+
+
+--
+-- Name: block_validator block_validator_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.block_validator
+    ADD CONSTRAINT block_validator_pk PRIMARY KEY (id);
 
 
 --
@@ -2750,6 +2781,13 @@ CREATE UNIQUE INDEX block_height_uindex ON explorer.block USING btree (height);
 --
 
 CREATE INDEX block_timestamp_index ON explorer.block USING btree ("timestamp");
+
+
+--
+-- Name: block_validator_validator_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX block_validator_validator_index ON explorer.block_validator USING btree (validator);
 
 
 --
@@ -3319,7 +3357,7 @@ ALTER TABLE ONLY explorer.authority
 --
 
 ALTER TABLE ONLY explorer.block_aborted_solution_id
-    ADD CONSTRAINT block_aborted_solution_id_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id);
+    ADD CONSTRAINT block_aborted_solution_id_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id) ON DELETE CASCADE;
 
 
 --
@@ -3328,6 +3366,14 @@ ALTER TABLE ONLY explorer.block_aborted_solution_id
 
 ALTER TABLE ONLY explorer.block_aborted_transaction_id
     ADD CONSTRAINT block_aborted_transaction_id_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id) ON DELETE CASCADE;
+
+
+--
+-- Name: block_validator block_validator_block_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.block_validator
+    ADD CONSTRAINT block_validator_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id) ON DELETE CASCADE;
 
 
 --
@@ -3439,7 +3485,7 @@ ALTER TABLE ONLY explorer.finalize_operation_remove_mapping
 --
 
 ALTER TABLE ONLY explorer.finalize_operation_replace_mapping
-    ADD CONSTRAINT finalize_operation_replace_mapping_finalize_operation_id_fk FOREIGN KEY (finalize_operation_id) REFERENCES explorer.finalize_operation(id);
+    ADD CONSTRAINT finalize_operation_replace_mapping_finalize_operation_id_fk FOREIGN KEY (finalize_operation_id) REFERENCES explorer.finalize_operation(id) ON DELETE CASCADE;
 
 
 --
@@ -3479,7 +3525,7 @@ ALTER TABLE ONLY explorer.future
 --
 
 ALTER TABLE ONLY explorer.mapping_history
-    ADD CONSTRAINT mapping_history_mapping_history_id_fk FOREIGN KEY (previous_id) REFERENCES explorer.mapping_history(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+    ADD CONSTRAINT mapping_history_mapping_history_id_fk FOREIGN KEY (previous_id) REFERENCES explorer.mapping_history(id) ON UPDATE RESTRICT ON DELETE CASCADE;
 
 
 --

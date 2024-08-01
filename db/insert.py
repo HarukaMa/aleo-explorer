@@ -1282,6 +1282,7 @@ class DatabaseInsert(DatabaseBase):
                                 (block_db_id, block.authority.type.name, str(block.authority.signature))
                             )
                             subdag_copy_data = []
+                            validators_copy_data = []
                         elif isinstance(block.authority, QuorumAuthority):
                             await cur.execute(
                                 "INSERT INTO authority (block_id, type) VALUES (%s, %s) RETURNING id",
@@ -1292,6 +1293,8 @@ class DatabaseInsert(DatabaseBase):
                             authority_db_id = res["id"]
                             subdag = block.authority.subdag
                             subdag_copy_data: list[tuple[int, int, str, str, int, str, int, str]] = []
+                            validators: set[str] = set()
+                            validators_copy_data: list[tuple[int, str]] = []
                             for round_, certificates in subdag.subdag.items():
                                 for index, certificate in enumerate(certificates):
                                     if round_ != certificate.batch_header.round:
@@ -1301,6 +1304,12 @@ class DatabaseInsert(DatabaseBase):
                                         str(certificate.batch_header.author), certificate.batch_header.timestamp,
                                         str(certificate.batch_header.signature), index, str(certificate.batch_header.committee_id)
                                     ))
+                                    for signature in certificate.signatures:
+                                        validators.add(aleo_explorer_rust.signature_to_address(str(signature)))
+                                    validators.add(str(certificate.batch_header.author))
+
+                            for validator in validators:
+                                validators_copy_data.append((block_db_id, validator))
                                         # await cur.execute(
                                         #     "INSERT INTO dag_vertex (authority_id, round, batch_certificate_id, batch_id, "
                                         #     "author, timestamp, author_signature, index) "
@@ -1371,6 +1380,10 @@ class DatabaseInsert(DatabaseBase):
                                 "author, timestamp, author_signature, index, committee_id) FROM STDIN"
                             ) as copy:
                                 for row in subdag_copy_data:
+                                    await copy.write_row(row)
+                        if validators_copy_data:
+                            async with cur.copy("COPY block_validator (block_id, validator) FROM STDIN") as copy:
+                                for row in validators_copy_data:
                                     await copy.write_row(row)
 
                         ignore_deploy_txids: list[str] = []
