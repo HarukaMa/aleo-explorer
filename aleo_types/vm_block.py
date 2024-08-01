@@ -3347,30 +3347,34 @@ class SolutionID(Serializable):
 class SolutionTransmissionID(TransmissionID):
     type = TransmissionID.Type.Solution
 
-    def __init__(self, *, id_: SolutionID):
+    def __init__(self, *, id_: SolutionID, checksum: u128):
         self.id = id_
+        self.checksum = checksum
 
     def dump(self) -> bytes:
-        return self.type.dump() + self.id.dump()
+        return self.type.dump() + self.id.dump() + self.checksum.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
         id_ = SolutionID.load(data)
-        return cls(id_=id_)
+        checksum = u128.load(data)
+        return cls(id_=id_, checksum=checksum)
 
 class TransactionTransmissionID(TransmissionID):
     type = TransmissionID.Type.Transaction
 
-    def __init__(self, *, id_: TransactionID):
+    def __init__(self, *, id_: TransactionID, checksum: u128):
         self.id = id_
+        self.checksum = checksum
 
     def dump(self) -> bytes:
-        return self.type.dump() + self.id.dump()
+        return self.type.dump() + self.id.dump() + self.checksum.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
         id_ = TransactionID.load(data)
-        return cls(id_=id_)
+        checksum = u128.load(data)
+        return cls(id_=id_, checksum=checksum)
 
 
 class BatchHeader(Serializable):
