@@ -47,19 +47,14 @@ class DatabaseValidator(DatabaseBase):
                     else:
                         return []
                     await cur.execute(
-                        "WITH va AS "
-                        "    (SELECT unnest(array_agg(DISTINCT d.author)) AS author "
-                        "     FROM BLOCK b "
-                        "     JOIN authority a ON a.block_id = b.id "
-                        "     JOIN dag_vertex d ON d.authority_id = a.id "
-                        "     WHERE b.timestamp > %s "
-                        "     GROUP BY d.authority_id) "
-                        "SELECT author, count(author) FROM va "
-                        "GROUP BY author",
+                        "SELECT validator, count(validator) FROM block_validator bv "
+                        "JOIN block b ON bv.block_id = b.id "
+                        "WHERE b.timestamp > %s "
+                        "GROUP BY validator",
                         (timestamp - 86400,)
                     )
                     res = await cur.fetchall()
-                    validator_counts = {v["author"]: v["count"] for v in res}
+                    validator_counts = {v["validator"]: v["count"] for v in res}
                     await cur.execute(
                         "SELECT count(*) FROM block WHERE timestamp > %s",
                         (timestamp - 86400,)
@@ -88,31 +83,29 @@ class DatabaseValidator(DatabaseBase):
                     else:
                         return None
                     await cur.execute(
-                        "WITH va AS "
-                        "    (SELECT unnest(array_agg(DISTINCT d.author)) AS author "
-                        "     FROM BLOCK b "
-                        "     JOIN authority a ON a.block_id = b.id "
-                        "     JOIN dag_vertex d ON d.authority_id = a.id "
-                        "     WHERE b.timestamp > %s "
-                        "     GROUP BY d.authority_id) "
-                        "SELECT author, count(author) FROM va "
-                        "GROUP BY author",
-                        (timestamp - 86400,)
+                        "SELECT count(validator) FROM block_validator bv "
+                        "JOIN block b ON bv.block_id = b.id "
+                        "WHERE b.timestamp > %s AND validator = %s",
+                        (timestamp - 86400, address)
                     )
-                    res = await cur.fetchall()
-                    validator_counts = {v["author"]: v["count"] for v in res}
-                    if address not in validator_counts:
-                        return 0
+                    res = await cur.fetchone()
+                    if res:
+                        validator_counts = res["count"]
+                    else:
+                        validator_counts = 0
                     await cur.execute(
-                        "SELECT count(*) FROM block WHERE timestamp > %s",
-                        (timestamp - 86400,)
+                        "SELECT count(chm.address) FROM committee_history_member chm "
+                        "JOIN committee_history ch ON chm.committee_id = ch.id "
+                        "JOIN block b ON ch.height = b.height "
+                        "WHERE b.timestamp > %s AND chm.address = %s",
+                        (timestamp - 86400, address)
                     )
                     res = await cur.fetchone()
                     if res:
                         block_count = res["count"]
                     else:
                         return None
-                    return validator_counts[address] / block_count
+                    return validator_counts / block_count
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
@@ -147,14 +140,9 @@ class DatabaseValidator(DatabaseBase):
                     else:
                         return 0
                     await cur.execute(
-                        "WITH va AS "
-                        "    (SELECT unnest(array_agg(DISTINCT d.author)) AS author "
-                        "     FROM BLOCK b "
-                        "     JOIN authority a ON a.block_id = b.id "
-                        "     JOIN dag_vertex d ON d.authority_id = a.id "
-                        "     WHERE b.timestamp > %s "
-                        "     GROUP BY d.authority_id) "
-                        "SELECT count(author) FROM va",
+                        "SELECT count(validator) FROM block_validator bv "
+                        "JOIN block b ON bv.block_id = b.id "
+                        "WHERE b.timestamp > %s",
                         (timestamp - 3600,)
                     )
                     res = await cur.fetchone()
@@ -185,15 +173,14 @@ class DatabaseValidator(DatabaseBase):
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT DISTINCT author FROM dag_vertex dv "
-                        "JOIN authority a on dv.authority_id = a.id "
-                        "JOIN block b on a.block_id = b.id "
+                        "SELECT validator FROM block_validator bv "
+                        "JOIN block b ON bv.block_id = b.id "
                         "WHERE b.height = %s ",
                         (height,)
                     )
                     validators: list[str] = []
                     for row in await cur.fetchall():
-                        validators.append(row["author"])
+                        validators.append(row["validator"])
                     await cur.execute(
                         "SELECT chm.* FROM committee_history_member chm "
                         "JOIN committee_history ch ON chm.committee_id = ch.id "
