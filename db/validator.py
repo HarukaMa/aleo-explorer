@@ -63,13 +63,10 @@ class DatabaseValidator(DatabaseBase):
                         "GROUP BY address",
                         (timestamp - 86400,)
                     )
-                    res = await cur.fetchone()
-                    if res:
-                        block_count = res["count"]
-                    else:
-                        return []
+                    res = await cur.fetchall()
+                    validator_in_counts = {v["address"]: v["count"] for v in res}
                     for validator in validators:
-                        validator["uptime"] = validator_counts.get(validator["address"], 0) / block_count
+                        validator["uptime"] = validator_counts.get(validator["address"], 0) / validator_in_counts.get(validator["address"], 1)
 
                     return validators
                 except Exception as e:

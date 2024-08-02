@@ -242,6 +242,8 @@ LIMIT 30
                     )
                     if (res := await cur.fetchone()) is None:
                         return 0
+                    if res["avg"] is None:
+                        return 0
                     return res["avg"]
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
