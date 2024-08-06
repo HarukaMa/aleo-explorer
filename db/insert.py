@@ -734,7 +734,7 @@ class DatabaseInsert(DatabaseBase):
         await self.redis.execute_command("EXEC") # type: ignore
         await cur.execute(
             "INSERT INTO mapping_committee_history (height, content) VALUES (%s, %s) RETURNING id",
-            (0, json.dumps({str(i["key"]): i["value"].dump().hex() for i in global_mapping_cache[committee_mapping_id].values()}))
+            (height, json.dumps({str(i["key"]): i["value"].dump().hex() for i in global_mapping_cache[committee_mapping_id].values()}))
         )
 
         global_mapping_cache[bonded_mapping_id] = {}
@@ -769,7 +769,7 @@ class DatabaseInsert(DatabaseBase):
         await self.redis.execute_command("EXEC") # type: ignore
         await cur.execute(
             "INSERT INTO mapping_bonded_history (height, content) VALUES (%s, %s) RETURNING id",
-            (0, json.dumps({str(i["key"]): i["value"].dump().hex() for i in global_mapping_cache[bonded_mapping_id].values()}))
+            (height, json.dumps({str(i["key"]): i["value"].dump().hex() for i in global_mapping_cache[bonded_mapping_id].values()}))
         )
 
         global_mapping_cache[delegated_mapping_id] = {}
@@ -792,7 +792,7 @@ class DatabaseInsert(DatabaseBase):
         await self.redis.execute_command("EXEC") # type: ignore
         await cur.execute(
             "INSERT INTO mapping_delegated_history (height, content) VALUES (%s, %s) RETURNING id",
-            (0, json.dumps({str(i["key"]): str(i["value"]) for i in global_mapping_cache[delegated_mapping_id].values()}))
+            (height, json.dumps({str(i["key"]): str(i["value"]) for i in global_mapping_cache[delegated_mapping_id].values()}))
         )
 
     @staticmethod
