@@ -1147,6 +1147,68 @@ ALTER SEQUENCE explorer.mapping_bonded_history_id_seq OWNED BY explorer.mapping_
 
 
 --
+-- Name: mapping_committee_history; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.mapping_committee_history (
+    id integer NOT NULL,
+    height bigint NOT NULL,
+    content jsonb NOT NULL
+);
+
+
+--
+-- Name: mapping_committee_history_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.mapping_committee_history_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: mapping_committee_history_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.mapping_committee_history_id_seq OWNED BY explorer.mapping_committee_history.id;
+
+
+--
+-- Name: mapping_delegated_history; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.mapping_delegated_history (
+    id integer NOT NULL,
+    height bigint NOT NULL,
+    content jsonb NOT NULL
+);
+
+
+--
+-- Name: mapping_delegated_history_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.mapping_delegated_history_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: mapping_delegated_history_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.mapping_delegated_history_id_seq OWNED BY explorer.mapping_delegated_history.id;
+
+
+--
 -- Name: mapping_history; Type: TABLE; Schema: explorer; Owner: -
 --
 
@@ -2129,6 +2191,20 @@ ALTER TABLE ONLY explorer.mapping_bonded_history ALTER COLUMN id SET DEFAULT nex
 
 
 --
+-- Name: mapping_committee_history id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping_committee_history ALTER COLUMN id SET DEFAULT nextval('explorer.mapping_committee_history_id_seq'::regclass);
+
+
+--
+-- Name: mapping_delegated_history id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping_delegated_history ALTER COLUMN id SET DEFAULT nextval('explorer.mapping_delegated_history_id_seq'::regclass);
+
+
+--
 -- Name: mapping_history id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -2478,6 +2554,22 @@ ALTER TABLE ONLY explorer.future
 
 ALTER TABLE ONLY explorer.mapping_bonded_history
     ADD CONSTRAINT mapping_bonded_history_pk PRIMARY KEY (id);
+
+
+--
+-- Name: mapping_committee_history mapping_committee_history_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping_committee_history
+    ADD CONSTRAINT mapping_committee_history_pk PRIMARY KEY (id);
+
+
+--
+-- Name: mapping_delegated_history mapping_delegated_history_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping_delegated_history
+    ADD CONSTRAINT mapping_delegated_history_pk PRIMARY KEY (id);
 
 
 --
@@ -3022,10 +3114,45 @@ CREATE INDEX future_type_index ON explorer.future USING btree (type);
 
 
 --
+-- Name: mapping_bonded_history_content_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX mapping_bonded_history_content_index ON explorer.mapping_bonded_history USING gin (content);
+
+
+--
 -- Name: mapping_bonded_history_height_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
 CREATE INDEX mapping_bonded_history_height_index ON explorer.mapping_bonded_history USING btree (height);
+
+
+--
+-- Name: mapping_committee_history_content_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX mapping_committee_history_content_index ON explorer.mapping_committee_history USING gin (content);
+
+
+--
+-- Name: mapping_committee_history_height_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX mapping_committee_history_height_index ON explorer.mapping_committee_history USING btree (height);
+
+
+--
+-- Name: mapping_delegated_history_content_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX mapping_delegated_history_content_index ON explorer.mapping_delegated_history USING gin (content);
+
+
+--
+-- Name: mapping_delegated_history_height_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX mapping_delegated_history_height_index ON explorer.mapping_delegated_history USING btree (height);
 
 
 --

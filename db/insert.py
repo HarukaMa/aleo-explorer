@@ -691,9 +691,11 @@ class DatabaseInsert(DatabaseBase):
     @profile
     async def _update_committee_bonded_delegated_map(
         self,
+        cur: psycopg.AsyncCursor[DictRow],
         committee_members: dict[Address, tuple[u64, bool_, u8]],
         stakers: dict[Address, tuple[Address, u64]],
         delegated: dict[Address, u64],
+        height: int
     ):
         committee_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "committee"))
         bonded_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "bonded"))
@@ -730,6 +732,10 @@ class DatabaseInsert(DatabaseBase):
         await self.redis.delete("credits.aleo:committee")
         await self.redis.hset("credits.aleo:committee", mapping={k: json.dumps(v) for k, v in committee_mapping.items()})
         await self.redis.execute_command("EXEC") # type: ignore
+        await cur.execute(
+            "INSERT INTO mapping_committee_history (height, content) VALUES (%s, %s) RETURNING id",
+            (0, json.dumps({str(i["key"]): i["value"].dump().hex() for i in global_mapping_cache[committee_mapping_id].values()}))
+        )
 
         global_mapping_cache[bonded_mapping_id] = {}
         bonded_mapping: dict[str, dict[str, str]] = {}
@@ -761,6 +767,10 @@ class DatabaseInsert(DatabaseBase):
         await self.redis.delete("credits.aleo:bonded")
         await self.redis.hset("credits.aleo:bonded", mapping={k: json.dumps(v) for k, v in bonded_mapping.items()})
         await self.redis.execute_command("EXEC") # type: ignore
+        await cur.execute(
+            "INSERT INTO mapping_bonded_history (height, content) VALUES (%s, %s) RETURNING id",
+            (0, json.dumps({str(i["key"]): i["value"].dump().hex() for i in global_mapping_cache[bonded_mapping_id].values()}))
+        )
 
         global_mapping_cache[delegated_mapping_id] = {}
         delegated_mapping: dict[str, dict[str, str]] = {}
@@ -780,6 +790,10 @@ class DatabaseInsert(DatabaseBase):
         await self.redis.delete("credits.aleo:delegated")
         await self.redis.hset("credits.aleo:delegated", mapping={k: json.dumps(v) for k, v in delegated_mapping.items()})
         await self.redis.execute_command("EXEC") # type: ignore
+        await cur.execute(
+            "INSERT INTO mapping_delegated_history (height, content) VALUES (%s, %s) RETURNING id",
+            (0, json.dumps({str(i["key"]): str(i["value"]) for i in global_mapping_cache[delegated_mapping_id].values()}))
+        )
 
     @staticmethod
     async def _save_committee_history(cur: psycopg.AsyncCursor[dict[str, Any]], height: int, committee: Committee):
@@ -830,7 +844,7 @@ class DatabaseInsert(DatabaseBase):
         delegated: dict[Address, u64] = self._stakers_to_delegated(stakers)
 
         committee_members = {address: (amount, is_open, commission) for address, amount, is_open, commission in committee.members}
-        await self._update_committee_bonded_delegated_map(committee_members, stakers, delegated)
+        await self._update_committee_bonded_delegated_map(cur, committee_members, stakers, delegated, 0)
 
         public_balances = ratification.public_balances
         operations: list[dict[str, Any]] = []
@@ -1108,7 +1122,7 @@ class DatabaseInsert(DatabaseBase):
                     supply_tracker.tally_block_reward(amount)
                 await pipe.execute() # type: ignore
 
-                await self._update_committee_bonded_delegated_map(committee_members, stakers, delegated)
+                await self._update_committee_bonded_delegated_map(cur, committee_members, stakers, delegated, height)
                 starting_round = u64(round_)
                 members = Vec[Tuple[Address, u64, bool_, u8], u16]([
                     Tuple[Address, u64, bool_, u8]((address, amount, is_open, commission)) for address, (amount, is_open, commission) in committee_members.items()

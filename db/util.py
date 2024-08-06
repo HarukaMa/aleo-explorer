@@ -40,6 +40,8 @@ class DatabaseUtil(DatabaseBase):
                 await conn.execute("TRUNCATE TABLE committee_history RESTART IDENTITY CASCADE")
                 await conn.execute("TRUNCATE TABLE committee_history_member RESTART IDENTITY CASCADE")
                 await conn.execute("TRUNCATE TABLE mapping_bonded_history RESTART IDENTITY CASCADE")
+                await conn.execute("TRUNCATE TABLE mapping_committee_history RESTART IDENTITY CASCADE")
+                await conn.execute("TRUNCATE TABLE mapping_delegated_history RESTART IDENTITY CASCADE")
                 await conn.execute("TRUNCATE TABLE ratification_genesis_balance RESTART IDENTITY CASCADE")
                 await self.redis.flushall()
             except Exception as e:
