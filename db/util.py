@@ -114,6 +114,18 @@ class DatabaseUtil(DatabaseBase):
                             "DELETE FROM mapping_history WHERE height > %s",
                             (last_backup_height,)
                         )
+                        await cur.execute(
+                            "DELETE FROM mapping_committee_history WHERE height > %s",
+                            (last_backup_height,)
+                        )
+                        await cur.execute(
+                            "DELETE FROM mapping_delegated_history WHERE height > %s",
+                            (last_backup_height,)
+                        )
+                        await cur.execute(
+                            "DELETE FROM mapping_bonded_history WHERE height > %s",
+                            (last_backup_height,)
+                        )
 
                         print("fetching blocks to revert")
                         blocks_to_revert = await DatabaseBlock.get_full_block_range(u32.max, last_backup_height, conn)
