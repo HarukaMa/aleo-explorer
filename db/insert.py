@@ -1193,6 +1193,7 @@ class DatabaseInsert(DatabaseBase):
                     if await redis_conn.exists(key) == 1:
                         await redis_conn.copy(key, backup_key) # type: ignore[arg-type]
                 else:
+                    print("redis backup exists, rolling back")
                     await redis_conn.copy(backup_key, key, replace=True) # type: ignore[arg-type]
 
     async def _redis_cleanup(self, redis_conn: Redis[str], keys: list[str], height: int, rollback: bool):
