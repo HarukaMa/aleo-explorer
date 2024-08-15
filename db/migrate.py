@@ -17,6 +17,7 @@ class DatabaseMigrate(DatabaseBase):
     # migration methods
     async def migrate(self):
         migrations: list[tuple[int, Callable[[psycopg.AsyncConnection[DictRow], Redis[str]], Awaitable[None]]]] = [
+            (1, self.migrate_1_add_block_validator_index),
         ]
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -32,3 +33,7 @@ class DatabaseMigrate(DatabaseBase):
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
+
+    @staticmethod
+    async def migrate_1_add_block_validator_index(conn: psycopg.AsyncConnection[DictRow], redis: Redis[str]):
+        await conn.execute("CREATE INDEX block_validator_block_id_index ON block_validator (block_id)")
