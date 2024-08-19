@@ -141,18 +141,7 @@ class DatabaseValidator(DatabaseBase):
                     else:
                         return 0
                     await cur.execute(
-                        "SELECT count(validator) FROM block_validator bv "
-                        "JOIN block b ON bv.block_id = b.id "
-                        "WHERE b.timestamp > %s",
-                        (timestamp - 3600,)
-                    )
-                    res = await cur.fetchone()
-                    if res:
-                        validator_count = res["count"]
-                    else:
-                        return 0
-                    await cur.execute(
-                        "SELECT count(*) FROM committee_history_member chm "
+                        "SELECT sum(stake) FROM committee_history_member chm "
                         "JOIN committee_history ch ON chm.committee_id = ch.id "
                         "JOIN block b ON ch.height = b.height "
                         "WHERE b.timestamp > %s",
@@ -160,10 +149,23 @@ class DatabaseValidator(DatabaseBase):
                     )
                     res = await cur.fetchone()
                     if res:
-                        total_validator_count = res["count"]
+                        validator_total_stake_count = res["sum"]
                     else:
                         return 0
-                    return validator_count / total_validator_count
+                    await cur.execute(
+                        "SELECT sum(stake) FROM committee_history_member chm "
+                        "JOIN committee_history ch ON chm.committee_id = ch.id "
+                        "JOIN block b ON ch.height = b.height "
+                        "JOIN block_validator bv ON b.id = bv.block_id and bv.validator = chm.address "
+                        "WHERE b.timestamp > %s",
+                        (timestamp - 3600,)
+                    )
+                    res = await cur.fetchone()
+                    if res:
+                        validator_stake_count = res["sum"]
+                    else:
+                        return 0
+                    return validator_stake_count / validator_total_stake_count
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
