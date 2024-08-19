@@ -65,7 +65,7 @@
             <li class="tabs-title"><a href="#solutions">Puzzle solutions</a></li>
         </ul>
 
-        <div class="tabs-content" data-tabs-content="block-tabs">
+        <div class="tabs-content table-wrap" data-tabs-content="block-tabs">
             <div class="tabs-panel" id="info">
                 {% call data_line("Round") %}
                 {{ block.header.metadata.round | format_number | safe }}

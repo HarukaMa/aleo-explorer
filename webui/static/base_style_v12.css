@@ -260,6 +260,11 @@ table {
     margin-top: 10px;
 }
 
+.table-wrap {
+    display: block;
+    overflow-x: auto;
+}
+
 pre {
     font-size: 0.825rem;
     background-color: #f8f8f8;
