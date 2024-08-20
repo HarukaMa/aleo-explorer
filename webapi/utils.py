@@ -44,7 +44,7 @@ async def out_of_sync_check(session: aiohttp.ClientSession, db: Database):
     )
     now = int(time.time())
     maintenance_info = os.environ.get("MAINTENANCE_INFO")
-    out_of_sync = now - last_timestamp > 120
+    out_of_sync = now - last_timestamp > 300
     node_height = None
     reference_height = None
     if out_of_sync:

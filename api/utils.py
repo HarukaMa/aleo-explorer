@@ -11,7 +11,7 @@ from db import Database
 async def out_of_sync_check(db: Database) -> bool:
     last_timestamp = await db.get_latest_block_timestamp()
     now = int(time.time())
-    if now - last_timestamp > 120:
+    if now - last_timestamp > 300:
         return True
     return False
 
