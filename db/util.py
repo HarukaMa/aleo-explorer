@@ -54,7 +54,7 @@ class DatabaseUtil(DatabaseBase):
             async with conn.transaction():
                 async with conn.cursor() as cur:
                     try:
-                        cursor, keys = await self.redis.scan(0, f"{self.redis_keys[0]}:history:*", 100)
+                        cursor, keys = await self.redis.scan(0, f"{self.redis_keys[0]}:history:*", 500)
                         if cursor != 0:
                             raise RuntimeError("unsupported configuration")
                         if not keys:
