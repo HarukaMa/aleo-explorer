@@ -301,3 +301,22 @@ LIMIT 30
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
+
+    async def get_solution_by_id(self, solution_id: str) -> dict[str, Any] | None:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT s.address, s.counter, s.target, s.reward, ps.target_sum, b.height, b.timestamp "
+                        "FROM solution s "
+                        "JOIN puzzle_solution ps ON s.puzzle_solution_id = ps.id "
+                        "JOIN block b ON ps.block_id = b.id "
+                        "WHERE s.solution_id = %s",
+                        (solution_id,)
+                    )
+                    if (res := await cur.fetchone()) is None:
+                        return None
+                    return res
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise

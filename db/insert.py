@@ -1205,16 +1205,16 @@ class DatabaseInsert(DatabaseBase):
                 history = True
             for key in keys:
                 backup_key = f"{key}:rollback_backup:{height}"
-                if rollback:
-                    if await redis_conn.exists(backup_key) == 1:
+                if await redis_conn.exists(backup_key) == 1:
+                    if rollback:
                         await redis_conn.copy(backup_key, key, replace=True) # type: ignore[arg-type]
-                else:
-                    if history:
-                        history_key = f"{key}:history:{height - 1}"
-                        await redis_conn.rename(backup_key, history_key) # type: ignore[arg-type]
-                        await redis_conn.expire(history_key, 60 * 60 * 24 * 3)
                     else:
-                        await redis_conn.delete(backup_key)
+                        if history:
+                            history_key = f"{key}:history:{height - 1}"
+                            await redis_conn.rename(backup_key, history_key) # type: ignore[arg-type]
+                            await redis_conn.expire(history_key, 60 * 60 * 24 * 3)
+                        else:
+                            await redis_conn.delete(backup_key)
 
     @profile
     async def _save_block(self, block: Block):

@@ -23,6 +23,7 @@ from util.cache import Cache
 from util.set_proc_title import set_proc_title
 from .execute_routes import preview_finalize_route
 from .mapping_routes import mapping_route, mapping_list_route, mapping_value_list_route, mapping_key_count_route
+from .solution_routes import solution_by_id_route
 from .utils import get_remote_height
 
 
@@ -69,6 +70,7 @@ routes = [
     Route("/v{version:int}/mapping/list_program_mapping_values/{program_id}/{mapping}", mapping_value_list_route),
     Route("/v{version:int}/mapping/get_key_count/{program_id}/{mapping}", mapping_key_count_route),
     Route("/v{version:int}/simulate_execution/finalize", preview_finalize_route, methods=["POST"]),
+    Route("/v{version:int}/solution/{solution_id}", solution_by_id_route),
     Route("/v{version:int}/status", status_route),
 ]
 
