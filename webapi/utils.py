@@ -1,29 +1,29 @@
 import asyncio
 import functools
+import json
 import os
 import time
+from decimal import Decimal
 from typing import Any, Callable, Coroutine
 
 import aiohttp
-import simplejson
 from starlette.requests import Request
 from starlette.responses import Response
 
 from db import Database
 
 
-class SJSONResponse(Response):
+class DecimalEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, Decimal):
+            return str(o)
+        return super().default(o)
+
+class DJSONResponse(Response):
     media_type = "application/json"
 
     def render(self, content: Any):
-        return simplejson.dumps(
-            content,
-            ensure_ascii=False,
-            allow_nan=False,
-            indent=None,
-            separators=(",", ":"),
-            use_decimal=True
-        ).encode("utf-8")
+        return json.dumps(content, cls=DecimalEncoder).encode("utf-8")
 
 async def get_remote_height(session: aiohttp.ClientSession, rpc_root: str) -> str:
     try:

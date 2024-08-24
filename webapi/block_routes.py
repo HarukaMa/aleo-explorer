@@ -4,7 +4,7 @@ from typing import Any
 from starlette.requests import Request
 
 from db import Database
-from webapi.utils import SJSONResponse, public_cache_seconds
+from webapi.utils import DJSONResponse, public_cache_seconds
 
 
 async def get_summary(db: Database):
@@ -27,33 +27,33 @@ async def get_summary(db: Database):
 async def recent_blocks_route(request: Request):
     db: Database = request.app.state.db
     recent_blocks = await db.get_recent_blocks_fast(10)
-    return SJSONResponse(recent_blocks)
+    return DJSONResponse(recent_blocks)
 
 @public_cache_seconds(5)
 async def index_update_route(request: Request):
     db: Database = request.app.state.db
     last_block = request.query_params.get("last_block")
     if last_block is None:
-        return SJSONResponse({"error": "Missing last_block parameter"}, status_code=400)
+        return DJSONResponse({"error": "Missing last_block parameter"}, status_code=400)
     try:
         last_block = int(last_block)
     except ValueError:
-        return SJSONResponse({"error": "Invalid last_block parameter"}, status_code=400)
+        return DJSONResponse({"error": "Invalid last_block parameter"}, status_code=400)
     if last_block < 0:
-        return SJSONResponse({"error": "Negative last_block parameter"}, status_code=400)
+        return DJSONResponse({"error": "Negative last_block parameter"}, status_code=400)
     summary = await get_summary(db)
     result: dict[str, Any] = {"summary": summary}
     latest_height = await db.get_latest_height()
     if latest_height is None:
-        return SJSONResponse({"error": "Database error"}, status_code=500)
+        return DJSONResponse({"error": "Database error"}, status_code=500)
     block_count = latest_height - last_block
     if block_count < 0:
-        return SJSONResponse({"summary": summary})
+        return DJSONResponse({"summary": summary})
     if block_count > 10:
         block_count = 10
     recent_blocks = await db.get_recent_blocks_fast(block_count)
     result["recent_blocks"] = recent_blocks
-    return SJSONResponse(result)
+    return DJSONResponse(result)
 
 @public_cache_seconds(5)
 async def blocks_route(request: Request):
@@ -65,15 +65,15 @@ async def blocks_route(request: Request):
         else:
             page = int(page)
     except:
-        return SJSONResponse({"error": "Invalid page"}, status_code=400)
+        return DJSONResponse({"error": "Invalid page"}, status_code=400)
     total_blocks = await db.get_latest_height()
     if not total_blocks:
-        return SJSONResponse({"error": "No blocks found"}, status_code=550)
+        return DJSONResponse({"error": "No blocks found"}, status_code=550)
     total_blocks += 1
     total_pages = math.ceil(total_blocks / 20)
     if page < 1 or page > total_pages:
-        return SJSONResponse({"error": "Invalid page"}, status_code=400)
+        return DJSONResponse({"error": "Invalid page"}, status_code=400)
     start = total_blocks - 1 - 20 * (page - 1)
     blocks = await db.get_blocks_range_fast(start, start - 20)
 
-    return SJSONResponse({"blocks": blocks, "total_blocks": total_blocks, "total_pages": total_pages})
+    return DJSONResponse({"blocks": blocks, "total_blocks": total_blocks, "total_pages": total_pages})
