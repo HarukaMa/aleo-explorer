@@ -12,7 +12,7 @@ def load_program(program_id: str) -> Program:
 class Mainnet:
     edition = u16()
     network_id = u16()
-    version = u32(16)
+    version = u32(17)
 
     genesis_block = Block.load(BytesIO(open(os.path.join(os.path.dirname(__file__), "block.genesis"), "rb").read()))
     dev_genesis_block = Block.load(BytesIO(open(os.path.join(os.path.dirname(__file__), "dev.genesis"), "rb").read()))
@@ -28,6 +28,6 @@ class Mainnet:
     deployment_fee_multiplier = 1000
     synthesis_fee_multiplier = 25
 
-    ans_registry = "aleo_name_service_registry_v3.aleo"
+    ans_registry = "aleo_name_service_registry.aleo"
 
     restrictions_id = Field(7562506206353711030068167991213732850758501012603348777370400520506564970105)

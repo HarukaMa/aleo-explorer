@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 from hashlib import md5
-from typing import TYPE_CHECKING, NamedTuple
+from typing import NamedTuple
 
 from .vm_instruction import *
 
@@ -92,7 +92,7 @@ class EpochChallenge(Serializable):
                    epoch_polynomial_evaluations=epoch_polynomial_evaluations)
 
 
-class MapKey(Serializable):
+class MapKey(Serializable, JSONSerialize):
 
     def __init__(self, *, plaintext_type: PlaintextType):
         self.plaintext_type = plaintext_type
@@ -106,7 +106,7 @@ class MapKey(Serializable):
         return cls(plaintext_type=plaintext_type)
 
 
-class MapValue(Serializable):
+class MapValue(Serializable, JSONSerialize):
 
     def __init__(self, *, plaintext_type: PlaintextType):
         self.plaintext_type = plaintext_type
@@ -120,7 +120,7 @@ class MapValue(Serializable):
         return cls(plaintext_type=plaintext_type)
 
 
-class Mapping(Serializable):
+class Mapping(Serializable, JSONSerialize):
 
     def __init__(self, *, name: Identifier, key: MapKey, value: MapValue):
         self.name = name
@@ -138,7 +138,7 @@ class Mapping(Serializable):
         return cls(name=name, key=key, value=value)
 
 
-class Struct(Serializable):
+class Struct(Serializable, JSONSerialize):
 
     def __init__(self, *, name: Identifier, members: Vec[Tuple[Identifier, PlaintextType], u16]):
         self.name = name
@@ -165,7 +165,7 @@ class PublicOrPrivate(IntEnumu8):
     Private = 1
 
 
-class EntryType(Serializable):  # enum
+class EntryType(Serializable, JSONSerialize):  # enum
 
     class Type(IntEnumu8):
         Constant = 0
@@ -186,7 +186,7 @@ class EntryType(Serializable):  # enum
         return cls(type_=type_, plaintext_type=plaintext_type)
 
 
-class RecordType(Serializable):
+class RecordType(Serializable, JSONSerialize):
 
     def __init__(self, *, name: Identifier, owner: PublicOrPrivate, entries: Vec[Tuple[Identifier, EntryType], u16]):
         self.name = name
@@ -204,7 +204,7 @@ class RecordType(Serializable):
         return cls(name=name, owner=owner, entries=entries)
 
 
-class ClosureInput(Serializable):
+class ClosureInput(Serializable, JSONSerialize):
 
     def __init__(self, *, register: Register, register_type: RegisterType):
         self.register = register
@@ -220,7 +220,7 @@ class ClosureInput(Serializable):
         return cls(register=register, register_type=register_type)
 
 
-class ClosureOutput(Serializable):
+class ClosureOutput(Serializable, JSONSerialize):
 
     def __init__(self, *, operand: Operand, register_type: RegisterType):
         self.operand = operand
@@ -236,7 +236,7 @@ class ClosureOutput(Serializable):
         return cls(operand=operand, register_type=register_type)
 
 
-class Closure(Serializable):
+class Closure(Serializable, JSONSerialize):
 
     def __init__(self, *, name: Identifier, inputs: Vec[ClosureInput, u16], instructions: Vec[Instruction, u32],
                  outputs: Vec[ClosureOutput, u16]):
@@ -274,7 +274,7 @@ class FinalizeCommand(Serializable):
         return cls(operands=operands)
 
 
-class Command(EnumBaseSerialize, RustEnum, Serializable):
+class Command(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize):
     type: "Command.Type"
 
     class Type(IntEnumu8):
@@ -541,7 +541,7 @@ class PositionCommand(Command):
         return cls(position=position)
 
 
-class FinalizeType(EnumBaseSerialize, RustEnum, Serializable):
+class FinalizeType(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize):
 
     class Type(IntEnumu8):
         Plaintext = 0
@@ -587,7 +587,7 @@ class FutureFinalizeType(FinalizeType):
         locator = Locator.load(data)
         return cls(locator=locator)
 
-class FinalizeInput(Serializable):
+class FinalizeInput(Serializable, JSONSerialize):
 
     def __init__(self, *, register: Register, finalize_type: FinalizeType):
         self.register = register
@@ -602,7 +602,7 @@ class FinalizeInput(Serializable):
         finalize_type = FinalizeType.load(data)
         return cls(register=register, finalize_type=finalize_type)
 
-class Finalize(Serializable):
+class Finalize(Serializable, JSONSerialize):
 
     def __init__(self, *, name: Identifier, inputs: Vec[FinalizeInput, u16], commands: Vec[Command, u16]):
         self.name = name
@@ -625,11 +625,19 @@ class Finalize(Serializable):
         commands = Vec[Command, u16].load(data)
         return cls(name=name, inputs=inputs, commands=commands)
 
+    def json(self) -> JSONType:
+        res = {
+            "name": self.name.json(),
+            "inputs": self.inputs.json(),
+            "commands": self.commands.json(),
+        }
+        return res
+
     def cost(self, program: Program) -> int:
         return sum(command.cost(program) for command in self.commands)
 
 
-class ValueType(EnumBaseSerialize, RustEnum, Serializable):
+class ValueType(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize):
 
     class Type(IntEnumu8):
         Constant = 0
@@ -750,7 +758,7 @@ class FutureValueType(ValueType):
         return cls(locator=locator)
 
 
-class FunctionInput(Serializable):
+class FunctionInput(Serializable, JSONSerialize):
 
     def __init__(self, *, register: Register, value_type: ValueType):
         self.register = register
@@ -766,7 +774,7 @@ class FunctionInput(Serializable):
         return cls(register=register, value_type=value_type)
 
 
-class FunctionOutput(Serializable):
+class FunctionOutput(Serializable, JSONSerialize):
 
     def __init__(self, *, operand: Operand, value_type: ValueType):
         self.operand = operand
@@ -782,7 +790,7 @@ class FunctionOutput(Serializable):
         return cls(operand=operand, value_type=value_type)
 
 
-class Function(Serializable):
+class Function(Serializable, JSONSerialize):
 
     def __init__(self, *, name: Identifier, inputs: Vec[FunctionInput, u16], instructions: Vec[Instruction, u32],
                  outputs: Vec[FunctionOutput, u16], finalize: Option[Finalize]):
@@ -826,13 +834,13 @@ class ProgramDefinition(IntEnumu8):
     Function = 4
 
 
-class Program(Serializable):
+class Program(Serializable, JSONSerialize):
     version = u8(1)
 
     def __init__(self, *, id_: ProgramID, imports: Vec[Import, u8], mappings: dict[Identifier, Mapping],
                  structs: dict[Identifier, Struct], records: dict[Identifier, RecordType],
                  closures: dict[Identifier, Closure], functions: dict[Identifier, Function],
-                 identifiers: list[tuple[Identifier, ProgramDefinition]]):
+                 identifiers: dict[Identifier, ProgramDefinition]):
         self.id = id_
         self.imports = imports
         self.mappings = mappings
@@ -848,7 +856,7 @@ class Program(Serializable):
         res += self.id.dump()
         res += self.imports.dump()
         res += len(self.identifiers).to_bytes(2, "little")
-        for i, d in self.identifiers:
+        for i, d in self.identifiers.items():
             res += d.dump()
             if d == ProgramDefinition.Mapping:
                 res += self.mappings[i].dump()
@@ -869,7 +877,7 @@ class Program(Serializable):
             raise ValueError("Invalid version")
         id_ = ProgramID.load(data)
         imports = Vec[Import, u8].load(data)
-        identifiers: list[tuple[Identifier, ProgramDefinition]] = []
+        identifiers: dict[Identifier, ProgramDefinition] = {}
         mappings: dict[Identifier, Mapping] = {}
         structs: dict[Identifier, Struct] = {}
         records: dict[Identifier, RecordType] = {}
@@ -881,25 +889,33 @@ class Program(Serializable):
             if d == ProgramDefinition.Mapping:
                 m = Mapping.load(data)
                 mappings[m.name] = m
-                identifiers.append((m.name, d))
+                identifiers[m.name] = d
             elif d == ProgramDefinition.Struct:
                 i = Struct.load(data)
                 structs[i.name] = i
-                identifiers.append((i.name, d))
+                identifiers[i.name] = d
             elif d == ProgramDefinition.Record:
                 r = RecordType.load(data)
                 records[r.name] = r
-                identifiers.append((r.name, d))
+                identifiers[r.name] = d
             elif d == ProgramDefinition.Closure:
                 c = Closure.load(data)
                 closures[c.name] = c
-                identifiers.append((c.name, d))
+                identifiers[c.name] = d
             elif d == ProgramDefinition.Function:
                 f = Function.load(data)
                 functions[f.name] = f
-                identifiers.append((f.name, d))
+                identifiers[f.name] = d
         return cls(id_=id_, imports=imports, mappings=mappings, structs=structs, records=records,
                    closures=closures, functions=functions, identifiers=identifiers)
+
+    def json(self) -> JSONType:
+        res = super().json()
+        if not isinstance(res, dict):
+            raise ValueError("invalid json")
+        from disasm.aleo import disassemble_program
+        res["_text"] = disassemble_program(self)
+        return res
 
     def is_helloworld(self) -> bool:
         header_length = len(self.version.dump() + self.id.dump())
@@ -1038,7 +1054,7 @@ class CircuitVerifyingKey(Serializable):
         return cls(circuit_info=circuit_info, circuit_commitments=circuit_commitments, id_=id_)
 
 
-class VerifyingKey(Serializable):
+class VerifyingKey(Serializable, JSONSerialize):
     version = u8(1)
 
     def __init__(self, *, verifying_key: CircuitVerifyingKey, num_variables: u64):
@@ -1056,6 +1072,12 @@ class VerifyingKey(Serializable):
         verifying_key = CircuitVerifyingKey.load(data)
         num_variables = u64.load(data)
         return cls(verifying_key=verifying_key, num_variables=num_variables)
+
+    def json(self) -> JSONType:
+        return str(self)
+
+    def __str__(self):
+        return str(Bech32m(self.dump(), "verifier"))
 
 
 class KZGProof(Serializable):
@@ -1119,8 +1141,14 @@ class Certificate(Serializable):
         pc_proof = BatchLCProof.load(data)
         return cls(pc_proof=pc_proof)
 
+    def json(self) -> JSONType:
+        return str(self)
 
-class Deployment(Serializable):
+    def __str__(self):
+        return str(Bech32m(self.dump(), "certificate"))
+
+
+class Deployment(Serializable, JSONSerialize):
     version = u8(1)
 
     def __init__(self, *, edition: u16, program: Program,
@@ -1342,7 +1370,7 @@ class FourthMessage(Serializable):
         return cls(sums=Vec[MatrixSums, u64](sums))
 
 
-class Proof(Serializable):
+class Proof(Serializable, JSONSerialize):
     version = u8(1)
 
     # Skipping a layer of varuna::Proof
@@ -1384,6 +1412,9 @@ class Proof(Serializable):
     def loads(cls, data: str):
         return cls.load(bech32_to_bytes(data))
 
+    def json(self) -> JSONType:
+        return str(self)
+
     def __str__(self):
         return str(Bech32m(self.dump(), "proof"))
 
@@ -1391,7 +1422,7 @@ class Proof(Serializable):
         return str(self)
 
 
-class Ciphertext(Serializable):
+class Ciphertext(Serializable, JSONSerialize):
 
     def __init__(self, *, ciphertext: Vec[Field, u16]):
         self.ciphertext = ciphertext
@@ -1408,11 +1439,14 @@ class Ciphertext(Serializable):
     def loads(cls, data: str):
         return cls.load(bech32_to_bytes(data))
 
+    def json(self) -> JSONType:
+        return str(self)
+
     def __str__(self):
         return str(Bech32m(self.dump(), "ciphertext"))
 
 
-class Plaintext(EnumBaseSerialize, RustEnum, Serializable):  # enum
+class Plaintext(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize):  # enum
 
     class Type(IntEnumu8):
         Literal = 0
@@ -1447,6 +1481,9 @@ class LiteralPlaintext(Plaintext):
     def load(cls, data: BytesIO):
         literal = Literal.load(data)
         return cls(literal=literal)
+
+    def json(self) -> JSONType:
+        return str(self)
 
     def __str__(self):
         return str(self.literal)
@@ -1584,6 +1621,8 @@ class StructPlaintext(Plaintext):
                     break
         return cls(members=Vec[Tuple[Identifier, Plaintext], u8](ordered_members))
 
+    def json(self) -> JSONType:
+        return str(self)
 
     def __str__(self):
         data = {}
@@ -1650,6 +1689,9 @@ class ArrayPlaintext(Plaintext):
     def loads(cls, data: str) -> Self:
         raise NotImplementedError
 
+    def json(self) -> JSONType:
+        return str(self)
+
     def __str__(self):
         return str(self.elements)
 
@@ -1676,7 +1718,7 @@ class ArrayPlaintext(Plaintext):
         return True
 
 
-class Owner(EnumBaseSerialize, RustEnum, Serializable, Generic[T]):
+class Owner(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize, Generic[T]):
     Private: TType[T]
 
     @tp_cache
@@ -1701,6 +1743,9 @@ class Owner(EnumBaseSerialize, RustEnum, Serializable, Generic[T]):
             return PrivateOwner[cls.Private].load(data)
         else:
             raise ValueError("invalid type")
+
+    def json(self) -> JSONType:
+        return str(self)
 
 
 class PublicOwner(Owner[T]):
@@ -1760,7 +1805,7 @@ class PrivateOwner(Owner[T]):
     def __str__(self):
         return str(self.owner)
 
-class Entry(EnumBaseSerialize, RustEnum, Serializable, Generic[T]):
+class Entry(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize, Generic[T]):
     Private: TType[T]
 
     @tp_cache
@@ -1851,8 +1896,8 @@ class PrivateEntry(Entry[T]):
     type = Entry.Type.Private
 
     # noinspection PyMissingConstructor
-    def __init__(self, *, plaintext: T):
-        self.plaintext = plaintext
+    def __init__(self, *, private: T):
+        self.private = private
 
     @tp_cache
     def __class_getitem__(cls, item: TType[T]) -> GenericAlias:
@@ -1864,18 +1909,18 @@ class PrivateEntry(Entry[T]):
         return GenericAlias(param_type, item)
 
     def dump(self) -> bytes:
-        return self.type.dump() + self.plaintext.dump()
+        return self.type.dump() + self.private.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
         plaintext = cls.Private.load(data)
-        return cls(plaintext=plaintext)
+        return cls(private=plaintext)
 
     def __str__(self):
-        return str(self.plaintext)
+        return str(self.private)
 
 
-class Record(Serializable, Generic[T]):
+class Record(Serializable, JSONSerialize, Generic[T]):
     Private: TType[T]
 
     def __init__(self, *, owner: Owner[T], data: Vec[Tuple[Identifier, Entry[T]], u8], nonce: Group):
@@ -1922,6 +1967,13 @@ class Record(Serializable, Generic[T]):
     @classmethod
     def loads(cls, data: str):
         return cls.load(bech32_to_bytes(data))
+
+    def json(self) -> JSONType:
+        res = super().json()
+        if not isinstance(res, dict):
+            raise ValueError("invalid json")
+        res["_text"] = str(self)
+        return res
 
     def __str__(self):
         return str(Bech32m(self.dump(), "record"))
@@ -1987,7 +2039,7 @@ class RecordValue(Value):
         return cls(record=record)
 
 
-class Future(Serializable):
+class Future(Serializable, JSONSerialize):
 
     def __init__(self, *, program_id: ProgramID, function_name: Identifier, arguments: Vec[Argument, u8]):
         self.program_id = program_id
@@ -2011,7 +2063,7 @@ class Future(Serializable):
         return f"{self.program_id}.{self.function_name}({', '.join(str(arg) for arg in self.arguments)})"
 
 
-class Argument(EnumBaseSerialize, RustEnum, Serializable):
+class Argument(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize):
 
     class Type(IntEnumu8):
         Plaintext = 0
@@ -2046,6 +2098,9 @@ class PlaintextArgument(Argument):
         plaintext = Plaintext.load(data)
         return cls(plaintext=plaintext)
 
+    def json(self) -> JSONType:
+        return str(self)
+
     def __str__(self):
         return str(self.plaintext)
 
@@ -2066,6 +2121,9 @@ class FutureArgument(Argument):
     def load(cls, data: BytesIO):
         future = Future.load(data)
         return cls(future=future)
+
+    def json(self) -> JSONType:
+        return self.future.json()
 
     def __str__(self):
         return str(self.future)
@@ -2094,7 +2152,7 @@ class FutureValue(Value):
         return str(self.future)
 
 
-class TransitionInput(EnumBaseSerialize, RustEnum, Serializable):
+class TransitionInput(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize):
 
     class Type(IntEnumu8):
         Constant = 0
@@ -2204,7 +2262,7 @@ class ExternalRecordTransitionInput(TransitionInput):
         return cls(input_commitment=input_commitment)
 
 
-class TransitionOutput(EnumBaseSerialize, RustEnum, Serializable):
+class TransitionOutput(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize):
 
     class Type(IntEnumu8):
         Constant = 0
@@ -2336,7 +2394,7 @@ class FutureTransitionOutput(TransitionOutput):
         return cls(future_hash=future_hash, future=future)
 
 
-class Transition(Serializable):
+class Transition(Serializable, JSONSerialize):
     version = u8(1)
 
     def __init__(self, *, id_: TransitionID, program_id: ProgramID, function_name: Identifier,
@@ -2381,7 +2439,7 @@ class Transition(Serializable):
                    tpk=tpk, tcm=tcm, scm=scm)
 
 
-class Fee(Serializable):
+class Fee(Serializable, JSONSerialize):
     version = u8(1)
 
     def __init__(self, *, transition: Transition, global_state_root: StateRoot, proof: Option[Proof]):
@@ -2437,7 +2495,7 @@ class Fee(Serializable):
         return int(get_primitive_from_public_input(fee_input)), int(get_primitive_from_public_input(priority_fee_input))
 
 
-class Execution(Serializable):
+class Execution(Serializable, JSONSerialize):
     version = u8(1)
 
     def __init__(self, *, transitions: Vec[Transition, u8], global_state_root: StateRoot,
@@ -2499,7 +2557,7 @@ FeeComponent = NamedTuple("FeeComponent", [
     ("burnt", int)
 ])
 
-class Transaction(EnumBaseSerialize, RustEnum, Serializable):
+class Transaction(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize):
     version = u8(1)
 
     class Type(IntEnumu8):
@@ -2551,7 +2609,7 @@ class Transaction(EnumBaseSerialize, RustEnum, Serializable):
             raise NotImplementedError
 
 
-class ProgramOwner(Serializable):
+class ProgramOwner(Serializable, JSONSerialize):
     version = u8(1)
 
     def __init__(self, *, address: Address, signature: Signature):
@@ -2629,7 +2687,7 @@ class FeeTransaction(Transaction):
         return cls(id_=id_, fee=fee)
 
 
-class FinalizeOperation(EnumBaseSerialize, RustEnum, Serializable):
+class FinalizeOperation(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize):
     class Type(IntEnumu8):
         InitializeMapping = 0
         InsertKeyValue = 1
@@ -2659,7 +2717,7 @@ class FinalizeOperation(EnumBaseSerialize, RustEnum, Serializable):
         else:
             raise ValueError("incorrect type")
 
-class ConfirmedTransaction(EnumBaseSerialize, RustEnum, Serializable):
+class ConfirmedTransaction(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize):
     class Type(IntEnumu8):
         AcceptedDeploy = 0
         AcceptedExecute = 1
@@ -2880,7 +2938,7 @@ class AcceptedExecute(ConfirmedTransaction):
         finalize = Vec[FinalizeOperation, u16].load(data)
         return cls(index=index, transaction=transaction, finalize=finalize)
 
-class Rejected(EnumBaseSerialize, RustEnum, Serializable):
+class Rejected(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize):
     class Type(IntEnumu8):
         Deployment = 0
         Execution = 1
@@ -2967,7 +3025,7 @@ class RejectedExecute(ConfirmedTransaction):
         return cls(index=index, transaction=transaction, rejected=rejected, finalize=finalize)
 
 
-class Transactions(Serializable):
+class Transactions(Serializable, JSONSerialize):
     version = u8(1)
 
     def __init__(self, *, transactions: Vec[ConfirmedTransaction, u32]):  # we probably don't need IDs here so using Vec
@@ -2985,6 +3043,9 @@ class Transactions(Serializable):
         transactions = Vec[ConfirmedTransaction, u32].load(data)
         return cls(transactions=transactions)
 
+    def json(self) -> JSONType:
+        return self.transactions.json()
+
     def __iter__(self):
         return iter(self.transactions)
 
@@ -3001,7 +3062,7 @@ class Transactions(Serializable):
                     total += fee.value.amount[1]
         return total
 
-class BlockHeaderMetadata(Serializable):
+class BlockHeaderMetadata(Serializable, JSONSerialize):
     version = u8(1)
 
     def __init__(self, *, network: u16, round_: u64, height: u32,
@@ -3048,7 +3109,7 @@ class BlockHeaderMetadata(Serializable):
                    last_coinbase_timestamp=last_coinbase_timestamp, timestamp=timestamp)
 
 
-class BlockHeader(Serializable):
+class BlockHeader(Serializable, JSONSerialize):
     version = u8(1)
 
     def __init__(self, *, previous_state_root: StateRoot, transactions_root: Field, finalize_root: Field,
@@ -3083,7 +3144,7 @@ class BlockHeader(Serializable):
                    solutions_root=solutions_root, subdag_root=subdag_root, metadata=metadata)
 
 
-class PartialSolution(Serializable):
+class PartialSolution(Serializable, JSONSerialize):
 
     def __init__(self, *, solution_id: SolutionID, epoch_hash: BlockHash, address: Address, counter: u64):
         self.solution_id = solution_id
@@ -3103,7 +3164,7 @@ class PartialSolution(Serializable):
         return cls(solution_id=solution_id, epoch_hash=epoch_hash, address=address, counter=counter)
 
 
-class Solution(Serializable):
+class Solution(Serializable, JSONSerialize):
 
     def __init__(self, *, partial_solution: PartialSolution, target: u64):
         self.partial_solution = partial_solution
@@ -3119,7 +3180,7 @@ class Solution(Serializable):
         return cls(partial_solution=partial_solution, target=target)
 
 
-class PuzzleSolutions(Serializable):
+class PuzzleSolutions(Serializable, JSONSerialize):
 
     def __init__(self, *, solutions: Vec[Solution, u8]):
         self.solutions = solutions
@@ -3133,7 +3194,7 @@ class PuzzleSolutions(Serializable):
         return cls(solutions=solutions)
 
 
-class Ratify(EnumBaseSerialize, RustEnum, Serializable):
+class Ratify(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize):
 
     class Type(IntEnumu8):
         Genesis = 0
@@ -3157,7 +3218,7 @@ class Ratify(EnumBaseSerialize, RustEnum, Serializable):
         else:
             raise ValueError(f"invalid ratify type {type_}")
 
-class Committee(Serializable):
+class Committee(Serializable, JSONSerialize):
     version = u8(1)
 
     def __init__(self, *, id_: Field, starting_round: u64, members: Vec[Tuple[Address, u64, bool_, u8], u16], total_stake: u64):
@@ -3254,7 +3315,7 @@ def retarget(prev_target: int, prev_block_timestamp: int, block_timestamp: int, 
     return candidate_target
 
 
-class Authority(EnumBaseSerialize, RustEnum, Serializable):
+class Authority(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize):
 
     class Type(IntEnumu8):
         Beacon = 0
@@ -3288,7 +3349,7 @@ class BeaconAuthority(Authority):
         return cls(signature=signature)
 
 
-class TransmissionID(EnumBaseSerialize, RustEnum, Serializable):
+class TransmissionID(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize):
 
     class Type(IntEnumu8):
         Ratification = 0
@@ -3320,7 +3381,7 @@ class RatificationTransmissionID(TransmissionID):
     def load(cls, data: BytesIO):
         return cls()
 
-class SolutionID(Serializable):
+class SolutionID(Serializable, JSONSerialize):
 
     def __init__(self, *, nonce: u64):
         self.nonce = nonce
@@ -3339,6 +3400,9 @@ class SolutionID(Serializable):
         if hrp != "solution":
             raise ValueError("invalid hrp")
         return cls.load(BytesIO(raw))
+
+    def json(self) -> JSONType:
+        return str(self)
 
     def __str__(self):
         return str(Bech32m(self.dump(), "solution"))
@@ -3377,7 +3441,7 @@ class TransactionTransmissionID(TransmissionID):
         return cls(id_=id_, checksum=checksum)
 
 
-class BatchHeader(Serializable):
+class BatchHeader(Serializable, JSONSerialize):
     version = u8(1)
 
     def __init__(self, *, batch_id: Field, author: Address, round_: u64, timestamp: i64, committee_id: Field,
@@ -3415,7 +3479,7 @@ class BatchHeader(Serializable):
                    signature=signature)
 
 
-class BatchCertificate(Serializable):
+class BatchCertificate(Serializable, JSONSerialize):
     version = u8(1)
 
     def __init__(self, *, batch_header: BatchHeader, signatures: Vec[Signature, u16]):
@@ -3435,7 +3499,7 @@ class BatchCertificate(Serializable):
         return cls(batch_header=batch_header, signatures=signatures)
 
 
-class Subdag(Serializable):
+class Subdag(Serializable, JSONSerialize):
     version = u8(1)
 
     def __init__(self, *, subdag: dict[u64, Vec[BatchCertificate, u16]]):
@@ -3476,7 +3540,7 @@ class QuorumAuthority(Authority):
         return cls(subdag=subdag)
 
 
-class Ratifications(Serializable):
+class Ratifications(Serializable, JSONSerialize):
     version = u8(1)
 
     def __init__(self, *, ratifications: Vec[Ratify, u32]):
@@ -3493,10 +3557,13 @@ class Ratifications(Serializable):
         ratifications = Vec[Ratify, u32].load(data)
         return cls(ratifications=ratifications)
 
+    def json(self) -> JSONType:
+        return [r.json() for r in self.ratifications]
+
     def __iter__(self):
         return iter(self.ratifications)
 
-class Solutions(Serializable):
+class Solutions(Serializable, JSONSerialize):
     version = u8(1)
 
     def __init__(self, *, solutions: Option[PuzzleSolutions]):
@@ -3513,12 +3580,15 @@ class Solutions(Serializable):
             raise ValueError("invalid solutions version")
         return cls(solutions=solutions)
 
+    def json(self) -> JSONType:
+        return self.solutions.json()
+
     @property
     def value(self):
         return self.solutions.value
 
 
-class Block(Serializable):
+class Block(Serializable, JSONSerialize):
     version = u8(1)
 
     def __init__(self, *, block_hash: BlockHash, previous_hash: BlockHash, header: BlockHeader, authority: Authority,

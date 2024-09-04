@@ -1,4 +1,3 @@
-
 from .vm_block import *
 
 class NodeType(IntEnumu8):

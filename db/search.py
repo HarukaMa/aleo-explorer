@@ -54,6 +54,8 @@ class DatabaseSearch(DatabaseBase):
                 try:
                     puzzle_rewards = await self.redis.hgetall("address_puzzle_reward")
                     res = set(filter(lambda x: x.startswith(address), puzzle_rewards.keys()))
+                    stake_rewards = await self.redis.hgetall("address_stake_reward")
+                    res.update(set(filter(lambda x: x.startswith(address), stake_rewards.keys())))
                     await cur.execute(
                         "SELECT DISTINCT owner FROM program WHERE owner LIKE %s", (f"{address}%",)
                     )

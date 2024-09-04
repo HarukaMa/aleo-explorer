@@ -7,7 +7,7 @@ class AleoIDProtocol(Sized, Serializable, Protocol):
     size: int
     _prefix: str
 
-class AleoID(AleoIDProtocol):
+class AleoID(AleoIDProtocol, JSONSerialize):
     size = 32
     _prefix = ""
 
@@ -35,6 +35,9 @@ class AleoID(AleoIDProtocol):
             raise ValueError("incorrect length")
         return cls(bytes(raw))
 
+    def json(self) -> JSONType:
+        return str(self)
+
     def __str__(self):
         return str(self._bech32m)
 
@@ -47,7 +50,7 @@ class AleoID(AleoIDProtocol):
         return self._data == other._data
 
 
-class AleoObject(AleoIDProtocol):
+class AleoObject(AleoIDProtocol, JSONSerialize):
     size = 0
     _prefix = ""
 
@@ -72,6 +75,9 @@ class AleoObject(AleoIDProtocol):
         if len(raw) != cls.size:
             raise ValueError("incorrect length")
         return cls(bytes(raw))
+
+    def json(self) -> JSONType:
+        return str(self)
 
     def __str__(self):
         return str(self._bech32m)
@@ -133,7 +139,7 @@ class Address(AleoObject, Cast):
         return self._data == other._data
 
 
-class Field(Serializable, Double, Sub, Square, Div, Sqrt, Compare, Pow, Inv, Neg, Cast):
+class Field(Serializable, JSONSerialize, Double, Sub, Square, Div, Sqrt, Compare, Pow, Inv, Neg, Cast):
     # Fr, Fp256
     # Just store as a large integer now
     # Hopefully this will not be used later...
@@ -151,6 +157,9 @@ class Field(Serializable, Double, Sub, Square, Div, Sqrt, Compare, Pow, Inv, Neg
     @classmethod
     def loads(cls, data: str):
         return cls(int(data.removesuffix("field")))
+
+    def json(self) -> JSONType:
+        return str(self)
 
     def __str__(self):
         return str(self.data) + "field"
@@ -215,7 +224,7 @@ class Field(Serializable, Double, Sub, Square, Div, Sqrt, Compare, Pow, Inv, Neg
         return destination_type.primitive_type.load(BytesIO(aleo_explorer_rust.cast(str(self), LiteralType.Field, destination_type, lossy)))
 
 
-class Group(Serializable, Add, Sub, Mul, Neg, Cast):
+class Group(Serializable, JSONSerialize, Add, Sub, Mul, Neg, Cast):
     # This is definitely wrong, but we are not using the internals
     def __init__(self, data: int):
         self.data = data
@@ -231,6 +240,9 @@ class Group(Serializable, Add, Sub, Mul, Neg, Cast):
     @classmethod
     def loads(cls, data: str):
         return cls(int(data.removesuffix("group")))
+
+    def json(self) -> JSONType:
+        return str(self)
 
     def __str__(self):
         return str(self.data) + "group"
@@ -268,7 +280,7 @@ class Group(Serializable, Add, Sub, Mul, Neg, Cast):
         return hash(self.data)
 
 
-class Scalar(Serializable, Add, Sub, Mul, Compare, Cast):
+class Scalar(Serializable, JSONSerialize, Add, Sub, Mul, Compare, Cast):
     # Could be wrong as well
     def __init__(self, data: int):
         self.data = data
@@ -284,6 +296,9 @@ class Scalar(Serializable, Add, Sub, Mul, Compare, Cast):
     @classmethod
     def loads(cls, data: str):
         return cls(int(data.removesuffix("scalar")))
+
+    def json(self) -> JSONType:
+        return str(self)
 
     def __str__(self):
         return str(self.data) + "scalar"
@@ -435,7 +450,7 @@ class ComputeKey(Serializable):
         return hash(self.pk_sig) ^ hash(self.pr_sig)
 
 
-class Signature(Serializable):
+class Signature(Serializable, JSONSerialize):
 
     def __init__(self, *, challenge: Scalar, response: Scalar, compute_key: ComputeKey):
         self.challenge = challenge
@@ -456,6 +471,9 @@ class Signature(Serializable):
     def loads(cls, data: str):
         return cls.load(bech32_to_bytes(data))
 
+    def json(self) -> JSONType:
+        return str(self)
+
     def __str__(self):
         return str(Bech32m(self.dump(), "sign"))
 
@@ -472,7 +490,7 @@ class Data(Serializable, Generic[T]):
         self.value = value
 
     @tp_cache
-    def __class_getitem__(cls, key) -> GenericAlias:
+    def __class_getitem__(cls, key: TType[T]) -> GenericAlias:
         param_type = type(
             f"Data[{key.__name__}]",
             (Data,),
@@ -486,8 +504,6 @@ class Data(Serializable, Generic[T]):
 
     @classmethod
     def load(cls, data: BytesIO) -> Self:
-        if cls.types is None:
-            raise TypeError("expected types")
         version = u8.load(data)
         if version != cls.version:
             raise ValueError(f"expected version {cls.version}, got {version}")

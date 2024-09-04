@@ -4,6 +4,7 @@ from decimal import Decimal
 from ipaddress import IPv4Address, IPv6Address
 from typing import overload, Optional
 
+from .serialize import Serializable, JSONType, JSONSerialize
 from .traits import *
 
 
@@ -24,7 +25,7 @@ class IntProtocol(Sized, Compare, AddWrapped, SubWrapped, MulWrapped, DivWrapped
     min: int
     max: int
 
-class Int(int, Serializable, IntProtocol):
+class Int(int, Serializable, JSONSerialize, IntProtocol):
     size = -1
     min = 2**256
     max = -2**256
@@ -40,6 +41,9 @@ class Int(int, Serializable, IntProtocol):
     def loads(cls, value: str):
         value = value.replace(cls.__name__, "")
         return cls(int(value))
+
+    def json(self) -> JSONType:
+        return int(self)
 
     def __add__(self, other: int | Self):
         if type(other) is int:
@@ -324,6 +328,9 @@ class u64(Int, Mod):
         self = cls(struct.unpack("<Q", data.read(8))[0])
         return self
 
+    def json(self) -> JSONType:
+        return str(self)
+
 # Obviously we only support 64bit
 usize = u64
 
@@ -340,6 +347,9 @@ class u128(Int, Mod):
         lo, hi = struct.unpack("<QQ", data.read(16))
         self = cls((hi << 64) | lo)
         return self
+
+    def json(self) -> JSONType:
+        return str(self)
 
 
 class i8(Int, AbsWrapped, Neg):
@@ -429,6 +439,9 @@ class i64(Int, AbsWrapped, Neg):
     def __neg__(self):
         return i64(-int(self))
 
+    def json(self) -> JSONType:
+        return str(self)
+
 
 class i128(Int, AbsWrapped, Neg):
     size = 16
@@ -451,8 +464,11 @@ class i128(Int, AbsWrapped, Neg):
     def __neg__(self):
         return i128(-int(self))
 
+    def json(self) -> JSONType:
+        return str(self)
 
-class bool_(Sized, Serializable, And, Or, Not, Xor, Nand, Nor):
+
+class bool_(Sized, Serializable, JSONSerialize, And, Or, Not, Xor, Nand, Nor):
 
     size = 1
 
@@ -482,6 +498,9 @@ class bool_(Sized, Serializable, And, Or, Not, Xor, Nand, Nor):
         if value.lower() == "false":
             return cls()
         raise ValueError("invalid value for bool")
+
+    def json(self) -> JSONType:
+        return self.value
 
     def __str__(self):
         if self:

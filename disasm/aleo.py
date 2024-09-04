@@ -187,7 +187,7 @@ def disassemble_program(program: Program) -> str:
     res.insert_line("")
     res.insert_line(f"program {program.id};")
     res.insert_line("")
-    for identifier, definition in program.identifiers:
+    for identifier, definition in program.identifiers.items():
         if definition == ProgramDefinition.Mapping:
             m = program.mappings[identifier]
             res.insert_line(f"mapping {m.name}:")

@@ -8,6 +8,7 @@ from psycopg.rows import DictRow
 
 from aleo_types import *
 from explorer.types import Message as ExplorerMessage
+from node import Network
 from .base import DatabaseBase, profile
 
 
@@ -23,7 +24,7 @@ class DatabaseBlock(DatabaseBase):
             solutions_root=Field.loads(block["solutions_root"]),
             subdag_root=Field.loads(block["subdag_root"]),
             metadata=BlockHeaderMetadata(
-                network=u16(3),
+                network=Network.network_id,
                 round_=u64(block["round"]),
                 height=u32(block["height"]),
                 cumulative_weight=u128(block["cumulative_weight"]),
@@ -360,7 +361,7 @@ class DatabaseBlock(DatabaseBase):
                                     records={},
                                     closures={},
                                     functions={},
-                                    identifiers=[],
+                                    identifiers={},
                                 ),
                                 verifying_keys=Vec[Tuple[Identifier, VerifyingKey, Certificate], u16].load(BytesIO(deploy["verifying_keys"])),
                             ),
@@ -577,7 +578,7 @@ class DatabaseBlock(DatabaseBase):
                                 records={},
                                 closures={},
                                 functions={},
-                                identifiers=[],
+                                identifiers={},
                             ),
                             verifying_keys=Vec[Tuple[Identifier, VerifyingKey, Certificate], u16]([])
                         )
@@ -841,8 +842,8 @@ class DatabaseBlock(DatabaseBase):
                 for solution in solutions:
                     ss.append(Solution(
                         partial_solution=PartialSolution(
-                            solution_id=solution["puzzle_solution_id"],
-                            epoch_hash=solution["epoch_hash"],
+                            solution_id=SolutionID.load(BytesIO(aleo_explorer_rust.solution_to_id(str(solution["epoch_hash"]), str(solution["address"]), int(solution["counter"])))),
+                            epoch_hash=BlockHash.loads(solution["epoch_hash"]),
                             address=Address.loads(solution["address"]),
                             counter=u64(solution["counter"]),
                         ),
@@ -1067,7 +1068,7 @@ class DatabaseBlock(DatabaseBase):
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_block_by_height(self, height: int):
+    async def get_block_by_height(self, height: int) -> Block | None:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:

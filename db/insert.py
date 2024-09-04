@@ -1497,6 +1497,13 @@ class DatabaseInsert(DatabaseBase):
                                         "INSERT INTO ratification_genesis_balance (address, amount) VALUES (%s, %s)",
                                         (str(address), balance)
                                     )
+                                bonded_balances = ratify.bonded_balances
+                                for address, validator, withdrawal, amount in bonded_balances:
+                                    await cur.execute(
+                                        "INSERT INTO ratification_genesis_bonded (staker, validator, withdrawal, amount) "
+                                        "VALUES (%s, %s, %s, %s)",
+                                        (str(address), str(validator), str(withdrawal), amount)
+                                    )
                             elif isinstance(ratify, (BlockRewardRatify, PuzzleRewardRatify)):
                                 await cur.execute(
                                     "INSERT INTO ratification (block_id, index, type, amount) VALUES (%s, %s, %s, %s)",

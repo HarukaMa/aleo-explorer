@@ -206,7 +206,7 @@ async def run():
     port = int(os.environ.get("PORT", 8000))
     config = uvicorn.Config(
         "webui:app", reload=True, log_level="info", host=host, port=port,
-        forwarded_allow_ips=["127.0.0.1", "::1", "10.0.4.1"]
+        forwarded_allow_ips=["127.0.0.1", "::1", "10.0.4.1", "10.0.5.1"]
     )
     logging.getLogger("uvicorn.access").handlers = []
     server = UvicornServer(config=config)

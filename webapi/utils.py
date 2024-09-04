@@ -11,19 +11,26 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from db import Database
+from webui.classes import UIAddress
 
 
-class DecimalEncoder(json.JSONEncoder):
-    def default(self, o):
+class CustomEncoder(json.JSONEncoder):
+    def default(self, o: Any):
         if isinstance(o, Decimal):
             return str(o)
+        elif isinstance(o, UIAddress):
+            return {
+                "address": o.address,
+                "name": o.name,
+                "tag": o.tag,
+            }
         return super().default(o)
 
-class DJSONResponse(Response):
+class CJSONResponse(Response):
     media_type = "application/json"
 
     def render(self, content: Any):
-        return json.dumps(content, cls=DecimalEncoder).encode("utf-8")
+        return json.dumps(content, cls=CustomEncoder).encode("utf-8")
 
 async def get_remote_height(session: aiohttp.ClientSession, rpc_root: str) -> str:
     try:

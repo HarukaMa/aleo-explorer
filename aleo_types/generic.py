@@ -4,11 +4,15 @@ from types import GenericAlias
 from typing import Generic, TypeVar, TypeVarTuple, TypeGuard, cast, Callable, Hashable
 
 from .basic import *
+from .serialize import JSONSerialize
 
 
-class FixedSize(int):
+class FixedSize(int, JSONSerialize):
     def __class_getitem__(cls, item: int):
         return FixedSize(item)
+
+    def json(self) -> JSONType:
+        return int(self)
 
 
 T = TypeVar('T', bound=Serializable)
@@ -44,7 +48,7 @@ def is_serializable(t: Any) -> TypeGuard[TType[Serializable]]:
         t = t.__origin__
     return isinstance(t, Serializable)
 
-class Tuple(tuple[*TP], Serializable):
+class Tuple(tuple[*TP], Serializable, JSONSerialize):
     types: tuple[TType[Serializable], ...]
 
     def __new__(cls, value: tuple[*TP]):
@@ -74,8 +78,16 @@ class Tuple(tuple[*TP], Serializable):
             value.append(t.load(data))
         return cls(tuple(value)) # type: ignore
 
+    def json(self) -> JSONType:
+        res: list[JSONType] = []
+        for item in self:
+            if not isinstance(item, JSONSerialize):
+                raise TypeError(f"cannot serialize {item.__class__.__name__}")
+            res.append(item.json())
+        return res
 
-class Vec(list[T], Serializable, Generic[T, L]):
+
+class Vec(list[T], Serializable, JSONSerialize, Generic[T, L]):
     types: tuple[TType[T], TType[L]]
 
     # noinspection PyMissingConstructor
@@ -127,11 +139,34 @@ class Vec(list[T], Serializable, Generic[T, L]):
             size = cast(Int, size_type).load(data)
         return cls(list(value_type.load(data) for _ in range(size)))
 
+    def json(self) -> JSONType:
+        if isinstance(self._type, GenericAlias) and issubclass(self._type.__origin__, Tuple):
+            res1: dict[str, Any] = {}
+            for tup in self:
+                if not isinstance(tup, Tuple):
+                    raise TypeError(f"bad type in Vec: {tup.__class__.__name__}, expected {self._type.__name__}")
+                if len(tup) == 2:
+                    res1[str(tup[0])] = tup[1].json()
+                else:
+                    obj: list[JSONType] = []
+                    for item in tup[1:]:
+                        if not isinstance(item, JSONSerialize):
+                            raise TypeError(f"cannot serialize {item.__class__.__name__}")
+                        obj.append(item.json())
+                    res1[str(tup[0])] = obj
+            return res1
+        res: list[JSONType] = []
+        for item in self:
+            if not isinstance(item, JSONSerialize):
+                raise TypeError(f"cannot serialize {item.__class__.__name__}")
+            res.append(item.json())
+        return res
+
     def __str__(self):
         return f"[{', '.join(str(item) for item in self)}]"
 
 
-class Option(Serializable, Generic[T]):
+class Option(Serializable, JSONSerialize, Generic[T]):
     types: TType[T]
 
     def __init__(self, value: Optional[T]):
@@ -174,3 +209,10 @@ class Option(Serializable, Generic[T]):
         else:
             value = None
         return cls(value)
+
+    def json(self) -> JSONType:
+        if self.value is None:
+            return None
+        if not isinstance(self.value, JSONSerialize):
+            raise TypeError(f"cannot serialize {self.types.__name__}")
+        return self.value.json()

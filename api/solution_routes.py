@@ -3,7 +3,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from db import Database
-from webapi.utils import DJSONResponse
+from webapi.utils import CJSONResponse
 
 
 async def solution_by_id_route(request: Request):
@@ -12,4 +12,4 @@ async def solution_by_id_route(request: Request):
     data = await db.get_solution_by_id(solution_id)
     if data is None:
         return JSONResponse({"error": "Solution not found"}, status_code=404)
-    return DJSONResponse(data)
+    return CJSONResponse(data)

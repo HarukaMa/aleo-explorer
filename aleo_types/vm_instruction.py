@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 from enum import auto, EnumType
+from typing import TYPE_CHECKING
 
 from .vm_basic import *
+
+if TYPE_CHECKING:
+    from .vm_block import Program
 
 
 class StringType(Serializable):
@@ -29,7 +33,7 @@ class StringType(Serializable):
     def __str__(self):
         return self.string
 
-class Literal(Serializable): # enum
+class Literal(Serializable, JSONSerialize): # enum
 
     class Type(IntEnumu16):
         Address = 0
@@ -129,7 +133,7 @@ class Literal(Serializable): # enum
         return self.type == other.type and self.primitive >= other.primitive
 
 
-class Identifier(Serializable):
+class Identifier(Serializable, JSONSerialize):
 
     def __init__(self, *, value: str):
         self.data = value
@@ -146,6 +150,9 @@ class Identifier(Serializable):
     @classmethod
     def loads(cls, data: str):
         return cls(value=data)
+
+    def json(self) -> JSONType:
+        return self.data
 
     def __str__(self):
         return self.data
@@ -166,7 +173,7 @@ class Identifier(Serializable):
     def __len__(self):
         return len(self.data)
 
-class ProgramID(Serializable):
+class ProgramID(Serializable, JSONSerialize):
 
     def __init__(self, *, name: Identifier, network: Identifier):
         self.name = name
@@ -186,6 +193,9 @@ class ProgramID(Serializable):
         (name, network) = data.split(".")
         return cls(name=Identifier(value=name), network=Identifier(value=network))
 
+    def json(self) -> JSONType:
+        return str(self)
+
     def __str__(self):
         return f"{self.name}.{self.network}"
 
@@ -197,7 +207,7 @@ class ProgramID(Serializable):
         return False
 
 
-class Import(Serializable):
+class Import(Serializable, JSONSerialize):
 
     def __init__(self, *, program_id: ProgramID):
         self.program_id = program_id
@@ -211,7 +221,7 @@ class Import(Serializable):
         return cls(program_id=program_id)
 
 
-class VarInt(int, Serializable):
+class VarInt(int, Serializable, JSONSerialize):
 
     def __new__(cls, value: int):
         if value > 0xffffffffffffffff:
@@ -246,8 +256,11 @@ class VarInt(int, Serializable):
             value = u8(value)
         return cls(value)
 
+    def json(self) -> JSONType:
+        return int(self)
 
-class Register(EnumBaseSerialize, Serialize, RustEnum):
+
+class Register(EnumBaseSerialize, Serialize, JSONSerialize, RustEnum):
 
     class Type(IntEnumu8):
         Locator = 0
@@ -282,7 +295,7 @@ class LocatorRegister(Register):
         return cls(locator=locator)
 
 
-class Access(EnumBaseSerialize, Serialize, RustEnum):
+class Access(EnumBaseSerialize, Serialize, JSONSerialize, RustEnum):
 
     class Type(IntEnumu8):
         Member = 0
@@ -345,7 +358,7 @@ class AccessRegister(Register):
         return cls(locator=locator, accesses=accesses)
 
 
-class Operand(EnumBaseSerialize, Serialize, RustEnum):
+class Operand(EnumBaseSerialize, Serialize, JSONSerialize, RustEnum):
 
     class Type(IntEnumu8):
         Literal = 0
@@ -474,7 +487,7 @@ class NetworkIDOperand(Operand):
 
 N = TypeVar("N", bound=FixedSize)
 
-class Literals(Serializable, Generic[N]):
+class Literals(Serializable, JSONSerialize, Generic[N]):
     types: N
 
     def __init__(self, *, operands: list[Operand], destination: Register):
@@ -485,7 +498,7 @@ class Literals(Serializable, Generic[N]):
         self.destination = destination
 
     @tp_cache
-    def __class_getitem__(cls, item) -> GenericAlias:
+    def __class_getitem__(cls, item: TType[N]) -> GenericAlias:
         param_type = type(
             f"Literals[{item}]",
             (Literals,),
@@ -516,14 +529,14 @@ class Variant(int):
 
 V = TypeVar("V", bound=Variant)
 
-class AssertInstruction(Serializable, Generic[V]):
+class AssertInstruction(Serializable, JSONSerialize, Generic[V]):
     variant: V
 
     def __init__(self, *, operands: tuple[Operand, Operand]):
         self.operands = operands
 
     @tp_cache
-    def __class_getitem__(cls, item) -> GenericAlias:
+    def __class_getitem__(cls, item: TType[V]) -> GenericAlias:
         param_type = type(
             f"AssertInstruction[{item}]",
             (AssertInstruction,),
@@ -541,7 +554,7 @@ class AssertInstruction(Serializable, Generic[V]):
         return cls(operands=(op1, op2))
 
 
-class Locator(Serializable):
+class Locator(Serializable, JSONSerialize):
 
     def __init__(self, *, id_: ProgramID, resource: Identifier):
         self.id = id_
@@ -560,7 +573,7 @@ class Locator(Serializable):
         return f"{self.id}/{self.resource}"
 
 
-class CallOperator(EnumBaseSerialize, RustEnum, Serializable):
+class CallOperator(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize):
 
     class Type(IntEnumu8):
         Locator = 0
@@ -611,7 +624,7 @@ class ResourceCallOperator(CallOperator):
         return str(self.resource)
 
 
-class CallInstruction(Serializable):
+class CallInstruction(Serializable, JSONSerialize):
 
     def __init__(self, *, operator: CallOperator, operands: Vec[Operand, u8], destinations: Vec[Register, u8]):
         self.operator = operator
@@ -691,7 +704,7 @@ class LiteralType(IntEnumu8):
         }[self]
 
 
-class PlaintextType(EnumBaseSerialize, Serialize, RustEnum):
+class PlaintextType(EnumBaseSerialize, Serialize, JSONSerialize, RustEnum):
 
     class Type(IntEnumu8):
         Literal = 0
@@ -758,7 +771,7 @@ class StructPlaintextType(PlaintextType):
         size_of_members = sum(map(lambda t: t[1].size_in_bytes(program), struct_.members))
         return size_of_name + size_of_members
 
-class ArrayType(Serializable):
+class ArrayType(Serializable, JSONSerialize):
 
     def __init__(self, *, element_type: PlaintextType, length: u32):
         self.element_type = element_type
@@ -830,7 +843,7 @@ class ArrayPlaintextType(PlaintextType):
         return str(self.array_type)
 
 
-class RegisterType(EnumBaseSerialize, Serialize, RustEnum):
+class RegisterType(EnumBaseSerialize, Serialize, JSONSerialize, RustEnum):
 
     class Type(IntEnumu8):
         Plaintext = 0
@@ -894,7 +907,7 @@ class ExternalRecordRegisterType(RegisterType):
         locator = Locator.load(data)
         return cls(locator=locator)
 
-class CastType(EnumBaseSerialize, Serialize, RustEnum):
+class CastType(EnumBaseSerialize, Serialize, JSONSerialize, RustEnum):
 
     class Type(IntEnumu8):
         GroupXCoordinate = 0
@@ -982,7 +995,7 @@ class ExternalRecordCastType(CastType):
         return cls(locator=locator)
 
 
-class CastInstruction(Serializable, Generic[V]):
+class CastInstruction(Serializable, JSONSerialize, Generic[V]):
     type: V
 
     class Type(IntEnum):
@@ -995,7 +1008,7 @@ class CastInstruction(Serializable, Generic[V]):
         self.cast_type = cast_type
 
     @tp_cache
-    def __class_getitem__(cls, item) -> GenericAlias:
+    def __class_getitem__(cls, item: TType[V]) -> GenericAlias:
         param_type = type(
             f"CastInstruction[{item}]",
             (CastInstruction,),
@@ -1035,7 +1048,7 @@ class CommitInstruction(Serializable, Generic[V]):
         self.destination_type = destination_type
 
     @tp_cache
-    def __class_getitem__(cls, item) -> GenericAlias:
+    def __class_getitem__(cls, item: TType[V]) -> GenericAlias:
         param_type = type(
             f"CommitInstruction[{item}]",
             (CommitInstruction,),
@@ -1055,7 +1068,7 @@ class CommitInstruction(Serializable, Generic[V]):
         return cls(operands=(op1, op2), destination=destination, destination_type=destination_type)
 
 
-class HashInstruction(Serializable, Generic[V]):
+class HashInstruction(Serializable, JSONSerialize, Generic[V]):
     type: V
 
     class Type(IntEnum):
@@ -1090,7 +1103,7 @@ class HashInstruction(Serializable, Generic[V]):
         self.destination_type = destination_type
 
     @tp_cache
-    def __class_getitem__(cls, item) -> GenericAlias:
+    def __class_getitem__(cls, item: TType[V]) -> GenericAlias:
         param_type = type(
             f"HashInstruction[{item}]",
             (HashInstruction,),
@@ -1119,7 +1132,14 @@ class HashInstruction(Serializable, Generic[V]):
         destination_type = PlaintextType.load(data)
         return cls(operands=(op1, op2), destination=destination, destination_type=destination_type)
 
-class AsyncInstruction(Serializable):
+    def json(self) -> JSONType:
+        return {
+            "operands": [op.json() for op in self.operands if op],
+            "destination": self.destination.json(),
+            "destination_type": self.destination_type.json(),
+        }
+
+class AsyncInstruction(Serializable, JSONSerialize):
 
     def __init__(self, *, function_name: Identifier, operands: Vec[Operand, u8], destination: Register):
         self.function_name = function_name
@@ -1136,7 +1156,7 @@ class AsyncInstruction(Serializable):
         destination = Register.load(data)
         return cls(function_name=function_name, operands=operands, destination=destination)
 
-class Instruction(Serializable):
+class Instruction(Serializable, JSONSerialize):
 
     class Type(IntEnumu16):
 
