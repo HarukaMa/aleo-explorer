@@ -68,6 +68,7 @@ def format_aleo_credit(mc: int | Decimal):
 
 def network_tag(_: str):
     names = {
+        "mainnet": "Mainnet",
         "testnet": "Testnet Beta",
         "canary": "Canary",
     }
