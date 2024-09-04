@@ -165,6 +165,8 @@ class DatabaseValidator(DatabaseBase):
                         validator_stake_count = res["sum"]
                     else:
                         return 0
+                    if validator_stake_count is None or validator_total_stake_count is None:
+                        return 0
                     return validator_stake_count / validator_total_stake_count
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
