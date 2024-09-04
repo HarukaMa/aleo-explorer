@@ -145,7 +145,7 @@ class DatabaseValidator(DatabaseBase):
                         "JOIN committee_history ch ON chm.committee_id = ch.id "
                         "JOIN block b ON ch.height = b.height "
                         "WHERE b.timestamp > %s",
-                        (timestamp - 3600,)
+                        (timestamp - 300,)
                     )
                     res = await cur.fetchone()
                     if res:
@@ -158,7 +158,7 @@ class DatabaseValidator(DatabaseBase):
                         "JOIN block b ON ch.height = b.height "
                         "JOIN block_validator bv ON b.id = bv.block_id and bv.validator = chm.address "
                         "WHERE b.timestamp > %s",
-                        (timestamp - 3600,)
+                        (timestamp - 300,)
                     )
                     res = await cur.fetchone()
                     if res:
