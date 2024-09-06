@@ -238,7 +238,7 @@ LIMIT 30
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT AVG(reward) FROM solution"
+                        "SELECT AVG(reward) FROM solution ORDER BY id DESC LIMIT 10000"
                     )
                     if (res := await cur.fetchone()) is None:
                         return 0
