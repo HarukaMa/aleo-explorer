@@ -114,6 +114,10 @@ h1, h2, h3, h4, h5, h6 {
     .menubar {
         flex-wrap: wrap;
     }
+
+    .container {
+        margin: 0 8px;
+    }
 }
 
 .menubar .dropdown > li > a {
