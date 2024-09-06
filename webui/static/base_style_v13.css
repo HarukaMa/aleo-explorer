@@ -260,7 +260,12 @@ table {
     margin-top: 10px;
 }
 
-.table-wrap {
+.table-wrap.tabs-panel.is-active {
+    display: block;
+    overflow-x: auto;
+}
+
+.table-wrap:not(.tabs-panel) {
     display: block;
     overflow-x: auto;
 }
