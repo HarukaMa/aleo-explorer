@@ -110,6 +110,12 @@ h1, h2, h3, h4, h5, h6 {
     padding: 0 8px;
 }
 
+@media (max-width: 640px) {
+    .menubar {
+        flex-wrap: wrap;
+    }
+}
+
 .menubar .dropdown > li > a {
     margin-top: 2px;
     margin-bottom: -2px;
