@@ -6,21 +6,27 @@ from util import arc0137
 
 class UIAddress:
 
-    def __init__(self, address: str, name: Optional[str] = None, tag: Optional[str] = None):
+    def __init__(self, address: str, name: Optional[str] = None, tag: Optional[str] = None,
+                 link: Optional[str] = None, logo: Optional[str] = None):
         self.address = address
         self.name = name
         self.tag = tag
+        self.link = link
+        self.logo = logo
 
     async def resolve(self, db: Database) -> Self:
         if self.name is None:
             self.name = await arc0137.get_primary_name_from_address(db, self.address)
-        # TODO: implement custom address tag on explorer
+        self.tag = await db.get_address_tag(self.address)
+        self.link, self.logo = await db.get_validator_link_and_logo(self.address)
         return self
 
     def to_partial_json(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "tag": self.tag,
+            "link": self.link,
+            "logo": self.logo,
         }
 
     def __str__(self) -> str:

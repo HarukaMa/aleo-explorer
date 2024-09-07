@@ -116,3 +116,19 @@
     <span style="display: none">in_sync</span>
 {% endif %}
 {% endmacro %}
+
+{% macro UIAddress(uia) %}
+{% if uia.logo %}
+    <img src="/static/thirdparty/{{ uia.logo }}" alt="{{ uia.tag }}" class="validator-logo">
+{% endif %}
+{% if uia.tag %}
+    {{ uia.tag }}
+{% elif uia.ans %}
+    {{ uia.ans }}
+{% else %}
+    {{ uia.address }}
+{% endif %}
+{% if uia.link %}
+    <a href="{{ uia.link }}" target="_blank" class="fa fa-link validator-link"></a>
+{% endif %}
+{% endmacro %}

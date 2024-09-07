@@ -415,3 +415,13 @@ code, pre {
 .label .mono {
     font-size: 0.8rem;
 }
+
+.validator-logo {
+    height: 32px;
+    width: 32px;
+    object-fit: contain;
+}
+
+.validator-link {
+    font-size: 16px;
+}

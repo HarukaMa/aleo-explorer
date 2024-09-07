@@ -1,12 +1,12 @@
 
-{% from "macros.jinja2" import data_line, data_line_safe, htmx_title, sync_notice %}
+{% from "macros.jinja2" import data_line, data_line_safe, htmx_title, sync_notice, UIAddress %}
 {{ sync_notice(sync_info) }}
 
 
     <div class="content" hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
 
         <div id="header">
-            <h3>{% if committee_state %}Validator{% else %}Address{% endif %} {{ address_trunc }}</h3>
+            <h3>{% if committee_state %}Validator{% else %}Address{% endif %} {{ UIAddress(address) }}</h3>
         </div>
         {% if program_name is not none %}
         <div class="callout warning">This is a program address. Records owned by programs are currently unspendable.</div>

@@ -196,3 +196,17 @@ class DatabaseValidator(DatabaseBase):
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
+
+    async def get_validator_link_and_logo(self, address: str) -> tuple[Optional[str], Optional[str]]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute("SELECT website, logo FROM validator_info WHERE address = %s", (address,))
+                    res = await cur.fetchone()
+                    if res:
+                        return res["website"], res["logo"]
+                    else:
+                        return None, None
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise

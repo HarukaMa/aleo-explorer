@@ -866,7 +866,7 @@ async def validators_route(request: Request):
     total_stake = 0
     for validator in validators_data:
         validators.append({
-            "address": validator["address"],
+            "address": await UIAddress(validator["address"]).resolve(db),
             "stake": validator["stake"],
             "uptime": validator["uptime"] * 100,
         })
