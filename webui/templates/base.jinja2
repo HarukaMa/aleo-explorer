@@ -96,8 +96,8 @@
                     </ul>
                 </li>
                 <li><a href="{{ "API_DOC_ROOT" | get_env }}" target="_blank">API</a></li>
-                {% if "HAS_BETA" | get_env %}
-                    <li style="margin-left: auto"><a href="//explorerb.hamp.app">Preview</a></li>
+                {% if ("NETWORK" | get_env) != "mainnet" %}
+                    <li style="margin-left: auto;"><a style="color: darkred" href="//aleoscan.io">Switch to Mainnet</a></li>
                 {% endif %}
             </ul>
         </div>
