@@ -199,10 +199,11 @@ LIMIT 30
                 interval = 900
                 try:
                     await cur.execute(
+                        "WITH last AS (SELECT timestamp FROM block ORDER BY height DESC LIMIT 1) "
                         "SELECT b.height FROM solution s "
                         "JOIN puzzle_solution ps ON s.puzzle_solution_id = ps.id "
                         "JOIN block b ON ps.block_id = b.id "
-                        "WHERE timestamp > %s",
+                        "WHERE timestamp > (SELECT timestamp FROM last) - %s",
                         (now - interval,)
                     )
                     partial_solutions = await cur.fetchall()
@@ -238,8 +239,7 @@ LIMIT 30
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "WITH ss AS (SELECT reward FROM solution ORDER BY id DESC LIMIT 10000)"
-                        "SELECT avg(reward) FROM ss"
+                        "SELECT AVG(reward) FROM solution"
                     )
                     if (res := await cur.fetchone()) is None:
                         return 0
