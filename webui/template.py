@@ -78,7 +78,7 @@ def format_aleo_credit(mc: int | Decimal):
 def network_tag(_: str):
     names = {
         "mainnet": "Mainnet",
-        "testnet": "Testnet Beta",
+        "testnet": "Testnet",
         "canary": "Canary",
     }
     network = os.environ.get("NETWORK", "unknown")
