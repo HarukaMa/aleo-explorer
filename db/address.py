@@ -195,7 +195,6 @@ LIMIT 30
     async def get_network_speed(self) -> float:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
-                now = int(time.time())
                 interval = 900
                 try:
                     await cur.execute(
@@ -204,7 +203,7 @@ LIMIT 30
                         "JOIN puzzle_solution ps ON s.puzzle_solution_id = ps.id "
                         "JOIN block b ON ps.block_id = b.id "
                         "WHERE timestamp > (SELECT timestamp FROM last) - %s",
-                        (now - interval,)
+                        (interval,)
                     )
                     partial_solutions = await cur.fetchall()
                     heights = list(map(lambda x: x['height'], partial_solutions))

@@ -61,6 +61,15 @@ def format_number(number: int | Decimal, decimal_places: int = 2):
         "".join(map(lambda x: f'<span class="number-part">{x}</span>', decimal_parts)) + \
         '</span>'
 
+def format_large_number(number: int | Decimal):
+    if not isinstance(number, Decimal):
+        number = Decimal(number)
+    if number < 1_000_000_000:
+        return format_number(number / 1_000_000, 3) + "&nbsp;M"
+    if number < 1_000_000_000_000:
+        return format_number(number / 1_000_000_000, 3) + "&nbsp;G"
+    return format_number(number / 1_000_000_000_000, 3) + "&nbsp;T"
+
 def format_aleo_credit(mc: int | Decimal):
     if mc == "-":
         return "-"
@@ -82,6 +91,7 @@ templates.env.filters["format_time"] = format_time # type: ignore
 templates.env.filters["format_time_delta"] = format_time_delta # type: ignore
 templates.env.filters["format_aleo_credit"] = format_aleo_credit # type: ignore
 templates.env.filters["format_number"] = format_number # type: ignore
+templates.env.filters["format_large_number"] = format_large_number # type: ignore
 templates.env.filters["network_tag"] = network_tag # type: ignore
 
 def htmx_template(template: str):

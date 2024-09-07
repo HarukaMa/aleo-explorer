@@ -41,7 +41,7 @@
                 <div class="cell large-3 ticker-cell">
                     <div class="grid-y ticker-cell-content">
                         <div class="cell ticker-cell-title">Puzzle solving rate (15m)</div>
-                        <div class="cell auto ticker-cell-data">{{ network_speed | format_number | safe }}&nbsp;<span data-tippy-content="Solutions per second, see FAQ for more info">s/s</span></div>
+                        <div class="cell auto ticker-cell-data">{{ network_speed | format_large_number | safe }}<span data-tippy-content="Solutions per second, see FAQ for more info">s/s</span></div>
                     </div>
                 </div>
                 {% endif %}
