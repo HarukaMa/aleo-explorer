@@ -23,6 +23,8 @@ class CustomEncoder(json.JSONEncoder):
                 "address": o.address,
                 "name": o.name,
                 "tag": o.tag,
+                "link": o.link,
+                "logo": o.logo,
             }
         return super().default(o)
 

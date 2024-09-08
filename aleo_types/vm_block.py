@@ -2465,6 +2465,12 @@ class Fee(Serializable, JSONSerialize):
         proof = Option[Proof].load(data)
         return cls(transition=transition, global_state_root=global_state_root, proof=proof)
 
+    def json(self) -> JSONType:
+        data = super().json()
+        if not isinstance(data, dict):
+            raise ValueError("invalid json")
+        data["amount"] = self.amount
+        return data
 
     @property
     def amount(self):
