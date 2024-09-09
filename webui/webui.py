@@ -136,6 +136,7 @@ routes = [
     Route("/blocks", blocks_route),
     Route("/unconfirmed_transactions", unconfirmed_transactions_route),
     Route("/nodes", nodes_route),
+    Route("/solution", solution_route),
     # Programs
     Route("/programs", programs_route),
     Route("/program", program_route),

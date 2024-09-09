@@ -85,7 +85,7 @@ class DatabaseSearch(DatabaseBase):
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def search_solution(self, solution_id: str) -> Optional[int]:
+    async def search_solution(self, solution_id: str) -> list[str]:
         """
         @return: block height if solution exists
         """
@@ -93,14 +93,44 @@ class DatabaseSearch(DatabaseBase):
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT b.height FROM block b "
+                        "SELECT solution_id FROM block_aborted_solution_id "
+                        "WHERE solution_id LIKE %s",
+                        (f"{solution_id}%",)
+                    )
+                    res = list(map(lambda x: x["solution_id"], await cur.fetchall()))
+                    await cur.execute(
+                        "SELECT solution_id FROM solution WHERE solution_id LIKE %s",
+                        (f"{solution_id}%",)
+                    )
+                    res.extend(map(lambda x: x["solution_id"], await cur.fetchall()))
+                    return res
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def get_solution_block_height(self, solution_id: str) -> Optional[int]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT height FROM block b "
+                        "JOIN puzzle_solution ps on b.id = ps.block_id "
+                        "JOIN solution s on ps.id = s.puzzle_solution_id "
+                        "WHERE s.solution_id = %s",
+                        (solution_id,)
+                    )
+                    res = await cur.fetchone()
+                    if res is not None:
+                        return res["height"]
+                    await cur.execute(
+                        "SELECT height FROM block b "
                         "JOIN explorer.block_aborted_solution_id basi on b.id = basi.block_id "
                         "WHERE basi.solution_id = %s",
                         (solution_id,)
                     )
                     res = await cur.fetchone()
-                    if res:
-                        return res['height']
+                    if res is not None:
+                        return res["height"]
                     return None
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))

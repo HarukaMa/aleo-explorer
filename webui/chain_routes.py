@@ -779,10 +779,23 @@ async def search_route(request: Request):
         return ctx, {'Cache-Control': 'public, max-age=15'}
     elif query.startswith("solution1"):
         # solution id
-        block_height = await db.search_solution(query)
-        if not block_height:
-            raise HTTPException(status_code=404, detail="Solution not found or is confirmed (coming later)")
-        return RedirectResponse(f"/block?h={block_height}{remaining_query}", status_code=302)
+        solutions = await db.search_solution(query)
+        if not solutions:
+            raise HTTPException(status_code=404, detail="Solution not found")
+        if len(solutions) == 1:
+            height = await db.get_solution_block_height(solutions[0])
+            return RedirectResponse(f"/block?h={height}{remaining_query}", status_code=302)
+        too_many = False
+        if len(solutions) > 50:
+            solutions = solutions[:50]
+            too_many = True
+        ctx = {
+            "query": query,
+            "type": "solution",
+            "solutions": solutions,
+            "too_many": too_many,
+        }
+        return ctx, {'Cache-Control': 'public, max-age=15'}
     elif query.endswith(".ans"):
         address = await util.arc0137.get_address_from_domain(db, query)
         if address is None:
@@ -916,6 +929,16 @@ async def unconfirmed_transactions_route(request: Request):
         "sync_info": sync_info,
     }
     return ctx, {'Cache-Control': 'public, max-age=5'}
+
+async def solution_route(request: Request):
+    db: Database = request.app.state.db
+    solution_id = request.query_params.get("id")
+    if solution_id is None:
+        raise HTTPException(status_code=400, detail="Missing solution id")
+    height = await db.get_solution_block_height(solution_id)
+    if height is None:
+        raise HTTPException(status_code=404, detail="Solution not found")
+    return RedirectResponse(f"/block?h={height}", status_code=302)
 
 @htmx_template("nodes.jinja2")
 async def nodes_route(request: Request):

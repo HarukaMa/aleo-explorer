@@ -40,6 +40,11 @@
                     <span class="mono"><a href="/program?id={{ program }}">{{ program }}</a></span>
                 </li>
             {% endfor %}
+            {% for solution in solutions %}
+                <li>
+                    <span class="mono"><a href="/solution?id={{ solution }}">{{ solution }}</a></span>
+                </li>
+            {% endfor %}
         </ul>
     </div>
 
