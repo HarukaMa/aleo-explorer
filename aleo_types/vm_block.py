@@ -3599,7 +3599,7 @@ class Block(Serializable, JSONSerialize):
 
     def __init__(self, *, block_hash: BlockHash, previous_hash: BlockHash, header: BlockHeader, authority: Authority,
                  ratifications: Ratifications, solutions: Solutions, aborted_solution_ids: Vec[SolutionID, u32],
-                 transactions: Transactions, aborted_transactions_ids: Vec[TransactionID, u32]):
+                 transactions: Transactions, aborted_transaction_ids: Vec[TransactionID, u32]):
         self.block_hash = block_hash
         self.previous_hash = previous_hash
         self.header = header
@@ -3608,7 +3608,7 @@ class Block(Serializable, JSONSerialize):
         self.solutions = solutions
         self.aborted_solution_ids = aborted_solution_ids
         self.transactions = transactions
-        self.aborted_transactions_ids = aborted_transactions_ids
+        self.aborted_transaction_ids = aborted_transaction_ids
 
     def dump(self) -> bytes:
         return (self.version.dump()
@@ -3620,7 +3620,7 @@ class Block(Serializable, JSONSerialize):
                 + self.solutions.dump()
                 + self.aborted_solution_ids.dump()
                 + self.transactions.dump()
-                + self.aborted_transactions_ids.dump())
+                + self.aborted_transaction_ids.dump())
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -3633,12 +3633,12 @@ class Block(Serializable, JSONSerialize):
         solutions = Solutions.load(data)
         aborted_solution_ids = Vec[SolutionID, u32].load(data)
         transactions = Transactions.load(data)
-        aborted_transactions_ids = Vec[TransactionID, u32].load(data)
+        aborted_transaction_ids = Vec[TransactionID, u32].load(data)
         if version != cls.version:
             raise ValueError("invalid block version")
         return cls(block_hash=block_hash, previous_hash=previous_hash, header=header, authority=authority,
                    ratifications=ratifications, solutions=solutions, aborted_solution_ids=aborted_solution_ids,
-                   transactions=transactions, aborted_transactions_ids=aborted_transactions_ids)
+                   transactions=transactions, aborted_transaction_ids=aborted_transaction_ids)
 
 
     def __str__(self):

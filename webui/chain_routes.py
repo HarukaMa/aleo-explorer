@@ -160,7 +160,7 @@ async def block_route(request: Request):
             txs.append(t)
         else:
             raise HTTPException(status_code=550, detail="Unsupported transaction type")
-    atxs: list[str] = list(map(str, block.aborted_transactions_ids))
+    atxs: list[str] = list(map(str, block.aborted_transaction_ids))
     validators, all_validators_raw = await db.get_validator_by_height(height)
     all_validators: list[UIAddress] = []
     for v in all_validators_raw:

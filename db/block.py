@@ -952,7 +952,7 @@ class DatabaseBlock(DatabaseBase):
                 ratifications=Ratifications(ratifications=Vec[Ratify, u32](rs)),
                 solutions=Solutions(solutions=Option[PuzzleSolutions](puzzle_solution)),
                 aborted_solution_ids=Vec[SolutionID, u32](aborted_solution_ids),
-                aborted_transactions_ids=Vec[TransactionID, u32](aborted_transaction_ids),
+                aborted_transaction_ids=Vec[TransactionID, u32](aborted_transaction_ids),
             )
 
     @staticmethod

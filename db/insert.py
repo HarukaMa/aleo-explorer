@@ -1552,7 +1552,7 @@ class DatabaseInsert(DatabaseBase):
                                     pipe.hincrby("address_puzzle_reward", address, reward)
                                     await pipe.execute() # type: ignore
 
-                        for aborted in block.aborted_transactions_ids:
+                        for aborted in block.aborted_transaction_ids:
                             await cur.execute(
                                 "INSERT INTO block_aborted_transaction_id (block_id, transaction_id) VALUES (%s, %s)",
                                 (block_db_id, str(aborted))
