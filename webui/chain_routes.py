@@ -882,6 +882,7 @@ async def validators_route(request: Request):
             "address": await UIAddress(validator["address"]).resolve(db),
             "stake": validator["stake"],
             "uptime": validator["uptime"] * 100,
+            "commission": validator["commission"],
         })
         total_stake += validator["stake"]
 
