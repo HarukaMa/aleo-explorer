@@ -483,7 +483,9 @@ class DatabaseBlock(DatabaseBase):
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
-                    await cur.execute("SELECT COUNT(*) FROM transaction WHERE confirmed_transaction_id IS NULL")
+                    await cur.execute(
+                        "SELECT COUNT(*) FROM transaction WHERE confirmed_transaction_id IS NULL AND aborted = FALSE"
+                    )
                     res = await cur.fetchone()
                     if res is None:
                         raise RuntimeError("database inconsistent")
@@ -497,7 +499,8 @@ class DatabaseBlock(DatabaseBase):
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT transaction_id FROM transaction WHERE confirmed_transaction_id IS NULL "
+                        "SELECT transaction_id FROM transaction "
+                        "WHERE confirmed_transaction_id IS NULL AND aborted = FALSE "
                         "ORDER BY first_seen DESC LIMIT %s OFFSET %s",
                         (end - start, start)
                     )

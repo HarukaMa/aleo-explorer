@@ -20,6 +20,7 @@ class DatabaseMigrate(DatabaseBase):
             (1, self.migrate_1_add_block_validator_index),
             (2, self.migrate_2_add_address_tag_and_validator_table),
             (3, self.migrate_3_change_tag_validator_index_to_unique),
+            (4, self.migrate_4_create_transaction_aborted_flag),
         ]
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -75,3 +76,7 @@ create table validator_info
 
         await conn.execute("drop index validator_info_address_index")
         await conn.execute("create unique index validator_info_address_index on validator_info (address)")
+
+    @staticmethod
+    async def migrate_4_create_transaction_aborted_flag(conn: psycopg.AsyncConnection[DictRow], redis: Redis[str]):
+        await conn.execute("alter table transaction add column aborted boolean not null default false")

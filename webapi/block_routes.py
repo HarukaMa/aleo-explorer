@@ -73,14 +73,33 @@ async def block_route(request: Request):
     all_validators: list[str] = []
     for v in all_validators_raw:
         all_validators.append(v["address"])
-
+    css: list[dict[str, Any]] = []
+    target_sum = 0
+    if coinbase_reward is not None:
+        solutions = await db.get_solution_by_height(height, 0, 100)
+        for solution in solutions:
+            css.append({
+                "address": solution["address"],
+                "counter": solution["counter"],
+                "target": solution["target"],
+                "reward": solution["reward"],
+                "solution_id": solution["solution_id"],
+            })
+            target_sum += solution["target"]
     result = {
         "block": block.json(),
         "coinbase_reward": coinbase_reward,
         "validators": validators,
         "all_validators": all_validators,
+        "solutions": css,
     }
-    result["resolved_addresses"] = await UIAddress.resolve_recursive_detached(result, db, {})
+    result["resolved_addresses"] = \
+        await UIAddress.resolve_recursive_detached(
+            result, db,
+            await UIAddress.resolve_recursive_detached(
+                result["solutions"], db, {}
+            )
+        )
 
     return CJSONResponse(result)
 
