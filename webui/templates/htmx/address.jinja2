@@ -93,7 +93,7 @@
                     {% endcall %}
                     {% call data_line("Estimated speed") %}
                         {% if speed != 0 %}
-                            {{ "%.2f" % speed }} <span data-tippy-content="Solutions per second, see FAQ for more info">s/s</span> (last {{ timespan }})
+                            {{ speed | format_large_number | safe }}<span data-tippy-content="Solutions per second, see FAQ for more info">s/s</span> (last {{ timespan }})
                         {% else %}
                             Not enough solutions during last day
                         {% endif %}
