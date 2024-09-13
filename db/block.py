@@ -307,6 +307,22 @@ class DatabaseBlock(DatabaseBase):
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
+    async def is_transaction_aborted(self, transaction_id: str) -> Optional[bool]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT aborted FROM transaction WHERE transaction_id = %s",
+                        (transaction_id,)
+                    )
+                    res = await cur.fetchone()
+                    if res is None:
+                        return None
+                    return res["aborted"]
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
     async def get_unconfirmed_transaction(self, transaction_id: str) -> Optional[Transaction]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:

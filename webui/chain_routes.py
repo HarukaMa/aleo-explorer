@@ -202,12 +202,13 @@ async def transaction_route(request: Request):
         if confirmed_transaction is None:
             raise HTTPException(status_code=550, detail="Database inconsistent")
         transaction = confirmed_transaction.transaction
+        aborted = None
     else:
         confirmed_transaction = None
         transaction = await db.get_unconfirmed_transaction(tx_id)
         if transaction is None:
             raise HTTPException(status_code=404, detail="Transaction not found")
-
+        aborted = await db.is_transaction_aborted(tx_id)
     first_seen = await db.get_transaction_first_seen(tx_id)
     index = -1
     original_txid: Optional[str] = None
@@ -220,7 +221,10 @@ async def transaction_route(request: Request):
                 raise Unreachable
             index = confirmed_transaction.index
         else:
-            transaction_state = "Unconfirmed"
+            if aborted:
+                transaction_state = "Aborted"
+            else:
+                transaction_state = "Unconfirmed"
             program_info = await db.get_deploy_transaction_program_info(tx_id)
             if program_info is None:
                 raise HTTPException(status_code=550, detail="Database inconsistent")
@@ -232,7 +236,10 @@ async def transaction_route(request: Request):
                 raise Unreachable
             index = confirmed_transaction.index
         else:
-            transaction_state = "Unconfirmed"
+            if aborted:
+                transaction_state = "Aborted"
+            else:
+                transaction_state = "Unconfirmed"
     elif isinstance(transaction, FeeTransaction):
         if confirmed_transaction is None:
             raise HTTPException(status_code=550, detail="Database inconsistent")
@@ -293,6 +300,7 @@ async def transaction_route(request: Request):
         "original_txid": original_txid,
         "program_info": program_info,
         "reject_reason": await db.get_transaction_reject_reason(tx_id) if transaction_state == "Rejected" else None,
+        "aborted": aborted,
         "sync_info": sync_info,
     }
 
