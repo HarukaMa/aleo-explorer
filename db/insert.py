@@ -1292,8 +1292,8 @@ class DatabaseInsert(DatabaseBase):
                             "INSERT INTO block (height, block_hash, previous_hash, previous_state_root, transactions_root, "
                             "finalize_root, ratifications_root, solutions_root, subdag_root, round, cumulative_weight, "
                             "cumulative_proof_target, coinbase_target, proof_target, last_coinbase_target, "
-                            "last_coinbase_timestamp, timestamp, block_reward, coinbase_reward, total_supply) "
-                            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                            "last_coinbase_timestamp, timestamp, block_reward, coinbase_reward, total_supply, confirm_timestamp) "
+                            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
                             "RETURNING id",
                             (block.height, str(block.block_hash), str(block.previous_hash), str(block.header.previous_state_root),
                              str(block.header.transactions_root), str(block.header.finalize_root), str(block.header.ratifications_root),
@@ -1301,7 +1301,7 @@ class DatabaseInsert(DatabaseBase):
                              block.header.metadata.cumulative_weight, block.header.metadata.cumulative_proof_target,
                              block.header.metadata.coinbase_target, block.header.metadata.proof_target,
                              block.header.metadata.last_coinbase_target, block.header.metadata.last_coinbase_timestamp,
-                             block.header.metadata.timestamp, block_reward, coinbase_reward, supply_tracker.supply)
+                             block.header.metadata.timestamp, block_reward, coinbase_reward, supply_tracker.supply, 0)
                         ) # total supply will be rewritten after everything
                         if (res := await cur.fetchone()) is None:
                             raise RuntimeError("failed to insert row into database")
@@ -1323,26 +1323,31 @@ class DatabaseInsert(DatabaseBase):
                             )
                             if (res := await cur.fetchone()) is None:
                                 raise RuntimeError("failed to insert row into database")
-                            authority_db_id = res["id"]
+                            # authority_db_id = res["id"]
                             subdag = block.authority.subdag
                             subdag_copy_data: list[tuple[int, int, str, str, int, str, int, str]] = []
                             committee = await self._get_committee_mapping_unchecked(self.redis)
                             validators: set[str] = set()
                             validators_copy_data: list[tuple[int, str]] = []
+                            max_timestamp = 0
                             for round_, certificates in subdag.subdag.items():
                                 for index, certificate in enumerate(certificates):
+                                    if certificate.batch_header.timestamp > max_timestamp:
+                                        max_timestamp = certificate.batch_header.timestamp
                                     if round_ != certificate.batch_header.round:
                                         raise ValueError("invalid subdag round")
-                                    subdag_copy_data.append((
-                                        authority_db_id, round_, str(certificate.batch_header.batch_id),
-                                        str(certificate.batch_header.author), certificate.batch_header.timestamp,
-                                        str(certificate.batch_header.signature), index, str(certificate.batch_header.committee_id)
-                                    ))
+                                    # Wow, so now we stopped storing the subdags altogether as we are not really reusing them
+                                    #
+                                    # subdag_copy_data.append((
+                                    #     authority_db_id, round_, str(certificate.batch_header.batch_id),
+                                    #     str(certificate.batch_header.author), certificate.batch_header.timestamp,
+                                    #     str(certificate.batch_header.signature), index, str(certificate.batch_header.committee_id)
+                                    # ))
                                     if len(validators) != len(committee):
                                         for signature in certificate.signatures:
                                             validators.add(cached_compute_key_to_address(signature.compute_key))
                                         validators.add(str(certificate.batch_header.author))
-
+                            await cur.execute("UPDATE block SET confirm_timestamp = %s WHERE id = %s", (max_timestamp, block_db_id))
                             for validator in validators:
                                 validators_copy_data.append((block_db_id, validator))
                                         # await cur.execute(

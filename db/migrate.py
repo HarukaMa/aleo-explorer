@@ -21,6 +21,8 @@ class DatabaseMigrate(DatabaseBase):
             (2, self.migrate_2_add_address_tag_and_validator_table),
             (3, self.migrate_3_change_tag_validator_index_to_unique),
             (4, self.migrate_4_create_transaction_aborted_flag),
+            (5, self.migrate_5_add_confirm_timestamp_to_block),
+            (6, self.migrate_6_check_aborted_unconfirmed_transactions),
         ]
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -80,3 +82,31 @@ create table validator_info
     @staticmethod
     async def migrate_4_create_transaction_aborted_flag(conn: psycopg.AsyncConnection[DictRow], redis: Redis[str]):
         await conn.execute("alter table transaction add column aborted boolean not null default false")
+
+    @staticmethod
+    async def migrate_5_add_confirm_timestamp_to_block(conn: psycopg.AsyncConnection[DictRow], redis: Redis[str]):
+        async with conn.cursor() as cur:
+            await cur.execute("alter table block add column confirm_timestamp bigint")
+            await cur.execute(
+                "select height, max(s.timestamp) as timestamp from block b "
+                "join authority a on a.block_id = b.id "
+                "join dag_vertex s on s.authority_id = a.id "
+                "group by height "
+                "order by height desc"
+            )
+            res = await cur.fetchall()
+            for row in res:
+                await cur.execute("update block set confirm_timestamp = %s where height = %s", (row["timestamp"], row["height"]))
+            await cur.execute("update block set confirm_timestamp = timestamp where height = 0")
+            await cur.execute("alter table block alter column confirm_timestamp set not null")
+
+    @staticmethod
+    async def migrate_6_check_aborted_unconfirmed_transactions(conn: psycopg.AsyncConnection[DictRow], redis: Redis[str]):
+        async with conn.cursor() as cur:
+            await cur.execute("select transaction_id from transaction where aborted = false and confirmed_transaction_id is null")
+            res = await cur.fetchall()
+            for row in res:
+                await cur.execute("select count(*) from block_aborted_transaction_id where transaction_id = %s", (row["transaction_id"],))
+                count = await cur.fetchone()
+                if count is not None and count["count"] == 1:
+                    await cur.execute("update transaction set aborted = true where transaction_id = %s", (row["transaction_id"],))

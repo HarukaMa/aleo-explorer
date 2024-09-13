@@ -250,23 +250,14 @@ class DatabaseBlock(DatabaseBase):
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
-                    if height == 0:
-                        await cur.execute("SELECT timestamp FROM block WHERE height = 0")
-                        res = await cur.fetchone()
-                        if res is None:
-                            return None
-                        return res["timestamp"]
                     await cur.execute(
-                        "SELECT max(dv.timestamp) FROM dag_vertex dv "
-                        "JOIN authority a on dv.authority_id = a.id "
-                        "JOIN block b on a.block_id = b.id "
-                        "WHERE b.height = %s",
+                        "SELECT confirm_timestamp FROM block WHERE height = %s",
                         (height,)
                     )
                     res = await cur.fetchone()
                     if not res:
                         return None
-                    return res["max"]
+                    return res["confirm_timestamp"]
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
