@@ -29,7 +29,7 @@
                         <td><span class="mono"><a href="/address?a={{ validator.address.address }}">{{ UIAddress(validator.address) }}</a></span></td>
                         <td>{{ validator.stake | format_aleo_credit | safe }}</td>
                         <td>{{ "%0.2f" | format(validator.stake / total_stake * 100) }}%</td>
-                        <td>{{ validator.commission }}%</td>
+                        <td>{% if validator.open %}{{ validator.commission }}%{% else %}<span data-tippy-content="Not open for staking">--</span>{% endif %}</td>
                         <td>{{ "%0.2f" | format(validator.uptime) }}%</td>
                     </tr>
                 {% endfor %}

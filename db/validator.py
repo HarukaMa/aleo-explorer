@@ -31,7 +31,7 @@ class DatabaseValidator(DatabaseBase):
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT chm.address, chm.stake, chm.commission FROM committee_history_member chm "
+                        "SELECT chm.address, chm.stake, chm.commission, chm.is_open FROM committee_history_member chm "
                         "JOIN committee_history ch ON chm.committee_id = ch.id "
                         "WHERE ch.height = %s "
                         "ORDER BY chm.stake DESC "

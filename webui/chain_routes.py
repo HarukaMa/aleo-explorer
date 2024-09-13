@@ -891,6 +891,7 @@ async def validators_route(request: Request):
             "stake": validator["stake"],
             "uptime": validator["uptime"] * 100,
             "commission": validator["commission"],
+            "open": validator["is_open"],
         })
         total_stake += validator["stake"]
 
