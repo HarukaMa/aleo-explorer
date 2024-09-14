@@ -258,7 +258,15 @@ async def transaction_route(request: Request):
         raise HTTPException(status_code=550, detail="Unsupported transaction type")
 
     # TODO: use proper fee calculation
-    if confirmed_transaction is None:
+    if aborted:
+        height = await db.get_transaction_aborted_height(tx_id)
+        if height is None:
+            raise HTTPException(status_code=550, detail="Database inconsistent")
+        block = await db.get_block_by_height(height)
+        if block is None:
+            raise HTTPException(status_code=550, detail="Database inconsistent")
+        block_confirm_time = await db.get_block_confirm_time(height)
+    elif confirmed_transaction is None:
         # storage_cost, namespace_cost, finalize_costs, priority_fee, burnt = await transaction.get_fee_breakdown(db)
         block = None
         block_confirm_time = None
@@ -377,7 +385,7 @@ async def transaction_route(request: Request):
         raise HTTPException(status_code=550, detail="Unsupported transaction type")
 
     mapping_operations: Optional[list[dict[str, Any]]] = None
-    if confirmed_transaction is not None:
+    if confirmed_transaction is not None and not aborted:
         if block is None:
             raise Unreachable
         limited_tracking = {

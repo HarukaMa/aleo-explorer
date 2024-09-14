@@ -1214,3 +1214,20 @@ class DatabaseBlock(DatabaseBase):
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
+
+    async def get_transaction_aborted_height(self, transaction_id: str) -> Optional[int]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT height FROM block_aborted_transaction_id bt "
+                        "JOIN block b on bt.block_id = b.id "
+                        "WHERE transaction_id = %s",
+                        (transaction_id,)
+                    )
+                    if (res := await cur.fetchone()) is None:
+                        return None
+                    return res["height"]
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise

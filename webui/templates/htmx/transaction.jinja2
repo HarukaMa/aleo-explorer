@@ -23,6 +23,15 @@
                         {{ first_seen | format_time | safe }}
                     {% endif %}
                 {% endcall %}
+            {% elif state == "Aborted" %}
+                {% if not first_seen %}
+                    {% set first_seen = block_confirm_time %}
+                {% endif %}
+                {% set delta = block_confirm_time - first_seen %}
+                {% call data_line("Aborted at block") %}
+                    <a href="/block?h={{ block.header.metadata.height }}">{{ block.header.metadata.height | format_number | safe }}</a>
+                    ({{ block_confirm_time | format_time | safe }}{% if delta > 0 %}, aborted in {{ delta | format_time_delta }}{% endif %})
+                {% endcall %}
             {% else %}
                 {% if not first_seen %}
                     {% set first_seen = block_confirm_time %}
