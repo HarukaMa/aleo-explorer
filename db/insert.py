@@ -627,7 +627,8 @@ class DatabaseInsert(DatabaseBase):
             if (await cur.fetchone()) is not None:
                 await self._process_aborted_transaction(cur, transaction.id)
 
-    async def _process_aborted_transaction(self, cur: psycopg.AsyncCursor[DictRow], aborted_transaction_id: TransactionID):
+    @staticmethod
+    async def _process_aborted_transaction(cur: psycopg.AsyncCursor[DictRow], aborted_transaction_id: TransactionID):
         await cur.execute(
             "SELECT id FROM transaction WHERE transaction_id = %s",
             (str(aborted_transaction_id),)
@@ -1579,6 +1580,7 @@ class DatabaseInsert(DatabaseBase):
                                 "INSERT INTO block_aborted_transaction_id (block_id, transaction_id) VALUES (%s, %s)",
                                 (block_db_id, str(aborted))
                             )
+                            await self._process_aborted_transaction(cur, aborted)
 
                         for aborted in block.aborted_solution_ids:
                             await cur.execute(
