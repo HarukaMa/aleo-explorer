@@ -1200,3 +1200,17 @@ class DatabaseBlock(DatabaseBase):
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
+
+    async def get_total_supply_at_height(self, height: int) -> int:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT total_supply FROM block WHERE height = %s", (height,)
+                    )
+                    if (res := await cur.fetchone()) is None:
+                        return 0
+                    return res["total_supply"]
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise

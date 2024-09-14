@@ -1,4 +1,5 @@
 import math
+from decimal import Decimal
 from typing import Any
 
 from starlette.requests import Request
@@ -92,6 +93,7 @@ async def block_route(request: Request):
         "validators": validators,
         "all_validators": all_validators,
         "solutions": css,
+        "total_supply": Decimal(await db.get_total_supply_at_height(height)),
     }
     result["resolved_addresses"] = \
         await UIAddress.resolve_recursive_detached(
