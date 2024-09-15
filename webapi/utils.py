@@ -10,6 +10,7 @@ import aiohttp
 from starlette.requests import Request
 from starlette.responses import Response
 
+from aleo_types.serialize import JSONSerialize
 from db import Database
 from webui.classes import UIAddress
 
@@ -26,6 +27,8 @@ class CustomEncoder(json.JSONEncoder):
                 "link": o.link,
                 "logo": o.logo,
             }
+        elif isinstance(o, JSONSerialize):
+            return o.json()
         return super().default(o)
 
 class CJSONResponse(Response):

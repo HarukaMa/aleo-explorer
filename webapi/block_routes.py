@@ -87,8 +87,8 @@ async def block_route(request: Request):
                 "solution_id": solution["solution_id"],
             })
             target_sum += solution["target"]
-    result = {
-        "block": block.json(),
+    result: dict[str, Any] = {
+        "block": block,
         "coinbase_reward": coinbase_reward,
         "validators": validators,
         "all_validators": all_validators,
