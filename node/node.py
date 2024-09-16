@@ -304,5 +304,5 @@ class Node:
         self.is_syncing = False
         if self.ping_task is not None:
             self.ping_task.cancel()
-        await asyncio.sleep(5)
+        await asyncio.sleep(11)
         self.worker_task = asyncio.create_task(self.worker(self.node_ip, self.node_port))
