@@ -53,6 +53,7 @@ class LightNodeState:
                     self.nodes[key].connect(ip, port)
                     self.last_connect_attempt[key] = time.time()
                     self.states[key]["last_ping"] = time.time()
+                    self.states[key]["height"] = None
 
     def incoming(self, ip: str, port: int, node: "LightNode"):
         key = ":".join([ip, str(port)])
