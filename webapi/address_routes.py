@@ -97,7 +97,7 @@ async def address_route(request: Request) -> CJSONResponse:
     else:
         value = cast(PlaintextValue, Value.load(BytesIO(public_balance_bytes)))
         plaintext = cast(LiteralPlaintext, value.plaintext)
-        public_balance = int(cast(Int, plaintext.literal.primitive))
+        public_balance = cast(Int, plaintext.literal.primitive)
     if bond_state_bytes is None:
         bond_state = None
         withdrawal_address = None
@@ -108,7 +108,7 @@ async def address_route(request: Request) -> CJSONResponse:
         amount = cast(LiteralPlaintext, plaintext["microcredits"])
         bond_state = {
             "validator": str(validator.literal.primitive),
-            "amount": int(cast(Int, amount.literal.primitive)),
+            "amount": cast(Int, amount.literal.primitive),
         }
         withdraw_bytes = await db.get_mapping_value("credits.aleo", "withdraw", withdraw_key_id)
         if withdraw_bytes is None:
@@ -125,8 +125,8 @@ async def address_route(request: Request) -> CJSONResponse:
         amount = cast(LiteralPlaintext, plaintext["microcredits"])
         height = cast(LiteralPlaintext, plaintext["height"])
         unbond_state = {
-            "amount": int(cast(Int, amount.literal.primitive)),
-            "height": int(cast(u64, height.literal.primitive)),
+            "amount": cast(Int, amount.literal.primitive),
+            "height": cast(u64, height.literal.primitive),
         }
     if committee_state_bytes is None:
         committee_state = None
@@ -138,7 +138,7 @@ async def address_route(request: Request) -> CJSONResponse:
         commission = cast(LiteralPlaintext, plaintext["commission"])
         is_open = cast(LiteralPlaintext, plaintext["is_open"])
         committee_state = {
-            "commission": int(cast(Int, commission.literal.primitive)),
+            "commission": cast(Int, commission.literal.primitive),
             "is_open": bool(is_open.literal.primitive),
         }
         bonded_mapping = await db.get_bonded_mapping_unchecked()
@@ -146,7 +146,7 @@ async def address_route(request: Request) -> CJSONResponse:
         address_stakes = {}
         for staker_addr, (validator_addr, stake_amount) in bonded_mapping:
             if str(validator_addr) == address:
-                address_stakes[str(staker_addr)] = int(stake_amount)
+                address_stakes[str(staker_addr)] = stake_amount
                 if len(address_stakes) >= 50:
                     break
         uptime = await db.get_validator_uptime(address)
@@ -155,7 +155,7 @@ async def address_route(request: Request) -> CJSONResponse:
     else:
         value = cast(PlaintextValue, Value.load(BytesIO(delegated_bytes)))
         plaintext = cast(LiteralPlaintext, value.plaintext)
-        delegated = int(cast(Int, plaintext.literal.primitive))
+        delegated = cast(Int, plaintext.literal.primitive)
     if stake_reward is None:
         stake_reward = 0
     if transfer_in is None:
@@ -182,7 +182,7 @@ async def address_route(request: Request) -> CJSONResponse:
         "address": address,
         "solutions": recent_solutions,
         "programs": recent_programs,
-        "total_rewards": total_rewards,
+        "total_rewards": str(total_rewards),
         "total_solutions": solution_count,
         "total_programs": program_count,
         "speed": speed,
@@ -195,10 +195,10 @@ async def address_route(request: Request) -> CJSONResponse:
         "delegated": delegated,
         "withdrawal_address": withdrawal_address,
         "uptime": uptime,
-        "stake_reward": stake_reward,
-        "transfer_in": transfer_in,
-        "transfer_out": transfer_out,
-        "fee": fee,
+        "stake_reward": str(stake_reward),
+        "transfer_in": str(transfer_in),
+        "transfer_out": str(transfer_out),
+        "fee": str(fee),
         "transitions": recent_transitions,
         "program_name": program_name,
     }

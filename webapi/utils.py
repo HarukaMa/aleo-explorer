@@ -4,18 +4,79 @@ import json
 import os
 import time
 from decimal import Decimal
+# noinspection PyProtectedMember
+from json.encoder import encode_basestring_ascii, encode_basestring, _make_iterencode, INFINITY  # type: ignore
 from typing import Any, Callable, Coroutine
 
 import aiohttp
 from starlette.requests import Request
 from starlette.responses import Response
 
+from aleo_types import Int
 from aleo_types.serialize import JSONSerialize
 from db import Database
 from webui.classes import UIAddress
 
 
 class CustomEncoder(json.JSONEncoder):
+
+    def encode(self, o: Any):
+        if isinstance(o, Int):
+            return str(o.json())
+        return super().encode(o)
+
+    def iterencode(self, o: Any, _one_shot: bool = False):
+        """Encode the given object and yield each string
+        representation as available.
+
+        For example::
+
+            for chunk in JSONEncoder().iterencode(bigobject):
+                mysocket.write(chunk)
+
+        """
+        if self.check_circular:
+            markers = {}
+        else:
+            markers = None
+        if self.ensure_ascii:
+            _encoder = encode_basestring_ascii
+        else:
+            _encoder = encode_basestring
+
+        def floatstr(o, allow_nan=self.allow_nan,
+                     _repr=float.__repr__, _inf=INFINITY, _neginf=-INFINITY):
+            # Check for specials.  Note that this type of test is processor
+            # and/or platform-specific, so do tests which don't depend on the
+            # internals.
+
+            if o != o:
+                text = 'NaN'
+            elif o == _inf:
+                text = 'Infinity'
+            elif o == _neginf:
+                text = '-Infinity'
+            else:
+                return _repr(o)
+
+            if not allow_nan:
+                raise ValueError(
+                    "Out of range float values are not JSON compliant: " +
+                    repr(o))
+
+            return text
+
+        def _isinstance(o, c):
+            if isinstance(o, Int):
+                return False
+            return isinstance(o, c)
+
+        _iterencode = _make_iterencode(
+            markers, self.default, _encoder, self.indent, floatstr,
+            self.key_separator, self.item_separator, self.sort_keys,
+            self.skipkeys, _one_shot, isinstance=_isinstance)
+        return _iterencode(o, 0)
+
     def default(self, o: Any):
         if isinstance(o, Decimal):
             return str(o)
