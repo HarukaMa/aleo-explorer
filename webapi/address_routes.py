@@ -16,6 +16,10 @@ async def address_route(request: Request) -> CJSONResponse:
     address = request.path_params["address"]
     if not address:
         return CJSONResponse({"error": "Address not found"}, status_code=404)
+    try:
+        Address.loads(address)
+    except ValueError:
+        return CJSONResponse({"error": "Invalid address format"}, status_code=400)
     solutions = await db.get_recent_solutions_by_address(address)
     programs = await db.get_recent_programs_by_address(address)
     transitions = await db.get_address_recent_transitions(address)

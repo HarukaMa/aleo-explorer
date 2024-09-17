@@ -4,6 +4,7 @@ from typing import Any
 
 from starlette.requests import Request
 
+from aleo_types import u64
 from db import Database
 from webapi.utils import CJSONResponse, public_cache_seconds
 from webui.classes import UIAddress
@@ -119,7 +120,7 @@ async def blocks_route(request: Request):
         return CJSONResponse({"error": "Invalid page"}, status_code=400)
     total_blocks = await db.get_latest_height()
     if not total_blocks:
-        return CJSONResponse({"error": "No blocks found"}, status_code=550)
+        return CJSONResponse({"error": "No blocks found"}, status_code=500)
     total_blocks += 1
     total_pages = math.ceil(total_blocks / 20)
     if page < 1 or page > total_pages:
@@ -128,3 +129,46 @@ async def blocks_route(request: Request):
     blocks = await db.get_blocks_range_fast(start, start - 20)
 
     return CJSONResponse({"blocks": blocks, "total_blocks": total_blocks, "total_pages": total_pages})
+
+@public_cache_seconds(5)
+async def validators_route(request: Request):
+    db: Database = request.app.state.db
+    try:
+        page = request.query_params.get("p")
+        if page is None:
+            page = 1
+        else:
+            page = int(page)
+    except:
+        return CJSONResponse({"error": "Invalid page"}, status_code=400)
+    latest_height = await db.get_latest_height()
+    if latest_height is None:
+        return CJSONResponse({"error": "No blocks found"}, status_code=500)
+    total_validators = await db.get_validator_count_at_height(latest_height)
+    if not total_validators:
+        return CJSONResponse({"error": "No validators found"}, status_code=500)
+    total_pages = (total_validators // 50) + 1
+    if page < 1 or page > total_pages:
+        return CJSONResponse({"error": "Invalid page"}, status_code=400)
+    start = 50 * (page - 1)
+    validators_data = await db.get_validators_range_at_height(latest_height, start, start + 50)
+    validators: list[dict[str, Any]] = []
+    total_stake = 0
+    for validator in validators_data:
+        validators.append({
+            "address": validator["address"],
+            "stake": u64(validator["stake"]),
+            "uptime": validator["uptime"],
+            "commission": validator["commission"],
+            "open": validator["is_open"],
+        })
+        total_stake += validator["stake"]
+
+    result = {
+        "validators": validators,
+        "total_stake": total_stake,
+        "page": page,
+        "total_pages": total_pages,
+    }
+    result["resolved_addresses"] = await UIAddress.resolve_recursive_detached(result, db, {})
+    return CJSONResponse(result)
