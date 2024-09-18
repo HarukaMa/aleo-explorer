@@ -278,6 +278,7 @@ async def transaction_route(request: Request):
         "tx_id": tx_id,
         "height": block.height if block is not None else None,
         "block_confirm_time": block_confirm_time,
+        "block_timestamp": block.header.metadata.timestamp if block is not None else None,
         "type": transaction_type,
         "state": transaction_state,
         "total_fee": u64(storage_cost + namespace_cost + sum(finalize_costs) + priority_fee + burnt),
