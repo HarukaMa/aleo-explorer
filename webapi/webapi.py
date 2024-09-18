@@ -14,6 +14,7 @@ from starlette.routing import Route
 
 from db import Database
 from middleware.asgi_logger import AccessLoggerMiddleware
+from middleware.auth import AuthMiddleware
 from middleware.server_timing import ServerTimingMiddleware
 from util.set_proc_title import set_proc_title
 from .address_routes import address_route
