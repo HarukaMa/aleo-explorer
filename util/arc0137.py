@@ -4,7 +4,7 @@ from typing import Optional
 import aleo_explorer_rust
 
 from aleo_types import Address, Field, StructPlaintext, Vec, Tuple, Identifier, Plaintext, u8, LiteralType, Value, \
-    PlaintextValue, LiteralPlaintext, Literal, ArrayPlaintext
+    PlaintextValue, LiteralPlaintext, Literal, ArrayPlaintext, Scalar, u32
 from aleo_types.cached import cached_get_key_id, cached_get_mapping_id
 from db import Database
 from node import Network
@@ -28,8 +28,35 @@ async def _get_mapping_value(db: Database, program_id: str, mapping_name: str, k
     return value.plaintext
 
 def _get_name_hash(name_st: StructPlaintext) -> Field:
-    return Field.load(BytesIO(
+    name_field = Field.load(BytesIO(
         aleo_explorer_rust.hash_ops(PlaintextValue(plaintext=name_st).dump(), "psd2", LiteralType.Field)
+    ))
+    zero_field_plaintext = LiteralPlaintext(literal=Literal(type_=Literal.Type.Field, primitive=Field(data=0)))
+    data_struct = PlaintextValue(
+        plaintext=StructPlaintext(
+            members=Vec[Tuple[Identifier, Plaintext], u8]([
+                Tuple[Identifier, Plaintext]((
+                    Identifier(value="metadata"),
+                    ArrayPlaintext(
+                        elements=Vec[Plaintext, u32]([
+                            LiteralPlaintext(
+                                literal=Literal(type_=Literal.Type.Field, primitive=name_field)
+                            ),
+                            zero_field_plaintext,
+                            zero_field_plaintext,
+                            zero_field_plaintext,
+                        ])
+                    )
+                ))
+            ])
+        )
+    )
+    data_hash = Field.load(BytesIO(
+        aleo_explorer_rust.hash_ops(data_struct.dump(), "bhp256", LiteralType.Field)
+    ))
+    data_hash_value = PlaintextValue(plaintext=LiteralPlaintext(literal=Literal(type_=Literal.Type.Field, primitive=data_hash)))
+    return Field.load(BytesIO(
+        aleo_explorer_rust.commit_ops(data_hash_value.dump(), Scalar(0), "bhp256", LiteralType.Field)
     ))
 
 def _get_name_st(name: str, parent: Field) -> StructPlaintext:
