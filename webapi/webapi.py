@@ -14,11 +14,11 @@ from starlette.routing import Route
 
 from db import Database
 from middleware.asgi_logger import AccessLoggerMiddleware
-from middleware.auth import AuthMiddleware
 from middleware.server_timing import ServerTimingMiddleware
 from util.set_proc_title import set_proc_title
 from .address_routes import address_route
 from .chain_routes import blocks_route, get_summary, recent_blocks_route, index_update_route, block_route, \
+    transaction_route, \
     validators_route
 from .error_routes import bad_request, not_found, internal_error
 from .utils import public_cache_seconds, out_of_sync_check, CJSONResponse
@@ -63,6 +63,7 @@ routes = [
     Route("/blocks", blocks_route),
     Route("/block/{height}", block_route),
     Route("/validators", validators_route),
+    Route("/transaction/{id}", transaction_route),
 
     Route("/address/{address}", address_route),
 ]

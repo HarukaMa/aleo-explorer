@@ -1,10 +1,14 @@
 import math
 from decimal import Decimal
-from typing import Any
+from io import BytesIO
+from typing import Any, Optional
 
+import aleo_explorer_rust
 from starlette.requests import Request
 
-from aleo_types import u64
+from aleo_types import u64, DeployTransaction, ExecuteTransaction, FeeTransaction, RejectedDeploy, RejectedExecute, Fee, \
+    FinalizeOperation, UpdateKeyValue, RemoveKeyValue, Value, Plaintext
+from aleo_types.cached import cached_get_mapping_id, cached_get_key_id
 from db import Database
 from webapi.utils import CJSONResponse, public_cache_seconds
 from webui.classes import UIAddress
@@ -171,4 +175,242 @@ async def validators_route(request: Request):
         "total_pages": total_pages,
     }
     result["resolved_addresses"] = await UIAddress.resolve_recursive_detached(result, db, {})
+    return CJSONResponse(result)
+
+@public_cache_seconds(5)
+async def transaction_route(request: Request):
+    db: Database = request.app.state.db
+    tx_id = request.path_params.get("id")
+    if tx_id is None:
+        return CJSONResponse({"error": "Missing transaction id"}, status_code=400)
+    tx_id = await db.get_updated_transaction_id(tx_id)
+    is_confirmed = await db.is_transaction_confirmed(tx_id)
+    if is_confirmed is None:
+        return CJSONResponse({"error": "Transaction not found"}, status_code=404)
+    if is_confirmed:
+        confirmed_transaction = await db.get_confirmed_transaction(tx_id)
+        if confirmed_transaction is None:
+            return CJSONResponse({"error": "Internal error: should have tx"}, status_code=500)
+        transaction = confirmed_transaction.transaction
+        aborted = None
+    else:
+        confirmed_transaction = None
+        transaction = await db.get_unconfirmed_transaction(tx_id)
+        if transaction is None:
+            return CJSONResponse({"error": "Transaction not found"}, status_code=404)
+        aborted = await db.is_transaction_aborted(tx_id)
+    first_seen = await db.get_transaction_first_seen(tx_id)
+    original_txid: Optional[str] = None
+    program_info: Optional[dict[str, Any]] = None
+    if isinstance(transaction, DeployTransaction):
+        transaction_type = "Deploy"
+        if is_confirmed:
+            transaction_state = "Accepted"
+            if confirmed_transaction is None:
+                return CJSONResponse({"error": "Internal error: should have tx"}, status_code=500)
+        else:
+            if aborted:
+                transaction_state = "Aborted"
+            else:
+                transaction_state = "Unconfirmed"
+            program_info = await db.get_deploy_transaction_program_info(tx_id)
+            if program_info is None:
+                return CJSONResponse({"error": "Internal error: should have program info"}, status_code=500)
+    elif isinstance(transaction, ExecuteTransaction):
+        transaction_type = "Execute"
+        if is_confirmed:
+            transaction_state = "Accepted"
+            if confirmed_transaction is None:
+                return CJSONResponse({"error": "Internal error: should have tx"}, status_code=500)
+        else:
+            if aborted:
+                transaction_state = "Aborted"
+            else:
+                transaction_state = "Unconfirmed"
+    elif isinstance(transaction, FeeTransaction):
+        if confirmed_transaction is None:
+            return CJSONResponse({"error": "Internal error: should have tx"}, status_code=500)
+        if isinstance(confirmed_transaction, RejectedDeploy):
+            transaction_type = "Deploy"
+            transaction_state = "Rejected"
+            program_info = await db.get_deploy_transaction_program_info(tx_id)
+        elif isinstance(confirmed_transaction, RejectedExecute):
+            transaction_type = "Execute"
+            transaction_state = "Rejected"
+        else:
+            return CJSONResponse({"error": "Internal error: invalid transaction type"}, status_code=500)
+        original_txid = await db.get_rejected_transaction_original_id(tx_id)
+    else:
+        return CJSONResponse({"error": "Unsupported transaction type"}, status_code=500)
+
+    # TODO: use proper fee calculation
+    if aborted:
+        height = await db.get_transaction_aborted_height(tx_id)
+        if height is None:
+            return CJSONResponse({"error": "Internal error: aborted tx missing"}, status_code=500)
+        block = await db.get_block_by_height(height)
+        if block is None:
+            return CJSONResponse({"error": "Internal error: block missing"}, status_code=500)
+        block_confirm_time = await db.get_block_confirm_time(height)
+    elif confirmed_transaction is None:
+        # storage_cost, namespace_cost, finalize_costs, priority_fee, burnt = await transaction.get_fee_breakdown(db)
+        block = None
+        block_confirm_time = None
+    else:
+        # storage_cost, namespace_cost, finalize_costs, priority_fee, burnt = await confirmed_transaction.get_fee_breakdown(db)
+        block = await db.get_block_from_transaction_id(tx_id)
+        if block is None:
+            return CJSONResponse({"error": "Internal error: block missing"}, status_code=500)
+        block_confirm_time = await db.get_block_confirm_time(block.height)
+
+    fee = transaction.fee
+    if isinstance(fee, Fee):
+        storage_cost, priority_fee = fee.amount
+    elif fee.value is not None:
+        storage_cost, priority_fee = fee.value.amount
+    else:
+        storage_cost, priority_fee = 0, 0
+    namespace_cost = 0
+    finalize_costs: list[int] = []
+    burnt = 0
+
+    result: dict[str, Any] = {
+        "tx_id": tx_id,
+        "height": block.height if block is not None else None,
+        "block_confirm_time": block_confirm_time,
+        "type": transaction_type,
+        "state": transaction_state,
+        "total_fee": u64(storage_cost + namespace_cost + sum(finalize_costs) + priority_fee + burnt),
+        "storage_cost": u64(storage_cost),
+        "namespace_cost": u64(namespace_cost),
+        "finalize_costs": list(map(u64, finalize_costs)),
+        "priority_fee": u64(priority_fee),
+        "burnt_fee": u64(burnt),
+        "first_seen": first_seen,
+        "original_txid": original_txid,
+        "program_info": program_info,
+        "reject_reason": await db.get_transaction_reject_reason(tx_id) if transaction_state == "Rejected" else None,
+        "aborted": aborted,
+    }
+    if confirmed_transaction is not None:
+        result["confirmed_transaction"] = confirmed_transaction
+    else:
+        result["transaction"] = transaction
+
+    mapping_operations: Optional[list[dict[str, Any]]] = None
+    if confirmed_transaction is not None and not aborted:
+        if block is None:
+            return CJSONResponse({"error": "Internal error: block missing"}, status_code=500)
+        limited_tracking = {
+            cached_get_mapping_id("credits.aleo", "committee"): ("credits.aleo", "committee"),
+            cached_get_mapping_id("credits.aleo", "bonded"): ("credits.aleo", "bonded"),
+        }
+        fos: list[FinalizeOperation] = []
+        untracked_fos: list[FinalizeOperation] = []
+        for ct in block.transactions:
+            for fo in ct.finalize:
+                if isinstance(fo, (UpdateKeyValue, RemoveKeyValue)):
+                    if str(fo.mapping_id) in limited_tracking:
+                        untracked_fos.append(fo)
+                    else:
+                        fos.append(fo)
+        mhs = await db.get_transaction_mapping_history_by_height(block.height)
+        # TODO: remove compatibility after mainnet
+        after_tracking = False
+        if len(fos) + len(untracked_fos) == len(mhs):
+            after_tracking = True
+            fos = []
+            for ct in block.transactions:
+                for fo in ct.finalize:
+                    if isinstance(fo, (UpdateKeyValue, RemoveKeyValue)):
+                        fos.append(fo)
+        if len(fos) == len(mhs):
+            indices: list[int] = []
+            untracked_indices: list[int] = []
+            last_index = -1
+            for fo in confirmed_transaction.finalize:
+                if isinstance(fo, (UpdateKeyValue, RemoveKeyValue)):
+                    if not after_tracking and fo in untracked_fos:
+                        untracked_indices.append(untracked_fos.index(fo))
+                    else:
+                        last_index = fos.index(fo, last_index + 1)
+                        indices.append(last_index)
+            mapping_operations = []
+            for i in untracked_indices:
+                fo = untracked_fos[i]
+                program_id, mapping_name = limited_tracking[str(fo.mapping_id)]
+                if isinstance(fo, UpdateKeyValue):
+                    mapping_operations.append({
+                        "type": "Update",
+                        "program_id": program_id,
+                        "mapping_name": mapping_name,
+                        "key": None,
+                        "value": None,
+                        "previous_value": None,
+                    })
+                elif isinstance(fo, RemoveKeyValue):
+                    mapping_operations.append({
+                        "type": "Remove",
+                        "program_id": program_id,
+                        "mapping_name": mapping_name,
+                        "key": None,
+                        "value": None,
+                        "previous_value": None,
+                    })
+            for i in indices:
+                fo = fos[i]
+                mh = mhs[i]
+                if str(fo.mapping_id) != str(mh["mapping_id"]):
+                    mapping_operations = None
+                    break
+                limited_tracked = str(fo.mapping_id) in limited_tracking
+                if isinstance(fo, UpdateKeyValue):
+                    if mh["value"] is None:
+                        mapping_operations = None
+                        break
+                    key_id = cached_get_key_id(mh["program_id"], mh["mapping"], mh["key"])
+                    value_id = aleo_explorer_rust.get_value_id(str(key_id), mh["value"])
+                    if value_id != str(fo.value_id):
+                        mapping_operations = None
+                        break
+                    if limited_tracked:
+                        previous_value = None
+                    else:
+                        previous_value = await db.get_mapping_history_previous_value(mh["id"], mh["key_id"])
+                    if previous_value is not None:
+                        previous_value = str(Value.load(BytesIO(previous_value)))
+                    mapping_operations.append({
+                        "type": "Update",
+                        "program_id": mh["program_id"],
+                        "mapping_name": mh["mapping"],
+                        "key": str(Plaintext.load(BytesIO(mh["key"]))),
+                        "value": str(Value.load(BytesIO(mh["value"]))),
+                        "previous_value": previous_value,
+                        "limited_tracked": limited_tracked,
+                    })
+                elif isinstance(fo, RemoveKeyValue):
+                    if mh["value"] is not None:
+                        mapping_operations = None
+                        break
+                    if limited_tracked:
+                        previous_value = None
+                    else:
+                        previous_value = await db.get_mapping_history_previous_value(mh["id"], mh["key_id"])
+                    if previous_value is not None:
+                        previous_value = str(Value.load(BytesIO(previous_value)))
+                    elif not limited_tracked:
+                        mapping_operations = None
+                        break
+                    mapping_operations.append({
+                        "type": "Remove",
+                        "program_id": mh["program_id"],
+                        "mapping_name": mh["mapping"],
+                        "key": str(Plaintext.load(BytesIO(mh["key"]))),
+                        "previous_value": previous_value,
+                        "limited_tracked": limited_tracked,
+                    })
+
+    result["mapping_operations"] = mapping_operations
+    result["resolved_addresses"] = await UIAddress.resolve_recursive_detached(result, db, {})
+
     return CJSONResponse(result)

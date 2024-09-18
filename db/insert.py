@@ -1453,6 +1453,13 @@ class DatabaseInsert(DatabaseBase):
 
                             transaction = confirmed_transaction.transaction
 
+                            # track supply for credit split fee
+                            if isinstance(transaction, ExecuteTransaction):
+                                transitions = transaction.execution.transitions
+                                for transition in transitions:
+                                    if transition.program_id == "credits.aleo" and transition.function_name == "split":
+                                        supply_tracker.burn(10000)
+
                             await self._insert_transaction(cur, self.redis, transaction, confirmed_transaction, ct_index, ignore_deploy_txids,
                                                            confirmed_transaction_db_id, reject_reasons)
 
