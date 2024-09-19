@@ -19,6 +19,7 @@ v2
 * Added :ref:`mapping-get-key-count` endpoint.
 * Added :ref:`status` endpoint.
 * Added :ref:`address-staking-info` endpoint.
+* Added :ref:`address-delegated` endpoint.
 
 v1
 ^^

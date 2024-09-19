@@ -44,7 +44,7 @@ Address Staking Info / History
    :statuscode 400: invalid parameter or combination
    :statuscode 404: time or height is before the genesis block
 
-.. _address-delegated-amount:
+.. _address-delegated:
 
 Address Delegated Credits / History
 -----------------------------------
