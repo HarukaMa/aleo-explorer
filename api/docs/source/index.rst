@@ -12,6 +12,7 @@ Explorer API
    version
    quota
    status
+   address
    mapping
    execute
 
@@ -23,12 +24,12 @@ Overview
 This is the documentation for the API of the explorer.
 
 Available API endpoints are pretty limited right now. If you have ideas and
-specific needs, please provide feedback `here <https://testnet3.aleoscan.io/feedback>`_.
+specific needs, please provide feedback `here <https://aleoscan.io/feedback>`_.
 
 Base Endpoint
 ^^^^^^^^^^^^^
 
-The base endpoint is ``https://testnet3.aleoscan.io``.
+The base endpoint is ``https://api.aleoscan.io``.
 
 Authentication
 ^^^^^^^^^^^^^^

@@ -246,6 +246,22 @@ class DatabaseBlock(DatabaseBase):
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
+    async def get_block_from_timestamp(self, timestamp: int) -> Block | None:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT * FROM block WHERE timestamp < %s ORDER BY timestamp DESC LIMIT 1",
+                        (timestamp,)
+                    )
+                    block = await cur.fetchone()
+                    if block is None:
+                        return None
+                    return await self._get_full_block(block, conn)
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
     async def get_block_confirm_time(self, height: int) -> Optional[int]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:

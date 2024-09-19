@@ -9,7 +9,7 @@ Returns the status of the explorer.
 Get Status
 ----------
 
-.. http:get:: /api/v2/status
+.. http:get:: /v2/status
 
    :>json int server_time: server time in epoch.
    :>json int latest_block_height: latest block height indexed.
@@ -23,8 +23,8 @@ Get Status
 
    .. sourcecode:: http
 
-      GET /api/v2/status HTTP/1.1
-      Host: testnet3.aleoscan.io
+      GET /v2/status HTTP/1.1
+      Host: api.aleoscan.io
 
    **Example response**:
 

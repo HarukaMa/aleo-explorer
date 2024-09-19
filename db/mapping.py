@@ -363,3 +363,43 @@ class DatabaseMapping(DatabaseBase):
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
+
+    async def get_mapping_value_at_height(self, program_id: str, mapping: str, key_id: str, height: int) -> Optional[bytes]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    if program_id == "credits.aleo" and mapping in ["committee", "bonded", "delegated"]:
+                        query = psycopg.sql.SQL("SELECT content FROM {} WHERE height = %s").format(psycopg.sql.Identifier(f"mapping_{mapping}_history"))
+                        await cur.execute(query, (height,))
+                        if (res := await cur.fetchone()) is None:
+                            return None
+                        mapping_data: dict[str, str] = res["content"]
+                        if mapping == "delegated":
+                            if (data := mapping_data.get(key_id)) is None:
+                                return None
+                            return PlaintextValue(
+                                plaintext=LiteralPlaintext(
+                                    literal=Literal(
+                                        type_=Literal.Type.U64,
+                                        primitive=u64.loads(data)
+                                    )
+                                )
+                            ).dump()
+                        else:
+                            if (data := mapping_data.get(key_id)) is None:
+                                return None
+                            return bytes.fromhex(data)
+                    await cur.execute(
+                        "SELECT value FROM mapping_history mh "
+                        "JOIN mapping m on mh.mapping_id = m.id "
+                        "WHERE m.program_id = %s AND m.mapping = %s AND mh.key_id = %s AND mh.height <= %s "
+                        "ORDER BY mh.id DESC "
+                        "LIMIT 1",
+                        (program_id, mapping, key_id, height)
+                    )
+                    if (res := await cur.fetchone()) is None:
+                        return None
+                    return res["value"]
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise

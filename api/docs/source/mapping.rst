@@ -10,21 +10,21 @@ Mapping API
 Get Mapping Value
 -----------------
 
-.. http:get:: /api/v1/mapping/get_value/(program_id)/(mapping_id)/(key)
+.. http:get:: /v1/mapping/get_value/(program_id)/(mapping_id)/(key)
 
    Get the mapping value, given the program ID, mapping name and key.
 
    Returns ``null`` if the key doesn't exist in the mapping.
 
    .. tip::
-      Equivalent snarkOS API: ``/testnet3/program/{programID}/mapping/{mappingName}/{mappingKey}``
+      Equivalent snarkOS API: ``/mainnet/program/{programID}/mapping/{mappingName}/{mappingKey}``
 
    **Example request**:
 
    .. sourcecode:: http
 
-      GET /api/v1/mapping/get_value/credits.aleo/account/aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px HTTP/1.1
-      Host: testnet3.aleoscan.io
+      GET /v1/mapping/get_value/credits.aleo/account/aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px HTTP/1.1
+      Host: api.aleoscan.io
 
    **Example response**:
 
@@ -53,19 +53,19 @@ Get Mapping Value
 List Mappings in Program
 ------------------------
 
-.. http:get:: /api/v1/mapping/list_program_mappings/(program_name)
+.. http:get:: /v1/mapping/list_program_mappings/(program_name)
 
    List all mappings in a program.
 
    .. tip::
-      Equivalent snarkOS API: ``/testnet3/program/{programName}/mappings``
+      Equivalent snarkOS API: ``/mainnet/program/{programName}/mappings``
 
    **Example request**:
 
    .. sourcecode:: http
 
-      GET /api/v1/mapping/list_program_mappings/credits.aleo HTTP/1.1
-      Host: testnet3.aleoscan.io
+      GET /v1/mapping/list_program_mappings/credits.aleo HTTP/1.1
+      Host: api.aleoscan.io
 
    **Example response**:
 
@@ -89,7 +89,7 @@ List Mappings in Program
 List All Values in Mapping
 --------------------------
 
-.. http:get:: /api/v2/mapping/list_program_mapping_values/(program_id)/(mapping_id)
+.. http:get:: /v2/mapping/list_program_mapping_values/(program_id)/(mapping_id)
 
       :query count: (optional) number of values to return (default: 50, max: 100), see remarks below
       :query cursor: (optional) cursor for pagination
@@ -111,8 +111,8 @@ List All Values in Mapping
 
       .. sourcecode:: http
 
-         GET /api/v2/mapping/list_program_mapping_values/credits.aleo/account?count=5 HTTP/1.1
-         Host: testnet3.aleoscan.io
+         GET /v2/mapping/list_program_mapping_values/credits.aleo/account?count=5 HTTP/1.1
+         Host: api.aleoscan.io
 
       **Example response**:
 
@@ -155,7 +155,7 @@ List All Values in Mapping
 Get Mapping Key Count
 ---------------------
 
-.. http:get:: /api/v2/mapping/get_key_count/(program_id)/(mapping_id)
+.. http:get:: /v2/mapping/get_key_count/(program_id)/(mapping_id)
 
    Get the number of keys in a mapping.
 
@@ -163,8 +163,8 @@ Get Mapping Key Count
 
    .. sourcecode:: http
 
-      GET /api/v2/mapping/get_key_count/credits.aleo/account HTTP/1.1
-      Host: testnet3.aleoscan.io
+      GET /v2/mapping/get_key_count/credits.aleo/account HTTP/1.1
+      Host: api.aleoscan.io
 
    **Example response**:
 

@@ -21,6 +21,7 @@ from middleware.asgi_logger import AccessLoggerMiddleware
 from middleware.server_timing import ServerTimingMiddleware
 from util.cache import Cache
 from util.set_proc_title import set_proc_title
+from .address_routes import address_staking_route
 from .execute_routes import preview_finalize_route
 from .mapping_routes import mapping_route, mapping_list_route, mapping_value_list_route, mapping_key_count_route
 from .solution_routes import solution_by_id_route
@@ -65,6 +66,7 @@ async def status_route(request: Request):
 
 
 routes = [
+    Route("/v{version:int}/address/staking_info/{address}", address_staking_route),
     Route("/v{version:int}/mapping/get_value/{program_id}/{mapping}/{key}", mapping_route),
     Route("/v{version:int}/mapping/list_program_mappings/{program_id}", mapping_list_route),
     Route("/v{version:int}/mapping/list_program_mapping_values/{program_id}/{mapping}", mapping_value_list_route),
@@ -72,6 +74,7 @@ routes = [
     Route("/v{version:int}/simulate_execution/finalize", preview_finalize_route, methods=["POST"]),
     Route("/v{version:int}/solution/{solution_id}", solution_by_id_route),
     Route("/v{version:int}/status", status_route),
+
 ]
 
 async def startup():
