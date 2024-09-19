@@ -1,3 +1,4 @@
+import datetime
 import time
 from typing import Callable, Coroutine, Any, Optional
 
@@ -47,3 +48,40 @@ async def get_remote_height(session: aiohttp.ClientSession, rpc_root: str) -> Op
     except:
         remote_height = None
     return remote_height
+
+async def parse_history_params(db: Database, height_param: Optional[str], time_param: Optional[str]):
+    if height_param is not None and time_param is not None:
+        return JSONResponse({"error": "Only one of height or time can be specified"}, status_code=400)
+
+    if height_param is not None:
+        try:
+            height = int(height_param)
+        except ValueError:
+            return JSONResponse({"error": "Invalid height"}, status_code=400)
+        block = await db.get_block_by_height(height)
+        if block is None:
+            return JSONResponse({"error": "Invalid height"}, status_code=400)
+        block_timestamp = block.header.metadata.timestamp
+    elif time_param is not None:
+        try:
+            timestamp = int(time_param)
+        except ValueError:
+            try:
+                timestamp = int(datetime.datetime.fromisoformat(time_param).timestamp())
+            except ValueError:
+                return JSONResponse({"error": "Invalid time"}, status_code=400)
+        block = await db.get_block_from_timestamp(timestamp)
+        if block is None:
+            return JSONResponse({"error": "No block found for the specified time"}, status_code=404)
+        height = block.height
+        block_timestamp = block.header.metadata.timestamp
+    else:
+        height = await db.get_latest_height()
+        if height is None:
+            return JSONResponse({"error": "Database uninitialized"}, status_code=500)
+        block = await db.get_block_by_height(height)
+        if block is None:
+            return JSONResponse({"error": "Database uninitialized"}, status_code=500)
+        block_timestamp = block.header.metadata.timestamp
+
+    return height, block, block_timestamp

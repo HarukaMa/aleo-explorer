@@ -369,6 +369,7 @@ class DatabaseMapping(DatabaseBase):
             async with conn.cursor() as cur:
                 try:
                     if program_id == "credits.aleo" and mapping in ["committee", "bonded", "delegated"]:
+                        # noinspection SqlResolve
                         query = psycopg.sql.SQL("SELECT content FROM {} WHERE height = %s").format(psycopg.sql.Identifier(f"mapping_{mapping}_history"))
                         await cur.execute(query, (height,))
                         if (res := await cur.fetchone()) is None:

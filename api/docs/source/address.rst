@@ -44,3 +44,42 @@ Address Staking Info / History
    :statuscode 400: invalid parameter or combination
    :statuscode 404: time or height is before the genesis block
 
+.. _address-delegated-amount:
+
+Address Delegated Credits / History
+-----------------------------------
+
+.. http:get:: /v2/address/delegated/(address)
+
+   :query height: (optional) retrieve data at a specific block height. Mutually exclusive with ``time``.
+   :query time: (optional) retrieve data at a specific time. Accepts a number as unix epoch, or a string in ISO 8601 format. Mutually exclusive with ``height``.
+   :>json int height: block height of the data.
+   :>json int timestamp: block timestamp.
+   :>json int amount: delegated amount of the address in microcredits.
+
+   Get the amount of tokens delegated to the address, now or at specific time in the past.
+   Returns ``null`` if no tokens are delegated to the address.
+
+   **Example request**:
+
+   .. sourcecode:: http
+
+      GET /v2/address/delegated/aleo1sdjqhlcm9qltpu74ek0vxewt52zsdmn6swmpjn6m0tp9xf57dvpq740r8j HTTP/1.1
+      Host: api.aleoscan.io
+
+   **Example response**:
+
+   .. sourcecode:: http
+
+      HTTP/1.1 200 OK
+      Content-Type: application/json
+
+      {
+          "height": 1230000,
+          "timestamp": 1712200000,
+          "amount": 10000000000000
+      }
+
+   :statuscode 200: no error
+   :statuscode 400: invalid parameter or combination
+   :statuscode 404: time or height is before the genesis block
