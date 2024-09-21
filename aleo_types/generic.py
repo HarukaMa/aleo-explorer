@@ -211,7 +211,6 @@ class Option(Serializable, JSONSerialize, Generic[T]):
         return cls(value)
 
     def json(self, compatible: bool = False) -> JSONType:
-        print(compatible)
         if self.value is None:
             return None
         if not isinstance(self.value, JSONSerialize):
