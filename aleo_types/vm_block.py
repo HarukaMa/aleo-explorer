@@ -5,6 +5,7 @@ import re
 from hashlib import md5
 from typing import NamedTuple
 
+from aleo_types.serialize import enum_name_convert
 from .vm_instruction import *
 
 if TYPE_CHECKING:
@@ -625,7 +626,7 @@ class Finalize(Serializable, JSONSerialize):
         commands = Vec[Command, u16].load(data)
         return cls(name=name, inputs=inputs, commands=commands)
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         res = {
             "name": self.name.json(),
             "inputs": self.inputs.json(),
@@ -909,7 +910,7 @@ class Program(Serializable, JSONSerialize):
         return cls(id_=id_, imports=imports, mappings=mappings, structs=structs, records=records,
                    closures=closures, functions=functions, identifiers=identifiers)
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         res = super().json()
         if not isinstance(res, dict):
             raise ValueError("invalid json")
@@ -1073,7 +1074,7 @@ class VerifyingKey(Serializable, JSONSerialize):
         num_variables = u64.load(data)
         return cls(verifying_key=verifying_key, num_variables=num_variables)
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         return str(self)
 
     def __str__(self):
@@ -1123,7 +1124,7 @@ class BatchLCProof(Serializable):
         return cls(proof=proof)
 
 
-class Certificate(Serializable):
+class Certificate(Serializable, JSONSerialize):
     version = u8(1)
 
     # Skipping a layer of marlin::Certificate
@@ -1141,7 +1142,7 @@ class Certificate(Serializable):
         pc_proof = BatchLCProof.load(data)
         return cls(pc_proof=pc_proof)
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         return str(self)
 
     def __str__(self):
@@ -1412,7 +1413,7 @@ class Proof(Serializable, JSONSerialize):
     def loads(cls, data: str):
         return cls.load(bech32_to_bytes(data))
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         return str(self)
 
     def __str__(self):
@@ -1439,7 +1440,7 @@ class Ciphertext(Serializable, JSONSerialize):
     def loads(cls, data: str):
         return cls.load(bech32_to_bytes(data))
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         return str(self)
 
     def __str__(self):
@@ -1482,7 +1483,7 @@ class LiteralPlaintext(Plaintext):
         literal = Literal.load(data)
         return cls(literal=literal)
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         return str(self)
 
     def __str__(self):
@@ -1621,7 +1622,7 @@ class StructPlaintext(Plaintext):
                     break
         return cls(members=Vec[Tuple[Identifier, Plaintext], u8](ordered_members))
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         return str(self)
 
     def __str__(self):
@@ -1689,7 +1690,7 @@ class ArrayPlaintext(Plaintext):
     def loads(cls, data: str) -> Self:
         raise NotImplementedError
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         return str(self)
 
     def __str__(self):
@@ -1744,7 +1745,7 @@ class Owner(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize, Generic[T]
         else:
             raise ValueError("invalid type")
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         return str(self)
 
 
@@ -1968,7 +1969,7 @@ class Record(Serializable, JSONSerialize, Generic[T]):
     def loads(cls, data: str):
         return cls.load(bech32_to_bytes(data))
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         res = super().json()
         if not isinstance(res, dict):
             raise ValueError("invalid json")
@@ -2098,7 +2099,7 @@ class PlaintextArgument(Argument):
         plaintext = Plaintext.load(data)
         return cls(plaintext=plaintext)
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         return str(self)
 
     def __str__(self):
@@ -2122,8 +2123,8 @@ class FutureArgument(Argument):
         future = Future.load(data)
         return cls(future=future)
 
-    def json(self) -> JSONType:
-        return self.future.json()
+    def json(self, compatible: bool = False) -> JSONType:
+        return self.future.json(compatible)
 
     def __str__(self):
         return str(self.future)
@@ -2195,6 +2196,13 @@ class ConstantTransitionInput(TransitionInput):
         plaintext = Option[Plaintext].load(data)
         return cls(plaintext_hash=plaintext_hash, plaintext=plaintext)
 
+    def json_compatible(self) -> JSONType:
+        return {
+            "type": enum_name_convert(self.type.name),
+            "id": self.plaintext_hash.json_compatible(),
+            "value": self.plaintext.json_compatible() if self.plaintext else None
+        }
+
 
 class PublicTransitionInput(TransitionInput):
     type = TransitionInput.Type.Public
@@ -2211,6 +2219,13 @@ class PublicTransitionInput(TransitionInput):
         plaintext_hash = Field.load(data)
         plaintext = Option[Plaintext].load(data)
         return cls(plaintext_hash=plaintext_hash, plaintext=plaintext)
+
+    def json_compatible(self) -> JSONType:
+        return {
+            "type": enum_name_convert(self.type.name),
+            "id": self.plaintext_hash.json_compatible(),
+            "value": self.plaintext.json_compatible() if self.plaintext else None
+        }
 
 
 class PrivateTransitionInput(TransitionInput):
@@ -2229,6 +2244,13 @@ class PrivateTransitionInput(TransitionInput):
         ciphertext = Option[Ciphertext].load(data)
         return cls(ciphertext_hash=ciphertext_hash, ciphertext=ciphertext)
 
+    def json_compatible(self) -> JSONType:
+        return {
+            "type": enum_name_convert(self.type.name),
+            "id": self.ciphertext_hash.json_compatible(),
+            "value": self.ciphertext.json_compatible() if self.ciphertext else None
+        }
+
 
 class RecordTransitionInput(TransitionInput):
     type = TransitionInput.Type.Record
@@ -2246,6 +2268,13 @@ class RecordTransitionInput(TransitionInput):
         tag = Field.load(data)
         return cls(serial_number=serial_number, tag=tag)
 
+    def json_compatible(self) -> JSONType:
+        return {
+            "type": enum_name_convert(self.type.name),
+            "id": self.serial_number.json_compatible(),
+            "tag": self.tag.json_compatible()
+        }
+
 
 class ExternalRecordTransitionInput(TransitionInput):
     type = TransitionInput.Type.ExternalRecord
@@ -2260,6 +2289,12 @@ class ExternalRecordTransitionInput(TransitionInput):
     def load(cls, data: BytesIO):
         input_commitment = Field.load(data)
         return cls(input_commitment=input_commitment)
+
+    def json_compatible(self) -> JSONType:
+        return {
+            "type": enum_name_convert(self.type.name),
+            "id": self.input_commitment.json_compatible()
+        }
 
 
 class TransitionOutput(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize):
@@ -2309,6 +2344,13 @@ class ConstantTransitionOutput(TransitionOutput):
         plaintext = Option[Plaintext].load(data)
         return cls(plaintext_hash=plaintext_hash, plaintext=plaintext)
 
+    def json_compatible(self) -> JSONType:
+        return {
+            "type": enum_name_convert(self.type.name),
+            "id": self.plaintext_hash.json_compatible(),
+            "value": self.plaintext.json_compatible() if self.plaintext else None
+        }
+
 
 class PublicTransitionOutput(TransitionOutput):
     type = TransitionOutput.Type.Public
@@ -2326,6 +2368,13 @@ class PublicTransitionOutput(TransitionOutput):
         plaintext = Option[Plaintext].load(data)
         return cls(plaintext_hash=plaintext_hash, plaintext=plaintext)
 
+    def json_compatible(self) -> JSONType:
+        return {
+            "type": enum_name_convert(self.type.name),
+            "id": self.plaintext_hash.json_compatible(),
+            "value": self.plaintext.json_compatible() if self.plaintext else None
+        }
+
 
 class PrivateTransitionOutput(TransitionOutput):
     type = TransitionOutput.Type.Private
@@ -2342,6 +2391,13 @@ class PrivateTransitionOutput(TransitionOutput):
         ciphertext_hash = Field.load(data)
         ciphertext = Option[Ciphertext].load(data)
         return cls(ciphertext_hash=ciphertext_hash, ciphertext=ciphertext)
+
+    def json_compatible(self) -> JSONType:
+        return {
+            "type": enum_name_convert(self.type.name),
+            "id": self.ciphertext_hash.json_compatible(),
+            "value": self.ciphertext.json_compatible() if self.ciphertext else None
+        }
 
 
 class RecordTransitionOutput(TransitionOutput):
@@ -2362,6 +2418,14 @@ class RecordTransitionOutput(TransitionOutput):
         record_ciphertext = Option[Record[Ciphertext]].load(data)
         return cls(commitment=commitment, checksum=checksum, record_ciphertext=record_ciphertext)
 
+    def json_compatible(self) -> JSONType:
+        return {
+            "type": enum_name_convert(self.type.name),
+            "id": self.commitment.json_compatible(),
+            "checksum": self.checksum.json_compatible(),
+            "value": self.record_ciphertext.json_compatible() if self.record_ciphertext else None
+        }
+
 
 class ExternalRecordTransitionOutput(TransitionOutput):
     type = TransitionOutput.Type.ExternalRecord
@@ -2376,6 +2440,12 @@ class ExternalRecordTransitionOutput(TransitionOutput):
     def load(cls, data: BytesIO):
         commitment = Field.load(data)
         return cls(commitment=commitment)
+
+    def json_compatible(self) -> JSONType:
+        return {
+            "type": enum_name_convert(self.type.name),
+            "id": self.commitment.json_compatible()
+        }
 
 class FutureTransitionOutput(TransitionOutput):
     type = TransitionOutput.Type.Future
@@ -2392,6 +2462,13 @@ class FutureTransitionOutput(TransitionOutput):
         future_hash = Field.load(data)
         future = Option[Future].load(data)
         return cls(future_hash=future_hash, future=future)
+
+    def json_compatible(self) -> JSONType:
+        return {
+            "type": enum_name_convert(self.type.name),
+            "id": self.future_hash.json_compatible(),
+            "value": self.future.json_compatible() if self.future else None
+        }
 
 
 class Transition(Serializable, JSONSerialize):
@@ -2438,6 +2515,18 @@ class Transition(Serializable, JSONSerialize):
         return cls(id_=id_, program_id=program_id, function_name=function_name, inputs=inputs, outputs=outputs,
                    tpk=tpk, tcm=tcm, scm=scm)
 
+    def json_compatible(self) -> JSONType:
+        return {
+            "id": self.id.json_compatible(),
+            "program": self.program_id.json_compatible(),
+            "function": self.function_name.json_compatible(),
+            "inputs": [i.json_compatible() for i in self.inputs],
+            "outputs": [o.json_compatible() for o in self.outputs],
+            "tpk": self.tpk.json_compatible(),
+            "tcm": self.tcm.json_compatible(),
+            "scm": self.scm.json_compatible(),
+        }
+
 
 class Fee(Serializable, JSONSerialize):
     version = u8(1)
@@ -2465,12 +2554,21 @@ class Fee(Serializable, JSONSerialize):
         proof = Option[Proof].load(data)
         return cls(transition=transition, global_state_root=global_state_root, proof=proof)
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
+        if compatible:
+            return self.json_compatible()
         data = super().json()
         if not isinstance(data, dict):
             raise ValueError("invalid json")
         data["amount"] = self.amount
         return data
+
+    def json_compatible(self) -> JSONType:
+        return {
+            "transition": self.transition.json_compatible(),
+            "global_state_root": self.global_state_root.json_compatible(),
+            "proof": self.proof.json_compatible()
+        }
 
     @property
     def amount(self):
@@ -3049,8 +3147,8 @@ class Transactions(Serializable, JSONSerialize):
         transactions = Vec[ConfirmedTransaction, u32].load(data)
         return cls(transactions=transactions)
 
-    def json(self) -> JSONType:
-        return self.transactions.json()
+    def json(self, compatible: bool = False) -> JSONType:
+        return self.transactions.json(compatible)
 
     def __iter__(self):
         return iter(self.transactions)
@@ -3407,7 +3505,7 @@ class SolutionID(Serializable, JSONSerialize):
             raise ValueError("invalid hrp")
         return cls.load(BytesIO(raw))
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         return str(self)
 
     def __str__(self):
@@ -3563,7 +3661,7 @@ class Ratifications(Serializable, JSONSerialize):
         ratifications = Vec[Ratify, u32].load(data)
         return cls(ratifications=ratifications)
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         return [r.json() for r in self.ratifications]
 
     def __iter__(self):
@@ -3586,8 +3684,8 @@ class Solutions(Serializable, JSONSerialize):
             raise ValueError("invalid solutions version")
         return cls(solutions=solutions)
 
-    def json(self) -> JSONType:
-        return self.solutions.json()
+    def json(self, compatible: bool = False) -> JSONType:
+        return self.solutions.json(compatible)
 
     @property
     def value(self):

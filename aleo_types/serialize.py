@@ -35,13 +35,16 @@ def enum_name_convert(name: str) -> str:
 @runtime_checkable
 class JSONSerialize(Protocol):
 
-    def json(self) -> JSONType:
+    def __default_json(self, compatible: bool = False) -> JSONType:
         """Return a JSON-serializable object."""
         res: dict[str, Any] = {}
         for k, v in self.__dict__.items():
             if not k.startswith("_"):
                 if isinstance(v, JSONSerialize):
-                    res[k] = v.json()
+                    if compatible:
+                        res[k] = v.json_compatible()
+                    else:
+                        res[k] = v.json(compatible)
                 elif isinstance(v, dict):
                     v = cast(dict[Any, Any], v)
                     dict_sub = {}
@@ -51,7 +54,10 @@ class JSONSerialize(Protocol):
                         elif not isinstance(v1, JSONSerialize):
                             raise TypeError(f"cannot serialize {v1.__class__.__name__}")
                         else:
-                            dict_sub[str(k1)] = v1.json()
+                            if compatible:
+                                dict_sub[str(k1)] = v1.json_compatible()
+                            else:
+                                dict_sub[str(k1)] = v1.json(compatible)
                     res[k] = dict_sub
                 elif isinstance(v, (list, tuple)):
                     v = cast(list[Any], v)
@@ -59,7 +65,10 @@ class JSONSerialize(Protocol):
                     for item in v:
                         if not isinstance(item, JSONSerialize):
                             raise TypeError(f"cannot serialize {item.__class__.__name__}")
-                        list_sub.append(item.json())
+                        if compatible:
+                            list_sub.append(item.json_compatible())
+                        else:
+                            list_sub.append(item.json(compatible))
                     res[k] = list_sub
                 elif isinstance(v, IntEnum):
                     res[k] = enum_name_convert(v.name)
@@ -70,3 +79,13 @@ class JSONSerialize(Protocol):
                 if isinstance(v, IntEnum):
                     res[k] = enum_name_convert(v.name)
         return res
+
+    def json(self, compatible: bool = False) -> JSONType:
+        if compatible and self.__class__.json_compatible is not JSONSerialize.json_compatible:
+            return self.json_compatible()
+        return self.__default_json(compatible)
+
+    def json_compatible(self) -> JSONType:
+        if self.__class__.json is not JSONSerialize.json:
+            return self.json(compatible=True)
+        return self.__default_json(compatible=True)

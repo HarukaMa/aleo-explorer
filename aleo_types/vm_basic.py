@@ -35,7 +35,7 @@ class AleoID(AleoIDProtocol, JSONSerialize):
             raise ValueError("incorrect length")
         return cls(bytes(raw))
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         return str(self)
 
     def __str__(self):
@@ -76,7 +76,7 @@ class AleoObject(AleoIDProtocol, JSONSerialize):
             raise ValueError("incorrect length")
         return cls(bytes(raw))
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         return str(self)
 
     def __str__(self):
@@ -158,7 +158,7 @@ class Field(Serializable, JSONSerialize, Double, Sub, Square, Div, Sqrt, Compare
     def loads(cls, data: str):
         return cls(int(data.removesuffix("field")))
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         return str(self)
 
     def __str__(self):
@@ -241,7 +241,7 @@ class Group(Serializable, JSONSerialize, Add, Sub, Mul, Neg, Cast):
     def loads(cls, data: str):
         return cls(int(data.removesuffix("group")))
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         return str(self)
 
     def __str__(self):
@@ -297,7 +297,7 @@ class Scalar(Serializable, JSONSerialize, Add, Sub, Mul, Compare, Cast):
     def loads(cls, data: str):
         return cls(int(data.removesuffix("scalar")))
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         return str(self)
 
     def __str__(self):
@@ -471,7 +471,7 @@ class Signature(Serializable, JSONSerialize):
     def loads(cls, data: str):
         return cls.load(bech32_to_bytes(data))
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         return str(self)
 
     def __str__(self):

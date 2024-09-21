@@ -151,7 +151,7 @@ class Identifier(Serializable, JSONSerialize):
     def loads(cls, data: str):
         return cls(value=data)
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         return self.data
 
     def __str__(self):
@@ -193,7 +193,7 @@ class ProgramID(Serializable, JSONSerialize):
         (name, network) = data.split(".")
         return cls(name=Identifier(value=name), network=Identifier(value=network))
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         return str(self)
 
     def __str__(self):
@@ -256,7 +256,7 @@ class VarInt(int, Serializable, JSONSerialize):
             value = u8(value)
         return cls(value)
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         return int(self)
 
 
@@ -1132,7 +1132,7 @@ class HashInstruction(Serializable, JSONSerialize, Generic[V]):
         destination_type = PlaintextType.load(data)
         return cls(operands=(op1, op2), destination=destination, destination_type=destination_type)
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         return {
             "operands": [op.json() for op in self.operands if op],
             "destination": self.destination.json(),

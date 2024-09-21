@@ -42,7 +42,7 @@ class Int(int, Serializable, JSONSerialize, IntProtocol):
         value = value.replace(cls.__name__, "")
         return cls(int(value))
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         return int(self)
 
     def __add__(self, other: int | Self):
@@ -328,7 +328,7 @@ class u64(Int, Mod):
         self = cls(struct.unpack("<Q", data.read(8))[0])
         return self
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         return str(self)
 
 # Obviously we only support 64bit
@@ -348,7 +348,7 @@ class u128(Int, Mod):
         self = cls((hi << 64) | lo)
         return self
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         return str(self)
 
 
@@ -439,7 +439,7 @@ class i64(Int, AbsWrapped, Neg):
     def __neg__(self):
         return i64(-int(self))
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         return str(self)
 
 
@@ -464,7 +464,7 @@ class i128(Int, AbsWrapped, Neg):
     def __neg__(self):
         return i128(-int(self))
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         return str(self)
 
 
@@ -499,7 +499,7 @@ class bool_(Sized, Serializable, JSONSerialize, And, Or, Not, Xor, Nand, Nor):
             return cls()
         raise ValueError("invalid value for bool")
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         return self.value
 
     def __str__(self):

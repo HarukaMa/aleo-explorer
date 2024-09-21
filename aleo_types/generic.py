@@ -11,7 +11,7 @@ class FixedSize(int, JSONSerialize):
     def __class_getitem__(cls, item: int):
         return FixedSize(item)
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         return int(self)
 
 
@@ -78,12 +78,12 @@ class Tuple(tuple[*TP], Serializable, JSONSerialize):
             value.append(t.load(data))
         return cls(tuple(value)) # type: ignore
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         res: list[JSONType] = []
         for item in self:
             if not isinstance(item, JSONSerialize):
                 raise TypeError(f"cannot serialize {item.__class__.__name__}")
-            res.append(item.json())
+            res.append(item.json(compatible))
         return res
 
 
@@ -139,27 +139,27 @@ class Vec(list[T], Serializable, JSONSerialize, Generic[T, L]):
             size = cast(Int, size_type).load(data)
         return cls(list(value_type.load(data) for _ in range(size)))
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
         if isinstance(self._type, GenericAlias) and issubclass(self._type.__origin__, Tuple):
             res1: dict[str, Any] = {}
             for tup in self:
                 if not isinstance(tup, Tuple):
                     raise TypeError(f"bad type in Vec: {tup.__class__.__name__}, expected {self._type.__name__}")
                 if len(tup) == 2:
-                    res1[str(tup[0])] = tup[1].json()
+                    res1[str(tup[0])] = tup[1].json(compatible)
                 else:
                     obj: list[JSONType] = []
                     for item in tup[1:]:
                         if not isinstance(item, JSONSerialize):
                             raise TypeError(f"cannot serialize {item.__class__.__name__}")
-                        obj.append(item.json())
+                        obj.append(item.json(compatible))
                     res1[str(tup[0])] = obj
             return res1
         res: list[JSONType] = []
         for item in self:
             if not isinstance(item, JSONSerialize):
                 raise TypeError(f"cannot serialize {item.__class__.__name__}")
-            res.append(item.json())
+            res.append(item.json(compatible))
         return res
 
     def __str__(self):
@@ -210,9 +210,10 @@ class Option(Serializable, JSONSerialize, Generic[T]):
             value = None
         return cls(value)
 
-    def json(self) -> JSONType:
+    def json(self, compatible: bool = False) -> JSONType:
+        print(compatible)
         if self.value is None:
             return None
         if not isinstance(self.value, JSONSerialize):
             raise TypeError(f"cannot serialize {self.types.__name__}")
-        return self.value.json()
+        return self.value.json(compatible)
