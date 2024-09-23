@@ -65,3 +65,12 @@ async def address_delegated_route(request: Request):
         "timestamp": block_timestamp,
         "amount": amount,
     })
+
+async def address_program_id_route(request: Request):
+    db: Database = request.app.state.db
+    version = request.path_params["version"]
+    if version <= 1:
+        return JSONResponse({"error": "This endpoint is not supported in this version"}, status_code=400)
+    address = request.path_params["address"]
+
+    return JSONResponse(await db.get_address_program_id(address))

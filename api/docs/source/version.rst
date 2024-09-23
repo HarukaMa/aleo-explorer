@@ -20,6 +20,7 @@ v2
 * Added :ref:`status` endpoint.
 * Added :ref:`address-staking-info` endpoint.
 * Added :ref:`address-delegated` endpoint.
+* Added :ref:`address-program_id` endpoint.
 
 v1
 ^^

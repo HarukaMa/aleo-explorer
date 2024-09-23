@@ -449,3 +449,23 @@ async def transition_route(request: Request):
     result["resolved_addresses"] = await UIAddress.resolve_recursive_detached(result, db, {})
 
     return CJSONResponse(result)
+
+@public_cache_seconds(5)
+async def transactions_route(request: Request):
+    db: Database = request.app.state.db
+    try:
+        page = request.query_params.get("p")
+        if page is None:
+            page = 1
+        else:
+            page = int(page)
+    except:
+        return CJSONResponse({"error": "Invalid page"}, status_code=400)
+    total_transactions = await db.get_transaction_count()
+    total_pages = math.ceil(total_transactions / 20)
+    if page < 1 or page > total_pages:
+        return CJSONResponse({"error": "Invalid page"}, status_code=400)
+    start = total_transactions - 20 * (page - 1)
+    transactions = await db.get_transactions_range_fast(start, start - 20)
+
+    return CJSONResponse({"transactions": transactions, "total_transactions": total_transactions, "total_pages": total_pages})

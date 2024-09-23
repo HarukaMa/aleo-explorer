@@ -83,3 +83,32 @@ Address Delegated Credits / History
    :statuscode 200: no error
    :statuscode 400: invalid parameter or combination
    :statuscode 404: time or height is before the genesis block
+
+.. _address-program_id:
+
+Address Program ID
+------------------
+
+.. http:get:: /v2/address/program_id/(address)
+
+   Get the program ID of an address, if it is a program address.
+   Returns ``null`` if the address is not a program address.
+
+   **Example request**:
+
+   .. sourcecode:: http
+
+      GET /v2/address/program_id/aleo12x4rzm2j56e9uknpy0dcglt32vfk9ujx9e0pl8x7sy77jjyx4cps5sp8hm HTTP/1.1
+      Host: api.aleoscan.io
+
+   **Example response**:
+
+   .. sourcecode:: http
+
+      HTTP/1.1 200 OK
+      Content-Type: application/json
+
+      "vlink_quest_v1.aleo"
+
+   :statuscode 200: no error
+   :statuscode 400: invalid parameter

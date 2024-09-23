@@ -332,3 +332,15 @@ LIMIT 30
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
+
+    async def get_address_program_id(self, address: str) -> Optional[str]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute("SELECT program_id FROM program WHERE address = %s", (address,))
+                    if (res := await cur.fetchone()) is None:
+                        return None
+                    return res["program_id"]
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
