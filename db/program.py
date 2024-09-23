@@ -13,7 +13,7 @@ class DatabaseProgram(DatabaseBase):
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT * FROM program_function "
+                        "SELECT input, input_mode, output, output_mode, finalize FROM program_function "
                         "JOIN program ON program.id = program_function.program_id "
                         "WHERE program.program_id = %s AND name = %s",
                         (program_id, function_name)

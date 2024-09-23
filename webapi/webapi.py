@@ -20,7 +20,7 @@ from util.set_proc_title import set_proc_title
 from .address_routes import address_route
 from .chain_routes import blocks_route, get_summary, recent_blocks_route, index_update_route, block_route, \
     transaction_route, \
-    validators_route
+    validators_route, transition_route
 from .error_routes import bad_request, not_found, internal_error
 from .utils import public_cache_seconds, out_of_sync_check, CJSONResponse
 
@@ -65,6 +65,7 @@ routes = [
     Route("/block/{height}", block_route),
     Route("/validators", validators_route),
     Route("/transaction/{id}", transaction_route),
+    Route("/transition/{id}", transition_route),
 
     Route("/address/{address}", address_route),
 ]

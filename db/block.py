@@ -1247,3 +1247,29 @@ class DatabaseBlock(DatabaseBase):
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
+
+    async def get_transaction_id_from_transition_id(self, transition_id: str) -> Optional[str]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT t.transaction_id FROM transition ts "
+                        "JOIN transaction_execute te on ts.transaction_execute_id = te.id "
+                        "JOIN transaction t on te.transaction_id = t.id "
+                        "WHERE ts.transition_id = %s",
+                        (transition_id,)
+                    )
+                    if (res := await cur.fetchone()) is None:
+                        await cur.execute(
+                            "SELECT t.transaction_id FROM transition ts "
+                            "JOIN fee f on ts.fee_id = f.id "
+                            "JOIN transaction t on f.transaction_id = t.id "
+                            "WHERE ts.transition_id = %s",
+                            (transition_id,)
+                        )
+                        if (res := await cur.fetchone()) is None:
+                            return None
+                    return res["transaction_id"]
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise

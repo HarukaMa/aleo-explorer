@@ -9,8 +9,9 @@ from starlette.requests import Request
 from aleo_types import u64, DeployTransaction, ExecuteTransaction, FeeTransaction, RejectedDeploy, RejectedExecute, Fee, \
     FinalizeOperation, UpdateKeyValue, RemoveKeyValue, Value, Plaintext
 from aleo_types.cached import cached_get_mapping_id, cached_get_key_id
+from aleo_types.vm_block import AcceptedDeploy, AcceptedExecute
 from db import Database
-from webapi.utils import CJSONResponse, public_cache_seconds
+from webapi.utils import CJSONResponse, public_cache_seconds, function_definition
 from webui.classes import UIAddress
 
 
@@ -412,6 +413,39 @@ async def transaction_route(request: Request):
                     })
 
     result["mapping_operations"] = mapping_operations
+    result["resolved_addresses"] = await UIAddress.resolve_recursive_detached(result, db, {})
+
+    return CJSONResponse(result)
+
+@public_cache_seconds(5)
+async def transition_route(request: Request):
+    db: Database = request.app.state.db
+    transition_id = request.path_params.get("id")
+    if transition_id is None:
+        return CJSONResponse({"error": "Missing transition id"}, status_code=400)
+    transition = await db.get_transition(transition_id)
+    if transition is None:
+        return CJSONResponse({"error": "Transition not found"}, status_code=404)
+    transaction_id = await db.get_transaction_id_from_transition_id(transition_id)
+    if transaction_id is None:
+        return CJSONResponse({"error": "Transaction not found"}, status_code=404)
+    is_confirmed = await db.is_transaction_confirmed(transaction_id)
+    is_aborted = await db.is_transaction_aborted(transaction_id)
+    is_accepted = False
+    if is_confirmed:
+        confirmed_transaction = await db.get_confirmed_transaction(transaction_id)
+        if confirmed_transaction is None:
+            return CJSONResponse({"error": "Internal error: should have tx"}, status_code=500)
+        if isinstance(confirmed_transaction, (AcceptedDeploy, AcceptedExecute)):
+            is_accepted = True
+    result: dict[str, Any] = {
+        "transition": transition.json(),
+        "transaction_id": transaction_id,
+        "is_confirmed": is_confirmed,
+        "is_aborted": is_aborted,
+        "is_accepted": is_accepted,
+        "function_definition": await function_definition(db, str(transition.program_id), str(transition.function_name)),
+    }
     result["resolved_addresses"] = await UIAddress.resolve_recursive_detached(result, db, {})
 
     return CJSONResponse(result)
