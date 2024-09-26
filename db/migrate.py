@@ -23,6 +23,7 @@ class DatabaseMigrate(DatabaseBase):
             (4, self.migrate_4_create_transaction_aborted_flag),
             (5, self.migrate_5_add_confirm_timestamp_to_block),
             (6, self.migrate_6_check_aborted_unconfirmed_transactions),
+            (7, self.migrate_7_rebuild_solution_id_index_with_ops),
         ]
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -110,3 +111,9 @@ create table validator_info
                 count = await cur.fetchone()
                 if count is not None and count["count"] == 1:
                     await cur.execute("update transaction set aborted = true where transaction_id = %s", (row["transaction_id"],))
+
+    @staticmethod
+    async def migrate_7_rebuild_solution_id_index_with_ops(conn: psycopg.AsyncConnection[DictRow], redis: Redis[str]):
+        await conn.execute("drop index solution_puzzle_solution_id_index")
+        await conn.execute("create index solution_puzzle_solution_id_index on solution (solution_id text_pattern_ops)")
+        await conn.execute("create index block_aborted_solution_id_solution_id_index on block_aborted_solution_id (solution_id text_pattern_ops)")

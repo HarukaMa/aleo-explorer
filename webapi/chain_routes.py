@@ -11,6 +11,7 @@ from aleo_types import u64, DeployTransaction, ExecuteTransaction, FeeTransactio
 from aleo_types.cached import cached_get_mapping_id, cached_get_key_id
 from aleo_types.vm_block import AcceptedDeploy, AcceptedExecute
 from db import Database
+from util import arc0137
 from webapi.utils import CJSONResponse, public_cache_seconds, function_definition
 from webui.classes import UIAddress
 
@@ -469,3 +470,75 @@ async def transactions_route(request: Request):
     transactions = await db.get_transactions_range_fast(start, start - 20)
 
     return CJSONResponse({"transactions": transactions, "total_transactions": total_transactions, "total_pages": total_pages})
+
+@public_cache_seconds(5)
+async def search_route(request: Request):
+    db: Database = request.app.state.db
+    query = request.query_params.get("q")
+    if query is None:
+        return CJSONResponse({"error": "Missing query"}, status_code=400)
+    query = query.lower().strip()
+    if len(query) < 3:
+        return CJSONResponse({"error": "Query too short"}, status_code=400)
+    try:
+        height = int(query)
+        return CJSONResponse({"type": "block", "height": height})
+    except ValueError:
+        pass
+    if query.startswith("aprivatekey1zkp"):
+        return CJSONResponse({"error": "You have leaked your private key"})
+    too_many = False
+    if query.startswith("ab1"):
+        if len(query) < 6:
+            return CJSONResponse({"error": "Query too short"}, status_code=400)
+        blocks = await db.search_block_hash(query)
+        if len(blocks) > 50:
+            too_many = True
+            blocks = blocks[:50]
+        return CJSONResponse({"type": "blocks", "blocks": blocks, "too_many": too_many})
+    if query.startswith("at1"):
+        if len(query) < 6:
+            return CJSONResponse({"error": "Query too short"}, status_code=400)
+        transactions = await db.search_transaction_id(query)
+        if len(transactions) > 50:
+            too_many = True
+            transactions = transactions[:50]
+        return CJSONResponse({"type": "transactions", "transactions": transactions, "too_many": too_many})
+    if query.startswith("au1"):
+        if len(query) < 6:
+            return CJSONResponse({"error": "Query too short"}, status_code=400)
+        transitions = await db.search_transition_id(query)
+        if len(transitions) > 50:
+            too_many = True
+            transitions = transitions[:50]
+        return CJSONResponse({"type": "transitions", "transitions": transitions, "too_many": too_many})
+    if query.startswith("aleo1"):
+        if len(query) < 8:
+            return CJSONResponse({"error": "Query too short"}, status_code=400)
+        addresses = await db.search_address(query)
+        if len(addresses) > 50:
+            too_many = True
+            addresses = addresses[:50]
+        return CJSONResponse({"type": "addresses", "addresses": addresses, "too_many": too_many})
+    if query.startswith("solution1"):
+        if len(query) < 12:
+            return CJSONResponse({"error": "Query too short"}, status_code=400)
+        solutions = await db.search_solution(query)
+        if len(solutions) > 50:
+            too_many = True
+            solutions = solutions[:50]
+        return CJSONResponse({"type": "solutions", "solutions": solutions, "too_many": too_many})
+    else:
+        all_names = await arc0137.get_all_names(db)
+        names = [name.startswith(query) for name in all_names]
+        programs = await db.search_program(query)
+        if len(programs) > 50:
+            too_many = True
+            programs = programs[:50]
+        if len(names) > 50:
+            too_many = True
+            names = names[:50]
+        if len(programs) + len(names) > 0:
+            return CJSONResponse({"type": "ans_program", "programs": programs, "names": names, "too_many": too_many})
+    return CJSONResponse({"error": "No results found"}, status_code=404)
+
