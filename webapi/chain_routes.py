@@ -488,6 +488,17 @@ async def search_route(request: Request):
     if query.startswith("aprivatekey1zkp"):
         return CJSONResponse({"error": "You have leaked your private key"})
     too_many = False
+    all_names = await arc0137.get_all_names(db)
+    names = [name.startswith(query) for name in all_names]
+    programs = await db.search_program(query)
+    if len(programs) > 50:
+        too_many = True
+        programs = programs[:50]
+    if len(names) > 50:
+        too_many = True
+        names = names[:50]
+    if len(programs) + len(names) > 0:
+        return CJSONResponse({"type": "ans_program", "programs": programs, "names": names, "too_many": too_many})
     if query.startswith("ab1"):
         if len(query) < 6:
             return CJSONResponse({"error": "Query too short"}, status_code=400)
@@ -529,16 +540,5 @@ async def search_route(request: Request):
             solutions = solutions[:50]
         return CJSONResponse({"type": "solutions", "solutions": solutions, "too_many": too_many})
     else:
-        all_names = await arc0137.get_all_names(db)
-        names = [name.startswith(query) for name in all_names]
-        programs = await db.search_program(query)
-        if len(programs) > 50:
-            too_many = True
-            programs = programs[:50]
-        if len(names) > 50:
-            too_many = True
-            names = names[:50]
-        if len(programs) + len(names) > 0:
-            return CJSONResponse({"type": "ans_program", "programs": programs, "names": names, "too_many": too_many})
-    return CJSONResponse({"error": "No results found"}, status_code=404)
+        return CJSONResponse({"error": "No results found"}, status_code=404)
 
