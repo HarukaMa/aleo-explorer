@@ -12,14 +12,14 @@
             {% call data_line("Transfer amount") %}
                 <strong>{{ future.arguments[-1].plaintext.literal.primitive | format_aleo_credit | safe }} Aleo credits</strong>
             {% endcall %}
-            {% call data_line("Sender") %}
+            {% call data_line("From") %}
                 {% if transitions[0].action == "credits.aleo/transfer_private_to_public" %}
                     Private
                 {% else %}
                     <span class="mono"><a href="address?a={{ future.arguments[0] }}">{{ future.arguments[0] }}</a></span>
                 {% endif %}
             {% endcall %}
-            {% call data_line("Recipient") %}
+            {% call data_line("To") %}
                 {% if transitions[0].action == "credits.aleo/transfer_public_to_private" %}
                     Private
                 {% else %}
