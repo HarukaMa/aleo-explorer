@@ -24,6 +24,7 @@ class DatabaseMigrate(DatabaseBase):
             (5, self.migrate_5_add_confirm_timestamp_to_block),
             (6, self.migrate_6_check_aborted_unconfirmed_transactions),
             (7, self.migrate_7_rebuild_solution_id_index_with_ops),
+            (8, self.migrate_8_fix_missing_fee_stats),
         ]
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -117,3 +118,37 @@ create table validator_info
         await conn.execute("drop index solution_puzzle_solution_id_index")
         await conn.execute("create index solution_puzzle_solution_id_index on solution (solution_id text_pattern_ops)")
         await conn.execute("create index block_aborted_solution_id_solution_id_index on block_aborted_solution_id (solution_id text_pattern_ops)")
+
+    @staticmethod
+    async def migrate_8_fix_missing_fee_stats(conn: psycopg.AsyncConnection[DictRow], redis: Redis[str]):
+        async with conn.cursor() as cur:
+            await cur.execute("""
+                select tx.id
+                from transition ts
+                         join transaction_execute te on te.id = ts.transaction_execute_id
+                         join transaction tx on tx.id = te.transaction_id
+                where program_id = 'credits.aleo'
+                  and function_name = 'unbond_public'
+                  and tx.type = 'Execute'
+            """)
+            txs = await cur.fetchall()
+            for tx_id in [x["id"] for x in txs]:
+                await cur.execute("""
+                    select fa.*
+                    from future_argument fa
+                             join future fu on fu.id = fa.future_id
+                             join transition_output_future tsof on tsof.id = fu.transition_output_future_id
+                             join transition_output tso on tso.id = tsof.transition_output_id
+                             join transition ts on ts.id = tso.transition_id
+                             join fee f on ts.fee_id = f.id
+                             join transaction tx on tx.id = f.transaction_id
+                    where tx.id = %s
+                    order by fa.id
+                """, (tx_id,))
+                args = [Plaintext.load(BytesIO(x["plaintext"])) for x in await cur.fetchall()]
+                if len(args) != 2:
+                    raise RuntimeError(f"unexpected number of args: {args}")
+                address = cast(LiteralPlaintext, args[0])
+                amount = cast(LiteralPlaintext, args[1])
+                await redis.hincrby("address_fee", str(address), int(str(amount).replace("u64", "")))
+                print(f"added fee {amount} to {address}")

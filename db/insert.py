@@ -212,7 +212,7 @@ class DatabaseInsert(DatabaseBase):
                     transfer_to = str(withdraw.literal.primitive)
                     amount = int(cast(u64, cast(LiteralPlaintext, unbonding["microcredits"]).literal.primitive))
                 else:
-                    return
+                    continue
 
                 if transfer_from != transfer_to:
                     if transfer_from is not None:
