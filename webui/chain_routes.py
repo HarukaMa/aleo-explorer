@@ -333,6 +333,7 @@ async def transaction_route(request: Request):
             transitions.append({
                 "transition_id": transition.id,
                 "action":f"{transition.program_id}/{transition.function_name}",
+                "obj": transition,
             })
         fee = cast(Option[Fee], transaction.fee).value
         if fee is not None:

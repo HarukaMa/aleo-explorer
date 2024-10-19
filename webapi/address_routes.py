@@ -205,6 +205,7 @@ async def address_route(request: Request) -> CJSONResponse:
         "fee": str(fee),
         "transitions": recent_transitions,
         "program_name": program_name,
+        "latest_height": await db.get_latest_height(),
     }
     result["resolved_addresses"] = await UIAddress.resolve_recursive_detached(result, db, {})
     return CJSONResponse(result)
