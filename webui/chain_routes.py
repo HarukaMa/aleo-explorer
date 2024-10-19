@@ -17,7 +17,7 @@ from aleo_types import u32, Transition, ExecuteTransaction, PrivateTransitionInp
     FeeTransaction, RejectedDeploy, RejectedExecution, Identifier, Entry, FutureTransitionOutput, Future, \
     PlaintextArgument, FutureArgument, StructPlaintext, Finalize, \
     PlaintextFinalizeType, StructPlaintextType, UpdateKeyValue, Value, Plaintext, RemoveKeyValue, FinalizeOperation, \
-    NodeType, FeeComponent, Fee, Option
+    NodeType, FeeComponent, Fee, Option, Address
 from aleo_types.cached import cached_get_key_id, cached_get_mapping_id
 from db import Database
 from node.light_node import LightNodeState
@@ -780,7 +780,11 @@ async def search_route(request: Request):
         # address
         addresses = await db.search_address(query)
         if not addresses:
-            raise HTTPException(status_code=404, detail="Address not found. See FAQ for more info.")
+            try: # try to convert to a valid address
+                Address.loads(query)
+                return RedirectResponse(f"/address?a={query}{remaining_query}", status_code=302)
+            except:
+                raise HTTPException(status_code=400, detail="Invalid address format")
         if len(addresses) == 1:
             return RedirectResponse(f"/address?a={addresses[0]}{remaining_query}", status_code=302)
         too_many = False

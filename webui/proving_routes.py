@@ -75,6 +75,10 @@ async def address_route(request: Request):
     address = request.query_params.get("a")
     if not address:
         raise HTTPException(status_code=400, detail="Missing address")
+    try:
+        Address.loads(address)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid address format")
     solutions = await db.get_recent_solutions_by_address(address)
     programs = await db.get_recent_programs_by_address(address)
     transitions = await db.get_address_recent_transitions(address)
@@ -102,20 +106,20 @@ async def address_route(request: Request):
     fee = await db.get_address_total_fee(address)
     program_name = await db.get_program_name_from_address(address)
 
-    if (len(solutions) == 0
-        and len(programs) == 0
-        and len(transitions) == 0
-        and public_balance_bytes is None
-        and bond_state_bytes is None
-        and unbond_state_bytes is None
-        and committee_state_bytes is None
-        and stake_reward is None
-        and transfer_in is None
-        and transfer_out is None
-        and fee is None
-        and program_name is None
-    ):
-        raise HTTPException(status_code=404, detail="Address not found")
+    # if (len(solutions) == 0
+    #     and len(programs) == 0
+    #     and len(transitions) == 0
+    #     and public_balance_bytes is None
+    #     and bond_state_bytes is None
+    #     and unbond_state_bytes is None
+    #     and committee_state_bytes is None
+    #     and stake_reward is None
+    #     and transfer_in is None
+    #     and transfer_out is None
+    #     and fee is None
+    #     and program_name is None
+    # ):
+    #     raise HTTPException(status_code=404, detail="Address not found")
     if len(solutions) > 0:
         solution_count = await db.get_solution_count_by_address(address)
         total_rewards = await db.get_puzzle_reward_by_address(address)
