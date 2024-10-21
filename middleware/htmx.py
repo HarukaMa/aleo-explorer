@@ -1,3 +1,6 @@
+from typing import Any, MutableMapping
+
+from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Scope, Receive, Send
 
 
@@ -9,7 +12,14 @@ class HtmxMiddleware:
         if scope["type"] not in ["http", "websocket"]:
             return await self.app(scope, receive, send)
         scope["htmx"] = HtmxData(scope)
-        await self.app(scope, receive, send)
+
+        async def send_vary(message: MutableMapping[str, Any]) -> None:
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                headers.append("Vary", "HX-Request")
+            await send(message)
+
+        await self.app(scope, receive, send_vary)
 
 class HtmxData:
 

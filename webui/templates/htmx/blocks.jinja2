@@ -7,7 +7,7 @@
             <h3>Blocks</h3>
         </div>
 
-        <div id="blocks">
+        <div id="blocks" class="table-wrap">
 
             {{ nav(page, total_pages, "/blocks?") }}
 
@@ -15,6 +15,7 @@
                 <thead>
                 <tr>
                     <th>Height</th>
+                    <th>Epoch</th>
                     <th>Timestamp</th>
                     <th>Transactions</th>
                     <th>Proof target</th>
@@ -28,12 +29,13 @@
                 {% for block in blocks %}
                     <tr>
                         <td><a href="/block?h={{ block.height }}">{{ block.height | format_number | safe }}</a></td>
+                        <td>{{ block.height // 360 }} <span class="note">{{ block.height % 360 }} / 360</span></td>
                         <td>{{ block.timestamp | format_time | safe }}</td>
                         <td>{{ block.transaction_count }}</td>
                         <td>{{ block.proof_target | format_number | safe }}</td>
                         <td>{{ block.coinbase_target | format_number | safe }}</td>
                         <td>{{ block.block_reward | format_aleo_credit | safe }}</td>
-                        <td>{{ (block.coinbase_reward // 2) | format_aleo_credit | safe }}</td>
+                        <td>{{ (block.coinbase_reward * 2 // 3) | format_aleo_credit | safe }}</td>
                         <td>{{ block.partial_solution_count }}</td>
                     </tr>
                 {% endfor %}

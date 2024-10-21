@@ -136,6 +136,7 @@ routes = [
     Route("/blocks", blocks_route),
     Route("/unconfirmed_transactions", unconfirmed_transactions_route),
     Route("/nodes", nodes_route),
+    Route("/solution", solution_route),
     # Programs
     Route("/programs", programs_route),
     Route("/program", program_route),
@@ -144,7 +145,7 @@ routes = [
     Route("/submit_source", submit_source_route, methods=["POST"]),
     # Proving
     Route("/calc", calc_route),
-    Route("/leaderboard", leaderboard_route),
+    Route("/incentive", incentive_route),
     Route("/address", address_route),
     Route("/address_solution", address_solution_route),
     # Other
@@ -173,13 +174,15 @@ async def startup():
     db = Database(server=os.environ["DB_HOST"], user=os.environ["DB_USER"], password=os.environ["DB_PASS"],
                   database=os.environ["DB_DATABASE"], schema=os.environ["DB_SCHEMA"],
                   redis_server=os.environ["REDIS_HOST"], redis_port=int(os.environ["REDIS_PORT"]),
-                  redis_db=int(os.environ["REDIS_DB"]),
+                  redis_db=int(os.environ["REDIS_DB"]), redis_user=os.environ.get("REDIS_USER"),
+                  redis_password=os.environ.get("REDIS_PASS"),
                   message_callback=noop)
     await db.connect()
     # noinspection PyUnresolvedReferences
     app.state.db = db
     # noinspection PyUnresolvedReferences
     app.state.lns.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4133")), None)
+    app.state.lns.start_listener()
     app.state.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=1))
     set_proc_title("aleo-explorer: webui")
 
@@ -202,7 +205,10 @@ app = Starlette(
 async def run():
     host = os.environ.get("HOST", "127.0.0.1")
     port = int(os.environ.get("PORT", 8000))
-    config = uvicorn.Config("webui:app", reload=True, log_level="info", host=host, port=port)
+    config = uvicorn.Config(
+        "webui:app", reload=True, log_level="info", host=host, port=port,
+        forwarded_allow_ips=["127.0.0.1", "::1", "10.0.4.1", "10.0.5.1"]
+    )
     logging.getLogger("uvicorn.access").handlers = []
     server = UvicornServer(config=config)
     # noinspection PyUnresolvedReferences

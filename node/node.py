@@ -9,7 +9,7 @@ from typing import Awaitable
 import explorer.types as explorer
 from aleo_types import *  # too many types
 # from .light_node import LightNodeState
-from .testnet3.param import Testnet3
+from . import Network
 
 # Do not open PR about this value.
 # The deviation from the node's behavior is for lower sync delays.
@@ -60,9 +60,9 @@ class Node:
         await self.explorer_message(explorer.Message(explorer.Message.Type.NodeConnected, None))
         try:
             challenge_request = ChallengeRequest(
-                version=Testnet3.version,
+                version=Network.version,
                 listener_port=u16(14133),
-                node_type=NodeType.Client,
+                node_type=NodeType.Validator,
                 address=Address.loads("aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px"),
                 nonce=self.nonce,
             )
@@ -116,15 +116,16 @@ class Node:
             if self.handshake_state != 2:
                 raise Exception("incorrect handshake state")
             msg = frame.message
-            if msg.version < Testnet3.version:
+            if msg.version < Network.version:
                 raise ValueError("peer is outdated")
             if await self.explorer_request(explorer.Request.GetDevMode()):
-                genesis = Testnet3.dev_genesis_block.header
+                genesis = Network.dev_genesis_block.header
             else:
-                genesis = Testnet3.genesis_block.header
+                genesis = Network.genesis_block.header
             resp_nonce = u64(random.randint(0, 2 ** 64 - 1))
             response = ChallengeResponse(
                 genesis_header=genesis,
+                restrictions_id=Network.restrictions_id,
                 signature=Data[Signature](Signature.load(BytesIO(aleo_explorer_rust.sign_nonce("APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH", msg.nonce.dump() + resp_nonce.dump())))),
                 nonce=resp_nonce,
             )
@@ -142,13 +143,6 @@ class Node:
         elif isinstance(frame.message, ChallengeResponse):
             if self.handshake_state != 0:
                 raise Exception("incorrect handshake state")
-            msg = frame.message
-            if await self.explorer_request(explorer.Request.GetDevMode()):
-                genesis = Testnet3.dev_genesis_block.header.transactions_root
-            else:
-                genesis = Testnet3.genesis_block.header.transactions_root
-            if msg.genesis_header.transactions_root != genesis:
-                raise ValueError("peer has wrong genesis block")
             self.handshake_state = 2
 
         elif isinstance(frame.message, Ping):
@@ -163,13 +157,13 @@ class Node:
                 recents: dict[u32, BlockHash] = locators.recents
                 if not recents:
                     raise ValueError("invalid block locator: recents is empty")
-                if len(recents) > Testnet3.block_locator_num_recents:
+                if len(recents) > Network.block_locator_num_recents:
                     raise ValueError("invalid block locator: recents is too long")
                 latest_recents_height = 0
                 for i, (height, _) in enumerate(recents.items()):
-                    if i == 0 and len(recents) < Testnet3.block_locator_num_recents and height != 0:
+                    if i == 0 and len(recents) < Network.block_locator_num_recents and height != 0:
                         raise ValueError("invalid block locator: first height must be 0")
-                    if i > 0 and height != latest_recents_height + Testnet3.block_locator_recent_interval:
+                    if i > 0 and height != latest_recents_height + Network.block_locator_recent_interval:
                         raise ValueError("invalid block locator: recent heights must be in sequence")
                     latest_recents_height = height
 
@@ -180,7 +174,7 @@ class Node:
                 for i, (height, _) in enumerate(checkpoints.items()):
                     if i == 0 and height != 0:
                         raise ValueError("invalid block locator: first height must be 0")
-                    if i > 0 and height != latest_checkpoints_height + Testnet3.block_locator_checkpoint_interval:
+                    if i > 0 and height != latest_checkpoints_height + Network.block_locator_checkpoint_interval:
                         raise ValueError("invalid block locator: checkpoint heights must be in sequence")
                     latest_checkpoints_height = height
 
@@ -254,7 +248,7 @@ class Node:
             await self.send_message(msg)
         else:
             latest_height = await self.explorer_request(explorer.Request.GetLatestHeight())
-            if latest_height == self.peer_block_height:
+            if latest_height >= self.peer_block_height:
                 return
 
             start_block_height = latest_height + 1
@@ -269,8 +263,8 @@ class Node:
 
     async def send_ping(self):
         ping = Ping(
-            version=Testnet3.version,
-            node_type=NodeType.Client,
+            version=Network.version,
+            node_type=NodeType.Validator,
             block_locators=Option[BlockLocators](
                 BlockLocators(
                     recents=dict[u32, BlockHash]({
@@ -310,5 +304,5 @@ class Node:
         self.is_syncing = False
         if self.ping_task is not None:
             self.ping_task.cancel()
-        await asyncio.sleep(5)
+        await asyncio.sleep(11)
         self.worker_task = asyncio.create_task(self.worker(self.node_ip, self.node_port))

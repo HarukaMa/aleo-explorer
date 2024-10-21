@@ -1,6 +1,9 @@
 Execute API
 =================
 
+.. note::
+   Endpoints on this page is under maintenance and unavailable at the moment.
+
 .. warning::
    All executions are *simulated*. No real execution is performed.
 
@@ -9,7 +12,7 @@ Execute API
 Simulate Finalize Execution
 ---------------------------
 
-.. http:post:: /api/v1/simulate_execution/finalize
+.. http:post:: /v1/simulate_execution/finalize
 
    Simulate finalize execution.
 
@@ -21,8 +24,8 @@ Simulate Finalize Execution
 
    .. sourcecode:: http
 
-      POST /api/v1/simulate_execution/finalize HTTP/1.1
-      Host: testnet3.aleoscan.io
+      POST /v1/simulate_execution/finalize HTTP/1.1
+      Host: api.aleoscan.io
       Content-Type: application/json
 
       {

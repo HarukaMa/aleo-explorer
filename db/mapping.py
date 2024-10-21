@@ -4,6 +4,7 @@ import psycopg
 import psycopg.sql
 
 from aleo_types import *
+from aleo_types.cached import cached_get_mapping_id
 from explorer.types import Message as ExplorerMessage
 from .base import DatabaseBase
 
@@ -11,7 +12,7 @@ from .base import DatabaseBase
 class DatabaseMapping(DatabaseBase):
     async def get_mapping_cache_with_cur(self, cur: psycopg.AsyncCursor[dict[str, Any]], program_name: str,
                                          mapping_name: str) -> dict[Field, Any]:
-        if program_name == "credits.aleo" and mapping_name in ["committee", "bonded"]:
+        if program_name == "credits.aleo" and mapping_name in ["committee", "bonded", "delegated"]:
             def transform(d: dict[str, Any]):
                 return {
                     "key": Plaintext.load(BytesIO(bytes.fromhex(d["key"]))),
@@ -48,7 +49,7 @@ class DatabaseMapping(DatabaseBase):
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
-                    if program_id == "credits.aleo" and mapping in ["committee", "bonded"]:
+                    if program_id == "credits.aleo" and mapping in ["committee", "bonded", "delegated"]:
                         conn = self.redis
                         data = await conn.hget(f"{program_id}:{mapping}", key_id)
                         if data is None:
@@ -90,7 +91,7 @@ class DatabaseMapping(DatabaseBase):
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
-                    if program_id == "credits.aleo" and mapping in ["committee", "bonded"]:
+                    if program_id == "credits.aleo" and mapping in ["committee", "bonded", "delegated"]:
                         def transform(d: dict[str, Any]):
                             return {
                                 "key": Plaintext.load(BytesIO(bytes.fromhex(d["key"]))),
@@ -132,7 +133,7 @@ class DatabaseMapping(DatabaseBase):
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
-                    if program_id == "credits.aleo" and mapping in ["committee", "bonded"]:
+                    if program_id == "credits.aleo" and mapping in ["committee", "bonded", "delegated"]:
                         conn = self.redis
                         return await conn.hlen(f"{program_id}:{mapping}")
                     else:
@@ -176,7 +177,7 @@ class DatabaseMapping(DatabaseBase):
                                        mapping_name: str, mapping_id: str, key_id: str, value_id: str,
                                        key: bytes, value: bytes, height: int, from_transaction: bool):
         try:
-            limited_tracking = program_name == "credits.aleo" and mapping_name in ["committee", "bonded"]
+            limited_tracking = program_name == "credits.aleo" and mapping_name in ["committee", "bonded", "delegated"]
             if limited_tracking:
                 conn = self.redis
                 data = {
@@ -212,7 +213,9 @@ class DatabaseMapping(DatabaseBase):
                     "RETURNING id",
                     (mapping_id, height, key_id, key, value, from_transaction, previous_id)
                 )
-                latest_id = (await cur.fetchone())['id']
+                if (res := await cur.fetchone()) is None:
+                    raise ValueError("failed to insert mapping history")
+                latest_id = res['id']
                 await cur.execute(
                     "INSERT INTO mapping_history_last_id (key_id, last_history_id) VALUES (%s, %s) "
                     "ON CONFLICT (key_id) DO UPDATE SET last_history_id = %s",
@@ -227,7 +230,7 @@ class DatabaseMapping(DatabaseBase):
                                        mapping_name: str, mapping_id: str, key_id: str, key: bytes, height: int,
                                        from_transaction: bool):
         try:
-            limited_tracking = program_name == "credits.aleo" and mapping_name in ["committee", "bonded"]
+            limited_tracking = program_name == "credits.aleo" and mapping_name in ["committee", "bonded", "delegated"]
             if limited_tracking:
                 conn = self.redis
                 await conn.hdel(f"{program_name}:{mapping_name}", key_id)
@@ -256,7 +259,9 @@ class DatabaseMapping(DatabaseBase):
                     "RETURNING id",
                     (mapping_id, height, key_id, key, from_transaction, previous_id)
                 )
-                latest_id = (await cur.fetchone())['id']
+                if (res := await cur.fetchone()) is None:
+                    raise ValueError("failed to insert mapping history")
+                latest_id = res['id']
                 await cur.execute(
                     "INSERT INTO mapping_history_last_id (key_id, last_history_id) VALUES (%s, %s) "
                     "ON CONFLICT (key_id) DO UPDATE SET last_history_id = %s",
@@ -290,23 +295,26 @@ class DatabaseMapping(DatabaseBase):
                                 (d["id"],)
                             )
                             u = await cur.fetchone()
+                            if u is None:
+                                raise ValueError(f"finalize operation {d['id']} not found")
                             result.append(UpdateKeyValue(
                                 mapping_id=Field.loads(u["mapping_id"]),
                                 key_id=Field.loads(u["key_id"]),
                                 value_id=Field.loads(u["value_id"]),
-                                index=u64(),
                             ))
                         elif d["type"] == "RemoveKeyValue":
                             await cur.execute(
-                                "SELECT mapping_id FROM finalize_operation_remove_kv fu "
+                                "SELECT mapping_id, key_id FROM finalize_operation_remove_kv fu "
                                 "JOIN explorer.finalize_operation fo on fo.id = fu.finalize_operation_id "
                                 "WHERE fo.id = %s",
                                 (d["id"],)
                             )
                             u = await cur.fetchone()
+                            if u is None:
+                                raise ValueError(f"finalize operation {d['id']} not found")
                             result.append(RemoveKeyValue(
                                 mapping_id=Field.loads(u["mapping_id"]),
-                                index=u64()
+                                key_id=Field.loads(u["key_id"]),
                             ))
                     return result
                 except Exception as e:
@@ -352,6 +360,47 @@ class DatabaseMapping(DatabaseBase):
                     if res["key_id"] != key_id:
                         return None
                     return res['value']
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def get_mapping_value_at_height(self, program_id: str, mapping: str, key_id: str, height: int) -> Optional[bytes]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    if program_id == "credits.aleo" and mapping in ["committee", "bonded", "delegated"]:
+                        # noinspection SqlResolve
+                        query = psycopg.sql.SQL("SELECT content FROM {} WHERE height = %s").format(psycopg.sql.Identifier(f"mapping_{mapping}_history"))
+                        await cur.execute(query, (height,))
+                        if (res := await cur.fetchone()) is None:
+                            return None
+                        mapping_data: dict[str, str] = res["content"]
+                        if mapping == "delegated":
+                            if (data := mapping_data.get(key_id)) is None:
+                                return None
+                            return PlaintextValue(
+                                plaintext=LiteralPlaintext(
+                                    literal=Literal(
+                                        type_=Literal.Type.U64,
+                                        primitive=u64.loads(data)
+                                    )
+                                )
+                            ).dump()
+                        else:
+                            if (data := mapping_data.get(key_id)) is None:
+                                return None
+                            return bytes.fromhex(data)
+                    await cur.execute(
+                        "SELECT value FROM mapping_history mh "
+                        "JOIN mapping m on mh.mapping_id = m.id "
+                        "WHERE m.program_id = %s AND m.mapping = %s AND mh.key_id = %s AND mh.height <= %s "
+                        "ORDER BY mh.id DESC "
+                        "LIMIT 1",
+                        (program_id, mapping, key_id, height)
+                    )
+                    if (res := await cur.fetchone()) is None:
+                        return None
+                    return res["value"]
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise

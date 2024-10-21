@@ -3,14 +3,15 @@ import os
 import traceback
 from sys import stdout
 
-import api
-import webui
 from aleo_types import Block, BlockHash
+from api import api
 from db import Database
 from interpreter.interpreter import init_builtin_program
-from node import Node
 # from node.light_node import LightNodeState
-from node.testnet3 import Testnet3
+from node import Network
+from node import Node
+from webapi import webapi
+from webui import webui
 from .types import Request, Message, ExplorerRequest
 
 
@@ -23,13 +24,14 @@ class Explorer:
         self.db = Database(server=os.environ["DB_HOST"], user=os.environ["DB_USER"], password=os.environ["DB_PASS"],
                            database=os.environ["DB_DATABASE"], schema=os.environ["DB_SCHEMA"],
                            redis_server=os.environ["REDIS_HOST"], redis_port=int(os.environ["REDIS_PORT"]),
-                           redis_db=int(os.environ["REDIS_DB"]),
+                           redis_db=int(os.environ["REDIS_DB"]), redis_user=os.environ.get("REDIS_USER"),
+                           redis_password=os.environ.get("REDIS_PASS"),
                            message_callback=self.message)
 
         # states
         self.dev_mode = False
         self.latest_height = 0
-        self.latest_block_hash: BlockHash = Testnet3.genesis_block.block_hash
+        self.latest_block_hash: BlockHash = Network.genesis_block.block_hash
 
     def start(self):
         self.task = asyncio.create_task(self.main_loop())
@@ -63,14 +65,15 @@ class Explorer:
         height = await self.db.get_latest_height()
         if height is None:
             if self.dev_mode:
-                await self.add_block(Testnet3.dev_genesis_block)
+                await self.add_block(Network.dev_genesis_block)
             else:
-                await self.add_block(Testnet3.genesis_block)
+                await self.add_block(Network.genesis_block)
 
     async def main_loop(self):
         try:
             await self.db.connect()
             await self.db.migrate()
+            await self.check_clear()
             await self.check_dev_mode()
             await self.check_genesis()
             await self.check_revert()
@@ -85,8 +88,9 @@ class Explorer:
             print(f"latest height: {self.latest_height}")
             self.node = Node(explorer_message=self.message, explorer_request=self.node_request)
             await self.node.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4133")))
-            asyncio.create_task(webui.run())
-            asyncio.create_task(api.run())
+            _ = asyncio.create_task(webapi.run())
+            _ = asyncio.create_task(webui.run())
+            _ = asyncio.create_task(api.run())
             while True:
                 msg = await self.message_queue.get()
                 match msg.type:
@@ -113,8 +117,8 @@ class Explorer:
             raise
 
     async def add_block(self, block: Block):
-        if block in [Testnet3.genesis_block, Testnet3.dev_genesis_block]:
-            for program in Testnet3.builtin_programs:
+        if block in [Network.genesis_block, Network.dev_genesis_block]:
+            for program in Network.builtin_programs:
                 await init_builtin_program(self.db, program)
             await self.db.save_block(block)
             return
@@ -139,9 +143,9 @@ class Explorer:
             if db_genesis is None:
                 return
             if self.dev_mode:
-                genesis_block = Testnet3.dev_genesis_block
+                genesis_block = Network.dev_genesis_block
             else:
-                genesis_block = Testnet3.genesis_block
+                genesis_block = Network.genesis_block
             if db_genesis.header.transactions_root != genesis_block.header.transactions_root:
                 await self.clear_database()
 
@@ -164,3 +168,11 @@ class Explorer:
             except OSError as e:
                 print("Cannot remove revert_flag:", e)
             await self.db.revert_to_last_backup()
+
+    async def check_clear(self):
+        if os.path.exists("clear_flag") and os.path.isfile("clear_flag"):
+            try:
+                os.remove("clear_flag")
+            except OSError as e:
+                print("Cannot remove clear_flag:", e)
+            await self.db.clear_database()

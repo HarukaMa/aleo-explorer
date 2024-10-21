@@ -29,7 +29,7 @@ def get_relative_time(timestamp: int):
 
 async def get_remote_height(session: aiohttp.ClientSession, rpc_root: str) -> str:
     try:
-        async with session.get(f"{rpc_root}/testnet3/latest/height") as resp:
+        async with session.get(f"{rpc_root}/mainnet/latest/height") as resp:
             if resp.status == 200:
                 remote_height = await resp.text()
             else:
@@ -46,7 +46,7 @@ async def out_of_sync_check(session: aiohttp.ClientSession, db: Database):
     )
     now = int(time.time())
     maintenance_info = os.environ.get("MAINTENANCE_INFO")
-    out_of_sync = now - last_timestamp > 120
+    out_of_sync = now - last_timestamp > 300
     node_height = None
     reference_height = None
     if out_of_sync:

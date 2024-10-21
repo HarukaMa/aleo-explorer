@@ -19,8 +19,8 @@
                 </div>
                 <div class="cell large-auto ticker-cell">
                     <div class="grid-y ticker-cell-content">
-                        <div class="cell ticker-cell-title">Timestamp</div>
-                        <div class="cell auto ticker-cell-data timestamp-font-size">{{ latest_block.header.metadata.timestamp | format_time | safe }}</div>
+                        <div class="cell ticker-cell-title">Latest epoch</div>
+                        <div class="cell auto ticker-cell-data">{{ latest_block.height // 360 }}&nbsp;<span class="ticker-cell-data-note">{{ latest_block.height % 360 }} / 360</span></div>
                     </div>
                 </div>
                 <div class="cell large-auto ticker-cell">
@@ -40,8 +40,8 @@
                 {% if not "DEBUG_SKIP_COINBASE" | get_env %}
                 <div class="cell large-3 ticker-cell">
                     <div class="grid-y ticker-cell-content">
-                        <div class="cell ticker-cell-title">Estimated proving capacity (15m)</div>
-                        <div class="cell auto ticker-cell-data">{{ network_speed | format_number | safe }}&nbsp;<span data-tippy-content='commitments per second, also known as "p/s" or "s/s"'>c/s</span></div>
+                        <div class="cell ticker-cell-title">Puzzle solving rate (15m)</div>
+                        <div class="cell auto ticker-cell-data">{{ network_speed | format_large_number | safe }}<span data-tippy-content="Solutions per second, see FAQ for more info">s/s</span></div>
                     </div>
                 </div>
                 {% endif %}
@@ -53,19 +53,20 @@
                 </div>
                 <div class="cell large-3 ticker-cell">
                     <div class="grid-y ticker-cell-content">
-                        <div class="cell ticker-cell-title">Validator participation rate (1h)</div>
+                        <div class="cell ticker-cell-title">Validator participation rate (5m)</div>
                         <div class="cell auto ticker-cell-data">{{ "%0.2f" | format(participation_rate * 100) }}%</div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div id="recent-blocks">
+        <div id="recent-blocks" class="table-wrap">
             <h4>Recent Blocks</h4>
             <table class="unstriped">
                 <thead>
                 <tr>
                     <th>Height</th>
+                    <th>Epoch</th>
                     <th>Timestamp</th>
                     <th>Transactions</th>
                     <th>Proof target</th>
@@ -81,12 +82,13 @@
                 {% for block in recent_blocks %}
                     <tr>
                         <td><a href="/block?h={{ block.height }}">{{ block.height | format_number | safe }}</a></td>
+                        <td>{{ block.height // 360 }} <span class="note">{{ block.height % 360 }} / 360</span></td>
                         <td>{{ block.timestamp | format_time | safe }}</td>
                         <td>{{ block.transaction_count }}</td>
                         <td>{{ block.proof_target | format_number | safe }}</td>
                         <td>{{ block.coinbase_target | format_number | safe }}</td>
                         <td>{{ block.block_reward | format_aleo_credit | safe }}</td>
-                        <td>{{ (block.coinbase_reward // 2) | format_aleo_credit | safe }}</td>
+                        <td>{{ (block.coinbase_reward * 2 // 3) | format_aleo_credit | safe }}</td>
                         {% if not "DEBUG_SKIP_COINBASE" | get_env %}
                             <td>{{ block.partial_solution_count }}</td>
                         {% endif %}

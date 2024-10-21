@@ -1,25 +1,8 @@
 from enum import IntEnum
 from typing import Protocol, runtime_checkable, Self, Type as TType
 
+from .serialize import Serialize
 from .utils import *
-
-
-class Deserialize(Protocol):
-
-    @classmethod
-    def load(cls, data: BytesIO) -> Self:
-        ...
-
-
-class Serialize(Protocol):
-
-    def dump(self) -> bytes:
-        ...
-
-
-@runtime_checkable
-class Serializable(Serialize, Deserialize, Protocol):
-    pass
 
 
 class Sized(Protocol):

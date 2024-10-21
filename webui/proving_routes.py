@@ -1,12 +1,13 @@
 import time
 from io import BytesIO
-from typing import Any, cast
+from typing import Any, cast, Optional
 
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
 
 from aleo_types import PlaintextValue, LiteralPlaintext, Literal, \
-    Address, Value, StructPlaintext, Int, u64, cached_get_key_id
+    Address, Value, StructPlaintext, Int, u64
+from aleo_types.cached import cached_get_key_id
 from db import Database
 from .classes import UIAddress
 from .template import htmx_template
@@ -17,16 +18,20 @@ from .utils import out_of_sync_check
 async def calc_route(request: Request):
     db: Database = request.app.state.db
     proof_target = (await db.get_latest_block()).header.metadata.proof_target
+    total_solutions = await db.get_total_solution_count()
+    avg_reward = await db.get_average_solution_reward()
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
         "proof_target": proof_target,
+        "total_solutions": total_solutions,
+        "avg_reward": avg_reward,
         "sync_info": sync_info,
     }
     return ctx, {'Cache-Control': 'public, max-age=60'}
 
 
-@htmx_template("leaderboard.jinja2")
-async def leaderboard_route(request: Request):
+@htmx_template("incentive.jinja2")
+async def incentive_route(request: Request):
     db: Database = request.app.state.db
     try:
         page = request.query_params.get("p")
@@ -36,32 +41,29 @@ async def leaderboard_route(request: Request):
             page = int(page)
     except:
         raise HTTPException(status_code=400, detail="Invalid page")
-    address_count = await db.get_leaderboard_size()
+    address_count = await db.get_incentive_address_count()
     total_pages = (address_count // 50) + 1
     if page < 1 or page > total_pages:
         raise HTTPException(status_code=400, detail="Invalid page")
     start = 50 * (page - 1)
-    leaderboard_data = await db.get_leaderboard(start, start + 50)
+    leaderboard_data = await db.get_incentive_addresses(start, start + 50)
     data: list[dict[str, Any]] = []
     for line in leaderboard_data:
         data.append({
             "address": line["address"],
-            "total_rewards": line["total_reward"],
-            "total_incentive": line["total_incentive"],
+            "total_rewards": line["reward"],
         })
     now = int(time.time())
-    total_credit = await db.get_leaderboard_total()
-    target_credit = 37_500_000_000_000
-    ratio = total_credit / target_credit * 100
+    total_credit = await db.get_incentive_total_reward()
+    ratio = (now - 1719849600) / (86400 * 14) * 100
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
         "leaderboard": data,
         "page": page,
         "total_pages": total_pages,
         "total_credit": total_credit,
-        "target_credit": target_credit,
-        "ratio": ratio,
         "now": now,
+        "ratio": ratio,
         "sync_info": sync_info,
     }
     return ctx, {'Cache-Control': 'public, max-age=15'}
@@ -73,6 +75,10 @@ async def address_route(request: Request):
     address = request.query_params.get("a")
     if not address:
         raise HTTPException(status_code=400, detail="Missing address")
+    try:
+        Address.loads(address)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid address format")
     solutions = await db.get_recent_solutions_by_address(address)
     programs = await db.get_recent_programs_by_address(address)
     transitions = await db.get_address_recent_transitions(address)
@@ -87,38 +93,40 @@ async def address_route(request: Request):
     bonded_key_id = cached_get_key_id("credits.aleo", "bonded", address_key_bytes)
     unbonding_key_id = cached_get_key_id("credits.aleo", "unbonding", address_key_bytes)
     committee_key_id = cached_get_key_id("credits.aleo", "committee", address_key_bytes)
+    delegated_key_id = cached_get_key_id("credits.aleo", "delegated", address_key_bytes)
+    withdraw_key_id = cached_get_key_id("credits.aleo", "withdraw", address_key_bytes)
     public_balance_bytes = await db.get_mapping_value("credits.aleo", "account", account_key_id)
     bond_state_bytes = await db.get_mapping_value("credits.aleo", "bonded", bonded_key_id)
     unbond_state_bytes = await db.get_mapping_value("credits.aleo", "unbonding", unbonding_key_id)
     committee_state_bytes = await db.get_mapping_value("credits.aleo", "committee", committee_key_id)
+    delegated_bytes = await db.get_mapping_value("credits.aleo", "delegated", delegated_key_id)
     stake_reward = await db.get_address_stake_reward(address)
     transfer_in = await db.get_address_transfer_in(address)
     transfer_out = await db.get_address_transfer_out(address)
     fee = await db.get_address_total_fee(address)
     program_name = await db.get_program_name_from_address(address)
 
-    if (len(solutions) == 0
-        and len(programs) == 0
-        and len(transitions) == 0
-        and public_balance_bytes is None
-        and bond_state_bytes is None
-        and unbond_state_bytes is None
-        and committee_state_bytes is None
-        and stake_reward is None
-        and transfer_in is None
-        and transfer_out is None
-        and fee is None
-        and program_name is None
-    ):
-        raise HTTPException(status_code=404, detail="Address not found")
+    # if (len(solutions) == 0
+    #     and len(programs) == 0
+    #     and len(transitions) == 0
+    #     and public_balance_bytes is None
+    #     and bond_state_bytes is None
+    #     and unbond_state_bytes is None
+    #     and committee_state_bytes is None
+    #     and stake_reward is None
+    #     and transfer_in is None
+    #     and transfer_out is None
+    #     and fee is None
+    #     and program_name is None
+    # ):
+    #     raise HTTPException(status_code=404, detail="Address not found")
     if len(solutions) > 0:
         solution_count = await db.get_solution_count_by_address(address)
-        total_rewards, total_incentive = await db.get_leaderboard_rewards_by_address(address)
+        total_rewards = await db.get_puzzle_reward_by_address(address)
         speed, interval = await db.get_address_speed(address)
     else:
         solution_count = 0
         total_rewards = 0
-        total_incentive = 0
         speed = 0
         interval = 0
     program_count = await db.get_program_count_by_address(address)
@@ -137,9 +145,10 @@ async def address_route(request: Request):
             "height": solution["height"],
             "timestamp": solution["timestamp"],
             "reward": solution["reward"],
-            "nonce": solution["nonce"],
+            "counter": solution["counter"],
             "target": solution["target"],
             "target_sum": solution["target_sum"],
+            "solution_id": solution["solution_id"],
         })
     recent_programs: list[dict[str, Any]] = []
     for program in programs:
@@ -160,6 +169,7 @@ async def address_route(request: Request):
         public_balance = int(cast(Int, plaintext.literal.primitive))
     if bond_state_bytes is None:
         bond_state = None
+        withdrawal_address = None
     else:
         value = cast(PlaintextValue, Value.load(BytesIO(bond_state_bytes)))
         plaintext = cast(StructPlaintext, value.plaintext)
@@ -169,6 +179,13 @@ async def address_route(request: Request):
             "validator": str(validator.literal.primitive),
             "amount": int(cast(Int, amount.literal.primitive)),
         }
+        withdraw_bytes = await db.get_mapping_value("credits.aleo", "withdraw", withdraw_key_id)
+        if withdraw_bytes is None:
+            withdrawal_address = None
+        else:
+            value = cast(PlaintextValue, Value.load(BytesIO(withdraw_bytes)))
+            plaintext = cast(LiteralPlaintext, value.plaintext)
+            withdrawal_address = str(plaintext.literal.primitive)
     if unbond_state_bytes is None:
         unbond_state = None
     else:
@@ -182,15 +199,15 @@ async def address_route(request: Request):
         }
     if committee_state_bytes is None:
         committee_state = None
-        address_stakes = None
+        address_stakes: Optional[dict[str, int]] = None
         uptime = None
     else:
         value = cast(PlaintextValue, Value.load(BytesIO(committee_state_bytes)))
         plaintext = cast(StructPlaintext, value.plaintext)
-        amount = cast(LiteralPlaintext, plaintext["microcredits"])
+        commission = cast(LiteralPlaintext, plaintext["commission"])
         is_open = cast(LiteralPlaintext, plaintext["is_open"])
         committee_state = {
-            "amount": int(cast(Int, amount.literal.primitive)),
+            "commission": int(cast(Int, commission.literal.primitive)),
             "is_open": bool(is_open.literal.primitive),
         }
         bonded_mapping = await db.get_bonded_mapping_unchecked()
@@ -202,7 +219,12 @@ async def address_route(request: Request):
                 if len(address_stakes) >= 50:
                     break
         uptime = await db.get_validator_uptime(address)
-
+    if delegated_bytes is None:
+        delegated = None
+    else:
+        value = cast(PlaintextValue, Value.load(BytesIO(delegated_bytes)))
+        plaintext = cast(LiteralPlaintext, value.plaintext)
+        delegated = int(cast(Int, plaintext.literal.primitive))
     if stake_reward is None:
         stake_reward = 0
     if transfer_in is None:
@@ -228,11 +250,11 @@ async def address_route(request: Request):
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
         "address": await UIAddress(address).resolve(db),
+        "raw_address": address,
         "address_trunc": address[:14] + "..." + address[-6:],
         "solutions": recent_solutions,
         "programs": recent_programs,
         "total_rewards": total_rewards,
-        "total_incentive": total_incentive,
         "total_solutions": solution_count,
         "total_programs": program_count,
         "speed": speed,
@@ -242,6 +264,8 @@ async def address_route(request: Request):
         "unbond_state": unbond_state,
         "committee_state": committee_state,
         "address_stakes": address_stakes,
+        "delegated": delegated,
+        "withdrawal_address": withdrawal_address,
         "uptime": uptime,
         "stake_reward": stake_reward,
         "transfer_in": transfer_in,
@@ -280,9 +304,10 @@ async def address_solution_route(request: Request):
             "height": solution["height"],
             "timestamp": solution["timestamp"],
             "reward": solution["reward"],
-            "nonce": solution["nonce"],
+            "counter": solution["counter"],
             "target": solution["target"],
             "target_sum": solution["target_sum"],
+            "solution_id": solution["solution_id"],
         })
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {

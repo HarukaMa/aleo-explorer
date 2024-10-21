@@ -1,4 +1,4 @@
-{% from "macros.jinja2" import nav, htmx_title, sync_notice %}
+{% from "macros.jinja2" import nav, htmx_title, sync_notice, UIAddress %}
 {{ sync_notice(sync_info) }}
 
     <div class="content">
@@ -7,7 +7,7 @@
             <h3>Validators</h3>
         </div>
 
-        <div id="blocks">
+        <div id="blocks" class="table-wrap">
 
             {{ nav(page, total_pages, "/validators?") }}
 
@@ -18,6 +18,7 @@
                     <th>Validator</th>
                     <th>Total stake</th>
                     <th>Vote power</th>
+                    <th>Commission</th>
                     <th>Uptime (last 24 hours)</th>
                 </tr>
                 </thead>
@@ -25,9 +26,10 @@
                 {% for validator in validators %}
                     <tr>
                         <td>{{ loop.index + (page - 1) * 50 }}</td>
-                        <td><span class="mono"><a href="/address?a={{ validator.address }}">{{ validator.address }}</a></span></td>
+                        <td><span class="mono"><a href="/address?a={{ validator.address.address }}">{{ UIAddress(validator.address) }}</a></span></td>
                         <td>{{ validator.stake | format_aleo_credit | safe }}</td>
                         <td>{{ "%0.2f" | format(validator.stake / total_stake * 100) }}%</td>
+                        <td>{% if validator.open %}{{ validator.commission }}%{% else %}<span data-tippy-content="Not open for staking">--</span>{% endif %}</td>
                         <td>{{ "%0.2f" | format(validator.uptime) }}%</td>
                     </tr>
                 {% endfor %}

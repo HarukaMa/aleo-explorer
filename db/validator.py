@@ -31,7 +31,7 @@ class DatabaseValidator(DatabaseBase):
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT chm.address, chm.stake FROM committee_history_member chm "
+                        "SELECT chm.address, chm.stake, chm.commission, chm.is_open FROM committee_history_member chm "
                         "JOIN committee_history ch ON chm.committee_id = ch.id "
                         "WHERE ch.height = %s "
                         "ORDER BY chm.stake DESC "
@@ -47,30 +47,26 @@ class DatabaseValidator(DatabaseBase):
                     else:
                         return []
                     await cur.execute(
-                        "WITH va AS "
-                        "    (SELECT unnest(array_agg(DISTINCT d.author)) AS author "
-                        "     FROM BLOCK b "
-                        "     JOIN authority a ON a.block_id = b.id "
-                        "     JOIN dag_vertex d ON d.authority_id = a.id "
-                        "     WHERE b.timestamp > %s "
-                        "     GROUP BY d.authority_id) "
-                        "SELECT author, count(author) FROM va "
-                        "GROUP BY author",
+                        "SELECT validator, count(validator) FROM block_validator bv "
+                        "JOIN block b ON bv.block_id = b.id "
+                        "WHERE b.timestamp > %s "
+                        "GROUP BY validator",
                         (timestamp - 86400,)
                     )
                     res = await cur.fetchall()
-                    validator_counts = {v["author"]: v["count"] for v in res}
+                    validator_counts = {v["validator"]: v["count"] for v in res}
                     await cur.execute(
-                        "SELECT count(*) FROM block WHERE timestamp > %s",
+                        "SELECT address, count(chm.address) FROM committee_history_member chm "
+                        "JOIN committee_history ch ON chm.committee_id = ch.id "
+                        "JOIN block b ON ch.height = b.height "
+                        "WHERE b.timestamp > %s "
+                        "GROUP BY address",
                         (timestamp - 86400,)
                     )
-                    res = await cur.fetchone()
-                    if res:
-                        block_count = res["count"]
-                    else:
-                        return []
+                    res = await cur.fetchall()
+                    validator_in_counts = {v["address"]: v["count"] for v in res}
                     for validator in validators:
-                        validator["uptime"] = validator_counts.get(validator["address"], 0) / block_count
+                        validator["uptime"] = validator_counts.get(validator["address"], 0) / validator_in_counts.get(validator["address"], 1)
 
                     return validators
                 except Exception as e:
@@ -88,36 +84,34 @@ class DatabaseValidator(DatabaseBase):
                     else:
                         return None
                     await cur.execute(
-                        "WITH va AS "
-                        "    (SELECT unnest(array_agg(DISTINCT d.author)) AS author "
-                        "     FROM BLOCK b "
-                        "     JOIN authority a ON a.block_id = b.id "
-                        "     JOIN dag_vertex d ON d.authority_id = a.id "
-                        "     WHERE b.timestamp > %s "
-                        "     GROUP BY d.authority_id) "
-                        "SELECT author, count(author) FROM va "
-                        "GROUP BY author",
-                        (timestamp - 86400,)
+                        "SELECT count(validator) FROM block_validator bv "
+                        "JOIN block b ON bv.block_id = b.id "
+                        "WHERE b.timestamp > %s AND validator = %s",
+                        (timestamp - 86400, address)
                     )
-                    res = await cur.fetchall()
-                    validator_counts = {v["author"]: v["count"] for v in res}
-                    if address not in validator_counts:
-                        return 0
+                    res = await cur.fetchone()
+                    if res:
+                        validator_counts = res["count"]
+                    else:
+                        validator_counts = 0
                     await cur.execute(
-                        "SELECT count(*) FROM block WHERE timestamp > %s",
-                        (timestamp - 86400,)
+                        "SELECT count(chm.address) FROM committee_history_member chm "
+                        "JOIN committee_history ch ON chm.committee_id = ch.id "
+                        "JOIN block b ON ch.height = b.height "
+                        "WHERE b.timestamp > %s AND chm.address = %s",
+                        (timestamp - 86400, address)
                     )
                     res = await cur.fetchone()
                     if res:
                         block_count = res["count"]
                     else:
                         return None
-                    return validator_counts[address] / block_count
+                    return validator_counts / block_count
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_current_validator_count(self):
+    async def get_current_validator_count(self) -> int:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -128,7 +122,7 @@ class DatabaseValidator(DatabaseBase):
                         "GROUP BY b.height ORDER BY b.height DESC LIMIT 1"
                     )
                     res = await cur.fetchone()
-                    if res:
+                    if res is not None:
                         return res["count"]
                     else:
                         return 0
@@ -147,34 +141,33 @@ class DatabaseValidator(DatabaseBase):
                     else:
                         return 0
                     await cur.execute(
-                        "WITH va AS "
-                        "    (SELECT unnest(array_agg(DISTINCT d.author)) AS author "
-                        "     FROM BLOCK b "
-                        "     JOIN authority a ON a.block_id = b.id "
-                        "     JOIN dag_vertex d ON d.authority_id = a.id "
-                        "     WHERE b.timestamp > %s "
-                        "     GROUP BY d.authority_id) "
-                        "SELECT count(author) FROM va",
-                        (timestamp - 3600,)
-                    )
-                    res = await cur.fetchone()
-                    if res:
-                        validator_count = res["count"]
-                    else:
-                        return 0
-                    await cur.execute(
-                        "SELECT count(*) FROM committee_history_member chm "
+                        "SELECT sum(stake) FROM committee_history_member chm "
                         "JOIN committee_history ch ON chm.committee_id = ch.id "
                         "JOIN block b ON ch.height = b.height "
                         "WHERE b.timestamp > %s",
-                        (timestamp - 3600,)
+                        (timestamp - 300,)
                     )
                     res = await cur.fetchone()
                     if res:
-                        total_validator_count = res["count"]
+                        validator_total_stake_count = res["sum"]
                     else:
                         return 0
-                    return validator_count / total_validator_count
+                    await cur.execute(
+                        "SELECT sum(stake) FROM committee_history_member chm "
+                        "JOIN committee_history ch ON chm.committee_id = ch.id "
+                        "JOIN block b ON ch.height = b.height "
+                        "JOIN block_validator bv ON b.id = bv.block_id and bv.validator = chm.address "
+                        "WHERE b.timestamp > %s",
+                        (timestamp - 300,)
+                    )
+                    res = await cur.fetchone()
+                    if res:
+                        validator_stake_count = res["sum"]
+                    else:
+                        return 0
+                    if validator_stake_count is None or validator_total_stake_count is None:
+                        return 0
+                    return validator_stake_count / validator_total_stake_count
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
@@ -185,15 +178,14 @@ class DatabaseValidator(DatabaseBase):
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT DISTINCT author FROM dag_vertex dv "
-                        "JOIN authority a on dv.authority_id = a.id "
-                        "JOIN block b on a.block_id = b.id "
+                        "SELECT validator FROM block_validator bv "
+                        "JOIN block b ON bv.block_id = b.id "
                         "WHERE b.height = %s ",
                         (height,)
                     )
-                    validators = []
+                    validators: list[str] = []
                     for row in await cur.fetchall():
-                        validators.append(row["author"])
+                        validators.append(row["validator"])
                     await cur.execute(
                         "SELECT chm.* FROM committee_history_member chm "
                         "JOIN committee_history ch ON chm.committee_id = ch.id "
@@ -201,6 +193,20 @@ class DatabaseValidator(DatabaseBase):
                         (height,)
                     )
                     return validators, await cur.fetchall()
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def get_validator_link_and_logo(self, address: str) -> tuple[Optional[str], Optional[str]]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute("SELECT website, logo FROM validator_info WHERE address = %s", (address,))
+                    res = await cur.fetchone()
+                    if res:
+                        return res["website"], res["logo"]
+                    else:
+                        return None, None
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise

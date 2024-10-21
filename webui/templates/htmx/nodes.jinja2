@@ -1,6 +1,18 @@
 {% from "macros.jinja2" import htmx_title, sync_notice %}
 {{ sync_notice(sync_info) }}
 
+{% macro connection_icon(direction) %}
+{% if direction == "outgoing" %}
+    <i class="fa-solid fa-caret-up" style="color: green"></i>
+{% elif direction == "incoming" %}
+    <i class="fa-solid fa-caret-down" style="color: red"></i>
+{% elif direction == "disconnected" %}
+    <i class="fa-solid fa-times" style="color: darkgray"></i>
+{% else %}
+    <i class="fa-solid fa-question" style="color: black"></i>
+{% endif %}
+{% endmacro %}
+
 <div class="content" hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
     <div class="header">
         <h3>Known nodes: {{ nodes | length }}</h3>
@@ -10,7 +22,7 @@
     <table class="unstriped">
         <thead>
         <tr>
-            <th>IP address</th>
+            <th>IP address <i class="fa-regular fa-circle-question" id="icon-legend"></i></th>
             <th>Type</th>
             <th>Address</th>
             <th>Height</th>
@@ -22,7 +34,7 @@
         {% set max_height = (nodes.values() | list)[0].height | int %}
         {% for address, node in nodes.items() %}
             <tr>
-                <td>{{ address }}</td>
+                <td>{{ connection_icon(node.direction) }}{{ address }}</td>
                 <td>
                     {% if node.node_type is not none %}
                         {{ node.node_type }}
@@ -57,5 +69,19 @@
         </tbody>
     </table>
 </div>
+
+<script>
+  function init() {
+    tippy(document.getElementById("icon-legend"), {
+      content: "<i class='fa-solid fa-caret-up' style='color: green'></i> Active outgoing connection<br>" +
+          "<i class='fa-solid fa-caret-down' style='color: red'></i> Active incoming connection<br>" +
+          "<i class='fa-solid fa-times' style='color: darkgray'></i> Disconnected",
+      allowHTML: true,
+      placement: 'bottom-start',
+    });
+  }
+  document.addEventListener('DOMContentLoaded', init)
+  document.addEventListener('htmx:pushedIntoHistory', init)
+</script>
 
 {{ htmx_title(request, "Nodes") }}

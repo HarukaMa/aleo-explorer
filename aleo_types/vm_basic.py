@@ -7,7 +7,7 @@ class AleoIDProtocol(Sized, Serializable, Protocol):
     size: int
     _prefix: str
 
-class AleoID(AleoIDProtocol):
+class AleoID(AleoIDProtocol, JSONSerialize):
     size = 32
     _prefix = ""
 
@@ -35,6 +35,9 @@ class AleoID(AleoIDProtocol):
             raise ValueError("incorrect length")
         return cls(bytes(raw))
 
+    def json(self, compatible: bool = False) -> JSONType:
+        return str(self)
+
     def __str__(self):
         return str(self._bech32m)
 
@@ -47,7 +50,7 @@ class AleoID(AleoIDProtocol):
         return self._data == other._data
 
 
-class AleoObject(AleoIDProtocol):
+class AleoObject(AleoIDProtocol, JSONSerialize):
     size = 0
     _prefix = ""
 
@@ -72,6 +75,9 @@ class AleoObject(AleoIDProtocol):
         if len(raw) != cls.size:
             raise ValueError("incorrect length")
         return cls(bytes(raw))
+
+    def json(self, compatible: bool = False) -> JSONType:
+        return str(self)
 
     def __str__(self):
         return str(self._bech32m)
@@ -99,7 +105,6 @@ class TransactionID(AleoID):
 
 class TransitionID(AleoID):
     _prefix = "au"
-
 
 ## Saved for reference
 # class RecordCiphertext(AleoObject):
@@ -134,7 +139,7 @@ class Address(AleoObject, Cast):
         return self._data == other._data
 
 
-class Field(Serializable, Double, Sub, Square, Div, Sqrt, Compare, Pow, Inv, Neg, Cast):
+class Field(Serializable, JSONSerialize, Double, Sub, Square, Div, Sqrt, Compare, Pow, Inv, Neg, Cast):
     # Fr, Fp256
     # Just store as a large integer now
     # Hopefully this will not be used later...
@@ -152,6 +157,9 @@ class Field(Serializable, Double, Sub, Square, Div, Sqrt, Compare, Pow, Inv, Neg
     @classmethod
     def loads(cls, data: str):
         return cls(int(data.removesuffix("field")))
+
+    def json(self, compatible: bool = False) -> JSONType:
+        return str(self)
 
     def __str__(self):
         return str(self.data) + "field"
@@ -216,7 +224,7 @@ class Field(Serializable, Double, Sub, Square, Div, Sqrt, Compare, Pow, Inv, Neg
         return destination_type.primitive_type.load(BytesIO(aleo_explorer_rust.cast(str(self), LiteralType.Field, destination_type, lossy)))
 
 
-class Group(Serializable, Add, Sub, Mul, Neg, Cast):
+class Group(Serializable, JSONSerialize, Add, Sub, Mul, Neg, Cast):
     # This is definitely wrong, but we are not using the internals
     def __init__(self, data: int):
         self.data = data
@@ -232,6 +240,9 @@ class Group(Serializable, Add, Sub, Mul, Neg, Cast):
     @classmethod
     def loads(cls, data: str):
         return cls(int(data.removesuffix("group")))
+
+    def json(self, compatible: bool = False) -> JSONType:
+        return str(self)
 
     def __str__(self):
         return str(self.data) + "group"
@@ -260,8 +271,16 @@ class Group(Serializable, Add, Sub, Mul, Neg, Cast):
             raise ValueError("invalid type")
         return destination_type.primitive_type.load(BytesIO(aleo_explorer_rust.cast(str(self), LiteralType.Group, destination_type, lossy)))
 
+    def __eq__(self, value: object) -> bool:
+        if not isinstance(value, Group):
+            return False
+        return self.data == value.data
 
-class Scalar(Serializable, Add, Sub, Mul, Compare, Cast):
+    def __hash__(self):
+        return hash(self.data)
+
+
+class Scalar(Serializable, JSONSerialize, Add, Sub, Mul, Compare, Cast):
     # Could be wrong as well
     def __init__(self, data: int):
         self.data = data
@@ -278,6 +297,9 @@ class Scalar(Serializable, Add, Sub, Mul, Compare, Cast):
     def loads(cls, data: str):
         return cls(int(data.removesuffix("scalar")))
 
+    def json(self, compatible: bool = False) -> JSONType:
+        return str(self)
+
     def __str__(self):
         return str(self.data) + "scalar"
 
@@ -290,7 +312,7 @@ class Scalar(Serializable, Add, Sub, Mul, Compare, Cast):
     def __sub__(self, other: Self):
         return Scalar.load(BytesIO(aleo_explorer_rust.scalar_ops(self, other, "sub")))
 
-    def __mul__(self, other: Group):
+    def __mul__(self, other: Group):  # pyright: ignore [reportIncompatibleMethodOverride]
         return Group.load(BytesIO(aleo_explorer_rust.scalar_ops(self, other, "mul")))
 
     def __gt__(self, other: Self):
@@ -305,7 +327,9 @@ class Scalar(Serializable, Add, Sub, Mul, Compare, Cast):
     def __le__(self, other: Self):
         return bool_.load(BytesIO(aleo_explorer_rust.scalar_ops(self, other, "lte"))).value
 
-    def __eq__(self, other: Self):
+    def __eq__(self, other: object):
+        if not isinstance(other, Scalar):
+            return False
         return self.data == other.data
 
     def cast(self, destination_type: Any, *, lossy: bool) -> Any:
@@ -417,8 +441,16 @@ class ComputeKey(Serializable):
         pr_sig = Group.load(data)
         return cls(pk_sig=pk_sig, pr_sig=pr_sig)
 
+    def __eq__(self, value: object) -> bool:
+        if not isinstance(value, ComputeKey):
+            return False
+        return self.pk_sig == value.pk_sig and self.pr_sig == value.pr_sig
 
-class Signature(Serializable):
+    def __hash__(self):
+        return hash(self.pk_sig) ^ hash(self.pr_sig)
+
+
+class Signature(Serializable, JSONSerialize):
 
     def __init__(self, *, challenge: Scalar, response: Scalar, compute_key: ComputeKey):
         self.challenge = challenge
@@ -439,6 +471,9 @@ class Signature(Serializable):
     def loads(cls, data: str):
         return cls.load(bech32_to_bytes(data))
 
+    def json(self, compatible: bool = False) -> JSONType:
+        return str(self)
+
     def __str__(self):
         return str(Bech32m(self.dump(), "sign"))
 
@@ -455,7 +490,7 @@ class Data(Serializable, Generic[T]):
         self.value = value
 
     @tp_cache
-    def __class_getitem__(cls, key) -> GenericAlias:
+    def __class_getitem__(cls, key: TType[T]) -> GenericAlias:
         param_type = type(
             f"Data[{key.__name__}]",
             (Data,),
@@ -469,8 +504,6 @@ class Data(Serializable, Generic[T]):
 
     @classmethod
     def load(cls, data: BytesIO) -> Self:
-        if cls.types is None:
-            raise TypeError("expected types")
         version = u8.load(data)
         if version != cls.version:
             raise ValueError(f"expected version {cls.version}, got {version}")

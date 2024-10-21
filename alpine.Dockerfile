@@ -12,6 +12,9 @@ RUN set -eux; \
     musl-dev \
     pkgconfig \
     openssl-dev \
+    libc-dev \
+    linux-headers \
+    libffi-dev \
     ;
 
 # Installs Rust compiler

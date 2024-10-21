@@ -3,8 +3,10 @@ import time
 from typing import ParamSpec, Awaitable
 
 import psycopg
+from aleo_explorer_rust import RustExecuteError
 
 from aleo_types import *
+from aleo_types.cached import cached_get_key_id, cached_get_mapping_id
 from db import Database
 from disasm.aleo import disasm_instruction, disasm_command
 from util.global_cache import MappingCacheDict, get_program
@@ -31,10 +33,12 @@ async def mapping_cache_read_with_cur(db: Database, cur: psycopg.AsyncCursor[dic
     return await db.get_mapping_cache_with_cur(cur, program_name, mapping_name)
 
 class ExecuteError(Exception):
-    def __init__(self, message: str, exception: Optional[Exception], instruction: str, program: Optional[str] = None, function_name: Optional[str] = None):
+    def __init__(self, message: str, exception: Optional[Exception], instruction: str, transition_id: TransitionID,
+                 program: Optional[str] = None, function_name: Optional[str] = None):
         super().__init__(message)
         self.original_exception = exception
         self.instruction = instruction
+        self.transition_id = transition_id
         self.program = program
         self.function_name = function_name
 
@@ -45,8 +49,7 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
                             function_name: Identifier, inputs: list[Value],
                             mapping_cache: dict[Field, MappingCacheDict],
                             local_mapping_cache: dict[Field, MappingCacheDict],
-                            allow_state_change: bool,
-                            execute_await: bool = False) -> list[dict[str, Any]]:
+                            allow_state_change: bool) -> list[dict[str, Any]]:
     registers = Registers()
     operations: list[dict[str, Any]] = []
     function = program.functions[function_name]
@@ -96,16 +99,25 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
                 instruction = c.instruction
                 try:
                     execute_instruction(instruction, program, registers, finalize_state)
-                except (AssertionError, OverflowError, ZeroDivisionError) as e:
-                    raise ExecuteError(str(e), e, disasm_instruction(instruction), str(program.id), str(function_name))
+                except (AssertionError, OverflowError, ZeroDivisionError, RustExecuteError) as e:
+                    raise ExecuteError(str(e), e, disasm_instruction(instruction), transition_id, str(program.id), str(function_name))
                 except Exception:
                     registers.dump()
                     raise
 
             elif isinstance(c, ContainsCommand):
-                mapping_id = await load_mapping_cache_id(program.id, c.mapping)
+                operator = c.mapping
+                if isinstance(operator, LocatorCallOperator):
+                    program_id = operator.locator.id
+                    mapping = operator.locator.resource
+                elif isinstance(operator, ResourceCallOperator):
+                    program_id = program.id
+                    mapping = operator.resource
+                else:
+                    raise TypeError("invalid locator type")
+                mapping_id = await load_mapping_cache_id(program_id, mapping)
                 key = load_plaintext_from_operand(c.key, registers, finalize_state)
-                key_id = Field.loads(cached_get_key_id(str(program.id), str(c.mapping), key.dump()))
+                key_id = Field.loads(cached_get_key_id(str(program_id), str(mapping), key.dump()))
                 if not allow_state_change and key_id in local_mapping_cache[mapping_id]:
                     contains = local_mapping_cache[mapping_id][key_id]["value"] is not None
                 else:
@@ -123,13 +135,13 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
                 store_plaintext_to_register(value.plaintext, destination, registers)
 
             elif isinstance(c, GetCommand | GetOrUseCommand):
-                locator = c.mapping
-                if isinstance(locator, LocatorMappingLocator):
-                    program_id = locator.locator.id
-                    mapping = locator.locator.resource
-                elif isinstance(locator, ResourceMappingLocator):
+                operator = c.mapping
+                if isinstance(operator, LocatorCallOperator):
+                    program_id = operator.locator.id
+                    mapping = operator.locator.resource
+                elif isinstance(operator, ResourceCallOperator):
                     program_id = program.id
-                    mapping = locator.resource
+                    mapping = operator.resource
                 else:
                     raise TypeError("invalid locator type")
                 mapping_id = await load_mapping_cache_id(program_id, mapping)
@@ -138,7 +150,7 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
                 if not allow_state_change and key_id in local_mapping_cache[mapping_id]:
                     if local_mapping_cache[mapping_id][key_id]["value"] is None:
                         if isinstance(c, GetCommand):
-                            raise ExecuteError(f"key {key} not found in mapping {mapping}", None, disasm_command(c), str(program.id), str(function_name))
+                            raise ExecuteError(f"key {key} not found in mapping {mapping}", None, disasm_command(c), transition_id, str(program.id), str(function_name))
                         default = load_plaintext_from_operand(c.default, registers, finalize_state)
                         value = PlaintextValue(plaintext=default)
                     else:
@@ -146,7 +158,7 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
                 else:
                     if key_id not in mapping_cache[mapping_id]:
                         if isinstance(c, GetCommand):
-                            raise ExecuteError(f"key {key} not found in mapping {mapping}", None, disasm_command(c), str(program.id), str(function_name))
+                            raise ExecuteError(f"key {key} not found in mapping {mapping}", None, disasm_command(c), transition_id, str(program.id), str(function_name))
                         default = load_plaintext_from_operand(c.default, registers, finalize_state)
                         value = PlaintextValue(plaintext=default)
                     else:
@@ -246,23 +258,22 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
                 pass
 
             elif isinstance(c, AwaitCommand):
-                if execute_await:
-                    call_future = load_future_from_register(c.register, registers, finalize_state)
-                    call_program = await get_program(db, str(call_future.program_id))
-                    if not call_program:
-                        raise RuntimeError("program not found")
+                call_future = load_future_from_register(c.register, registers, finalize_state)
+                call_program = await get_program(db, str(call_future.program_id))
+                if not call_program:
+                    raise RuntimeError("program not found")
 
-                    from interpreter.interpreter import _load_input_from_arguments
-                    call_inputs: list[Value] = _load_input_from_arguments(call_future.arguments)
-                    operations.extend(
-                        await execute_finalizer(db, cur, finalize_state, transition_id, call_program, call_future.function_name, call_inputs, mapping_cache, local_mapping_cache, allow_state_change)
-                    )
+                from interpreter.interpreter import load_input_from_arguments
+                call_inputs: list[Value] = load_input_from_arguments(call_future.arguments)
+                operations.extend(
+                    await execute_finalizer(db, cur, finalize_state, transition_id, call_program, call_future.function_name, call_inputs, mapping_cache, local_mapping_cache, allow_state_change)
+                )
 
             else:
                 raise NotImplementedError
 
         except IndexError as e:
-            raise ExecuteError(f"r{e} does not exist", e, disasm_command(c), str(program.id), str(function_name))
+            raise ExecuteError(f"r{e} does not exist", e, disasm_command(c), transition_id, str(program.id), str(function_name))
 
         pc += 1
 

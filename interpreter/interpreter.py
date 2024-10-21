@@ -1,6 +1,7 @@
 import psycopg
 
 from aleo_types import *
+from aleo_types.cached import cached_get_key_id, cached_get_mapping_id
 from db import Database
 from interpreter.finalizer import execute_finalizer, ExecuteError, mapping_cache_read, profile
 from interpreter.utils import FinalizeState
@@ -30,7 +31,7 @@ async def _execute_public_fee(db: Database, cur: psycopg.AsyncCursor[dict[str, A
     if not program:
         raise RuntimeError("program not found")
 
-    inputs: list[Value] = _load_input_from_arguments(future.arguments)
+    inputs: list[Value] = load_input_from_arguments(future.arguments)
     return await execute_finalizer(db, cur, finalize_state, fee_transition.id, program, future.function_name, inputs,
                                    mapping_cache, local_mapping_cache, allow_state_change)
 
@@ -65,7 +66,7 @@ async def finalize_deploy(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]]
         rejected_reason = "(detailed reason not available)"
     return expected_operations, operations, rejected_reason
 
-def _load_input_from_arguments(arguments: list[Argument]) -> list[Value]:
+def load_input_from_arguments(arguments: list[Argument]) -> list[Value]:
     inputs: list[Value] = []
     for argument in arguments:
         if isinstance(argument, PlaintextArgument):
@@ -88,7 +89,7 @@ async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]
         execution = transaction.execution
         allow_state_change = True
         local_mapping_cache = mapping_cache
-        fee = transaction.additional_fee.value
+        fee = cast(Option[Fee], transaction.fee).value
     elif isinstance(confirmed_transaction, RejectedExecute):
         if not isinstance(confirmed_transaction.rejected, RejectedExecution):
             raise TypeError("invalid rejected execute transaction")
@@ -97,37 +98,40 @@ async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]
         local_mapping_cache = {}
         if not isinstance(confirmed_transaction.transaction, FeeTransaction):
             raise TypeError("invalid rejected execute transaction")
-        fee = confirmed_transaction.transaction.fee
+        fee = cast(Fee, confirmed_transaction.transaction.fee)
     else:
         raise NotImplementedError
     operations: list[dict[str, Any]] = []
     reject_reason: str | None = None
-    for index, transition in enumerate(execution.transitions):
-        if len(transition.outputs) == 0:
-            continue
+    transition = execution.transitions[-1]
+    if len(transition.outputs) != 0:
         maybe_future_output = transition.outputs[-1]
         if isinstance(maybe_future_output, FutureTransitionOutput):
             future_option = maybe_future_output.future
             if future_option.value is None:
                 raise RuntimeError("invalid future is None")
-            # noinspection PyTypeChecker
             future = future_option.value
             program = await get_program(db, str(future.program_id))
             if not program:
                 raise RuntimeError("program not found")
 
-            inputs: list[Value] = _load_input_from_arguments(future.arguments)
+            inputs: list[Value] = load_input_from_arguments(future.arguments)
             try:
                 operations.extend(
                     await execute_finalizer(db, cur, finalize_state, transition.id, program, future.function_name, inputs, mapping_cache, local_mapping_cache, allow_state_change)
                 )
             except ExecuteError as e:
-                # TODO: handle nested calls
+                for ts in execution.transitions:
+                    if ts.id == e.transition_id:
+                        index = execution.transitions.index(ts)
+                        break
+                else:
+                    raise RuntimeError("rejected transition not found in transaction")
                 reject_reason = f"execute error: {e}, at transition #{index}, instruction \"{e.instruction}\""
                 operations = []
-                break
     if isinstance(confirmed_transaction, RejectedExecute) and reject_reason is None:
         # execute fee as part of rejected execute as it failed here
+        # this is the case when the account doesn't have enough credits for fee after executing other transitions
         transition = cast(Fee, fee).transition
         if transition.function_name == "fee_public":
             try:
@@ -135,12 +139,19 @@ async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]
             except ExecuteError as e:
                 reject_reason = f"execute error: {e}, at fee transition, instruction \"{e.instruction}\""
                 operations = []
-    if isinstance(confirmed_transaction, RejectedExecute) and reject_reason is None:
-        raise RuntimeError("rejected execute transaction should not finalize without ExecuteError")
+            else:
+                # well we don't really know the reason, but have to continue
+                reject_reason = "unknown reason"
+                operations = []
+        else:
+            # same as above but for private fee
+            reject_reason = "unknown reason"
+            operations = []
 
     if fee:
         transition = fee.transition
         if transition.function_name == "fee_public":
+            # failure means aborted transaction, so this is bound to succeed
             operations.extend(await _execute_public_fee(db, cur, finalize_state, transition, mapping_cache, local_mapping_cache, True))
     return expected_operations, operations, reject_reason
 
@@ -174,10 +185,10 @@ async def finalize_block(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]],
                     pass
                 elif isinstance(e, UpdateKeyValue):
                     if e.key_id != o["key_id"] or e.value_id != o["value_id"]:
-                        raise TypeError("invalid finalize operation")
+                        raise TypeError("invalid finalize update key operation")
                 elif isinstance(e, RemoveKeyValue):
-                    # snarkVM #2114
-                    pass
+                    if e.key_id != o["key_id"]:
+                        raise TypeError("invalid finalize remove key operation")
                 else:
                     raise NotImplementedError
             except TypeError:
@@ -223,6 +234,7 @@ async def execute_operations(db: Database, cur: psycopg.AsyncCursor[dict[str, An
                 raise NotImplementedError
 
 async def get_mapping_value(db: Database, program_id: str, mapping_name: str, key: str) -> Value:
+    # where was this used?
     mapping_id = Field.loads(cached_get_mapping_id(program_id, mapping_name))
     if mapping_id not in global_mapping_cache:
         global_mapping_cache[mapping_id] = await mapping_cache_read(db, program_id, mapping_name)
@@ -241,7 +253,7 @@ async def get_mapping_value(db: Database, program_id: str, mapping_name: str, ke
     key_plaintext = LiteralPlaintext(literal=Literal.loads(Literal.Type(mapping_key_type.literal_type.value), key))
     key_id = Field.loads(cached_get_key_id(program_id, mapping_name, key_plaintext.dump()))
     if key_id not in global_mapping_cache[mapping_id]:
-        raise ExecuteError(f"key {key} not found in mapping {mapping_id}", None, "")
+        raise ExecuteError(f"key {key} not found in mapping {mapping_id}", None, "", )
     else:
         value = global_mapping_cache[mapping_id][key_id]["value"]
         if not isinstance(value, PlaintextValue):

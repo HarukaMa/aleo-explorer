@@ -6,7 +6,7 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'Explorer API'
+project = 'AleoScan API'
 copyright = '2023, Haruka'
 author = 'Haruka'
 

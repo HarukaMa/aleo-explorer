@@ -1,6 +1,12 @@
+from __future__ import annotations
+
 from enum import auto, EnumType
+from typing import TYPE_CHECKING
 
 from .vm_basic import *
+
+if TYPE_CHECKING:
+    from .vm_block import Program
 
 
 class StringType(Serializable):
@@ -27,7 +33,7 @@ class StringType(Serializable):
     def __str__(self):
         return self.string
 
-class Literal(Serializable): # enum
+class Literal(Serializable, JSONSerialize): # enum
 
     class Type(IntEnumu16):
         Address = 0
@@ -127,7 +133,7 @@ class Literal(Serializable): # enum
         return self.type == other.type and self.primitive >= other.primitive
 
 
-class Identifier(Serializable):
+class Identifier(Serializable, JSONSerialize):
 
     def __init__(self, *, value: str):
         self.data = value
@@ -145,6 +151,9 @@ class Identifier(Serializable):
     def loads(cls, data: str):
         return cls(value=data)
 
+    def json(self, compatible: bool = False) -> JSONType:
+        return self.data
+
     def __str__(self):
         return self.data
 
@@ -161,7 +170,10 @@ class Identifier(Serializable):
     def __hash__(self):
         return hash(self.data)
 
-class ProgramID(Serializable):
+    def __len__(self):
+        return len(self.data)
+
+class ProgramID(Serializable, JSONSerialize):
 
     def __init__(self, *, name: Identifier, network: Identifier):
         self.name = name
@@ -181,6 +193,9 @@ class ProgramID(Serializable):
         (name, network) = data.split(".")
         return cls(name=Identifier(value=name), network=Identifier(value=network))
 
+    def json(self, compatible: bool = False) -> JSONType:
+        return str(self)
+
     def __str__(self):
         return f"{self.name}.{self.network}"
 
@@ -192,7 +207,7 @@ class ProgramID(Serializable):
         return False
 
 
-class Import(Serializable):
+class Import(Serializable, JSONSerialize):
 
     def __init__(self, *, program_id: ProgramID):
         self.program_id = program_id
@@ -206,7 +221,7 @@ class Import(Serializable):
         return cls(program_id=program_id)
 
 
-class VarInt(int, Serializable):
+class VarInt(int, Serializable, JSONSerialize):
 
     def __new__(cls, value: int):
         if value > 0xffffffffffffffff:
@@ -241,8 +256,11 @@ class VarInt(int, Serializable):
             value = u8(value)
         return cls(value)
 
+    def json(self, compatible: bool = False) -> JSONType:
+        return int(self)
 
-class Register(EnumBaseSerialize, Serialize, RustEnum):
+
+class Register(EnumBaseSerialize, Serialize, JSONSerialize, RustEnum):
 
     class Type(IntEnumu8):
         Locator = 0
@@ -277,7 +295,7 @@ class LocatorRegister(Register):
         return cls(locator=locator)
 
 
-class Access(EnumBaseSerialize, Serialize, RustEnum):
+class Access(EnumBaseSerialize, Serialize, JSONSerialize, RustEnum):
 
     class Type(IntEnumu8):
         Member = 0
@@ -340,7 +358,7 @@ class AccessRegister(Register):
         return cls(locator=locator, accesses=accesses)
 
 
-class Operand(EnumBaseSerialize, Serialize, RustEnum):
+class Operand(EnumBaseSerialize, Serialize, JSONSerialize, RustEnum):
 
     class Type(IntEnumu8):
         Literal = 0
@@ -349,6 +367,7 @@ class Operand(EnumBaseSerialize, Serialize, RustEnum):
         Signer = 3
         Caller = 4
         BlockHeight = 5
+        NetworkID = 6
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -365,6 +384,8 @@ class Operand(EnumBaseSerialize, Serialize, RustEnum):
             return CallerOperand.load(data)
         elif type_ == cls.Type.BlockHeight:
             return BlockHeightOperand.load(data)
+        elif type_ == cls.Type.NetworkID:
+            return NetworkIDOperand.load(data)
         else:
             raise ValueError("unknown operand type")
 
@@ -450,11 +471,23 @@ class BlockHeightOperand(Operand):
     def load(cls, data: BytesIO):
         return cls()
 
+class NetworkIDOperand(Operand):
+    type = Operand.Type.NetworkID
+
+    def __init__(self):
+        pass
+
+    def dump(self) -> bytes:
+        return self.type.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        return cls()
 
 
 N = TypeVar("N", bound=FixedSize)
 
-class Literals(Serializable, Generic[N]):
+class Literals(Serializable, JSONSerialize, Generic[N]):
     types: N
 
     def __init__(self, *, operands: list[Operand], destination: Register):
@@ -465,7 +498,7 @@ class Literals(Serializable, Generic[N]):
         self.destination = destination
 
     @tp_cache
-    def __class_getitem__(cls, item) -> GenericAlias:
+    def __class_getitem__(cls, item: TType[N]) -> GenericAlias:
         param_type = type(
             f"Literals[{item}]",
             (Literals,),
@@ -496,14 +529,14 @@ class Variant(int):
 
 V = TypeVar("V", bound=Variant)
 
-class AssertInstruction(Serializable, Generic[V]):
+class AssertInstruction(Serializable, JSONSerialize, Generic[V]):
     variant: V
 
     def __init__(self, *, operands: tuple[Operand, Operand]):
         self.operands = operands
 
     @tp_cache
-    def __class_getitem__(cls, item) -> GenericAlias:
+    def __class_getitem__(cls, item: TType[V]) -> GenericAlias:
         param_type = type(
             f"AssertInstruction[{item}]",
             (AssertInstruction,),
@@ -521,7 +554,7 @@ class AssertInstruction(Serializable, Generic[V]):
         return cls(operands=(op1, op2))
 
 
-class Locator(Serializable):
+class Locator(Serializable, JSONSerialize):
 
     def __init__(self, *, id_: ProgramID, resource: Identifier):
         self.id = id_
@@ -540,7 +573,7 @@ class Locator(Serializable):
         return f"{self.id}/{self.resource}"
 
 
-class CallOperator(EnumBaseSerialize, Serialize, RustEnum):
+class CallOperator(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize):
 
     class Type(IntEnumu8):
         Locator = 0
@@ -570,6 +603,9 @@ class LocatorCallOperator(CallOperator):
     def load(cls, data: BytesIO):
         return cls(locator=Locator.load(data))
 
+    def __str__(self):
+        return str(self.locator)
+
 
 class ResourceCallOperator(CallOperator):
     type = CallOperator.Type.Resource
@@ -584,8 +620,11 @@ class ResourceCallOperator(CallOperator):
     def load(cls, data: BytesIO):
         return cls(resource=Identifier.load(data))
 
+    def __str__(self):
+        return str(self.resource)
 
-class CallInstruction(Serializable):
+
+class CallInstruction(Serializable, JSONSerialize):
 
     def __init__(self, *, operator: CallOperator, operands: Vec[Operand, u8], destinations: Vec[Register, u8]):
         self.operator = operator
@@ -665,7 +704,7 @@ class LiteralType(IntEnumu8):
         }[self]
 
 
-class PlaintextType(EnumBaseSerialize, Serialize, RustEnum):
+class PlaintextType(EnumBaseSerialize, Serialize, JSONSerialize, RustEnum):
 
     class Type(IntEnumu8):
         Literal = 0
@@ -685,6 +724,8 @@ class PlaintextType(EnumBaseSerialize, Serialize, RustEnum):
             return ArrayPlaintextType.load(data)
         raise ValueError("unknown type")
 
+    size_in_bytes: Callable[["Program"], int]
+
 
 class LiteralPlaintextType(PlaintextType):
     type = PlaintextType.Type.Literal
@@ -702,6 +743,9 @@ class LiteralPlaintextType(PlaintextType):
 
     def __str__(self):
         return str(self.literal_type)
+
+    def size_in_bytes(self, _: "Program"):
+        return self.literal_type.primitive_type.size
 
 
 class StructPlaintextType(PlaintextType):
@@ -721,7 +765,13 @@ class StructPlaintextType(PlaintextType):
     def __str__(self):
         return str(self.struct)
 
-class ArrayType(Serializable):
+    def size_in_bytes(self, program: "Program"):
+        struct_ = program.structs[self.struct]
+        size_of_name = len(struct_.name)
+        size_of_members = sum(map(lambda t: t[1].size_in_bytes(program), struct_.members))
+        return size_of_name + size_of_members
+
+class ArrayType(Serializable, JSONSerialize):
 
     def __init__(self, *, element_type: PlaintextType, length: u32):
         self.element_type = element_type
@@ -772,6 +822,9 @@ class ArrayType(Serializable):
     def __str__(self):
         return f"[{self.element_type}; {self.length}u32]"
 
+    def size_in_bytes(self, program: "Program"):
+        return self.element_type.size_in_bytes(program) * self.length
+
 class ArrayPlaintextType(PlaintextType):
     type = PlaintextType.Type.Array
 
@@ -790,7 +843,7 @@ class ArrayPlaintextType(PlaintextType):
         return str(self.array_type)
 
 
-class RegisterType(EnumBaseSerialize, Serialize, RustEnum):
+class RegisterType(EnumBaseSerialize, Serialize, JSONSerialize, RustEnum):
 
     class Type(IntEnumu8):
         Plaintext = 0
@@ -854,7 +907,7 @@ class ExternalRecordRegisterType(RegisterType):
         locator = Locator.load(data)
         return cls(locator=locator)
 
-class CastType(EnumBaseSerialize, Serialize, RustEnum):
+class CastType(EnumBaseSerialize, Serialize, JSONSerialize, RustEnum):
 
     class Type(IntEnumu8):
         GroupXCoordinate = 0
@@ -942,7 +995,7 @@ class ExternalRecordCastType(CastType):
         return cls(locator=locator)
 
 
-class CastInstruction(Serializable, Generic[V]):
+class CastInstruction(Serializable, JSONSerialize, Generic[V]):
     type: V
 
     class Type(IntEnum):
@@ -955,7 +1008,7 @@ class CastInstruction(Serializable, Generic[V]):
         self.cast_type = cast_type
 
     @tp_cache
-    def __class_getitem__(cls, item) -> GenericAlias:
+    def __class_getitem__(cls, item: TType[V]) -> GenericAlias:
         param_type = type(
             f"CastInstruction[{item}]",
             (CastInstruction,),
@@ -995,7 +1048,7 @@ class CommitInstruction(Serializable, Generic[V]):
         self.destination_type = destination_type
 
     @tp_cache
-    def __class_getitem__(cls, item) -> GenericAlias:
+    def __class_getitem__(cls, item: TType[V]) -> GenericAlias:
         param_type = type(
             f"CommitInstruction[{item}]",
             (CommitInstruction,),
@@ -1015,7 +1068,7 @@ class CommitInstruction(Serializable, Generic[V]):
         return cls(operands=(op1, op2), destination=destination, destination_type=destination_type)
 
 
-class HashInstruction(Serializable, Generic[V]):
+class HashInstruction(Serializable, JSONSerialize, Generic[V]):
     type: V
 
     class Type(IntEnum):
@@ -1050,7 +1103,7 @@ class HashInstruction(Serializable, Generic[V]):
         self.destination_type = destination_type
 
     @tp_cache
-    def __class_getitem__(cls, item) -> GenericAlias:
+    def __class_getitem__(cls, item: TType[V]) -> GenericAlias:
         param_type = type(
             f"HashInstruction[{item}]",
             (HashInstruction,),
@@ -1079,7 +1132,14 @@ class HashInstruction(Serializable, Generic[V]):
         destination_type = PlaintextType.load(data)
         return cls(operands=(op1, op2), destination=destination, destination_type=destination_type)
 
-class AsyncInstruction(Serializable):
+    def json(self, compatible: bool = False) -> JSONType:
+        return {
+            "operands": [op.json() for op in self.operands if op],
+            "destination": self.destination.json(),
+            "destination_type": self.destination_type.json(),
+        }
+
+class AsyncInstruction(Serializable, JSONSerialize):
 
     def __init__(self, *, function_name: Identifier, operands: Vec[Operand, u8], destination: Register):
         self.function_name = function_name
@@ -1096,7 +1156,7 @@ class AsyncInstruction(Serializable):
         destination = Register.load(data)
         return cls(function_name=function_name, operands=operands, destination=destination)
 
-class Instruction(Serializable):
+class Instruction(Serializable, JSONSerialize):
 
     class Type(IntEnumu16):
 
@@ -1321,83 +1381,74 @@ class Instruction(Serializable):
     }
 
     fee_map = {
-        Type.Abs: 2_000,
-        Type.AbsWrapped: 2_000,
-        Type.Add: 2_000,
-        Type.AddWrapped: 2_000,
-        Type.And: 2_000,
-        Type.AssertEq: 2_000,
-        Type.AssertNeq: 2_000,
+        Type.Abs: 500,
+        Type.AbsWrapped: 500,
+        Type.Add: 500,
+        Type.AddWrapped: 500,
+        Type.And: 500,
+        Type.AssertEq: 500,
+        Type.AssertNeq: 500,
         Type.Async: -1,
         Type.Call: -1,
-        Type.Cast: 2_000,
-        Type.CastLossy: 2_000,
-        Type.CommitBHP256: 200_000,
-        Type.CommitBHP512: 200_000,
-        Type.CommitBHP768: 200_000,
-        Type.CommitBHP1024: 200_000,
-        Type.CommitPED64: 100_000,
-        Type.CommitPED128: 100_000,
-        Type.Div: 10_000,
-        Type.DivWrapped: 2_000,
-        Type.Double: 2_000,
-        Type.GreaterThan: 2_000,
-        Type.GreaterThanOrEqual: 2_000,
-        Type.HashBHP256: 100_000,
-        Type.HashBHP512: 100_000,
-        Type.HashBHP768: 100_000,
-        Type.HashBHP1024: 100_000,
-        Type.HashKeccak256: 100_000,
-        Type.HashKeccak384: 100_000,
-        Type.HashKeccak512: 100_000,
-        Type.HashPED64: 20_000,
-        Type.HashPED128: 30_000,
-        Type.HashPSD2: {
-            "high": 600_000,
-            "low": 60_000,
-        },
-        Type.HashPSD4: {
-            "high": 700_000,
-            "low": 100_000,
-        },
-        Type.HashPSD8: {
-            "high": 800_000,
-            "low": 200_000,
-        },
-        Type.HashSha3_256: 100_000,
-        Type.HashSha3_384: 100_000,
-        Type.HashSha3_512: 100_000,
+        Type.Cast: -2,
+        Type.CastLossy: -2,
+        Type.CommitBHP256: -2,
+        Type.CommitBHP512: -2,
+        Type.CommitBHP768: -2,
+        Type.CommitBHP1024: -2,
+        Type.CommitPED64: -2,
+        Type.CommitPED128: -2,
+        Type.Div: -2,
+        Type.DivWrapped: 500,
+        Type.Double: 500,
+        Type.GreaterThan: 500,
+        Type.GreaterThanOrEqual: 500,
+        Type.HashBHP256: -2,
+        Type.HashBHP512: -2,
+        Type.HashBHP768: -2,
+        Type.HashBHP1024: -2,
+        Type.HashKeccak256: -2,
+        Type.HashKeccak384: -2,
+        Type.HashKeccak512: -2,
+        Type.HashPED64: -2,
+        Type.HashPED128: -2,
+        Type.HashPSD2: -2,
+        Type.HashPSD4: -2,
+        Type.HashPSD8: -2,
+        Type.HashSha3_256: -2,
+        Type.HashSha3_384: -2,
+        Type.HashSha3_512: -2,
         Type.HashManyPSD2: -1,
         Type.HashManyPSD4: -1,
         Type.HashManyPSD8: -1,
-        Type.Inv: 10_000,
-        Type.IsEq: 2_000,
-        Type.IsNeq: 2_000,
-        Type.LessThan: 2_000,
-        Type.LessThanOrEqual: 2_000,
-        Type.Modulo: 2_000,
-        Type.Mul: 150_000,
-        Type.MulWrapped: 2_000,
-        Type.Nand: 2_000,
-        Type.Neg: 2_000,
-        Type.Nor: 2_000,
-        Type.Not: 2_000,
-        Type.Or: 2_000,
-        Type.Pow: 20_000,
-        Type.PowWrapped: 2_000,
-        Type.Rem: 2_000,
-        Type.RemWrapped: 2_000,
-        Type.Shl: 2_000,
-        Type.ShlWrapped: 2_000,
-        Type.Shr: 2_000,
-        Type.ShrWrapped: 2_000,
-        Type.SignVerify: 250_000,
-        Type.Square: 2_000,
-        Type.SquareRoot: 120_000,
-        Type.Sub: 10_000,
-        Type.SubWrapped: 2_000,
-        Type.Ternary: 2_000,
-        Type.Xor: 2_000,
+        Type.Inv: 2_500,
+        Type.IsEq: 500,
+        Type.IsNeq: 500,
+        Type.LessThan: 500,
+        Type.LessThanOrEqual: 500,
+        Type.Modulo: 500,
+        Type.Mul: -2,
+        Type.MulWrapped: 500,
+        Type.Nand: 500,
+        Type.Neg: 500,
+        Type.Nor: 500,
+        Type.Not: 500,
+        Type.Or: 500,
+        Type.Pow: -2,
+        Type.PowWrapped: 500,
+        Type.Rem: 500,
+        Type.RemWrapped: 500,
+        Type.Shl: 500,
+        Type.ShlWrapped: 500,
+        Type.Shr: 500,
+        Type.ShrWrapped: 500,
+        Type.SignVerify: -2,
+        Type.Square: 500,
+        Type.SquareRoot: 2_500,
+        Type.Sub: 500,
+        Type.SubWrapped: 500,
+        Type.Ternary: 500,
+        Type.Xor: 500,
     }
 
     def __init__(self, *, type_: Type, literals: Literals[Any] | AssertInstruction[Any] | CallInstruction | CastInstruction[Any] | CommitInstruction[Any] | HashInstruction[Any] | AsyncInstruction):
@@ -1414,22 +1465,25 @@ class Instruction(Serializable):
         literals = instruction_type.load(data)
         return cls(type_=type_, literals=literals)
 
-    @property
-    def cost(self) -> int:
-        if self.type in (self.Type.HashPSD2, self.Type.HashPSD4, self.Type.HashPSD8):
-            if not isinstance(self.literals, HashInstruction):
-                raise ValueError(f"expected HashInstruction, got {self}")
-            inst = self.literals
-            # need to redesign the fee map to go fully static
-            fee_dict: dict[str, int] = Instruction.fee_map[self.type] # type: ignore[reportGeneralTypeIssues]
-            if not isinstance(inst.destination_type, LiteralPlaintextType):
-                raise ValueError(f"expected LiteralPlaintextType, got {inst.destination_type}")
-            literal_type = inst.destination_type.literal_type
-            if literal_type in (LiteralType.Address, LiteralType.Group):
-                return fee_dict["high"]
-            else:
-                return fee_dict["low"]
+    def cost(self, program: "Program") -> int:
+        # TODO: huge todo here
         cost = Instruction.fee_map[self.type]
         if cost == -1:
             raise ValueError(f"instruction {self.type} is not supported in finalize")
+        if cost == -2:
+            if self.type == self.Type.Cast:
+                instruction = cast(CastInstruction[Any], self.literals)
+                if isinstance(instruction.cast_type, PlaintextCastType):
+                    if isinstance(instruction.cast_type.plaintext_type, LiteralPlaintextType):
+                        cost = 500
+                    else:
+                        from node import Network
+                        cost = instruction.cast_type.plaintext_type.size_in_bytes(program) * Network.cast_per_byte_cost + Network.cast_base_cost
+                else:
+                    cost = 500
+            elif self.type in [self.Type.CommitBHP256, self.Type.CommitBHP512, self.Type.CommitBHP768, self.Type.CommitBHP1024, self.Type.CommitPED64, self.Type.CommitPED128]:
+                instruction = cast(CommitInstruction[Any], self.literals)
+
+
+
         return cost # type: ignore[reportGeneralTypeIssues]

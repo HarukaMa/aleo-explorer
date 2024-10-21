@@ -4,9 +4,11 @@ from collections import defaultdict
 
 import psycopg
 import psycopg.sql
+from psycopg.rows import DictRow
 
 from aleo_types import *
 from explorer.types import Message as ExplorerMessage
+from node import Network
 from .base import DatabaseBase, profile
 
 
@@ -22,7 +24,7 @@ class DatabaseBlock(DatabaseBase):
             solutions_root=Field.loads(block["solutions_root"]),
             subdag_root=Field.loads(block["subdag_root"]),
             metadata=BlockHeaderMetadata(
-                network=u16(3),
+                network=Network.network_id,
                 round_=u64(block["round"]),
                 height=u32(block["height"]),
                 cumulative_weight=u128(block["cumulative_weight"]),
@@ -37,7 +39,7 @@ class DatabaseBlock(DatabaseBase):
 
     @staticmethod
     @profile
-    async def _load_future(conn: psycopg.AsyncConnection[dict[str, Any]], transition_output_db_id: Optional[int],
+    async def _load_future(conn: psycopg.AsyncConnection[DictRow], transition_output_db_id: Optional[int],
                            future_argument_db_id: Optional[int]) -> Optional[Future]:
         async with conn.cursor() as cur:
             if transition_output_db_id:
@@ -85,7 +87,7 @@ class DatabaseBlock(DatabaseBase):
 
     @staticmethod
     @profile
-    async def _get_transition_from_dict(transition: dict[str, Any], conn: psycopg.AsyncConnection[dict[str, Any]]):
+    async def _get_transition_from_dict(transition: dict[str, Any], conn: psycopg.AsyncConnection[DictRow]):
         async with conn.cursor() as cur:
             await cur.execute("SELECT * FROM get_transition_inputs(%s)", (transition["id"],))
             transition_inputs = await cur.fetchall()
@@ -178,6 +180,7 @@ class DatabaseBlock(DatabaseBase):
                 outputs=Vec[TransitionOutput, u8](transition_outputs),
                 tpk=Group.loads(transition["tpk"]),
                 tcm=Field.loads(transition["tcm"]),
+                scm=Field.loads(transition["scm"]),
             )
 
     async def get_transaction_reject_reason(self, transaction_id: TransactionID | str) -> Optional[str]:
@@ -186,7 +189,7 @@ class DatabaseBlock(DatabaseBase):
                 try:
                     await cur.execute(
                         "SELECT reject_reason FROM confirmed_transaction ct "
-                        "JOIN transaction t on ct.id = t.confimed_transaction_id "
+                        "JOIN transaction t on ct.id = t.confirmed_transaction_id "
                         "WHERE t.transaction_id = %s",
                         (str(transaction_id),)
                     )
@@ -204,7 +207,7 @@ class DatabaseBlock(DatabaseBase):
                     await cur.execute(
                         "SELECT b.* FROM block b "
                         "JOIN confirmed_transaction ct ON b.id = ct.block_id "
-                        "JOIN transaction t ON ct.id = t.confimed_transaction_id WHERE t.transaction_id = %s",
+                        "JOIN transaction t ON ct.id = t.confirmed_transaction_id WHERE t.transaction_id = %s",
                         (str(transaction_id),)
                     )
                     block = await cur.fetchone()
@@ -243,21 +246,34 @@ class DatabaseBlock(DatabaseBase):
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
+    async def get_block_from_timestamp(self, timestamp: int) -> Block | None:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT * FROM block WHERE timestamp < %s ORDER BY timestamp DESC LIMIT 1",
+                        (timestamp,)
+                    )
+                    block = await cur.fetchone()
+                    if block is None:
+                        return None
+                    return await self._get_full_block(block, conn)
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
     async def get_block_confirm_time(self, height: int) -> Optional[int]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT max(dv.timestamp) FROM dag_vertex dv "
-                        "JOIN authority a on dv.authority_id = a.id "
-                        "JOIN block b on a.block_id = b.id "
-                        "WHERE b.height = %s",
+                        "SELECT confirm_timestamp FROM block WHERE height = %s",
                         (height,)
                     )
                     res = await cur.fetchone()
                     if not res:
                         return None
-                    return res["max"]
+                    return res["confirm_timestamp"]
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
@@ -296,13 +312,29 @@ class DatabaseBlock(DatabaseBase):
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT confimed_transaction_id FROM transaction WHERE transaction_id = %s",
+                        "SELECT confirmed_transaction_id FROM transaction WHERE transaction_id = %s",
                         (transaction_id,)
                     )
                     res = await cur.fetchone()
                     if res is None:
                         return None
-                    return res["confimed_transaction_id"] is not None
+                    return res["confirmed_transaction_id"] is not None
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def is_transaction_aborted(self, transaction_id: str) -> Optional[bool]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT aborted FROM transaction WHERE transaction_id = %s",
+                        (transaction_id,)
+                    )
+                    res = await cur.fetchone()
+                    if res is None:
+                        return None
+                    return res["aborted"]
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
@@ -312,14 +344,14 @@ class DatabaseBlock(DatabaseBase):
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT id, transaction_id, type, confimed_transaction_id FROM transaction "
+                        "SELECT id, transaction_id, type, confirmed_transaction_id FROM transaction "
                         "WHERE transaction_id = %s",
                         (transaction_id,)
                     )
                     transaction = await cur.fetchone()
                     if transaction is None:
                         return None
-                    if transaction["confimed_transaction_id"] is not None:
+                    if transaction["confirmed_transaction_id"] is not None:
                         raise ValueError("transaction is confirmed")
                     if transaction["type"] == Transaction.Type.Deploy.name:
                         await cur.execute(
@@ -352,7 +384,7 @@ class DatabaseBlock(DatabaseBase):
                                     records={},
                                     closures={},
                                     functions={},
-                                    identifiers=[],
+                                    identifiers={},
                                 ),
                                 verifying_keys=Vec[Tuple[Identifier, VerifyingKey, Certificate], u16].load(BytesIO(deploy["verifying_keys"])),
                             ),
@@ -394,12 +426,10 @@ class DatabaseBlock(DatabaseBase):
                             (transaction["id"],)
                         )
                         fee = await cur.fetchone()
-                        if fee is None:
-                            additional_fee = None
-                        else:
+                        if fee is not None:
                             await cur.execute("SELECT * FROM transition WHERE fee_id = %s", (fee["id"],))
                             fee_transition = await cur.fetchone()
-                            additional_fee = Fee(
+                            fee = Fee(
                                 transition=await self._get_transition_from_dict(fee_transition, conn),
                                 global_state_root=StateRoot.loads(fee["global_state_root"]),
                                 proof=Option[Proof](Proof.loads(fee["proof"])),
@@ -411,10 +441,12 @@ class DatabaseBlock(DatabaseBase):
                                 global_state_root=StateRoot.loads(execute["global_state_root"]),
                                 proof=Option[Proof](Proof.loads(execute["proof"])),
                             ),
-                            additional_fee=Option[Fee](additional_fee),
+                            fee=Option[Fee](fee),
                         )
                     elif transaction["type"] == Transaction.Type.Fee.name:
                         raise ValueError("transaction is confirmed")
+                    else:
+                        raise NotImplementedError
                     return tx
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
@@ -474,7 +506,9 @@ class DatabaseBlock(DatabaseBase):
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
-                    await cur.execute("SELECT COUNT(*) FROM transaction WHERE confimed_transaction_id IS NULL")
+                    await cur.execute(
+                        "SELECT COUNT(*) FROM transaction WHERE confirmed_transaction_id IS NULL AND aborted = FALSE"
+                    )
                     res = await cur.fetchone()
                     if res is None:
                         raise RuntimeError("database inconsistent")
@@ -488,13 +522,14 @@ class DatabaseBlock(DatabaseBase):
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT transaction_id FROM transaction WHERE confimed_transaction_id IS NULL "
+                        "SELECT transaction_id FROM transaction "
+                        "WHERE confirmed_transaction_id IS NULL AND aborted = FALSE "
                         "ORDER BY first_seen DESC LIMIT %s OFFSET %s",
                         (end - start, start)
                     )
                     transaction_ids = await cur.fetchall()
-                    if transaction_ids is None:
-                        raise RuntimeError("database inconsistent")
+                    if not transaction_ids:
+                        return []
                     txs: list[Transaction] = []
                     for transaction_id in transaction_ids:
                         tx = await self.get_unconfirmed_transaction(transaction_id["transaction_id"])
@@ -507,7 +542,7 @@ class DatabaseBlock(DatabaseBase):
                     raise
 
     @staticmethod
-    async def _get_confirmed_transaction_from_dict(conn: psycopg.AsyncConnection[dict[str, Any]], confirmed_transaction: dict[str, Any]) -> ConfirmedTransaction:
+    async def get_confirmed_transaction_from_dict(conn: psycopg.AsyncConnection[DictRow], confirmed_transaction: dict[str, Any]) -> ConfirmedTransaction:
         async with conn.cursor() as cur:
             await cur.execute("SELECT * FROM get_finalize_operations(%s)", (confirmed_transaction["confirmed_transaction_id"],))
             finalize_operations = await cur.fetchall()
@@ -524,22 +559,23 @@ class DatabaseBlock(DatabaseBase):
                 elif finalize_operation["type"] == FinalizeOperation.Type.UpdateKeyValue.name:
                     f.append(UpdateKeyValue(
                         mapping_id=Field.loads(finalize_operation["mapping_id"]),
-                        index=u64(),
                         key_id=Field.loads(finalize_operation["key_id"]),
                         value_id=Field.loads(finalize_operation["value_id"]),
                     ))
                 elif finalize_operation["type"] == FinalizeOperation.Type.RemoveKeyValue.name:
                     f.append(RemoveKeyValue(
                         mapping_id=Field.loads(finalize_operation["mapping_id"]),
-                        index=u64(),
+                        key_id=Field.loads(finalize_operation["key_id"]),
                     ))
+                elif finalize_operation["type"] == FinalizeOperation.Type.ReplaceMapping.name:
+                    f.append(ReplaceMapping(mapping_id=Field.loads(finalize_operation["mapping_id"])))
                 elif finalize_operation["type"] == FinalizeOperation.Type.RemoveMapping.name:
                     f.append(RemoveMapping(mapping_id=Field.loads(finalize_operation["mapping_id"])))
                 else:
                     raise NotImplementedError
 
             transaction = confirmed_transaction
-            # TODO: store full program on rejected deploy so we dont need dummy data
+            # TODO: store full program on rejected deploy so we dont need dummy data - should we?
             match confirmed_transaction["confirmed_transaction_type"]:
                 case ConfirmedTransaction.Type.AcceptedDeploy.name | ConfirmedTransaction.Type.RejectedDeploy.name:
                     deploy_transaction = transaction
@@ -568,12 +604,13 @@ class DatabaseBlock(DatabaseBase):
                                 records={},
                                 closures={},
                                 functions={},
-                                identifiers=[],
+                                identifiers={},
                             ),
                             verifying_keys=Vec[Tuple[Identifier, VerifyingKey, Certificate], u16]([])
                         )
+                        program_data = None
                     fee_dict = transaction
-                    if fee_dict is None:
+                    if not fee_dict:
                         raise RuntimeError("database inconsistent")
                     await cur.execute(
                         "SELECT * FROM transition WHERE fee_id = %s",
@@ -591,6 +628,7 @@ class DatabaseBlock(DatabaseBase):
                         proof=Option[Proof](proof),
                     )
                     if confirmed_transaction["confirmed_transaction_type"] == ConfirmedTransaction.Type.AcceptedDeploy.name:
+                        program_data = cast(dict[str, Any], program_data)
                         tx = DeployTransaction(
                             id_=TransactionID.loads(transaction["transaction_id"]),
                             deployment=deployment,
@@ -632,24 +670,24 @@ class DatabaseBlock(DatabaseBase):
                     tss: list[Transition] = []
                     for transition in transitions:
                         tss.append(await DatabaseBlock._get_transition_from_dict(transition, conn))
-                    additional_fee = transaction
-                    if additional_fee["fee_id"] is None:
+                    fee = transaction
+                    if fee["fee_id"] is None:
                         fee = None
                     else:
                         await cur.execute(
                             "SELECT * FROM transition WHERE fee_id = %s",
-                            (additional_fee["fee_id"],)
+                            (fee["fee_id"],)
                         )
                         fee_transition = await cur.fetchone()
                         if fee_transition is None:
                             print(transaction)
                             raise ValueError("fee transition not found")
                         proof = None
-                        if additional_fee["fee_proof"] is not None:
-                            proof = Proof.loads(additional_fee["fee_proof"])
+                        if fee["fee_proof"] is not None:
+                            proof = Proof.loads(fee["fee_proof"])
                         fee = Fee(
                             transition=await DatabaseBlock._get_transition_from_dict(fee_transition, conn),
-                            global_state_root=StateRoot.loads(additional_fee["fee_global_state_root"]),
+                            global_state_root=StateRoot.loads(fee["fee_global_state_root"]),
                             proof=Option[Proof](proof),
                         )
                     if execute_transaction["proof"] is None:
@@ -666,7 +704,7 @@ class DatabaseBlock(DatabaseBase):
                                     global_state_root=StateRoot.loads(execute_transaction["global_state_root"]),
                                     proof=Option[Proof](proof),
                                 ),
-                                additional_fee=Option[Fee](fee),
+                                fee=Option[Fee](fee),
                             ),
                             finalize=Vec[FinalizeOperation, u16](f),
                         )
@@ -700,7 +738,7 @@ class DatabaseBlock(DatabaseBase):
                         "SELECT t.id as transaction_db_id,  t.transaction_id, t.type as transaction_type, "
                         "ct.id as confirmed_transaction_id, ct.type as confirmed_transaction_type, ct.index, ct.reject_reason "
                         "FROM transaction t "
-                        "JOIN confirmed_transaction ct ON t.confimed_transaction_id = ct.id "
+                        "JOIN confirmed_transaction ct ON t.confirmed_transaction_id = ct.id "
                         "WHERE transaction_id = %s", (transaction_id,))
                     confirmed_transaction = await cur.fetchone()
                     if confirmed_transaction is None:
@@ -745,20 +783,20 @@ class DatabaseBlock(DatabaseBase):
                         confirmed_transaction.update({"fee_id": None, "fee_global_state_root": None, "fee_proof": None})
                     else:
                         confirmed_transaction.update(fee)
-                    return await DatabaseBlock._get_confirmed_transaction_from_dict(conn, confirmed_transaction)
+                    return await DatabaseBlock.get_confirmed_transaction_from_dict(conn, confirmed_transaction)
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
     @staticmethod
     @profile
-    async def _get_full_block(block: dict[str, Any], conn: psycopg.AsyncConnection[dict[str, Any]]):
+    async def _get_full_block(block: dict[str, Any], conn: psycopg.AsyncConnection[DictRow]):
         async with conn.cursor() as cur:
             await cur.execute("SELECT * FROM get_confirmed_transactions(%s)", (block["id"],))
             confirmed_transactions = await cur.fetchall()
             ctxs: list[ConfirmedTransaction] = []
             for confirmed_transaction in confirmed_transactions:
-                ctxs.append(await DatabaseBlock._get_confirmed_transaction_from_dict(conn, confirmed_transaction))
+                ctxs.append(await DatabaseBlock.get_confirmed_transaction_from_dict(conn, confirmed_transaction))
             await cur.execute("SELECT * FROM ratification WHERE block_id = %s ORDER BY index", (block["id"],))
             ratifications = await cur.fetchall()
             rs: list[Ratify] = []
@@ -771,16 +809,18 @@ class DatabaseBlock(DatabaseBase):
                             raise RuntimeError("database inconsistent")
                         await cur.execute("SELECT * FROM committee_history_member WHERE committee_id = %s", (committee_history["id"],))
                         committee_history_members = await cur.fetchall()
-                        members: list[Tuple[Address, u64, bool_]] = []
+                        members: list[Tuple[Address, u64, bool_, u8]] = []
                         for committee_history_member in committee_history_members:
-                            members.append(Tuple[Address, u64, bool_]((
+                            members.append(Tuple[Address, u64, bool_, u8]((
                                 Address.loads(committee_history_member["address"]),
                                 u64(committee_history_member["stake"]),
-                                bool_(committee_history_member["is_open"]))
-                            ))
+                                bool_(committee_history_member["is_open"]),
+                                u8(committee_history_member["commission"]),
+                            )))
                         committee = Committee(
+                            id_=Field.loads(committee_history["committee_id"]),
                             starting_round=u64(committee_history["starting_round"]),
-                            members=Vec[Tuple[Address, u64, bool_], u16](members),
+                            members=Vec[Tuple[Address, u64, bool_, u8], u16](members),
                             total_stake=u64(committee_history["total_stake"]),
                         )
                         await cur.execute("SELECT * FROM ratification_genesis_balance")
@@ -788,9 +828,22 @@ class DatabaseBlock(DatabaseBase):
                         balances: list[Tuple[Address, u64]] = []
                         for public_balance in public_balances:
                             balances.append(Tuple[Address, u64]((Address.loads(public_balance["address"]), u64(public_balance["amount"]))))
+                        await cur.execute("SELECT * FROM ratification_genesis_bonded")
+                        bonded_balances = await cur.fetchall()
+                        bonded: list[Tuple[Address, Address, Address, u64]] = []
+                        for bonded_balance in bonded_balances:
+                            bonded.append(
+                                Tuple[Address, Address, Address, u64]((
+                                    Address.loads(bonded_balance["staker"]),
+                                    Address.loads(bonded_balance["validator"]),
+                                    Address.loads(bonded_balance["withdrawal"]),
+                                    u64(bonded_balance["amount"])
+                                ))
+                            )
                         rs.append(GenesisRatify(
                             committee=committee,
                             public_balances=Vec[Tuple[Address, u64], u16](balances),
+                            bonded_balances=Vec[Tuple[Address, Address, Address, u64], u16](bonded),
                         ))
                     case Ratify.Type.BlockReward.name:
                         rs.append(BlockRewardRatify(
@@ -803,33 +856,28 @@ class DatabaseBlock(DatabaseBase):
                     case _:
                         raise NotImplementedError
 
-            await cur.execute("SELECT * FROM coinbase_solution WHERE block_id = %s", (block["id"],))
-            coinbase_solution = await cur.fetchone()
-            if coinbase_solution is not None:
+            await cur.execute("SELECT * FROM puzzle_solution WHERE block_id = %s", (block["id"],))
+            puzzle_solution = await cur.fetchone()
+            if puzzle_solution is not None:
                 await cur.execute(
-                    "SELECT * FROM prover_solution WHERE coinbase_solution_id = %s",
-                    (coinbase_solution["id"],)
+                    "SELECT * FROM solution WHERE puzzle_solution_id = %s",
+                    (puzzle_solution["id"],)
                 )
-                prover_solutions = await cur.fetchall()
-                pss: list[ProverSolution] = []
-                for prover_solution in prover_solutions:
-                    pss.append(ProverSolution(
+                solutions = await cur.fetchall()
+                ss: list[Solution] = []
+                for solution in solutions:
+                    ss.append(Solution(
                         partial_solution=PartialSolution(
-                            address=Address.loads(prover_solution["address"]),
-                            nonce=u64(prover_solution["nonce"]),
-                            commitment=PuzzleCommitment.loads(prover_solution["commitment"]),
+                            solution_id=SolutionID.load(BytesIO(aleo_explorer_rust.solution_to_id(str(solution["epoch_hash"]), str(solution["address"]), int(solution["counter"])))),
+                            epoch_hash=BlockHash.loads(solution["epoch_hash"]),
+                            address=Address.loads(solution["address"]),
+                            counter=u64(solution["counter"]),
                         ),
-                        proof=KZGProof(
-                            w=G1Affine(
-                                x=Fq(value=int(prover_solution["proof_x"])),
-                                y_is_positive=prover_solution["proof_y_is_positive"],
-                            ),
-                            random_v=Option[Field](None),
-                        )
+                        target=u64(solution["target"]),
                     ))
-                coinbase_solution = CoinbaseSolution(solutions=Vec[ProverSolution, u16](pss))
+                puzzle_solution = PuzzleSolutions(solutions=Vec[Solution, u8](ss))
             else:
-                coinbase_solution = None
+                puzzle_solution = None
 
             await cur.execute("SELECT * FROM authority WHERE block_id = %s", (block["id"],))
             authority = await cur.fetchone()
@@ -853,19 +901,9 @@ class DatabaseBlock(DatabaseBase):
                     # )
                     # dag_vertex_signatures = await cur.fetchall()
 
-                    if dag_vertex["batch_certificate_id"] is not None:
-                        signatures: list[Tuple[Signature, i64]] = []
-                        # for signature in dag_vertex_signatures:
-                        #     signatures.append(
-                        #         Tuple[Signature, i64]((
-                        #             Signature.loads(signature["signature"]),
-                        #             i64(signature["timestamp"]),
-                        #         ))
-                        #     )
-                    else:
-                        signatures: list[Signature] = []
-                        # for signature in dag_vertex_signatures:
-                        #     signatures.append(Signature.loads(signature["signature"]))
+                    signatures: list[Signature] = []
+                    # for signature in dag_vertex_signatures:
+                    #     signatures.append(Signature.loads(signature["signature"]))
 
                     # await cur.execute(
                     #     "SELECT previous_vertex_id FROM dag_vertex_adjacency WHERE vertex_id = %s ORDER BY index",
@@ -873,7 +911,7 @@ class DatabaseBlock(DatabaseBase):
                     # )
                     # previous_ids = [x["previous_vertex_id"] for x in await cur.fetchall()]
 
-                    # TODO: use batch id after next reset
+                    # TODO: use batch id after next reset - do we still want to keep this? would be way too expensive
                     # await cur.execute(
                     #     "SELECT batch_certificate_id FROM dag_vertex v "
                     #     "JOIN UNNEST(%s) WITH ORDINALITY q(id, ord) ON q.id = v.id "
@@ -881,7 +919,7 @@ class DatabaseBlock(DatabaseBase):
                     #     (previous_ids,)
                     # )
                     # previous_cert_ids = [x["batch_certificate_id"] for x in await cur.fetchall()]
-                    previous_cert_ids = []
+                    previous_cert_ids: list[str] = []
 
                     await cur.execute(
                         "SELECT * FROM dag_vertex_transmission_id WHERE vertex_id = %s ORDER BY index",
@@ -892,50 +930,42 @@ class DatabaseBlock(DatabaseBase):
                         if tid["type"] == TransmissionID.Type.Ratification:
                             tids.append(RatificationTransmissionID())
                         elif tid["type"] == TransmissionID.Type.Solution:
-                            tids.append(SolutionTransmissionID(id_=PuzzleCommitment.loads(tid["commitment"])))
+                            tids.append(SolutionTransmissionID(id_=SolutionID.loads(tid["commitment"]), checksum=u128()))
                         elif tid["type"] == TransmissionID.Type.Transaction:
-                            tids.append(TransactionTransmissionID(id_=TransactionID.loads(tid["transaction_id"])))
+                            tids.append(TransactionTransmissionID(id_=TransactionID.loads(tid["transaction_id"]), checksum=u128()))
 
-                    if dag_vertex["batch_certificate_id"] is not None:
-                        certificates.append(
-                            BatchCertificate1(
-                                certificate_id=Field.loads(dag_vertex["batch_certificate_id"]),
-                                batch_header=BatchHeader1(
-                                    batch_id=Field.loads(dag_vertex["batch_id"]),
-                                    author=Address.loads(dag_vertex["author"]),
-                                    round_=u64(dag_vertex["round"]),
-                                    timestamp=i64(dag_vertex["timestamp"]),
-                                    transmission_ids=Vec[TransmissionID, u32](tids),
-                                    previous_certificate_ids=Vec[Field, u32]([Field.loads(x) for x in previous_cert_ids]),
-                                    signature=Signature.loads(dag_vertex["author_signature"]),
-                                ),
-                                signatures=Vec[Tuple[Signature, i64], u32](signatures),
-                            )
+                    certificates.append(
+                        BatchCertificate(
+                            batch_header=BatchHeader(
+                                batch_id=Field.loads(dag_vertex["batch_id"]),
+                                author=Address.loads(dag_vertex["author"]),
+                                round_=u64(dag_vertex["round"]),
+                                timestamp=i64(dag_vertex["timestamp"]),
+                                committee_id=Field.loads(dag_vertex["committee_id"]),
+                                transmission_ids=Vec[TransmissionID, u32](tids),
+                                previous_certificate_ids=Vec[Field, u16]([Field.loads(x) for x in previous_cert_ids]),
+                                signature=Signature.loads(dag_vertex["author_signature"]),
+                            ),
+                            signatures=Vec[Signature, u16](signatures),
                         )
-                    else:
-                        certificates.append(
-                            BatchCertificate2(
-                                batch_header=BatchHeader1(
-                                    batch_id=Field.loads(dag_vertex["batch_id"]),
-                                    author=Address.loads(dag_vertex["author"]),
-                                    round_=u64(dag_vertex["round"]),
-                                    timestamp=i64(dag_vertex["timestamp"]),
-                                    transmission_ids=Vec[TransmissionID, u32](tids),
-                                    previous_certificate_ids=Vec[Field, u32]([Field.loads(x) for x in previous_cert_ids]),
-                                    signature=Signature.loads(dag_vertex["author_signature"]),
-                                ),
-                                signatures=Vec[Signature, u16](signatures),
-                            )
-                        )
-                subdags: dict[u64, Vec[BatchCertificate, u32]] = defaultdict(lambda: Vec[BatchCertificate, u32]([]))
+                    )
+                subdags: dict[u64, Vec[BatchCertificate, u16]] = defaultdict(lambda: Vec[BatchCertificate, u16]([]))
                 for certificate in certificates:
                     subdags[certificate.batch_header.round].append(certificate)
-                subdag = Subdag1(
+                subdag = Subdag(
                     subdag=subdags
                 )
                 auth = QuorumAuthority(subdag=subdag)
             else:
                 raise NotImplementedError
+
+            await cur.execute("SELECT * FROM block_aborted_solution_id WHERE block_id = %s", (block["id"],))
+            aborted_solution_ids = await cur.fetchall()
+            aborted_solution_ids = [SolutionID.loads(x["solution_id"]) for x in aborted_solution_ids]
+
+            await cur.execute("SELECT * FROM block_aborted_transaction_id WHERE block_id = %s", (block["id"],))
+            aborted_transaction_ids = await cur.fetchall()
+            aborted_transaction_ids = [TransactionID.loads(x["transaction_id"]) for x in aborted_transaction_ids]
 
             return Block(
                 block_hash=BlockHash.loads(block['block_hash']),
@@ -946,13 +976,13 @@ class DatabaseBlock(DatabaseBase):
                     transactions=Vec[ConfirmedTransaction, u32](ctxs),
                 ),
                 ratifications=Ratifications(ratifications=Vec[Ratify, u32](rs)),
-                solutions=Option[CoinbaseSolution](coinbase_solution),
-                # TODO: save and fill in
-                aborted_transactions_ids=Vec[TransactionID, u32]([]),
+                solutions=Solutions(solutions=Option[PuzzleSolutions](puzzle_solution)),
+                aborted_solution_ids=Vec[SolutionID, u32](aborted_solution_ids),
+                aborted_transaction_ids=Vec[TransactionID, u32](aborted_transaction_ids),
             )
 
     @staticmethod
-    async def get_full_block_range(start: int, end: int, conn: psycopg.AsyncConnection[dict[str, Any]]):
+    async def get_full_block_range(start: int, end: int, conn: psycopg.AsyncConnection[DictRow]):
         async with conn.cursor() as cur:
             await cur.execute(
                 "SELECT * FROM block WHERE height <= %s AND height > %s ORDER BY height DESC",
@@ -962,7 +992,7 @@ class DatabaseBlock(DatabaseBase):
             return [await DatabaseBlock._get_full_block(block, conn) for block in blocks]
 
     @staticmethod
-    async def _get_fast_block(block: dict[str, Any], conn: psycopg.AsyncConnection[dict[str, Any]]) -> dict[str, Any]:
+    async def _get_fast_block(block: dict[str, Any], conn: psycopg.AsyncConnection[DictRow]) -> dict[str, Any]:
         async with conn.cursor() as cur:
             await cur.execute(
                 "SELECT COUNT(*) FROM confirmed_transaction WHERE block_id = %s",
@@ -973,9 +1003,9 @@ class DatabaseBlock(DatabaseBase):
             else:
                 transaction_count = res["count"]
             await cur.execute(
-                "SELECT COUNT(*) FROM prover_solution ps "
-                "JOIN coinbase_solution cs on ps.coinbase_solution_id = cs.id "
-                "WHERE cs.block_id = %s",
+                "SELECT COUNT(*) FROM solution s "
+                "JOIN puzzle_solution ps on s.puzzle_solution_id = ps.id "
+                "WHERE ps.block_id = %s",
                 (block["id"],)
             )
             if (res := await cur.fetchone()) is None:
@@ -989,7 +1019,7 @@ class DatabaseBlock(DatabaseBase):
             }
 
     @staticmethod
-    async def _get_fast_block_range(start: int, end: int, conn: psycopg.AsyncConnection[dict[str, Any]]):
+    async def _get_fast_block_range(start: int, end: int, conn: psycopg.AsyncConnection[DictRow]):
         async with conn.cursor() as cur:
             await cur.execute(
                 "SELECT * FROM block WHERE height <= %s AND height > %s ORDER BY height DESC",
@@ -1025,7 +1055,7 @@ class DatabaseBlock(DatabaseBase):
                     raise
 
 
-    async def get_latest_block(self):
+    async def get_latest_block(self) -> Block:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1064,7 +1094,7 @@ class DatabaseBlock(DatabaseBase):
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_block_by_height(self, height: int):
+    async def get_block_by_height(self, height: int) -> Block | None:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -1129,13 +1159,13 @@ class DatabaseBlock(DatabaseBase):
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_recent_blocks_fast(self):
+    async def get_recent_blocks_fast(self, limit: int = 30):
         async with self.pool.connection() as conn:
             try:
                 latest_height = await self.get_latest_height()
                 if latest_height is None:
                     raise RuntimeError("no blocks in database")
-                return await DatabaseBlock._get_fast_block_range(latest_height, latest_height - 30, conn)
+                return await DatabaseBlock._get_fast_block_range(latest_height, latest_height - limit, conn)
             except Exception as e:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
@@ -1175,14 +1205,71 @@ class DatabaseBlock(DatabaseBase):
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT target_sum FROM coinbase_solution "
-                        "JOIN block b on coinbase_solution.block_id = b.id "
+                        "SELECT target_sum FROM puzzle_solution ps "
+                        "JOIN block b on ps.block_id = b.id "
                         "WHERE height = %s ",
                         (height,)
                     )
                     if (res := await cur.fetchone()) is None:
                         return 0
                     return res["target_sum"]
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def get_total_supply_at_height(self, height: int) -> int:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT total_supply FROM block WHERE height = %s", (height,)
+                    )
+                    if (res := await cur.fetchone()) is None:
+                        return 0
+                    return res["total_supply"]
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def get_transaction_aborted_height(self, transaction_id: str) -> Optional[int]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT height FROM block_aborted_transaction_id bt "
+                        "JOIN block b on bt.block_id = b.id "
+                        "WHERE transaction_id = %s",
+                        (transaction_id,)
+                    )
+                    if (res := await cur.fetchone()) is None:
+                        return None
+                    return res["height"]
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def get_transaction_id_from_transition_id(self, transition_id: str) -> Optional[str]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT t.transaction_id FROM transition ts "
+                        "JOIN transaction_execute te on ts.transaction_execute_id = te.id "
+                        "JOIN transaction t on te.transaction_id = t.id "
+                        "WHERE ts.transition_id = %s",
+                        (transition_id,)
+                    )
+                    if (res := await cur.fetchone()) is None:
+                        await cur.execute(
+                            "SELECT t.transaction_id FROM transition ts "
+                            "JOIN fee f on ts.fee_id = f.id "
+                            "JOIN transaction t on f.transaction_id = t.id "
+                            "WHERE ts.transition_id = %s",
+                            (transition_id,)
+                        )
+                        if (res := await cur.fetchone()) is None:
+                            return None
+                    return res["transaction_id"]
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise

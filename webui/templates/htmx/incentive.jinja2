@@ -1,0 +1,95 @@
+{% from "macros.jinja2" import nav, htmx_title, sync_notice %}
+{{ sync_notice(sync_info) }}
+
+    <div class="content">
+
+        <div id="header">
+            <h3>Testnet Beta Incentive Dashboard</h3>
+        </div>
+
+    {% if now < 1719849600 %}
+        <div class="callout primary">
+            The incentive period for testnet beta will start at 2022-12-02 00:00 UTC.
+        </div>
+    {% elif now >= 1721059200 %}
+        <div class="callout success">
+            The incentive period for testnet beta has ended.
+        </div>
+        <h6>Total testnet Aleo credits rewarded during incentive period: {{ total_credit | format_aleo_credit | safe }} Aleo credits </h6><br>
+    {% else %}
+        <div class="callout warning">
+            This dashboard is unofficial. The data might be inaccurate.
+        </div>
+        <h6>Total testnet Aleo credits rewarded: {{ total_credit | format_aleo_credit | safe }} Aleo credits </h6><br>
+        Time to end of the incentive period: <span id="countdown"></span>
+        <div class="primary progress" role="progressbar">
+            <div class="progress-meter" style="width: {{ ratio }}%">
+            {% if ratio > 5 %}
+                <p class="progress-meter-text">{{ "%.1f" % ratio }}%</p>
+            {% endif %}
+            </div>
+        </div>
+    {% endif %}
+
+        <div id="blocks">
+
+            {{ nav(page, total_pages, "/incentive?") }}
+
+            <table class="unstriped">
+                <thead>
+                <tr>
+                    <th>Rank</th>
+                    <th>Address</th>
+                    <th>Testnet credits from proving</th>
+                    <th>Percentage of total</th>
+                </tr>
+                </thead>
+                <tbody hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
+                {% for line in leaderboard %}
+                    <tr>
+                        <td>{{ loop.index + (page - 1) * 50 }}</td>
+                        <td class="mono"><a href="/address?a={{ line.address }}#solutions">{{ line.address }}</a></td>
+                        <td>{{ line.total_rewards | format_aleo_credit | safe }}</td>
+                        <td>{{ "%.3f" % (line.total_rewards / total_credit * 100) }}%</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+
+            {{ nav(page, total_pages, "/incentive?") }}
+
+        </div>
+    </div>
+
+
+<script>
+
+  function init() {
+    function update_countdown() {
+      if (document.getElementById("countdown") === null) {
+        clearInterval(x);
+        return;
+      }
+      const now = new Date().getTime();
+      const distance = countDownDate - now;
+      const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+      document.getElementById("countdown").innerHTML = days + "d " + hours + "h " + minutes + "m " + seconds + "s ";
+      if (distance < 0) {
+        clearInterval(x);
+        document.getElementById("countdown").innerHTML = "EXPIRED";
+      }
+    }
+
+    countDownDate = new Date(1721059200 * 1000).getTime();
+    x = setInterval(update_countdown, 1000);
+    update_countdown();
+  }
+  init()
+
+
+</script>
+
+{{ htmx_title(request, "Incentive dashboard") }}

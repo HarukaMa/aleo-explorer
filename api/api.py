@@ -8,7 +8,6 @@ from typing import Any
 import aiohttp
 import uvicorn
 from starlette.applications import Starlette
-from starlette.exceptions import HTTPException
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
@@ -22,8 +21,10 @@ from middleware.asgi_logger import AccessLoggerMiddleware
 from middleware.server_timing import ServerTimingMiddleware
 from util.cache import Cache
 from util.set_proc_title import set_proc_title
+from .address_routes import address_staking_route, address_delegated_route, address_program_id_route
 from .execute_routes import preview_finalize_route
 from .mapping_routes import mapping_route, mapping_list_route, mapping_value_list_route, mapping_key_count_route
+from .solution_routes import solution_by_id_route
 from .utils import get_remote_height
 
 
@@ -39,16 +40,6 @@ class UvicornServer(multiprocessing.Process):
 
     def run(self, *args: Any, **kwargs: Any):
         self.server.run()
-
-async def commitment_route(request: Request):
-    db: Database = request.app.state.db
-    if time.time() >= 1675209600:
-        return JSONResponse(None)
-    commitment = request.query_params.get("commitment")
-    if not commitment:
-        return HTTPException(400, "Missing commitment")
-    return JSONResponse(await db.get_puzzle_commitment(commitment))
-
 
 async def status_route(request: Request):
     session = request.app.state.session
@@ -75,13 +66,17 @@ async def status_route(request: Request):
 
 
 routes = [
-    Route("/commitment", commitment_route),
+    Route("/v{version:int}/address/staking_info/{address}", address_staking_route),
+    Route("/v{version:int}/address/delegated/{address}", address_delegated_route),
+    Route("/v{version:int}/address/program_id/{address}", address_program_id_route),
     Route("/v{version:int}/mapping/get_value/{program_id}/{mapping}/{key}", mapping_route),
     Route("/v{version:int}/mapping/list_program_mappings/{program_id}", mapping_list_route),
     Route("/v{version:int}/mapping/list_program_mapping_values/{program_id}/{mapping}", mapping_value_list_route),
     Route("/v{version:int}/mapping/get_key_count/{program_id}/{mapping}", mapping_key_count_route),
     Route("/v{version:int}/simulate_execution/finalize", preview_finalize_route, methods=["POST"]),
+    Route("/v{version:int}/solution/{solution_id}", solution_by_id_route),
     Route("/v{version:int}/status", status_route),
+
 ]
 
 async def startup():
@@ -91,7 +86,8 @@ async def startup():
     db = Database(server=os.environ["DB_HOST"], user=os.environ["DB_USER"], password=os.environ["DB_PASS"],
                   database=os.environ["DB_DATABASE"], schema=os.environ["DB_SCHEMA"],
                   redis_server=os.environ["REDIS_HOST"], redis_port=int(os.environ["REDIS_PORT"]),
-                  redis_db=int(os.environ["REDIS_DB"]),
+                  redis_db=int(os.environ["REDIS_DB"]), redis_user=os.environ.get("REDIS_USER"),
+                  redis_password=os.environ.get("REDIS_PASS"),
                   message_callback=noop)
     await db.connect()
     app.state.db = db
@@ -118,7 +114,10 @@ app = Starlette(
 async def run():
     host = os.environ.get("API_HOST", "127.0.0.1")
     port = int(os.environ.get("API_PORT", 8001))
-    config = uvicorn.Config("api:app", reload=True, log_level="info", host=host, port=port)
+    config = uvicorn.Config(
+        "api:app", reload=True, log_level="info", host=host, port=port,
+        forwarded_allow_ips=["127.0.0.1", "::1", "10.0.4.1", "10.0.5.1"]
+    )
     logging.getLogger("uvicorn.access").handlers = []
     server = UvicornServer(config=config)
 

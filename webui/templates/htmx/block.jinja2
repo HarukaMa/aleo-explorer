@@ -15,10 +15,13 @@
         {% call data_line("Block hash") %}
             <span class="mono">{{ block.block_hash }}</span>
         {% endcall %}
+        {% call data_line("Epoch") %}
+            {{ block.height // 360 }} <span class="note">{{ block.height % 360 }} / 360</span>
+        {% endcall %}
         {% call data_line("Timestamp", '<i class="fa-regular fa-circle-question" data-tippy-content="Timestamp property in block, which is earlier than block generation time"></i>') %}
             {{ block.header.metadata.timestamp | format_time | safe }}
         {% endcall %}
-        {% call data_line("Validators", '<i class="fa-regular fa-circle-question" data-tippy-content="If the validator has participated in this block"></i>') %}
+        {% call data_line("Validators", '<i class="fa-regular fa-circle-question" data-tippy-content="If the block contains signed batches from the validator"></i>') %}
             <div class="block-validator">
                 {% for v in all_validators %}
                     {% if v.address in validators %}
@@ -43,7 +46,7 @@
             {{ block.header.metadata.cumulative_proof_target | format_number | safe }} ({{ (block.header.metadata.cumulative_proof_target / block.header.metadata.coinbase_target * 100) | format_number | safe }}% coinbase target reached)
         {% endcall %}
         {% call data_line("Coinbase reward") %}
-            {% if coinbase_reward %}{{ (coinbase_reward // 2) | format_aleo_credit | safe }}{% else %}-{% endif %}
+            {% if coinbase_reward %}{{ (coinbase_reward * 2 // 3) | format_aleo_credit | safe }}{% else %}-{% endif %}
         {% endcall %}
         {% call data_line("Total fee") %}
             {{ (total_base_fee + total_priority_fee + total_burnt_fee) | format_aleo_credit | safe }} Aleo credits
@@ -62,7 +65,7 @@
             <li class="tabs-title"><a href="#solutions">Puzzle solutions</a></li>
         </ul>
 
-        <div class="tabs-content" data-tabs-content="block-tabs">
+        <div class="tabs-content table-wrap" data-tabs-content="block-tabs">
             <div class="tabs-panel" id="info">
                 {% call data_line("Round") %}
                 {{ block.header.metadata.round | format_number | safe }}
@@ -95,6 +98,7 @@
             </div>
 
             <div class="tabs-panel is-active" id="transactions">
+                <h4>Confirmed transactions</h4>
                 <table id="transactions-table" class="unstriped">
                     <thead>
                     <tr>
@@ -129,15 +133,31 @@
                     {% endfor %}
                     </tbody>
                 </table>
+                <h4>Aborted transactions</h4>
+                <table id="aborted-table" class="unstriped">
+                    <thead>
+                    <tr>
+                        <td>Transaction ID</td>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for aborted_tx in aborted_transactions %}
+                    <tr>
+                        <td><span class="mono">{{ aborted_tx }}</span></td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
             </div>
 
             <div class="tabs-panel" id="solutions">
+                <h4>Confirmed solutions</h4>
                 <table id="coinbase-table" class="unstriped">
                     <thead>
                     <tr>
+                        <td>Solution ID</td>
                         <td>Address</td>
-                        <td>Nonce</td>
-                        <td>Commitment</td>
+                        <td>Counter</td>
                         <td>Target / Total</td>
                         <td>Reward</td>
                     </tr>
@@ -145,9 +165,9 @@
                     <tbody>
                     {% for partial_solution in coinbase_solutions %}
                     <tr>
+                        <td><span class="mono">{{ partial_solution.solution_id }}</span></td>
                         <td><a href="/address?a={{ partial_solution.address }}"><span class="mono">{{ partial_solution.address_trunc }}</span></a></td>
-                        <td><span class="mono">{{ partial_solution.nonce }}</span></td>
-                        <td><span class="mono">{{ partial_solution.commitment }}</span></td>
+                        <td><span class="mono">{{ partial_solution.counter }}</span></td>
                         <td>{{ partial_solution.target | format_number | safe }}<span class="note"> / {{ target_sum | format_number | safe }}</span></td>
                         <td>{{ partial_solution.reward | format_aleo_credit | safe }}</td>
                     </tr>
@@ -155,8 +175,23 @@
                     </tbody>
                 </table>
                 {% if block.solutions.value.solutions | count > 100 %}
-                Showing 100 items. <a href="block_solutions?h={{ block.header.metadata.height }}">Show all</a>
+                Showing 100 items. <a href="/block_solutions?h={{ block.header.metadata.height }}">Show all</a>
                 {% endif %}
+                <h4>Aborted solutions</h4>
+                <table id="aborted-table" class="unstriped">
+                    <thead>
+                    <tr>
+                        <td>Solution ID</td>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for aborted_solution in aborted_solutions %}
+                    <tr>
+                        <td><span class="mono">{{ aborted_solution }}</span></td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
 

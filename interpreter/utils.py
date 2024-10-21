@@ -1,5 +1,7 @@
 from aleo_types import *
+from node import Network
 from .environment import Registers
+
 
 class FinalizeState:
     def __init__(self, block: Block):
@@ -26,19 +28,39 @@ def load_plaintext_from_operand(operand: Operand, registers: Registers, finalize
             return value.plaintext
         elif isinstance(register, AccessRegister):
             value = registers[int(register.locator)]
-            if not isinstance(value, PlaintextValue):
-                raise TypeError("register is not plaintext")
-            plaintext = value.plaintext
-            for access in register.accesses:
-                if isinstance(access, MemberAccess):
-                    if not isinstance(plaintext, StructPlaintext):
-                        raise TypeError("register is not struct")
-                    plaintext = plaintext.get_member(access.identifier)
-                elif isinstance(access, IndexAccess):
-                    if not isinstance(plaintext, ArrayPlaintext):
-                        raise TypeError("register is not array")
-                    plaintext = plaintext[access.index]
-            return plaintext
+            if isinstance(value, PlaintextValue):
+                plaintext = value.plaintext
+                for access in register.accesses:
+                    if isinstance(access, MemberAccess):
+                        if not isinstance(plaintext, StructPlaintext):
+                            raise TypeError("register is not struct")
+                        plaintext = plaintext.get_member(access.identifier)
+                    elif isinstance(access, IndexAccess):
+                        if not isinstance(plaintext, ArrayPlaintext):
+                            raise TypeError("register is not array")
+                        plaintext = plaintext[access.index]
+                return plaintext
+            elif isinstance(value, FutureValue):
+                next_value: Plaintext | Future = value.future
+                for access in register.accesses:
+                    if isinstance(access, MemberAccess):
+                        if not isinstance(next_value, StructPlaintext):
+                            raise TypeError("register is not struct")
+                        next_value = next_value.get_member(access.identifier)
+                    elif isinstance(access, IndexAccess):
+                        if isinstance(next_value, Future):
+                            argument = next_value.arguments[access.index]
+                            if isinstance(argument, FutureArgument):
+                                next_value = argument.future
+                            elif isinstance(argument, PlaintextArgument):
+                                next_value = argument.plaintext
+                        if isinstance(next_value, ArrayPlaintext):
+                            next_value = next_value[access.index]
+                if not isinstance(next_value, Plaintext):
+                    raise TypeError("register is not plaintext")
+                return next_value
+            else:
+                raise NotImplementedError
         else:
             raise NotImplementedError
     elif isinstance(operand, BlockHeightOperand):
@@ -46,6 +68,20 @@ def load_plaintext_from_operand(operand: Operand, registers: Registers, finalize
             literal=Literal(
                 type_=Literal.Type.U32,
                 primitive=finalize_state.block_height
+            )
+        )
+    elif isinstance(operand, ProgramIDOperand):
+        return LiteralPlaintext(
+            literal=Literal(
+                type_=Literal.Type.Address,
+                primitive=Address.loads(aleo_explorer_rust.program_id_to_address(str(operand.program_id)))
+            )
+        )
+    elif isinstance(operand, NetworkIDOperand):
+        return LiteralPlaintext(
+            literal=Literal(
+                type_=Literal.Type.U16,
+                primitive=Network.network_id
             )
         )
     else:

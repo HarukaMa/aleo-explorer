@@ -4,7 +4,8 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from aleo_types import Program, Value, LiteralPlaintextType, LiteralPlaintext, \
-    Literal, StructPlaintextType, StructPlaintext, cached_get_key_id
+    Literal, StructPlaintextType, StructPlaintext
+from aleo_types.cached import cached_get_key_id
 from api.utils import async_check_sync, use_program_cache
 from db import Database
 

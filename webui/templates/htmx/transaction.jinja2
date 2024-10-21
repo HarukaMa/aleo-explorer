@@ -6,6 +6,34 @@
             <h3>Transaction {{ tx_id_trunc }}</h3>
         </div>
 
+        {% if (transitions | length) == 1 and transitions[0].action in ("credits.aleo/transfer_public", "credits.aleo/transfer_public_to_private", "credits.aleo/transfer_private_to_public") %}
+            <div class="transfer-data" style="margin: 20px 4px;">
+            {% set future = transitions[0].obj.outputs[-1].future.value %}
+            {% call data_line("Transfer amount") %}
+                <strong>{{ future.arguments[-1].plaintext.literal.primitive | format_aleo_credit | safe }} Aleo credits</strong>
+            {% endcall %}
+            {% call data_line("From") %}
+                {% if transitions[0].action == "credits.aleo/transfer_private_to_public" %}
+                    Private
+                {% else %}
+                    <span class="mono"><a href="address?a={{ future.arguments[0] }}">{{ future.arguments[0] }}</a></span>
+                {% endif %}
+            {% endcall %}
+            {% call data_line("To") %}
+                {% if transitions[0].action == "credits.aleo/transfer_public_to_private" %}
+                    Private
+                {% else %}
+                    {% if transitions[0].action == "credits.aleo/transfer_public" %}
+                        {% set arg_index = 1 %}
+                    {% else %}
+                        {% set arg_index = 0 %}
+                    {% endif %}
+                    <span class="mono"><a href="address?a={{ future.arguments[arg_index] }}">{{ future.arguments[arg_index] }}</a></span>
+                {% endif %}
+            {% endcall %}
+            </div>
+        {% endif %}
+
         <div id="data">
             {% call data_line("Transaction ID") %}
                 <span class="mono">{{ tx_id }}</span>
@@ -22,6 +50,15 @@
                     {% else %}
                         {{ first_seen | format_time | safe }}
                     {% endif %}
+                {% endcall %}
+            {% elif state == "Aborted" %}
+                {% if not first_seen %}
+                    {% set first_seen = block_confirm_time %}
+                {% endif %}
+                {% set delta = block_confirm_time - first_seen %}
+                {% call data_line("Aborted at block") %}
+                    <a href="/block?h={{ block.header.metadata.height }}">{{ block.header.metadata.height | format_number | safe }}</a>
+                    ({{ block_confirm_time | format_time | safe }}{% if delta > 0 %}, aborted in {{ delta | format_time_delta }}{% endif %})
                 {% endcall %}
             {% else %}
                 {% if not first_seen %}
@@ -83,26 +120,26 @@
             {% call data_line("Total fee") %}
                 {{ total_fee | format_aleo_credit | safe }} Aleo credits
             {% endcall %}
-            {% if state != "Unconfirmed" %}
-                {% if type == "Execute" %}
-                    {% call sub_data_line("Breakdown") %}
-                        <span class="box-drawing">├</span> Storage fee: {{ storage_cost | format_aleo_credit | safe }}<br>
-                        <span class="box-drawing">├</span> Finalize fee: {{ finalize_costs | sum | format_aleo_credit | safe }}<br>
-                        {% for cost in finalize_costs %}
-                            <span class="box-drawing">│{% if loop.revindex0 == 0 %}└{% else %}├{% endif %}</span> Transition #{{ loop.index0 }}: {{ cost | format_aleo_credit | safe }}<br>
-                        {% endfor %}
-                        <span class="box-drawing">├</span> Priority fee: {{ priority_fee | format_aleo_credit | safe }}<br>
-                        <span class="box-drawing">└</span> Burnt fee: {{ burnt_fee | format_aleo_credit | safe }}
-                    {% endcall %}
-                {% elif type == "Deploy" %}
-                    {% call sub_data_line("Breakdown") %}
-                        <span class="box-drawing">├</span> Storage fee: {{ storage_cost | format_aleo_credit | safe }}<br>
-                        <span class="box-drawing">├</span> Namespace fee: {{ namespace_cost | format_aleo_credit | safe }}<br>
-                        <span class="box-drawing">├</span> Priority fee: {{ priority_fee | format_aleo_credit | safe }}<br>
-                        <span class="box-drawing">└</span> Burnt fee: {{ burnt_fee | format_aleo_credit | safe }}
-                    {% endcall %}
-                {% endif %}
-            {% else %}
+{#            {% if state != "Unconfirmed" %}#}
+{#                {% if type == "Execute" %}#}
+{#                    {% call sub_data_line("Breakdown") %}#}
+{#                        <span class="box-drawing">├</span> Storage fee: {{ storage_cost | format_aleo_credit | safe }}<br>#}
+{#                        <span class="box-drawing">├</span> Finalize fee: {{ finalize_costs | sum | format_aleo_credit | safe }}<br>#}
+{#                        {% for cost in finalize_costs %}#}
+{#                            <span class="box-drawing">│{% if loop.revindex0 == 0 %}└{% else %}├{% endif %}</span> Transition #{{ loop.index0 }}: {{ cost | format_aleo_credit | safe }}<br>#}
+{#                        {% endfor %}#}
+{#                        <span class="box-drawing">├</span> Priority fee: {{ priority_fee | format_aleo_credit | safe }}<br>#}
+{#                        <span class="box-drawing">└</span> Burnt fee: {{ burnt_fee | format_aleo_credit | safe }}#}
+{#                    {% endcall %}#}
+{#                {% elif type == "Deploy" %}#}
+{#                    {% call sub_data_line("Breakdown") %}#}
+{#                        <span class="box-drawing">├</span> Storage fee: {{ storage_cost | format_aleo_credit | safe }}<br>#}
+{#                        <span class="box-drawing">├</span> Namespace fee: {{ namespace_cost | format_aleo_credit | safe }}<br>#}
+{#                        <span class="box-drawing">├</span> Priority fee: {{ priority_fee | format_aleo_credit | safe }}<br>#}
+{#                        <span class="box-drawing">└</span> Burnt fee: {{ burnt_fee | format_aleo_credit | safe }}#}
+{#                    {% endcall %}#}
+{#                {% endif %}#}
+{#            {% else %}#}
                 {% if type == "Execute" %}
                     {% call sub_data_line("Breakdown") %}
                         <span class="box-drawing">├</span> Base fee: {{ (storage_cost + (finalize_costs | sum) + burnt_fee) | format_aleo_credit | safe }}<br>
@@ -113,7 +150,7 @@
                         <span class="box-drawing">└</span> Priority fee: {{ priority_fee | format_aleo_credit | safe }}<br>
                     {% endcall %}
                 {% endif %}
-            {% endif %}
+{#            {% endif %}#}
         </div>
 
         <ul class="tabs" data-tabs id="transaction-tabs">
@@ -124,7 +161,7 @@
         {% endif %}
         </ul>
 
-        <div class="tabs-content" data-tabs-content="transaction-tabs">
+        <div class="tabs-content table-wrap" data-tabs-content="transaction-tabs">
             <div class="tabs-panel is-active" id="transitions">
                 {% if type == "Deploy" %}<h4>Fee transition</h4>{% endif %}
                 <table id="transitions-table" class="unstriped">

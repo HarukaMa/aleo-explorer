@@ -8,26 +8,28 @@
         <p>
             The network difficulty is constantly changing, so the calculation below cannot be used as earning prediction.
             <br>
-            "Average credit per day" assumes 2 credit per solution on average<span class="sup">*</span>.
+            "Average credits per day" assumes {{ avg_reward | format_aleo_credit | safe }} credits per solution on average<span class="sup">*</span>.
         </p>
 
         <form action="#">
             <div class="grid-x grid-padding-x">
                 <div class="cell small-2">
-                    <label for="proof_input" class="text-right middle">Proof target: </label>
+                    <label for="proof_target_input" class="text-right middle">Proof target: </label>
                 </div>
                 <div class="cell small-2">
-                    <label class="middle">{{ proof_target }}</label>
+                    <div class="input-group">
+                        <input class="input-group-field" id="proof_target_input" type="number" name="pt" placeholder="" value="{{ proof_target }}" min="134217728">
+                    </div>
                 </div>
             </div>
             <div class="grid-x grid-padding-x">
                 <div class="cell small-2">
-                    <label for="proof_input" class="text-right middle">Prover speed: </label>
+                    <label for="proof_input" class="text-right middle">Prover solution rate: </label>
                 </div>
                 <div class="cell small-2">
                     <div class="input-group">
                         <input class="input-group-field" id="proof_input" type="number" name="ps" placeholder="">
-                        <span class="input-group-label">c/s</span>
+                        <span class="input-group-label">s/s</span>
                     </div>
                 </div>
             </div>
@@ -43,8 +45,7 @@
         </p>
         <br>
         <p class="note">
-            * Mathematical average from all valid solutions during testnet3. While it should be achieveable in the long
-            run, most solutions should have rewards around 0.5 - 1 credit.
+            * Live data calculated from last 10,000 solutions submitted to the network.
         </p>
     </div>
 
@@ -66,10 +67,18 @@
     function calculate(e) {
         e.preventDefault();
         const ps = parseFloat(document.getElementById("proof_input").value)
-        const proof_target = {{ proof_target }}
+        const proof_target = parseInt(document.getElementById("proof_target_input").value)
+      if (isNaN(ps) || isNaN(proof_target)) {
+        alert("Invalid input")
+        return
+      }
+      if (proof_target < 134217728) {
+        alert("Proof target is less than network minimum target (134217728)")
+        return
+      }
         const result = document.getElementById("result")
         const average = sec_to_human(proof_target / ps)
-        const daily = 2 * (86400 / (proof_target / ps))
+        const daily = {{ avg_reward }} / 1000000 * (86400 / (proof_target / ps))
 
         const p_inv = 1 - (1 / proof_target)
         let cp = 1
@@ -89,7 +98,7 @@
         const upper_time = sec_to_human(upper / ps)
 
         result.innerHTML = `Average: ${average}<br> CDF [0.2, 0.8]: ${lower_time} - ${upper_time} <br>
-Average testnet credit per day: ${daily.toFixed(6)}`
+Average credits per day: ${daily.toFixed(6)}`
     }
 </script>
 

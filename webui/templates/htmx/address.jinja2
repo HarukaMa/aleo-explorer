@@ -1,11 +1,12 @@
 
-{% from "macros.jinja2" import data_line, data_line_safe, htmx_title, sync_notice %}
+{% from "macros.jinja2" import data_line, data_line_safe, htmx_title, sync_notice, UIAddress %}
 {{ sync_notice(sync_info) }}
+
 
     <div class="content" hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
 
         <div id="header">
-            <h3>{% if committee_state %}Validator{% else %}Address{% endif %} {{ address_trunc }}</h3>
+            <h3>{% if committee_state %}Validator{% else %}Address{% endif %} {{ UIAddress(address) }}</h3>
         </div>
         {% if program_name is not none %}
         <div class="callout warning">This is a program address. Records owned by programs are currently unspendable.</div>
@@ -48,11 +49,21 @@
             <div class="tabs-panel is-active" id="stats">
                 {% call data_line("Credits staked") %}
                     {% if bond_state %}
-                        {{ bond_state.amount | format_aleo_credit | safe }} Aleo credits, staked to {% if bond_state.validator == address %}self{% else %}validator <span class="mono"><a href="/address?a={{ bond_state.validator }}">{{ bond_state.validator }}</a></span>{% endif %}
+                        {{ bond_state.amount | format_aleo_credit | safe }} Aleo credits<br>
+                        Staked to {% if bond_state.validator == raw_address %}self{% else %}validator <span class="mono"><a href="/address?a={{ bond_state.validator }}">{{ bond_state.validator }}</a></span>{% endif %}<br>
                     {% else %}
                         0 Aleo credits
                     {% endif %}
                 {% endcall %}
+                {% if bond_state %}
+                    {% call data_line("Withdrawal address") %}
+                        {% if withdrawal_address == raw_address %}
+                            Self
+                        {% else %}
+                            <span class="mono"><a href="/address?a={{ withdrawal_address }}">{{ withdrawal_address }}</a></span>
+                        {% endif %}
+                    {% endcall %}
+                {% endif %}
                 {% if unbond_state %}
                     {% call data_line("Credits unstaking") %}
                         {{ unbond_state.amount | format_aleo_credit | safe }} Aleo credits, withdrawable {% if unbond_state.height > sync_info.explorer_height %}in {{ unbond_state.height - sync_info.explorer_height }} blocks{% else %}now{% endif %}
@@ -82,7 +93,7 @@
                     {% endcall %}
                     {% call data_line("Estimated speed") %}
                         {% if speed != 0 %}
-                            {{ "%.2f" % speed }} <span data-tippy-content='commitments per second, also known as "p/s" or "s/s"'>c/s</span> (last {{ timespan }})
+                            {{ speed | format_large_number | safe }}<span data-tippy-content="Solutions per second, see FAQ for more info">s/s</span> (last {{ timespan }})
                         {% else %}
                             Not enough solutions during last day
                         {% endif %}
@@ -93,10 +104,13 @@
             {% if committee_state %}
             <div class="tabs-panel" id="validator">
                 {% call data_line("Credits staked") %}
-                    {{ committee_state.amount | format_aleo_credit | safe }} Aleo credits
+                    {{ delegated | format_aleo_credit | safe }} Aleo credits
                 {% endcall %}
                 {% call data_line("Open for staking") %}
                     {% if committee_state.is_open %}Yes{% else %}No{% endif %}
+                {% endcall %}
+                {% call data_line("Commission") %}
+                    {{ committee_state.commission }}%
                 {% endcall %}
                 {% call data_line("Uptime in last 24 hours") %}
                     {{ "%0.2f" | format(uptime * 100) }}%
@@ -131,7 +145,8 @@
                         <th>Block</th>
                         <th>Epoch</th>
                         <th>Timestamp</th>
-                        <th>Nonce</th>
+                        <th>Solution ID</th>
+                        <th>Counter</th>
                         <th>Target / Total</th>
                         <th>Reward</th>
                     </tr>
@@ -140,9 +155,10 @@
                     {% for solution in solutions %}
                         <tr>
                             <td><a href="/block?h={{ solution.height }}">{{ solution.height | format_number | safe }}</a></td>
-                            <td>{{ solution.height // 256 }}</td>
+                            <td>{{ solution.height // 360 }}</td>
                             <td>{{ solution.timestamp | format_time | safe }}</td>
-                            <td>{{ solution.nonce }}</td>
+                            <td><span class="mono">{{ solution.solution_id }}</span></td>
+                            <td>{{ solution.counter }}</td>
                             <td>{{ solution.target | format_number | safe }}<span class="note"> / {{ solution.target_sum | format_number | safe }}</span></td>
                             <td>{{ solution.reward | format_aleo_credit | safe }}</td>
                         </tr>
@@ -204,4 +220,23 @@
 
     </div>
 
+
+<script>
+  function switch_tab(e) {
+    console.log(e)
+    hash = window.location.hash
+    console.log(window.location)
+    console.log(hash)
+    if (hash) {
+      tab = document.querySelector(`a[href="${hash}"]`)
+      console.log(tab)
+      window.history.replaceState(null, null, window.location.pathname + window.location.search)
+      if (tab) {
+        tab.click()
+        setTimeout(() => window.scrollTo(0, 0), 0)
+      }
+    }
+  }
+  document.addEventListener('htmx:pushedIntoHistory', switch_tab)
+</script>
 {{ htmx_title(request, "Address " ~ address_trunc) }}

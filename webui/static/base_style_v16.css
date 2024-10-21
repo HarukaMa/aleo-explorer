@@ -110,6 +110,16 @@ h1, h2, h3, h4, h5, h6 {
     padding: 0 8px;
 }
 
+@media (max-width: 640px) {
+    .menubar {
+        flex-wrap: wrap;
+    }
+
+    .container {
+        margin: 0 8px;
+    }
+}
+
 .menubar .dropdown > li > a {
     margin-top: 2px;
     margin-bottom: -2px;
@@ -260,6 +270,16 @@ table {
     margin-top: 10px;
 }
 
+.table-wrap.tabs-panel.is-active {
+    display: block;
+    overflow-x: auto;
+}
+
+.table-wrap:not(.tabs-panel) {
+    display: block;
+    overflow-x: auto;
+}
+
 pre {
     font-size: 0.825rem;
     background-color: #f8f8f8;
@@ -394,4 +414,14 @@ code, pre {
 
 .label .mono {
     font-size: 0.8rem;
+}
+
+.validator-logo {
+    height: 32px;
+    width: 32px;
+    object-fit: contain;
+}
+
+.validator-link {
+    font-size: 16px;
 }

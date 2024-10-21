@@ -7,7 +7,7 @@
             <h3>Solutions from {{ address_trunc }}</h3>
         </div>
 
-        <div id="blocks">
+        <div id="blocks" class="table-wrap">
 
             {{ nav(page, total_pages, "/address_solution?a=" + address + "&") }}
 
@@ -17,7 +17,8 @@
                     <th>Block</th>
                     <th>Epoch</th>
                     <th>Timestamp</th>
-                    <th>Nonce</th>
+                    <th>Solution ID</th>
+                    <th>counter</th>
                     <th>Target / Total</th>
                     <th>Reward</th>
                 </tr>
@@ -26,9 +27,10 @@
                 {% for solution in solutions %}
                     <tr>
                         <td><a href="/block?h={{ solution.height }}">{{ solution.height }}</a></td>
-                        <td>{{ solution.height // 256 }}</td>
+                        <td>{{ solution.height // 360 }}</td>
                         <td>{{ solution.timestamp | format_time | safe }}</td>
-                        <td>{{ solution.nonce }}</td>
+                        <td><span class="mono">{{ solution.solution_id }}</span></td>
+                        <td>{{ solution.counter }}</td>
                         <td>{{ solution.target }}<span class="note"> / {{ solution.target_sum }}</span></td>
                         <td>{{ solution.reward | format_aleo_credit | safe }}</td>
                     </tr>

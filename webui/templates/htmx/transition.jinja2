@@ -174,7 +174,7 @@
                     return
                 }
                 try {
-                    await wallet.connect("AUTO_DECRYPT", "testnet3")
+                    await wallet.connect("AUTO_DECRYPT", "mainnet")
                 } catch (e) {
                     button.className = "button alert"
                     button.innerText = "Connect failed"

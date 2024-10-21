@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="format-detection" content="telephone=no">
-    <meta name="htmx-config" content='{"getCacheBusterParam":true}'>
     <script type="application/ld+json">
         {
             "@context": "https://schema.org",
@@ -14,15 +13,16 @@
                 "@type": "Person",
                 "name": "Haruka Ma"
             },
-            "url": "https://testnet3.aleoscan.io/",
-            "description": "Aleoscan is an open source Aleo explorer. Explore the Aleo blockchain, find information about blocks, transactions, validators, programs and more. Formerly known as Haruka's Aleo Explorer.",
+            "url": "https://aleoscan.io/",
+            "description": "AleoScan is an open source Aleo explorer. Explore the Aleo blockchain, find information about blocks, transactions, validators, programs and more. Formerly known as Haruka's Aleo Explorer.",
             "potentialAction": {
                 "@type": "SearchAction",
-                "target": "https://testnet3.aleoscan.io/search?q={search_term_string}",
+                "target": "https://aleoscan.io/search?q={search_term_string}",
                 "query-input": "required name=search_term_string"
             }
         }
     </script>
+    <meta name="description" content="AleoScan is an open source Aleo explorer. Explore the Aleo blockchain, find information about blocks, transactions, validators, programs and more. Formerly known as Haruka's Aleo Explorer.">
 
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
@@ -57,7 +57,7 @@
         {% endif %}
         }
     </style>
-    <link rel="stylesheet" href="/static/base_style_v11.css">
+    <link rel="stylesheet" href="/static/base_style_v16.css">
     {% block head %}{% endblock %}
 </head>
 <body hx-ext="morph" hx-indicator="#htmx-body">
@@ -68,7 +68,7 @@
             <ul class="dropdown menu" data-dropdown-menu hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
                 <a href="/" style="padding: 0; margin: auto 0"><div class="title-logo"></div></a>
                 <div class="title-network-indicator-container">
-                    <span class="title-network-indicator-name">Testnet 3</span>
+                    <span class="title-network-indicator-name">{{ "" | network_tag }}</span>
                 </div>
                 <li>
                     <a href="#">Blockchain</a>
@@ -83,7 +83,7 @@
                 <li>
                     <a href="#">Proving</a>
                     <ul class="menu">
-                        <li><a href="/leaderboard">Leaderboard</a></li>
+{#                        <li><a href="/incentive">Incentive dashboard</a></li>#}
                         <li><a href="/calc">Calculator</a></li>
                     </ul>
                 </li>
@@ -96,8 +96,8 @@
                     </ul>
                 </li>
                 <li><a href="{{ "API_DOC_ROOT" | get_env }}" target="_blank">API</a></li>
-                {% if "HAS_BETA" | get_env %}
-                    <li style="margin-left: auto"><a href="//explorerb.hamp.app">Preview</a></li>
+                {% if ("NETWORK" | get_env) != "mainnet" %}
+                    <li style="margin-left: auto;"><a style="color: darkred" href="//aleoscan.io">Switch to Mainnet</a></li>
                 {% endif %}
             </ul>
         </div>
@@ -155,7 +155,6 @@
         integrity="sha512-2TtfktSlvvPzopzBA49C+MX6sdc7ykHGbBQUTH8Vk78YpkXVD5r6vrNU+nOmhhl1MyTWdVfxXdZfyFsvBvOllw=="
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
-<script id="content-script"></script>
 <script src="/static/base_script_v2.js"></script>
 <script>
     $(document).foundation()
@@ -194,5 +193,6 @@
         }
     {% endif %}
 </script>
+<script id="content-script"></script>
 </body>
 </html>

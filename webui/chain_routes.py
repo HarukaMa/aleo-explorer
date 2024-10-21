@@ -17,10 +17,12 @@ from aleo_types import u32, Transition, ExecuteTransaction, PrivateTransitionInp
     FeeTransaction, RejectedDeploy, RejectedExecution, Identifier, Entry, FutureTransitionOutput, Future, \
     PlaintextArgument, FutureArgument, StructPlaintext, Finalize, \
     PlaintextFinalizeType, StructPlaintextType, UpdateKeyValue, Value, Plaintext, RemoveKeyValue, FinalizeOperation, \
-    NodeType, cached_get_mapping_id, cached_get_key_id
+    NodeType, FeeComponent, Fee, Option, Address
+from aleo_types.cached import cached_get_key_id, cached_get_mapping_id
 from db import Database
 from node.light_node import LightNodeState
 from util.global_cache import get_program
+from util.typing_exc import Unreachable
 from .classes import UIAddress
 from .template import htmx_template
 from .utils import function_signature, out_of_sync_check, function_definition, get_relative_time
@@ -68,19 +70,29 @@ async def block_route(request: Request):
             css.append({
                 "address": solution["address"],
                 "address_trunc": solution["address"][:15] + "..." + solution["address"][-10:],
-                "nonce": solution["nonce"],
-                "commitment": solution["commitment"][:13] + "..." + solution["commitment"][-10:],
+                "counter": solution["counter"],
                 "target": solution["target"],
                 "reward": solution["reward"],
+                "solution_id": solution["solution_id"],
             })
             target_sum += solution["target"]
-
+    ass: list[str] = list(map(str, block.aborted_solution_ids))
     txs: DictList = []
     total_base_fee = 0
     total_priority_fee = 0
     total_burnt_fee = 0
     for ct in block.transactions.transactions:
-        fee_breakdown = await ct.get_fee_breakdown(db)
+        # TODO: use proper fee calculation
+        # fee_breakdown = await ct.get_fee_breakdown(db)
+        fee = ct.transaction.fee
+        if isinstance(fee, Fee):
+            base_fee, priority_fee = fee.amount
+        elif fee.value is not None:
+            base_fee, priority_fee = fee.value.amount
+        else:
+            base_fee, priority_fee = 0, 0
+        fee_breakdown = FeeComponent(base_fee, 0, [0], priority_fee, 0)
+        print(fee_breakdown)
         base_fee = fee_breakdown.storage_cost + fee_breakdown.namespace_cost + sum(fee_breakdown.finalize_costs)
         priority_fee = fee_breakdown.priority_fee
         burnt_fee = fee_breakdown.burnt
@@ -107,9 +119,9 @@ async def block_route(request: Request):
             tx = ct.transaction
             if not isinstance(tx, ExecuteTransaction):
                 raise HTTPException(status_code=550, detail="Invalid transaction type")
-            additional_fee = tx.additional_fee.value
-            if additional_fee is not None:
-                base_fee, priority_fee = additional_fee.amount
+            fee = cast(Option[Fee], tx.fee).value
+            if fee is not None:
+                base_fee, priority_fee = fee.amount
             else:
                 base_fee, priority_fee = 0, 0
             root_transition = tx.execution.transitions[-1]
@@ -118,7 +130,7 @@ async def block_route(request: Request):
                 "index": ct.index,
                 "type": "Execute",
                 "state": "Accepted",
-                "transitions_count": len(tx.execution.transitions) + bool(tx.additional_fee.value is not None),
+                "transitions_count": len(tx.execution.transitions) + bool(fee is not None),
                 "base_fee": base_fee - burnt_fee,
                 "priority_fee": priority_fee,
                 "burnt_fee": burnt_fee,
@@ -129,7 +141,7 @@ async def block_route(request: Request):
             tx = ct.transaction
             if not isinstance(tx, FeeTransaction):
                 raise HTTPException(status_code=550, detail="Invalid transaction type")
-            base_fee, priority_fee = tx.fee.amount
+            base_fee, priority_fee = cast(Fee, tx.fee).amount
             rejected = ct.rejected
             if not isinstance(rejected, RejectedExecution):
                 raise HTTPException(status_code=550, detail="Invalid rejected transaction type")
@@ -148,9 +160,9 @@ async def block_route(request: Request):
             txs.append(t)
         else:
             raise HTTPException(status_code=550, detail="Unsupported transaction type")
-
+    atxs: list[str] = list(map(str, block.aborted_transaction_ids))
     validators, all_validators_raw = await db.get_validator_by_height(height)
-    all_validators = []
+    all_validators: list[UIAddress] = []
     for v in all_validators_raw:
         all_validators.append(await UIAddress(v["address"]).resolve(db))
 
@@ -161,7 +173,9 @@ async def block_route(request: Request):
         "validator": "Not implemented", # await db.get_miner_from_block_hash(block.block_hash),
         "coinbase_reward": coinbase_reward,
         "transactions": txs,
+        "aborted_transactions": atxs,
         "coinbase_solutions": css,
+        "aborted_solutions": ass,
         "target_sum": target_sum,
         "total_base_fee": total_base_fee,
         "total_priority_fee": total_priority_fee,
@@ -188,12 +202,13 @@ async def transaction_route(request: Request):
         if confirmed_transaction is None:
             raise HTTPException(status_code=550, detail="Database inconsistent")
         transaction = confirmed_transaction.transaction
+        aborted = None
     else:
         confirmed_transaction = None
         transaction = await db.get_unconfirmed_transaction(tx_id)
         if transaction is None:
             raise HTTPException(status_code=404, detail="Transaction not found")
-
+        aborted = await db.is_transaction_aborted(tx_id)
     first_seen = await db.get_transaction_first_seen(tx_id)
     index = -1
     original_txid: Optional[str] = None
@@ -202,9 +217,14 @@ async def transaction_route(request: Request):
         transaction_type = "Deploy"
         if is_confirmed:
             transaction_state = "Accepted"
+            if confirmed_transaction is None:
+                raise Unreachable
             index = confirmed_transaction.index
         else:
-            transaction_state = "Unconfirmed"
+            if aborted:
+                transaction_state = "Aborted"
+            else:
+                transaction_state = "Unconfirmed"
             program_info = await db.get_deploy_transaction_program_info(tx_id)
             if program_info is None:
                 raise HTTPException(status_code=550, detail="Database inconsistent")
@@ -212,9 +232,14 @@ async def transaction_route(request: Request):
         transaction_type = "Execute"
         if is_confirmed:
             transaction_state = "Accepted"
+            if confirmed_transaction is None:
+                raise Unreachable
             index = confirmed_transaction.index
         else:
-            transaction_state = "Unconfirmed"
+            if aborted:
+                transaction_state = "Aborted"
+            else:
+                transaction_state = "Unconfirmed"
     elif isinstance(transaction, FeeTransaction):
         if confirmed_transaction is None:
             raise HTTPException(status_code=550, detail="Database inconsistent")
@@ -232,14 +257,36 @@ async def transaction_route(request: Request):
     else:
         raise HTTPException(status_code=550, detail="Unsupported transaction type")
 
-    if confirmed_transaction is None:
-        storage_cost, namespace_cost, finalize_costs, priority_fee, burnt = await transaction.get_fee_breakdown(db)
+    # TODO: use proper fee calculation
+    if aborted:
+        height = await db.get_transaction_aborted_height(tx_id)
+        if height is None:
+            raise HTTPException(status_code=550, detail="Database inconsistent")
+        block = await db.get_block_by_height(height)
+        if block is None:
+            raise HTTPException(status_code=550, detail="Database inconsistent")
+        block_confirm_time = await db.get_block_confirm_time(height)
+    elif confirmed_transaction is None:
+        # storage_cost, namespace_cost, finalize_costs, priority_fee, burnt = await transaction.get_fee_breakdown(db)
         block = None
         block_confirm_time = None
     else:
-        storage_cost, namespace_cost, finalize_costs, priority_fee, burnt = await confirmed_transaction.get_fee_breakdown(db)
+        # storage_cost, namespace_cost, finalize_costs, priority_fee, burnt = await confirmed_transaction.get_fee_breakdown(db)
         block = await db.get_block_from_transaction_id(tx_id)
+        if block is None:
+            raise HTTPException(status_code=550, detail="Database inconsistent")
         block_confirm_time = await db.get_block_confirm_time(block.height)
+
+    fee = transaction.fee
+    if isinstance(fee, Fee):
+        storage_cost, priority_fee = fee.amount
+    elif fee.value is not None:
+        storage_cost, priority_fee = fee.value.amount
+    else:
+        storage_cost, priority_fee = 0, 0
+    namespace_cost = 0
+    finalize_costs: list[int] = []
+    burnt = 0
 
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx: dict[str, Any] = {
@@ -261,18 +308,19 @@ async def transaction_route(request: Request):
         "original_txid": original_txid,
         "program_info": program_info,
         "reject_reason": await db.get_transaction_reject_reason(tx_id) if transaction_state == "Rejected" else None,
+        "aborted": aborted,
         "sync_info": sync_info,
     }
 
     if isinstance(transaction, DeployTransaction):
         deployment = transaction.deployment
         program = deployment.program
-        fee_transition = transaction.fee.transition
+        fee_transition = cast(Fee, transaction.fee).transition
         ctx.update({
             "edition": int(deployment.edition),
             "program_id": str(program.id),
             "transitions": [{
-                "transition_id": transaction.fee.transition.id,
+                "transition_id": fee_transition.id,
                 "action": f"{fee_transition.program_id}/{fee_transition.function_name}",
             }],
         })
@@ -285,10 +333,11 @@ async def transaction_route(request: Request):
             transitions.append({
                 "transition_id": transition.id,
                 "action":f"{transition.program_id}/{transition.function_name}",
+                "obj": transition,
             })
-        if transaction.additional_fee.value is not None:
-            additional_fee = transaction.additional_fee.value
-            transition = additional_fee.transition
+        fee = cast(Option[Fee], transaction.fee).value
+        if fee is not None:
+            transition = fee.transition
             fee_transition = {
                 "transition_id": transition.id,
                 "action":f"{transition.program_id}/{transition.function_name}",
@@ -302,12 +351,13 @@ async def transaction_route(request: Request):
             "transitions": transitions,
             "fee_transition": fee_transition,
         })
-    elif isinstance(transaction, FeeTransaction):
-        global_state_root = transaction.fee.global_state_root
-        proof = transaction.fee.proof.value
+    elif isinstance(transaction, FeeTransaction): # type: ignore[reportUnnecessaryIsInstance] # future proof
+        fee = cast(Fee, transaction.fee)
+        global_state_root = fee.global_state_root
+        proof = fee.proof.value
         transitions = []
         rejected_transitions: DictList = []
-        transition = transaction.fee.transition
+        transition = fee.transition
         transitions.append({
             "transition_id": transition.id,
             "action":f"{transition.program_id}/{transition.function_name}",
@@ -336,7 +386,9 @@ async def transaction_route(request: Request):
         raise HTTPException(status_code=550, detail="Unsupported transaction type")
 
     mapping_operations: Optional[list[dict[str, Any]]] = None
-    if confirmed_transaction is not None:
+    if confirmed_transaction is not None and not aborted:
+        if block is None:
+            raise Unreachable
         limited_tracking = {
             cached_get_mapping_id("credits.aleo", "committee"): ("credits.aleo", "committee"),
             cached_get_mapping_id("credits.aleo", "bonded"): ("credits.aleo", "bonded"),
@@ -371,7 +423,7 @@ async def transaction_route(request: Request):
                     else:
                         last_index = fos.index(fo, last_index + 1)
                         indices.append(last_index)
-            mapping_operations: Optional[list[dict[str, Any]]] = []
+            mapping_operations = []
             for i in untracked_indices:
                 fo = untracked_fos[i]
                 program_id, mapping_name = limited_tracking[str(fo.mapping_id)]
@@ -473,8 +525,9 @@ async def transition_route(request: Request):
                 if not isinstance(tx, DeployTransaction):
                     raise HTTPException(status_code=550, detail="Database inconsistent")
                 state = "Accepted"
-                if str(tx.fee.transition.id) == ts_id:
-                    transition = tx.fee.transition
+                fee = cast(Fee, tx.fee)
+                if str(fee.transition.id) == ts_id:
+                    transition = fee.transition
                     transaction_id = tx.id
                     break
             case AcceptedExecute():
@@ -487,8 +540,9 @@ async def transition_route(request: Request):
                         transition = ts
                         transaction_id = tx.id
                         break
-                if transaction_id is None and tx.additional_fee.value is not None:
-                    ts = tx.additional_fee.value.transition
+                fee = cast(Option[Fee], tx.fee).value
+                if transaction_id is None and fee is not None:
+                    ts = fee.transition
                     if str(ts.id) == ts_id:
                         transition = ts
                         transaction_id = tx.id
@@ -497,8 +551,9 @@ async def transition_route(request: Request):
                 tx = ct.transaction
                 if not isinstance(tx, FeeTransaction):
                     raise HTTPException(status_code=550, detail="Database inconsistent")
-                if str(tx.fee.transition.id) == ts_id:
-                    transition = tx.fee.transition
+                fee = cast(Fee, tx.fee)
+                if str(fee.transition.id) == ts_id:
+                    transition = fee.transition
                     transaction_id = tx.id
                     state = "Accepted"
                 else:
@@ -609,6 +664,8 @@ async def transition_route(request: Request):
                 struct_type = ""
                 if isinstance(argument.plaintext, StructPlaintext):
                     program = await get_program(db, str(transition.program_id))
+                    if program is None:
+                        raise HTTPException(status_code=550, detail="Program not found")
                     finalize = cast(Finalize, program.functions[transition.function_name].finalize.value)
                     finalize_type = cast(PlaintextFinalizeType, finalize.inputs[i].finalize_type)
                     struct_type = str(cast(StructPlaintextType, finalize_type.plaintext_type).struct)
@@ -723,7 +780,11 @@ async def search_route(request: Request):
         # address
         addresses = await db.search_address(query)
         if not addresses:
-            raise HTTPException(status_code=404, detail="Address not found. See FAQ for more info.")
+            try: # try to convert to a valid address
+                Address.loads(query)
+                return RedirectResponse(f"/address?a={query}{remaining_query}", status_code=302)
+            except:
+                raise HTTPException(status_code=400, detail="Invalid address format")
         if len(addresses) == 1:
             return RedirectResponse(f"/address?a={addresses[0]}{remaining_query}", status_code=302)
         too_many = False
@@ -734,6 +795,25 @@ async def search_route(request: Request):
             "query": query,
             "type": "address",
             "addresses": addresses,
+            "too_many": too_many,
+        }
+        return ctx, {'Cache-Control': 'public, max-age=15'}
+    elif query.startswith("solution1"):
+        # solution id
+        solutions = await db.search_solution(query)
+        if not solutions:
+            raise HTTPException(status_code=404, detail="Solution not found")
+        if len(solutions) == 1:
+            height = await db.get_solution_block_height(solutions[0])
+            return RedirectResponse(f"/block?h={height}{remaining_query}", status_code=302)
+        too_many = False
+        if len(solutions) > 50:
+            solutions = solutions[:50]
+            too_many = True
+        ctx = {
+            "query": query,
+            "type": "solution",
+            "solutions": solutions,
             "too_many": too_many,
         }
         return ctx, {'Cache-Control': 'public, max-age=15'}
@@ -806,6 +886,8 @@ async def validators_route(request: Request):
     except:
         raise HTTPException(status_code=400, detail="Invalid page")
     latest_height = await db.get_latest_height()
+    if latest_height is None:
+        raise HTTPException(status_code=550, detail="No blocks found")
     total_validators = await db.get_validator_count_at_height(latest_height)
     if not total_validators:
         raise HTTPException(status_code=550, detail="No validators found")
@@ -818,9 +900,11 @@ async def validators_route(request: Request):
     total_stake = 0
     for validator in validators_data:
         validators.append({
-            "address": validator["address"],
+            "address": await UIAddress(validator["address"]).resolve(db),
             "stake": validator["stake"],
             "uptime": validator["uptime"] * 100,
+            "commission": validator["commission"],
+            "open": validator["is_open"],
         })
         total_stake += validator["stake"]
 
@@ -869,22 +953,34 @@ async def unconfirmed_transactions_route(request: Request):
     }
     return ctx, {'Cache-Control': 'public, max-age=5'}
 
+async def solution_route(request: Request):
+    db: Database = request.app.state.db
+    solution_id = request.query_params.get("id")
+    if solution_id is None:
+        raise HTTPException(status_code=400, detail="Missing solution id")
+    height = await db.get_solution_block_height(solution_id)
+    if height is None:
+        raise HTTPException(status_code=404, detail="Solution not found")
+    return RedirectResponse(f"/block?h={height}", status_code=302)
+
 @htmx_template("nodes.jinja2")
 async def nodes_route(request: Request):
     lns: LightNodeState = request.app.state.lns
     lns.cleanup()
     nodes = lns.states
-    res = {}
+    data: dict[str, dict[str, Any]] = {}
     for k, v in nodes.items():
-        res[k] = copy.deepcopy(v)
-        res[k]["last_ping"] = get_relative_time(v["last_ping"])
+        if k.startswith("127.0.0.1"):
+            continue
+        data[k] = copy.deepcopy(v)
+        data[k]["last_ping"] = get_relative_time(v["last_ping"])
     validators = 0
     clients = 0
     provers = 0
     unknowns = 0
     connected = 0
     def sort_cmp(a: tuple[str, dict[str, Any]], b: tuple[str, dict[str, Any]]) -> int:
-        # sort by: height, address, node type
+        # sort by: height, address, node type, ip address
         a_height = a[1].get("height", None)
         b_height = b[1].get("height", None)
         if a_height is not None and b_height is not None:
@@ -910,10 +1006,12 @@ async def nodes_route(request: Request):
         if a_type is not None and b_type is None:
             return -1
         if a_type == b_type:
-            return 0
+            if a[0] == b[0]:
+                return 0
+            return 1 if a[0] > b[0] else -1
         return a_type.value - b_type.value
 
-    res = OrderedDict(sorted(res.items(), key=functools.cmp_to_key(sort_cmp)))
+    res: OrderedDict[str, dict[str, Any]] = OrderedDict(sorted(data.items(), key=functools.cmp_to_key(sort_cmp)))
     for node in res.values():
         node_type = node.get("node_type", None)
         if node_type is None:
@@ -924,7 +1022,7 @@ async def nodes_route(request: Request):
             clients += 1
         elif node_type == NodeType.Prover:
             provers += 1
-        if node.get("peer_count", 0) > 0:
+        if node.get("direction", "") != "disconnected":
             connected += 1
     ctx = {
         "nodes": res,

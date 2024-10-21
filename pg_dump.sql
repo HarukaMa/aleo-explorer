@@ -3,7 +3,7 @@
 --
 
 -- Dumped from database version 15.4 (Debian 15.4-3)
--- Dumped by pg_dump version 15.4
+-- Dumped by pg_dump version 16.3
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -64,6 +64,7 @@ CREATE TYPE explorer.finalize_operation_type AS ENUM (
     'InsertKeyValue',
     'UpdateKeyValue',
     'RemoveKeyValue',
+    'ReplaceMapping',
     'RemoveMapping'
 );
 
@@ -136,6 +137,145 @@ SELECT SUM(target) FROM explorer.partial_solution ps
 JOIN explorer.coinbase_solution cs ON cs.id = ps.coinbase_solution_id
 JOIN explorer.block b ON b.id = cs.block_id
 WHERE height = block_height
+$$;
+
+
+--
+-- Name: get_confirmed_transactions(integer); Type: FUNCTION; Schema: explorer; Owner: -
+--
+
+CREATE FUNCTION explorer.get_confirmed_transactions(block_db_id integer) RETURNS TABLE(confirmed_transaction_id integer, confirmed_transaction_type explorer.confirmed_transaction_type, index integer, reject_reason text, transaction_id text, transaction_type explorer.transaction_type, transaction_deploy_id integer, edition integer, verifying_keys bytea, program_id text, owner text, transaction_execute_id integer, global_state_root text, proof text, fee_id integer, fee_global_state_root text, fee_proof text)
+    LANGUAGE plpgsql
+    AS $$
+declare
+    transaction_db_id transaction.id%type;
+    confirmed_transaction_db_id confirmed_transaction.id%type;
+begin
+    for confirmed_transaction_db_id, confirmed_transaction_type, index, reject_reason in
+        select t.id, t.type, t.index, t.reject_reason from confirmed_transaction t where t.block_id = block_db_id
+        loop
+            confirmed_transaction_id := confirmed_transaction_db_id;
+            select t.id, t.transaction_id, t.type from transaction t where t.confirmed_transaction_id = confirmed_transaction_db_id into transaction_db_id, transaction_id, transaction_type;
+            if confirmed_transaction_type = 'AcceptedDeploy' or confirmed_transaction_type = 'RejectedDeploy' then
+                if confirmed_transaction_type = 'RejectedDeploy' then
+                    select t.id, t.edition, t.verifying_keys, t.program_id, t.owner from transaction_deploy t where t.transaction_id = transaction_db_id order by id limit 1 into transaction_deploy_id, edition, verifying_keys, program_id, owner;
+                else
+                    select t.id, t.edition, t.verifying_keys from transaction_deploy t where t.transaction_id = transaction_db_id into transaction_deploy_id, edition, verifying_keys;
+                end if;
+                select t.id, t.global_state_root, t.proof from fee t where t.transaction_id = transaction_db_id order by id limit 1 into fee_id, fee_global_state_root, fee_proof;
+                return next;
+            elsif confirmed_transaction_type = 'AcceptedExecute' or confirmed_transaction_type = 'RejectedExecute' then
+                select t.id, t.global_state_root, t.proof from transaction_execute t where t.transaction_id = transaction_db_id order by id limit 1 into transaction_execute_id, global_state_root, proof;
+                select t.id, t.global_state_root, t.proof from fee t where t.transaction_id = transaction_db_id order by id limit 1 into fee_id, fee_global_state_root, fee_proof;
+                return next;
+            end if;
+        end loop;
+end;
+$$;
+
+
+--
+-- Name: get_finalize_operations(integer); Type: FUNCTION; Schema: explorer; Owner: -
+--
+
+CREATE FUNCTION explorer.get_finalize_operations(confirmed_transaction_db_id integer) RETURNS TABLE(type explorer.finalize_operation_type, index integer, mapping_id text, key_id text, value_id text)
+    LANGUAGE plpgsql
+    AS $$
+declare
+    finalize_operation_db_id finalize_operation.id%type;
+begin
+    for finalize_operation_db_id, type, index in
+        select t.id, t.type, t.index from finalize_operation t where t.confirmed_transaction_id = confirmed_transaction_db_id
+        loop
+            if type = 'InitializeMapping' then
+                select t.mapping_id from finalize_operation_initialize_mapping t where t.finalize_operation_id = finalize_operation_db_id into mapping_id;
+                return next;
+            elsif type = 'InsertKeyValue' then
+                select t.mapping_id, t.key_id, t.value_id from finalize_operation_insert_kv t where t.finalize_operation_id = finalize_operation_db_id into mapping_id, key_id, value_id;
+                return next;
+            elsif type = 'UpdateKeyValue' then
+                select t.mapping_id, t.key_id, t.value_id from finalize_operation_update_kv t where t.finalize_operation_id = finalize_operation_db_id into mapping_id, key_id, value_id;
+                return next;
+            elsif type = 'RemoveKeyValue' then
+                select t.mapping_id, t.key_id from finalize_operation_remove_kv t where t.finalize_operation_id = finalize_operation_db_id into mapping_id, key_id;
+                return next;
+            elsif type = 'RemoveMapping' then
+                select t.mapping_id from finalize_operation_remove_mapping t where t.finalize_operation_id = finalize_operation_db_id into mapping_id;
+                return next;
+            else
+                raise exception 'unsupported finalize operation type: %', type;
+            end if;
+        end loop;
+end;
+$$;
+
+
+--
+-- Name: get_transition_inputs(integer); Type: FUNCTION; Schema: explorer; Owner: -
+--
+
+CREATE FUNCTION explorer.get_transition_inputs(transition_db_id integer) RETURNS TABLE(type explorer.transition_data_type, index integer, plaintext_hash text, plaintext bytea, ciphertext_hash text, ciphertext text, serial_number text, tag text, commitment text)
+    LANGUAGE plpgsql
+    AS $$
+declare
+    transition_input_db_id transition_input.id%type;
+begin
+    for transition_input_db_id, type, index in
+        select id, t.type, t.index from transition_input t where transition_id = transition_db_id
+        loop
+            if type = 'Public' then
+                select t.plaintext_hash, t.plaintext from transition_input_public t where transition_input_id = transition_input_db_id into plaintext_hash, plaintext;
+                return next;
+            elsif type = 'Private' then
+                select t.ciphertext_hash, t.ciphertext from transition_input_private t where transition_input_id = transition_input_db_id into ciphertext_hash, ciphertext;
+                return next;
+            elsif type = 'Record' then
+                select t.serial_number, t.tag from transition_input_record t where transition_input_id = transition_input_db_id into serial_number, tag;
+                return next;
+            elsif type = 'ExternalRecord' then
+                select t.commitment from transition_input_external_record t where transition_input_id = transition_input_db_id into commitment;
+                return next;
+            else
+                raise exception 'unsupported transition input type: %', type;
+            end if;
+        end loop;
+end;
+$$;
+
+
+--
+-- Name: get_transition_outputs(integer); Type: FUNCTION; Schema: explorer; Owner: -
+--
+
+CREATE FUNCTION explorer.get_transition_outputs(transition_db_id integer) RETURNS TABLE(type explorer.transition_data_type, index integer, plaintext_hash text, plaintext bytea, ciphertext_hash text, ciphertext text, record_commitment text, checksum text, record_ciphertext text, external_record_commitment text, future_id integer, future_hash text)
+    LANGUAGE plpgsql
+    AS $$
+declare
+    transition_output_db_id transition_output.id%type;
+begin
+    for transition_output_db_id, type, index in
+        select id, t.type, t.index from transition_output t where transition_id = transition_db_id
+    loop
+        if type = 'Public' then
+            select t.plaintext_hash, t.plaintext from transition_output_public t where transition_output_id = transition_output_db_id into plaintext_hash, plaintext;
+            return next;
+        elsif type = 'Private' then
+            select t.ciphertext_hash, t.ciphertext from transition_output_private t where transition_output_id = transition_output_db_id into ciphertext_hash, ciphertext;
+            return next;
+        elsif type = 'Record' then
+            select t.commitment, t.checksum, t.record_ciphertext from transition_output_record t where transition_output_id = transition_output_db_id into record_commitment, checksum, record_ciphertext;
+            return next;
+        elsif type = 'ExternalRecord' then
+            select t.commitment from transition_output_external_record t where transition_output_id = transition_output_db_id into external_record_commitment;
+            return next;
+        elsif type = 'Future' then
+            select t.id, t.future_hash from transition_output_future t where transition_output_id = transition_output_db_id into future_id, future_hash;
+            return next;
+        else
+            raise exception 'unsupported transition output type: %', type;
+        end if;
+    end loop;
+end;
 $$;
 
 
@@ -218,8 +358,40 @@ CREATE TABLE explorer.block (
     last_coinbase_timestamp bigint NOT NULL,
     "timestamp" bigint NOT NULL,
     block_reward numeric(20,0) NOT NULL,
-    coinbase_reward numeric(20,0) NOT NULL
+    coinbase_reward numeric(20,0) NOT NULL,
+    total_supply numeric(40,0) NOT NULL
 );
+
+
+--
+-- Name: block_aborted_solution_id; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.block_aborted_solution_id (
+    id integer NOT NULL,
+    block_id integer NOT NULL,
+    solution_id text NOT NULL
+);
+
+
+--
+-- Name: block_aborted_solution_id_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.block_aborted_solution_id_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: block_aborted_solution_id_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.block_aborted_solution_id_id_seq OWNED BY explorer.block_aborted_solution_id.id;
 
 
 --
@@ -274,10 +446,40 @@ ALTER SEQUENCE explorer.block_id_seq OWNED BY explorer.block.id;
 
 
 --
--- Name: coinbase_solution; Type: TABLE; Schema: explorer; Owner: -
+-- Name: block_validator; Type: TABLE; Schema: explorer; Owner: -
 --
 
-CREATE TABLE explorer.coinbase_solution (
+CREATE TABLE explorer.block_validator (
+    id bigint NOT NULL,
+    block_id integer NOT NULL,
+    validator text NOT NULL
+);
+
+
+--
+-- Name: block_validator_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.block_validator_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: block_validator_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.block_validator_id_seq OWNED BY explorer.block_validator.id;
+
+
+--
+-- Name: puzzle_solution; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.puzzle_solution (
     id integer NOT NULL,
     block_id integer NOT NULL,
     target_sum numeric(20,0) DEFAULT 0 NOT NULL
@@ -301,7 +503,7 @@ CREATE SEQUENCE explorer.coinbase_solution_id_seq
 -- Name: coinbase_solution_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
 --
 
-ALTER SEQUENCE explorer.coinbase_solution_id_seq OWNED BY explorer.coinbase_solution.id;
+ALTER SEQUENCE explorer.coinbase_solution_id_seq OWNED BY explorer.puzzle_solution.id;
 
 
 --
@@ -312,7 +514,8 @@ CREATE TABLE explorer.committee_history (
     id integer NOT NULL,
     height bigint NOT NULL,
     starting_round numeric(20,0) NOT NULL,
-    total_stake numeric(20,0) NOT NULL
+    total_stake numeric(20,0) NOT NULL,
+    committee_id text NOT NULL
 );
 
 
@@ -345,7 +548,8 @@ CREATE TABLE explorer.committee_history_member (
     committee_id integer NOT NULL,
     address text NOT NULL,
     stake numeric(20,0) NOT NULL,
-    is_open boolean NOT NULL
+    is_open boolean NOT NULL,
+    commission integer NOT NULL
 );
 
 
@@ -410,12 +614,12 @@ CREATE TABLE explorer.dag_vertex (
     id bigint NOT NULL,
     authority_id integer NOT NULL,
     round numeric(20,0) NOT NULL,
-    batch_certificate_id text NOT NULL,
     batch_id text NOT NULL,
     author text NOT NULL,
     "timestamp" bigint NOT NULL,
     author_signature text NOT NULL,
-    index integer NOT NULL
+    index integer NOT NULL,
+    committee_id text NOT NULL
 );
 
 
@@ -477,7 +681,7 @@ CREATE TABLE explorer.dag_vertex_signature (
     id bigint NOT NULL,
     vertex_id bigint NOT NULL,
     signature text NOT NULL,
-    "timestamp" bigint NOT NULL,
+    "timestamp" bigint,
     index integer NOT NULL
 );
 
@@ -605,7 +809,8 @@ ALTER SEQUENCE explorer.fee_id_seq OWNED BY explorer.fee.id;
 CREATE TABLE explorer.feedback (
     id integer NOT NULL,
     contact text NOT NULL,
-    content text NOT NULL
+    content text NOT NULL,
+    "timestamp" bigint DEFAULT EXTRACT(epoch FROM now()) NOT NULL
 );
 
 
@@ -732,7 +937,8 @@ ALTER SEQUENCE explorer.finalize_operation_insert_kv_id_seq OWNED BY explorer.fi
 CREATE TABLE explorer.finalize_operation_remove_kv (
     id integer NOT NULL,
     finalize_operation_id integer NOT NULL,
-    mapping_id text NOT NULL
+    mapping_id text NOT NULL,
+    key_id text NOT NULL
 );
 
 
@@ -785,6 +991,37 @@ CREATE SEQUENCE explorer.finalize_operation_remove_mapping_id_seq
 --
 
 ALTER SEQUENCE explorer.finalize_operation_remove_mapping_id_seq OWNED BY explorer.finalize_operation_remove_mapping.id;
+
+
+--
+-- Name: finalize_operation_replace_mapping; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.finalize_operation_replace_mapping (
+    id integer NOT NULL,
+    finalize_operation_id integer NOT NULL,
+    mapping_id text NOT NULL
+);
+
+
+--
+-- Name: finalize_operation_replace_mapping_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.finalize_operation_replace_mapping_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: finalize_operation_replace_mapping_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.finalize_operation_replace_mapping_id_seq OWNED BY explorer.finalize_operation_replace_mapping.id;
 
 
 --
@@ -867,26 +1104,6 @@ ALTER SEQUENCE explorer.future_id_seq OWNED BY explorer.future.id;
 
 
 --
--- Name: leaderboard; Type: TABLE; Schema: explorer; Owner: -
---
-
-CREATE TABLE explorer.leaderboard (
-    address text NOT NULL,
-    total_reward numeric(20,0) DEFAULT 0 NOT NULL,
-    total_incentive numeric(20,0) DEFAULT 0 NOT NULL
-);
-
-
---
--- Name: leaderboard_total; Type: TABLE; Schema: explorer; Owner: -
---
-
-CREATE TABLE explorer.leaderboard_total (
-    total_credit numeric(20,0) DEFAULT 0 NOT NULL
-);
-
-
---
 -- Name: mapping; Type: TABLE; Schema: explorer; Owner: -
 --
 
@@ -930,6 +1147,68 @@ ALTER SEQUENCE explorer.mapping_bonded_history_id_seq OWNED BY explorer.mapping_
 
 
 --
+-- Name: mapping_committee_history; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.mapping_committee_history (
+    id integer NOT NULL,
+    height bigint NOT NULL,
+    content jsonb NOT NULL
+);
+
+
+--
+-- Name: mapping_committee_history_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.mapping_committee_history_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: mapping_committee_history_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.mapping_committee_history_id_seq OWNED BY explorer.mapping_committee_history.id;
+
+
+--
+-- Name: mapping_delegated_history; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.mapping_delegated_history (
+    id integer NOT NULL,
+    height bigint NOT NULL,
+    content jsonb NOT NULL
+);
+
+
+--
+-- Name: mapping_delegated_history_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.mapping_delegated_history_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: mapping_delegated_history_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.mapping_delegated_history_id_seq OWNED BY explorer.mapping_delegated_history.id;
+
+
+--
 -- Name: mapping_history; Type: TABLE; Schema: explorer; Owner: -
 --
 
@@ -938,10 +1217,12 @@ CREATE TABLE explorer.mapping_history (
     mapping_id integer NOT NULL,
     height integer NOT NULL,
     key_id text NOT NULL,
-    key bytea,
+    key bytea NOT NULL,
     value bytea,
-    from_transaction boolean NOT NULL
+    from_transaction boolean NOT NULL,
+    previous_id bigint
 );
+ALTER TABLE ONLY explorer.mapping_history ALTER COLUMN key_id SET STATISTICS 10000;
 
 
 --
@@ -961,6 +1242,16 @@ CREATE SEQUENCE explorer.mapping_history_id_seq
 --
 
 ALTER SEQUENCE explorer.mapping_history_id_seq OWNED BY explorer.mapping_history.id;
+
+
+--
+-- Name: mapping_history_last_id; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.mapping_history_last_id (
+    key_id text NOT NULL,
+    last_history_id bigint NOT NULL
+);
 
 
 --
@@ -1017,20 +1308,18 @@ ALTER SEQUENCE explorer.mapping_value_id_seq OWNED BY explorer.mapping_value.id;
 
 
 --
--- Name: prover_solution; Type: TABLE; Schema: explorer; Owner: -
+-- Name: solution; Type: TABLE; Schema: explorer; Owner: -
 --
 
-CREATE TABLE explorer.prover_solution (
+CREATE TABLE explorer.solution (
     id bigint NOT NULL,
-    coinbase_solution_id integer NOT NULL,
-    dag_vertex_id bigint NOT NULL,
+    puzzle_solution_id integer NOT NULL,
     address text NOT NULL,
-    nonce numeric(20,0) NOT NULL,
-    commitment text NOT NULL,
+    counter numeric(20,0) NOT NULL,
     target numeric(20,0) NOT NULL,
     reward integer NOT NULL,
-    proof_x text NOT NULL,
-    proof_y_is_positive boolean NOT NULL
+    epoch_hash text NOT NULL,
+    solution_id text
 );
 
 
@@ -1050,7 +1339,7 @@ CREATE SEQUENCE explorer.partial_solution_id_seq
 -- Name: partial_solution_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
 --
 
-ALTER SEQUENCE explorer.partial_solution_id_seq OWNED BY explorer.prover_solution.id;
+ALTER SEQUENCE explorer.partial_solution_id_seq OWNED BY explorer.solution.id;
 
 
 --
@@ -1220,6 +1509,39 @@ ALTER SEQUENCE explorer.ratification_genesis_balance_id_seq OWNED BY explorer.ra
 
 
 --
+-- Name: ratification_genesis_bonded; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.ratification_genesis_bonded (
+    id integer NOT NULL,
+    staker text NOT NULL,
+    validator text NOT NULL,
+    withdrawal text NOT NULL,
+    amount numeric(20,0) NOT NULL
+);
+
+
+--
+-- Name: ratification_genesis_bonded_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.ratification_genesis_bonded_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: ratification_genesis_bonded_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.ratification_genesis_bonded_id_seq OWNED BY explorer.ratification_genesis_bonded.id;
+
+
+--
 -- Name: ratification_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
 --
 
@@ -1240,15 +1562,26 @@ ALTER SEQUENCE explorer.ratification_id_seq OWNED BY explorer.ratification.id;
 
 
 --
+-- Name: stats; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.stats (
+    name text NOT NULL,
+    value numeric(20,0) NOT NULL
+);
+
+
+--
 -- Name: transaction; Type: TABLE; Schema: explorer; Owner: -
 --
 
 CREATE TABLE explorer.transaction (
     id integer NOT NULL,
-    confimed_transaction_id integer NOT NULL,
-    dag_vertex_id bigint,
+    confirmed_transaction_id integer,
     transaction_id text NOT NULL,
-    type explorer.transaction_type NOT NULL
+    type explorer.transaction_type NOT NULL,
+    first_seen bigint DEFAULT EXTRACT(epoch FROM now()),
+    original_transaction_id text
 );
 
 
@@ -1260,7 +1593,9 @@ CREATE TABLE explorer.transaction_deploy (
     id integer NOT NULL,
     transaction_id integer NOT NULL,
     edition integer NOT NULL,
-    verifying_keys bytea NOT NULL
+    verifying_keys bytea NOT NULL,
+    program_id text,
+    owner text
 );
 
 
@@ -1317,7 +1652,8 @@ CREATE TABLE explorer.transition (
     function_name text NOT NULL,
     tpk text NOT NULL,
     tcm text NOT NULL,
-    index integer NOT NULL
+    index integer NOT NULL,
+    scm text NOT NULL
 );
 
 
@@ -1694,6 +2030,13 @@ ALTER TABLE ONLY explorer.block ALTER COLUMN id SET DEFAULT nextval('explorer.bl
 
 
 --
+-- Name: block_aborted_solution_id id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.block_aborted_solution_id ALTER COLUMN id SET DEFAULT nextval('explorer.block_aborted_solution_id_id_seq'::regclass);
+
+
+--
 -- Name: block_aborted_transaction_id id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -1701,10 +2044,10 @@ ALTER TABLE ONLY explorer.block_aborted_transaction_id ALTER COLUMN id SET DEFAU
 
 
 --
--- Name: coinbase_solution id; Type: DEFAULT; Schema: explorer; Owner: -
+-- Name: block_validator id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
-ALTER TABLE ONLY explorer.coinbase_solution ALTER COLUMN id SET DEFAULT nextval('explorer.coinbase_solution_id_seq'::regclass);
+ALTER TABLE ONLY explorer.block_validator ALTER COLUMN id SET DEFAULT nextval('explorer.block_validator_id_seq'::regclass);
 
 
 --
@@ -1806,6 +2149,13 @@ ALTER TABLE ONLY explorer.finalize_operation_remove_mapping ALTER COLUMN id SET 
 
 
 --
+-- Name: finalize_operation_replace_mapping id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.finalize_operation_replace_mapping ALTER COLUMN id SET DEFAULT nextval('explorer.finalize_operation_replace_mapping_id_seq'::regclass);
+
+
+--
 -- Name: finalize_operation_update_kv id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -1841,6 +2191,20 @@ ALTER TABLE ONLY explorer.mapping_bonded_history ALTER COLUMN id SET DEFAULT nex
 
 
 --
+-- Name: mapping_committee_history id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping_committee_history ALTER COLUMN id SET DEFAULT nextval('explorer.mapping_committee_history_id_seq'::regclass);
+
+
+--
+-- Name: mapping_delegated_history id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping_delegated_history ALTER COLUMN id SET DEFAULT nextval('explorer.mapping_delegated_history_id_seq'::regclass);
+
+
+--
 -- Name: mapping_history id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -1869,10 +2233,10 @@ ALTER TABLE ONLY explorer.program_function ALTER COLUMN id SET DEFAULT nextval('
 
 
 --
--- Name: prover_solution id; Type: DEFAULT; Schema: explorer; Owner: -
+-- Name: puzzle_solution id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
-ALTER TABLE ONLY explorer.prover_solution ALTER COLUMN id SET DEFAULT nextval('explorer.partial_solution_id_seq'::regclass);
+ALTER TABLE ONLY explorer.puzzle_solution ALTER COLUMN id SET DEFAULT nextval('explorer.coinbase_solution_id_seq'::regclass);
 
 
 --
@@ -1887,6 +2251,20 @@ ALTER TABLE ONLY explorer.ratification ALTER COLUMN id SET DEFAULT nextval('expl
 --
 
 ALTER TABLE ONLY explorer.ratification_genesis_balance ALTER COLUMN id SET DEFAULT nextval('explorer.ratification_genesis_balance_id_seq'::regclass);
+
+
+--
+-- Name: ratification_genesis_bonded id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.ratification_genesis_bonded ALTER COLUMN id SET DEFAULT nextval('explorer.ratification_genesis_bonded_id_seq'::regclass);
+
+
+--
+-- Name: solution id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.solution ALTER COLUMN id SET DEFAULT nextval('explorer.partial_solution_id_seq'::regclass);
 
 
 --
@@ -2003,6 +2381,14 @@ ALTER TABLE ONLY explorer.authority
 
 
 --
+-- Name: block_aborted_solution_id block_aborted_solution_id_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.block_aborted_solution_id
+    ADD CONSTRAINT block_aborted_solution_id_pk PRIMARY KEY (id);
+
+
+--
 -- Name: block_aborted_transaction_id block_aborted_transaction_id_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -2019,11 +2405,11 @@ ALTER TABLE ONLY explorer.block
 
 
 --
--- Name: coinbase_solution coinbase_solution_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+-- Name: block_validator block_validator_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
-ALTER TABLE ONLY explorer.coinbase_solution
-    ADD CONSTRAINT coinbase_solution_pk PRIMARY KEY (id);
+ALTER TABLE ONLY explorer.block_validator
+    ADD CONSTRAINT block_validator_pk PRIMARY KEY (id);
 
 
 --
@@ -2139,6 +2525,14 @@ ALTER TABLE ONLY explorer.finalize_operation_remove_mapping
 
 
 --
+-- Name: finalize_operation_replace_mapping finalize_operation_replace_mapping_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.finalize_operation_replace_mapping
+    ADD CONSTRAINT finalize_operation_replace_mapping_pk PRIMARY KEY (id);
+
+
+--
 -- Name: finalize_operation_update_kv finalize_operation_update_kv_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -2155,19 +2549,35 @@ ALTER TABLE ONLY explorer.future
 
 
 --
--- Name: leaderboard leaderboard_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.leaderboard
-    ADD CONSTRAINT leaderboard_pk PRIMARY KEY (address);
-
-
---
 -- Name: mapping_bonded_history mapping_bonded_history_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
 ALTER TABLE ONLY explorer.mapping_bonded_history
     ADD CONSTRAINT mapping_bonded_history_pk PRIMARY KEY (id);
+
+
+--
+-- Name: mapping_committee_history mapping_committee_history_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping_committee_history
+    ADD CONSTRAINT mapping_committee_history_pk PRIMARY KEY (id);
+
+
+--
+-- Name: mapping_delegated_history mapping_delegated_history_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping_delegated_history
+    ADD CONSTRAINT mapping_delegated_history_pk PRIMARY KEY (id);
+
+
+--
+-- Name: mapping_history_last_id mapping_history_last_id_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping_history_last_id
+    ADD CONSTRAINT mapping_history_last_id_pk PRIMARY KEY (key_id);
 
 
 --
@@ -2219,14 +2629,6 @@ ALTER TABLE ONLY explorer.mapping_value
 
 
 --
--- Name: prover_solution partial_solution_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.prover_solution
-    ADD CONSTRAINT partial_solution_pk PRIMARY KEY (id);
-
-
---
 -- Name: program_function program_function_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -2251,11 +2653,35 @@ ALTER TABLE ONLY explorer.program
 
 
 --
+-- Name: puzzle_solution puzzle_solution_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.puzzle_solution
+    ADD CONSTRAINT puzzle_solution_pk PRIMARY KEY (id);
+
+
+--
 -- Name: ratification ratification_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
 ALTER TABLE ONLY explorer.ratification
     ADD CONSTRAINT ratification_pk PRIMARY KEY (id);
+
+
+--
+-- Name: solution solution_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.solution
+    ADD CONSTRAINT solution_pk PRIMARY KEY (id);
+
+
+--
+-- Name: stats stats_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.stats
+    ADD CONSTRAINT stats_pk PRIMARY KEY (name);
 
 
 --
@@ -2415,6 +2841,13 @@ CREATE INDEX authority_type_index ON explorer.authority USING btree (type);
 
 
 --
+-- Name: block_aborted_solution_id_block_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX block_aborted_solution_id_block_id_index ON explorer.block_aborted_solution_id USING btree (block_id);
+
+
+--
 -- Name: block_aborted_transaction_id_block_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -2443,10 +2876,10 @@ CREATE INDEX block_timestamp_index ON explorer.block USING btree ("timestamp");
 
 
 --
--- Name: coinbase_solution_block_id_index; Type: INDEX; Schema: explorer; Owner: -
+-- Name: block_validator_validator_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-CREATE INDEX coinbase_solution_block_id_index ON explorer.coinbase_solution USING btree (block_id);
+CREATE INDEX block_validator_validator_index ON explorer.block_validator USING btree (validator);
 
 
 --
@@ -2499,6 +2932,13 @@ CREATE INDEX dag_vertex_adjacency_index_index ON explorer.dag_vertex_adjacency U
 
 
 --
+-- Name: dag_vertex_adjacency_vertex_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX dag_vertex_adjacency_vertex_id_index ON explorer.dag_vertex_adjacency USING btree (vertex_id);
+
+
+--
 -- Name: dag_vertex_author_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -2510,13 +2950,6 @@ CREATE INDEX dag_vertex_author_index ON explorer.dag_vertex USING btree (author)
 --
 
 CREATE INDEX dag_vertex_authority_id_index ON explorer.dag_vertex USING btree (authority_id);
-
-
---
--- Name: dag_vertex_batch_certificate_id_uindex; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE UNIQUE INDEX dag_vertex_batch_certificate_id_uindex ON explorer.dag_vertex USING btree (batch_certificate_id);
 
 
 --
@@ -2611,6 +3044,20 @@ CREATE INDEX finalize_operation_remove_mapping_mapping_id_index ON explorer.fina
 
 
 --
+-- Name: finalize_operation_replace_mapping_finalize_operation_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX finalize_operation_replace_mapping_finalize_operation_id_index ON explorer.finalize_operation_replace_mapping USING btree (finalize_operation_id);
+
+
+--
+-- Name: finalize_operation_replace_mapping_mapping_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX finalize_operation_replace_mapping_mapping_id_index ON explorer.finalize_operation_replace_mapping USING btree (mapping_id);
+
+
+--
 -- Name: finalize_operation_type_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -2667,27 +3114,6 @@ CREATE INDEX future_type_index ON explorer.future USING btree (type);
 
 
 --
--- Name: leaderboard_address_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX leaderboard_address_index ON explorer.leaderboard USING btree (address text_pattern_ops);
-
-
---
--- Name: leaderboard_total_incentive_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX leaderboard_total_incentive_index ON explorer.leaderboard USING btree (total_incentive);
-
-
---
--- Name: leaderboard_total_reward_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX leaderboard_total_reward_index ON explorer.leaderboard USING btree (total_reward);
-
-
---
 -- Name: mapping_bonded_history_content_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -2699,6 +3125,34 @@ CREATE INDEX mapping_bonded_history_content_index ON explorer.mapping_bonded_his
 --
 
 CREATE INDEX mapping_bonded_history_height_index ON explorer.mapping_bonded_history USING btree (height);
+
+
+--
+-- Name: mapping_committee_history_content_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX mapping_committee_history_content_index ON explorer.mapping_committee_history USING gin (content);
+
+
+--
+-- Name: mapping_committee_history_height_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX mapping_committee_history_height_index ON explorer.mapping_committee_history USING btree (height);
+
+
+--
+-- Name: mapping_delegated_history_content_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX mapping_delegated_history_content_index ON explorer.mapping_delegated_history USING gin (content);
+
+
+--
+-- Name: mapping_delegated_history_height_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX mapping_delegated_history_height_index ON explorer.mapping_delegated_history USING btree (height);
 
 
 --
@@ -2723,6 +3177,13 @@ CREATE INDEX mapping_history_mapping_id_index ON explorer.mapping_history USING 
 
 
 --
+-- Name: mapping_history_previous_id_uindex; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE UNIQUE INDEX mapping_history_previous_id_uindex ON explorer.mapping_history USING btree (previous_id);
+
+
+--
 -- Name: mapping_value_key_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -2737,24 +3198,10 @@ CREATE INDEX mapping_value_mapping_id_index ON explorer.mapping_value USING btre
 
 
 --
--- Name: partial_solution_address_index; Type: INDEX; Schema: explorer; Owner: -
+-- Name: program_address_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-CREATE INDEX partial_solution_address_index ON explorer.prover_solution USING btree (address text_pattern_ops);
-
-
---
--- Name: partial_solution_coinbase_solution_id_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX partial_solution_coinbase_solution_id_index ON explorer.prover_solution USING btree (coinbase_solution_id);
-
-
---
--- Name: partial_solution_dag_vertex_id_index; Type: INDEX; Schema: explorer; Owner: -
---
-
-CREATE INDEX partial_solution_dag_vertex_id_index ON explorer.prover_solution USING btree (dag_vertex_id);
+CREATE INDEX program_address_index ON explorer.program USING btree (address text_pattern_ops);
 
 
 --
@@ -2762,6 +3209,13 @@ CREATE INDEX partial_solution_dag_vertex_id_index ON explorer.prover_solution US
 --
 
 CREATE INDEX program_feature_hash_index ON explorer.program USING btree (feature_hash);
+
+
+--
+-- Name: program_feature_hash_index2; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX program_feature_hash_index2 ON explorer.program USING hash (feature_hash);
 
 
 --
@@ -2814,6 +3268,13 @@ CREATE INDEX program_transaction_deploy_id_index ON explorer.program USING btree
 
 
 --
+-- Name: puzzle_solution_block_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX puzzle_solution_block_id_index ON explorer.puzzle_solution USING btree (block_id);
+
+
+--
 -- Name: ratification_block_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -2828,17 +3289,24 @@ CREATE INDEX ratification_type_index ON explorer.ratification USING btree (type)
 
 
 --
--- Name: transaction_confimed_transaction_id_index; Type: INDEX; Schema: explorer; Owner: -
+-- Name: solution_address_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-CREATE INDEX transaction_confimed_transaction_id_index ON explorer.transaction USING btree (confimed_transaction_id);
+CREATE INDEX solution_address_index ON explorer.solution USING btree (address text_pattern_ops);
 
 
 --
--- Name: transaction_dag_vertex_id_index; Type: INDEX; Schema: explorer; Owner: -
+-- Name: solution_puzzle_solution_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-CREATE INDEX transaction_dag_vertex_id_index ON explorer.transaction USING btree (dag_vertex_id);
+CREATE INDEX solution_puzzle_solution_id_index ON explorer.solution USING btree (puzzle_solution_id);
+
+
+--
+-- Name: transaction_confirmed_transaction_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX transaction_confirmed_transaction_id_index ON explorer.transaction USING btree (confirmed_transaction_id);
 
 
 --
@@ -2853,6 +3321,20 @@ CREATE INDEX transaction_deployment_transaction_id_index ON explorer.transaction
 --
 
 CREATE INDEX transaction_execute_transaction_id_index ON explorer.transaction_execute USING btree (transaction_id);
+
+
+--
+-- Name: transaction_first_seen_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX transaction_first_seen_index ON explorer.transaction USING btree (first_seen);
+
+
+--
+-- Name: transaction_original_transaction_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX transaction_original_transaction_id_index ON explorer.transaction USING btree (original_transaction_id text_pattern_ops);
 
 
 --
@@ -2986,7 +3468,7 @@ CREATE UNIQUE INDEX transition_transition_id_uindex ON explorer.transition USING
 --
 
 ALTER TABLE ONLY explorer.address_transition
-    ADD CONSTRAINT address_stats_transition_transition_id_fk FOREIGN KEY (transition_id) REFERENCES explorer.transition(id);
+    ADD CONSTRAINT address_stats_transition_transition_id_fk FOREIGN KEY (transition_id) REFERENCES explorer.transition(id) ON DELETE CASCADE;
 
 
 --
@@ -2994,7 +3476,15 @@ ALTER TABLE ONLY explorer.address_transition
 --
 
 ALTER TABLE ONLY explorer.authority
-    ADD CONSTRAINT authority_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id);
+    ADD CONSTRAINT authority_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id) ON DELETE CASCADE;
+
+
+--
+-- Name: block_aborted_solution_id block_aborted_solution_id_block_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.block_aborted_solution_id
+    ADD CONSTRAINT block_aborted_solution_id_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id) ON DELETE CASCADE;
 
 
 --
@@ -3002,15 +3492,15 @@ ALTER TABLE ONLY explorer.authority
 --
 
 ALTER TABLE ONLY explorer.block_aborted_transaction_id
-    ADD CONSTRAINT block_aborted_transaction_id_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id);
+    ADD CONSTRAINT block_aborted_transaction_id_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id) ON DELETE CASCADE;
 
 
 --
--- Name: coinbase_solution coinbase_solution_block_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+-- Name: block_validator block_validator_block_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
 --
 
-ALTER TABLE ONLY explorer.coinbase_solution
-    ADD CONSTRAINT coinbase_solution_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id);
+ALTER TABLE ONLY explorer.block_validator
+    ADD CONSTRAINT block_validator_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id) ON DELETE CASCADE;
 
 
 --
@@ -3018,7 +3508,7 @@ ALTER TABLE ONLY explorer.coinbase_solution
 --
 
 ALTER TABLE ONLY explorer.committee_history_member
-    ADD CONSTRAINT committee_history_member_committee_history_id_fk FOREIGN KEY (committee_id) REFERENCES explorer.committee_history(id);
+    ADD CONSTRAINT committee_history_member_committee_history_id_fk FOREIGN KEY (committee_id) REFERENCES explorer.committee_history(id) ON DELETE CASCADE;
 
 
 --
@@ -3026,7 +3516,7 @@ ALTER TABLE ONLY explorer.committee_history_member
 --
 
 ALTER TABLE ONLY explorer.confirmed_transaction
-    ADD CONSTRAINT confirmed_transaction_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id);
+    ADD CONSTRAINT confirmed_transaction_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id) ON DELETE CASCADE;
 
 
 --
@@ -3034,7 +3524,7 @@ ALTER TABLE ONLY explorer.confirmed_transaction
 --
 
 ALTER TABLE ONLY explorer.dag_vertex_adjacency
-    ADD CONSTRAINT dag_vertex_adjacency_dag_vertex_id_fk FOREIGN KEY (vertex_id) REFERENCES explorer.dag_vertex(id);
+    ADD CONSTRAINT dag_vertex_adjacency_dag_vertex_id_fk FOREIGN KEY (vertex_id) REFERENCES explorer.dag_vertex(id) ON DELETE CASCADE;
 
 
 --
@@ -3042,7 +3532,7 @@ ALTER TABLE ONLY explorer.dag_vertex_adjacency
 --
 
 ALTER TABLE ONLY explorer.dag_vertex_adjacency
-    ADD CONSTRAINT dag_vertex_adjacency_dag_vertex_id_fk2 FOREIGN KEY (previous_vertex_id) REFERENCES explorer.dag_vertex(id);
+    ADD CONSTRAINT dag_vertex_adjacency_dag_vertex_id_fk2 FOREIGN KEY (previous_vertex_id) REFERENCES explorer.dag_vertex(id) ON DELETE CASCADE;
 
 
 --
@@ -3050,7 +3540,7 @@ ALTER TABLE ONLY explorer.dag_vertex_adjacency
 --
 
 ALTER TABLE ONLY explorer.dag_vertex
-    ADD CONSTRAINT dag_vertex_authority_id_fk FOREIGN KEY (authority_id) REFERENCES explorer.authority(id);
+    ADD CONSTRAINT dag_vertex_authority_id_fk FOREIGN KEY (authority_id) REFERENCES explorer.authority(id) ON DELETE CASCADE;
 
 
 --
@@ -3058,7 +3548,7 @@ ALTER TABLE ONLY explorer.dag_vertex
 --
 
 ALTER TABLE ONLY explorer.dag_vertex_signature
-    ADD CONSTRAINT dag_vertex_signature_dag_vertex_id_fk FOREIGN KEY (vertex_id) REFERENCES explorer.dag_vertex(id);
+    ADD CONSTRAINT dag_vertex_signature_dag_vertex_id_fk FOREIGN KEY (vertex_id) REFERENCES explorer.dag_vertex(id) ON DELETE CASCADE;
 
 
 --
@@ -3066,7 +3556,7 @@ ALTER TABLE ONLY explorer.dag_vertex_signature
 --
 
 ALTER TABLE ONLY explorer.dag_vertex_transmission_id
-    ADD CONSTRAINT dag_vertex_transmission_id_dag_vertex_id_fk FOREIGN KEY (vertex_id) REFERENCES explorer.dag_vertex(id);
+    ADD CONSTRAINT dag_vertex_transmission_id_dag_vertex_id_fk FOREIGN KEY (vertex_id) REFERENCES explorer.dag_vertex(id) ON DELETE CASCADE;
 
 
 --
@@ -3074,7 +3564,7 @@ ALTER TABLE ONLY explorer.dag_vertex_transmission_id
 --
 
 ALTER TABLE ONLY explorer.fee
-    ADD CONSTRAINT fee_transaction_id_fk FOREIGN KEY (transaction_id) REFERENCES explorer.transaction(id);
+    ADD CONSTRAINT fee_transaction_id_fk FOREIGN KEY (transaction_id) REFERENCES explorer.transaction(id) ON DELETE CASCADE;
 
 
 --
@@ -3082,7 +3572,7 @@ ALTER TABLE ONLY explorer.fee
 --
 
 ALTER TABLE ONLY explorer.finalize_operation
-    ADD CONSTRAINT finalize_operation_confirmed_transaction_id_fk FOREIGN KEY (confirmed_transaction_id) REFERENCES explorer.confirmed_transaction(id);
+    ADD CONSTRAINT finalize_operation_confirmed_transaction_id_fk FOREIGN KEY (confirmed_transaction_id) REFERENCES explorer.confirmed_transaction(id) ON DELETE CASCADE;
 
 
 --
@@ -3090,7 +3580,7 @@ ALTER TABLE ONLY explorer.finalize_operation
 --
 
 ALTER TABLE ONLY explorer.finalize_operation_initialize_mapping
-    ADD CONSTRAINT finalize_operation_initialize_mapping_finalize_operation_id_fk FOREIGN KEY (finalize_operation_id) REFERENCES explorer.finalize_operation(id);
+    ADD CONSTRAINT finalize_operation_initialize_mapping_finalize_operation_id_fk FOREIGN KEY (finalize_operation_id) REFERENCES explorer.finalize_operation(id) ON DELETE CASCADE;
 
 
 --
@@ -3098,7 +3588,7 @@ ALTER TABLE ONLY explorer.finalize_operation_initialize_mapping
 --
 
 ALTER TABLE ONLY explorer.finalize_operation_insert_kv
-    ADD CONSTRAINT finalize_operation_insert_kv_finalize_operation_id_fk FOREIGN KEY (finalize_operation_id) REFERENCES explorer.finalize_operation(id);
+    ADD CONSTRAINT finalize_operation_insert_kv_finalize_operation_id_fk FOREIGN KEY (finalize_operation_id) REFERENCES explorer.finalize_operation(id) ON DELETE CASCADE;
 
 
 --
@@ -3106,7 +3596,7 @@ ALTER TABLE ONLY explorer.finalize_operation_insert_kv
 --
 
 ALTER TABLE ONLY explorer.finalize_operation_remove_kv
-    ADD CONSTRAINT finalize_operation_remove_kv_finalize_operation_id_fk FOREIGN KEY (finalize_operation_id) REFERENCES explorer.finalize_operation(id);
+    ADD CONSTRAINT finalize_operation_remove_kv_finalize_operation_id_fk FOREIGN KEY (finalize_operation_id) REFERENCES explorer.finalize_operation(id) ON DELETE CASCADE;
 
 
 --
@@ -3114,7 +3604,15 @@ ALTER TABLE ONLY explorer.finalize_operation_remove_kv
 --
 
 ALTER TABLE ONLY explorer.finalize_operation_remove_mapping
-    ADD CONSTRAINT finalize_operation_remove_mapping_finalize_operation_id_fk FOREIGN KEY (finalize_operation_id) REFERENCES explorer.finalize_operation(id);
+    ADD CONSTRAINT finalize_operation_remove_mapping_finalize_operation_id_fk FOREIGN KEY (finalize_operation_id) REFERENCES explorer.finalize_operation(id) ON DELETE CASCADE;
+
+
+--
+-- Name: finalize_operation_replace_mapping finalize_operation_replace_mapping_finalize_operation_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.finalize_operation_replace_mapping
+    ADD CONSTRAINT finalize_operation_replace_mapping_finalize_operation_id_fk FOREIGN KEY (finalize_operation_id) REFERENCES explorer.finalize_operation(id) ON DELETE CASCADE;
 
 
 --
@@ -3122,7 +3620,7 @@ ALTER TABLE ONLY explorer.finalize_operation_remove_mapping
 --
 
 ALTER TABLE ONLY explorer.finalize_operation_update_kv
-    ADD CONSTRAINT finalize_operation_update_kv_finalize_operation_id_fk FOREIGN KEY (finalize_operation_id) REFERENCES explorer.finalize_operation(id);
+    ADD CONSTRAINT finalize_operation_update_kv_finalize_operation_id_fk FOREIGN KEY (finalize_operation_id) REFERENCES explorer.finalize_operation(id) ON DELETE CASCADE;
 
 
 --
@@ -3130,7 +3628,7 @@ ALTER TABLE ONLY explorer.finalize_operation_update_kv
 --
 
 ALTER TABLE ONLY explorer.future_argument
-    ADD CONSTRAINT future_argument_future_id_fk FOREIGN KEY (future_id) REFERENCES explorer.future(id);
+    ADD CONSTRAINT future_argument_future_id_fk FOREIGN KEY (future_id) REFERENCES explorer.future(id) ON DELETE CASCADE;
 
 
 --
@@ -3138,7 +3636,7 @@ ALTER TABLE ONLY explorer.future_argument
 --
 
 ALTER TABLE ONLY explorer.future
-    ADD CONSTRAINT future_future_argument_id_fk FOREIGN KEY (future_argument_id) REFERENCES explorer.future_argument(id);
+    ADD CONSTRAINT future_future_argument_id_fk FOREIGN KEY (future_argument_id) REFERENCES explorer.future_argument(id) ON DELETE CASCADE;
 
 
 --
@@ -3146,7 +3644,15 @@ ALTER TABLE ONLY explorer.future
 --
 
 ALTER TABLE ONLY explorer.future
-    ADD CONSTRAINT future_transition_output_future_id_fk FOREIGN KEY (transition_output_future_id) REFERENCES explorer.transition_output_future(id);
+    ADD CONSTRAINT future_transition_output_future_id_fk FOREIGN KEY (transition_output_future_id) REFERENCES explorer.transition_output_future(id) ON DELETE CASCADE;
+
+
+--
+-- Name: mapping_history mapping_history_mapping_history_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping_history
+    ADD CONSTRAINT mapping_history_mapping_history_id_fk FOREIGN KEY (previous_id) REFERENCES explorer.mapping_history(id) ON UPDATE RESTRICT ON DELETE CASCADE;
 
 
 --
@@ -3154,7 +3660,7 @@ ALTER TABLE ONLY explorer.future
 --
 
 ALTER TABLE ONLY explorer.mapping_history
-    ADD CONSTRAINT mapping_history_mapping_id_fk FOREIGN KEY (mapping_id) REFERENCES explorer.mapping(id);
+    ADD CONSTRAINT mapping_history_mapping_id_fk FOREIGN KEY (mapping_id) REFERENCES explorer.mapping(id) ON DELETE CASCADE;
 
 
 --
@@ -3162,23 +3668,7 @@ ALTER TABLE ONLY explorer.mapping_history
 --
 
 ALTER TABLE ONLY explorer.mapping_value
-    ADD CONSTRAINT mapping_value_mapping_id_fk FOREIGN KEY (mapping_id) REFERENCES explorer.mapping(id);
-
-
---
--- Name: prover_solution partial_solution_coinbase_solution_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.prover_solution
-    ADD CONSTRAINT partial_solution_coinbase_solution_id_fk FOREIGN KEY (coinbase_solution_id) REFERENCES explorer.coinbase_solution(id);
-
-
---
--- Name: prover_solution partial_solution_dag_vertex_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.prover_solution
-    ADD CONSTRAINT partial_solution_dag_vertex_id_fk FOREIGN KEY (dag_vertex_id) REFERENCES explorer.dag_vertex(id);
+    ADD CONSTRAINT mapping_value_mapping_id_fk FOREIGN KEY (mapping_id) REFERENCES explorer.mapping(id) ON DELETE CASCADE;
 
 
 --
@@ -3186,7 +3676,7 @@ ALTER TABLE ONLY explorer.prover_solution
 --
 
 ALTER TABLE ONLY explorer.program_function
-    ADD CONSTRAINT program_function_program_id_fk FOREIGN KEY (program_id) REFERENCES explorer.program(id);
+    ADD CONSTRAINT program_function_program_id_fk FOREIGN KEY (program_id) REFERENCES explorer.program(id) ON DELETE CASCADE;
 
 
 --
@@ -3194,7 +3684,15 @@ ALTER TABLE ONLY explorer.program_function
 --
 
 ALTER TABLE ONLY explorer.program
-    ADD CONSTRAINT program_transaction_deployment_id_fk FOREIGN KEY (transaction_deploy_id) REFERENCES explorer.transaction_deploy(id);
+    ADD CONSTRAINT program_transaction_deployment_id_fk FOREIGN KEY (transaction_deploy_id) REFERENCES explorer.transaction_deploy(id) ON DELETE CASCADE;
+
+
+--
+-- Name: puzzle_solution puzzle_solution_block_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.puzzle_solution
+    ADD CONSTRAINT puzzle_solution_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id) ON DELETE CASCADE;
 
 
 --
@@ -3202,7 +3700,15 @@ ALTER TABLE ONLY explorer.program
 --
 
 ALTER TABLE ONLY explorer.ratification
-    ADD CONSTRAINT ratification_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id);
+    ADD CONSTRAINT ratification_block_id_fk FOREIGN KEY (block_id) REFERENCES explorer.block(id) ON DELETE CASCADE;
+
+
+--
+-- Name: solution solution_puzzle_solution_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.solution
+    ADD CONSTRAINT solution_puzzle_solution_id_fk FOREIGN KEY (puzzle_solution_id) REFERENCES explorer.puzzle_solution(id) ON DELETE CASCADE;
 
 
 --
@@ -3210,15 +3716,7 @@ ALTER TABLE ONLY explorer.ratification
 --
 
 ALTER TABLE ONLY explorer.transaction
-    ADD CONSTRAINT transaction_confirmed_transaction_id_fk FOREIGN KEY (confimed_transaction_id) REFERENCES explorer.confirmed_transaction(id);
-
-
---
--- Name: transaction transaction_dag_vertex_id_fk; Type: FK CONSTRAINT; Schema: explorer; Owner: -
---
-
-ALTER TABLE ONLY explorer.transaction
-    ADD CONSTRAINT transaction_dag_vertex_id_fk FOREIGN KEY (dag_vertex_id) REFERENCES explorer.dag_vertex(id);
+    ADD CONSTRAINT transaction_confirmed_transaction_id_fk FOREIGN KEY (confirmed_transaction_id) REFERENCES explorer.confirmed_transaction(id) ON DELETE CASCADE;
 
 
 --
@@ -3226,7 +3724,7 @@ ALTER TABLE ONLY explorer.transaction
 --
 
 ALTER TABLE ONLY explorer.transaction_deploy
-    ADD CONSTRAINT transaction_deployment_transaction_id_fk FOREIGN KEY (transaction_id) REFERENCES explorer.transaction(id);
+    ADD CONSTRAINT transaction_deployment_transaction_id_fk FOREIGN KEY (transaction_id) REFERENCES explorer.transaction(id) ON DELETE CASCADE;
 
 
 --
@@ -3234,7 +3732,7 @@ ALTER TABLE ONLY explorer.transaction_deploy
 --
 
 ALTER TABLE ONLY explorer.transaction_execute
-    ADD CONSTRAINT transaction_execute_transaction_id_fk FOREIGN KEY (transaction_id) REFERENCES explorer.transaction(id);
+    ADD CONSTRAINT transaction_execute_transaction_id_fk FOREIGN KEY (transaction_id) REFERENCES explorer.transaction(id) ON DELETE CASCADE;
 
 
 --
@@ -3242,7 +3740,7 @@ ALTER TABLE ONLY explorer.transaction_execute
 --
 
 ALTER TABLE ONLY explorer.transition
-    ADD CONSTRAINT transition_fee_id_fk FOREIGN KEY (fee_id) REFERENCES explorer.fee(id);
+    ADD CONSTRAINT transition_fee_id_fk FOREIGN KEY (fee_id) REFERENCES explorer.fee(id) ON DELETE CASCADE;
 
 
 --
@@ -3250,7 +3748,7 @@ ALTER TABLE ONLY explorer.transition
 --
 
 ALTER TABLE ONLY explorer.transition_input_external_record
-    ADD CONSTRAINT transition_input_external_record_transition_input_id_fk FOREIGN KEY (transition_input_id) REFERENCES explorer.transition_input(id);
+    ADD CONSTRAINT transition_input_external_record_transition_input_id_fk FOREIGN KEY (transition_input_id) REFERENCES explorer.transition_input(id) ON DELETE CASCADE;
 
 
 --
@@ -3258,7 +3756,7 @@ ALTER TABLE ONLY explorer.transition_input_external_record
 --
 
 ALTER TABLE ONLY explorer.transition_input_private
-    ADD CONSTRAINT transition_input_private_transition_input_id_fk FOREIGN KEY (transition_input_id) REFERENCES explorer.transition_input(id);
+    ADD CONSTRAINT transition_input_private_transition_input_id_fk FOREIGN KEY (transition_input_id) REFERENCES explorer.transition_input(id) ON DELETE CASCADE;
 
 
 --
@@ -3266,7 +3764,7 @@ ALTER TABLE ONLY explorer.transition_input_private
 --
 
 ALTER TABLE ONLY explorer.transition_input_public
-    ADD CONSTRAINT transition_input_public_transition_input_id_fk FOREIGN KEY (transition_input_id) REFERENCES explorer.transition_input(id);
+    ADD CONSTRAINT transition_input_public_transition_input_id_fk FOREIGN KEY (transition_input_id) REFERENCES explorer.transition_input(id) ON DELETE CASCADE;
 
 
 --
@@ -3274,7 +3772,7 @@ ALTER TABLE ONLY explorer.transition_input_public
 --
 
 ALTER TABLE ONLY explorer.transition_input_record
-    ADD CONSTRAINT transition_input_record_transition_input_id_fk FOREIGN KEY (transition_input_id) REFERENCES explorer.transition_input(id);
+    ADD CONSTRAINT transition_input_record_transition_input_id_fk FOREIGN KEY (transition_input_id) REFERENCES explorer.transition_input(id) ON DELETE CASCADE;
 
 
 --
@@ -3282,7 +3780,7 @@ ALTER TABLE ONLY explorer.transition_input_record
 --
 
 ALTER TABLE ONLY explorer.transition_input
-    ADD CONSTRAINT transition_input_transition_id_fk FOREIGN KEY (transition_id) REFERENCES explorer.transition(id);
+    ADD CONSTRAINT transition_input_transition_id_fk FOREIGN KEY (transition_id) REFERENCES explorer.transition(id) ON DELETE CASCADE;
 
 
 --
@@ -3290,7 +3788,7 @@ ALTER TABLE ONLY explorer.transition_input
 --
 
 ALTER TABLE ONLY explorer.transition_output_external_record
-    ADD CONSTRAINT transition_output_external_record_transition_output_id_fk FOREIGN KEY (transition_output_id) REFERENCES explorer.transition_output(id);
+    ADD CONSTRAINT transition_output_external_record_transition_output_id_fk FOREIGN KEY (transition_output_id) REFERENCES explorer.transition_output(id) ON DELETE CASCADE;
 
 
 --
@@ -3298,7 +3796,7 @@ ALTER TABLE ONLY explorer.transition_output_external_record
 --
 
 ALTER TABLE ONLY explorer.transition_output_future
-    ADD CONSTRAINT transition_output_future_transition_output_id_fk FOREIGN KEY (transition_output_id) REFERENCES explorer.transition_output(id);
+    ADD CONSTRAINT transition_output_future_transition_output_id_fk FOREIGN KEY (transition_output_id) REFERENCES explorer.transition_output(id) ON DELETE CASCADE;
 
 
 --
@@ -3306,7 +3804,7 @@ ALTER TABLE ONLY explorer.transition_output_future
 --
 
 ALTER TABLE ONLY explorer.transition_output_private
-    ADD CONSTRAINT transition_output_private_transition_output_id_fkey FOREIGN KEY (transition_output_id) REFERENCES explorer.transition_output(id);
+    ADD CONSTRAINT transition_output_private_transition_output_id_fkey FOREIGN KEY (transition_output_id) REFERENCES explorer.transition_output(id) ON DELETE CASCADE;
 
 
 --
@@ -3314,7 +3812,7 @@ ALTER TABLE ONLY explorer.transition_output_private
 --
 
 ALTER TABLE ONLY explorer.transition_output_public
-    ADD CONSTRAINT transition_output_public_transition_output_id_fk FOREIGN KEY (transition_output_id) REFERENCES explorer.transition_output(id);
+    ADD CONSTRAINT transition_output_public_transition_output_id_fk FOREIGN KEY (transition_output_id) REFERENCES explorer.transition_output(id) ON DELETE CASCADE;
 
 
 --
@@ -3322,7 +3820,7 @@ ALTER TABLE ONLY explorer.transition_output_public
 --
 
 ALTER TABLE ONLY explorer.transition_output_record
-    ADD CONSTRAINT transition_output_record_transition_output_id_fk FOREIGN KEY (transition_output_id) REFERENCES explorer.transition_output(id);
+    ADD CONSTRAINT transition_output_record_transition_output_id_fk FOREIGN KEY (transition_output_id) REFERENCES explorer.transition_output(id) ON DELETE CASCADE;
 
 
 --
@@ -3330,7 +3828,7 @@ ALTER TABLE ONLY explorer.transition_output_record
 --
 
 ALTER TABLE ONLY explorer.transition_output
-    ADD CONSTRAINT transition_output_transition_id_fk FOREIGN KEY (transition_id) REFERENCES explorer.transition(id);
+    ADD CONSTRAINT transition_output_transition_id_fk FOREIGN KEY (transition_id) REFERENCES explorer.transition(id) ON DELETE CASCADE;
 
 
 --
@@ -3338,7 +3836,7 @@ ALTER TABLE ONLY explorer.transition_output
 --
 
 ALTER TABLE ONLY explorer.transition
-    ADD CONSTRAINT transition_transaction_execute_id_fk FOREIGN KEY (transaction_execute_id) REFERENCES explorer.transaction_execute(id);
+    ADD CONSTRAINT transition_transaction_execute_id_fk FOREIGN KEY (transaction_execute_id) REFERENCES explorer.transaction_execute(id) ON DELETE CASCADE;
 
 
 --

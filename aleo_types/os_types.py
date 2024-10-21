@@ -1,4 +1,3 @@
-
 from .vm_block import *
 
 class NodeType(IntEnumu8):
@@ -147,20 +146,22 @@ class ChallengeRequest(Message):
 class ChallengeResponse(Message):
     type = Message.Type.ChallengeResponse
 
-    def __init__(self, *, genesis_header: BlockHeader, signature: Data[Signature], nonce: u64):
+    def __init__(self, *, genesis_header: BlockHeader, restrictions_id: Field, signature: Data[Signature], nonce: u64):
         self.genesis_header = genesis_header
+        self.restrictions_id = restrictions_id
         self.signature = signature
         self.nonce = nonce
 
     def dump(self) -> bytes:
-        return self.type.dump() + self.genesis_header.dump() + self.signature.dump() + self.nonce.dump()
+        return self.type.dump() + self.genesis_header.dump() + self.restrictions_id.dump() + self.signature.dump() + self.nonce.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
         genesis_header = BlockHeader.load(data)
+        restrictions_id = Field.load(data)
         signature = Data[Signature].load(data)
         nonce = u64.load(data)
-        return cls(genesis_header=genesis_header, signature=signature, nonce=nonce)
+        return cls(genesis_header=genesis_header, restrictions_id=restrictions_id, signature=signature, nonce=nonce)
 
 
 class DisconnectReason(IntEnumu8):
@@ -178,7 +179,7 @@ class DisconnectReason(IntEnumu8):
     TooManyFailures = 11
     TooManyPeers = 12
     YouNeedToSyncFirst = 13
-    YourPortIsClosed = 14,
+    YourPortIsClosed = 14
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -346,7 +347,7 @@ class PuzzleResponse(Message):
 class UnconfirmedSolution(Message):
     type = Message.Type.UnconfirmedSolution
 
-    def __init__(self, *, solution_id: PuzzleCommitment, solution: Data[ProverSolution]):
+    def __init__(self, *, solution_id: SolutionID, solution: Data[Solution]):
         self.solution_id = solution_id
         self.solution = solution
 
@@ -355,8 +356,8 @@ class UnconfirmedSolution(Message):
 
     @classmethod
     def load(cls, data: BytesIO):
-        solution_id = PuzzleCommitment.load(data)
-        solution = Data[ProverSolution].load(data)
+        solution_id = SolutionID.load(data)
+        solution = Data[Solution].load(data)
         return cls(solution_id=solution_id, solution=solution)
 
 
