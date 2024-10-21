@@ -146,6 +146,9 @@ create table validator_info
                     order by fa.id
                 """, (tx_id,))
                 args = [Plaintext.load(BytesIO(x["plaintext"])) for x in await cur.fetchall()]
+                if len(args) == 0:
+                    # skip private fee
+                    continue
                 if len(args) != 2:
                     raise RuntimeError(f"unexpected number of args: {args}")
                 address = cast(LiteralPlaintext, args[0])
