@@ -1003,9 +1003,8 @@ class DatabaseBlock(DatabaseBase):
             else:
                 transaction_count = res["count"]
             await cur.execute(
-                "SELECT COUNT(*) FROM solution s "
-                "JOIN puzzle_solution ps on s.puzzle_solution_id = ps.id "
-                "WHERE ps.block_id = %s",
+                "WITH ps AS (SELECT ps.id FROM puzzle_solution ps WHERE ps.block_id = %s LIMIT 1) "
+                "SELECT COUNT(*) FROM solution s, ps WHERE s.puzzle_solution_id = ps.id",
                 (block["id"],)
             )
             if (res := await cur.fetchone()) is None:
