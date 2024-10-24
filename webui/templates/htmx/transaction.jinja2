@@ -10,11 +10,7 @@
             <div class="transfer-data" style="margin: 20px 4px;">
             {% set future = transitions[0].obj.outputs[-1].future.value %}
             {% call data_line("Transfer amount") %}
-                {% if transitions[0].action == "credits.aleo/transfer_private_to_public" %}
-                    <strong>{{ future.arguments[0].plaintext.literal.primitive | format_aleo_credit | safe }} Aleo credits</strong>
-                {% else %}
-                    <strong>{{ future.arguments[-1].plaintext.literal.primitive | format_aleo_credit | safe }} Aleo credits</strong>
-                {% endif %}
+                <strong>{{ future.arguments[-1].plaintext.literal.primitive | format_aleo_credit | safe }} Aleo credits</strong>
             {% endcall %}
             {% call data_line("From") %}
                 {% if transitions[0].action == "credits.aleo/transfer_private_to_public" %}
