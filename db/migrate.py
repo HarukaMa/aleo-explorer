@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Awaitable
+from typing import Awaitable, LiteralString
 
 import psycopg
 import psycopg.sql
@@ -25,6 +25,7 @@ class DatabaseMigrate(DatabaseBase):
             (6, self.migrate_6_check_aborted_unconfirmed_transactions),
             (7, self.migrate_7_rebuild_solution_id_index_with_ops),
             (8, self.migrate_8_fix_missing_fee_stats),
+            (9, self.migrate_9_fix_object_orders),
         ]
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -155,3 +156,7 @@ create table validator_info
                 amount = cast(LiteralPlaintext, args[1])
                 await redis.hincrby("address_fee", str(address), int(str(amount).replace("u64", "")))
                 print(f"added fee {amount} to {address}")
+
+    @staticmethod
+    async def migrate_9_fix_object_orders(conn: psycopg.AsyncConnection[DictRow], redis: Redis[str]):
+        await conn.execute(cast(LiteralString, open("db/migrate_9.sql").read()))

@@ -64,7 +64,7 @@ class DatabaseBlock(DatabaseBase):
             program_id = res["program_id"]
             function_name = res["function_name"]
             await cur.execute(
-                "SELECT id, type, plaintext FROM future_argument WHERE future_id = %s",
+                "SELECT id, type, plaintext FROM future_argument WHERE future_id = %s ORDER BY id",
                 (future_db_id,)
             )
             arguments: list[Argument] = []
@@ -663,7 +663,7 @@ class DatabaseBlock(DatabaseBase):
                 case ConfirmedTransaction.Type.AcceptedExecute.name | ConfirmedTransaction.Type.RejectedExecute.name:
                     execute_transaction = transaction
                     await cur.execute(
-                        "SELECT * FROM transition WHERE transaction_execute_id = %s",
+                        "SELECT * FROM transition WHERE transaction_execute_id = %s ORDER BY id",
                         (execute_transaction["transaction_execute_id"],)
                     )
                     transitions = await cur.fetchall()
