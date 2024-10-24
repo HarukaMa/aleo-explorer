@@ -27,7 +27,7 @@
                 {% if transitions[0].action == "credits.aleo/transfer_public_to_private" %}
                     Private
                 {% else %}
-                    {% if transitions[0].action == "credits.aleo/transfer_public" or transitions[0].action == "credits.aleo/transfer_private_to_public" %}
+                    {% if transitions[0].action == "credits.aleo/transfer_public" %}
                         {% set arg_index = 1 %}
                     {% else %}
                         {% set arg_index = 0 %}
