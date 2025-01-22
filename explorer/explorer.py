@@ -23,9 +23,6 @@ class Explorer:
         self.node = None
         self.db = Database(server=os.environ["DB_HOST"], user=os.environ["DB_USER"], password=os.environ["DB_PASS"],
                            database=os.environ["DB_DATABASE"], schema=os.environ["DB_SCHEMA"],
-                           redis_server=os.environ["REDIS_HOST"], redis_port=int(os.environ["REDIS_PORT"]),
-                           redis_db=int(os.environ["REDIS_DB"]), redis_user=os.environ.get("REDIS_USER"),
-                           redis_password=os.environ.get("REDIS_PASS"),
                            message_callback=self.message)
 
         # states
@@ -164,10 +161,15 @@ class Explorer:
     async def check_revert(self):
         if os.path.exists("revert_flag") and os.path.isfile("revert_flag"):
             try:
+                try:
+                    with open("revert_flag", "r") as f:
+                        height = int(f.read())
+                except ValueError:
+                    height = None
                 os.remove("revert_flag")
             except OSError as e:
                 print("Cannot remove revert_flag:", e)
-            await self.db.revert_to_last_backup()
+            await self.db.revert_to_last_backup(height)
 
     async def check_clear(self):
         if os.path.exists("clear_flag") and os.path.isfile("clear_flag"):

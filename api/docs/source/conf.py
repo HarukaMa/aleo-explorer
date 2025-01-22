@@ -7,7 +7,7 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'AleoScan API'
-copyright = '2023, Haruka'
+copyright = '2023-2025, AleoScan'
 author = 'Haruka'
 
 # -- General configuration ---------------------------------------------------

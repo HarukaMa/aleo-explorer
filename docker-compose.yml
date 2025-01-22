@@ -10,14 +10,6 @@ services:
       - POSTGRES_PASSWORD=postgres
     restart: unless-stopped
 
-  redis:
-    image: redis:7.2-alpine
-    restart: unless-stopped
-    command: ["redis-server", "/usr/local/etc/redis/redis.conf","--daemonize","no"]
-    volumes:
-      - ./redis.conf.example:/usr/local/etc/redis/redis.conf
-      - redis_data:/data
-
   harukamaaleoexplorer:
     image: harukamaaleoexplorer
     build:
@@ -30,9 +22,6 @@ services:
       - DB_PASS=postgres
       - DB_DATABASE=postgres
       - DB_SCHEMA=explorer
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_DB=0
       - HOST=0.0.0.0
       - PORT=8800
       - API_PORT=8801
@@ -49,13 +38,10 @@ services:
     restart: unless-stopped
     depends_on:
       - db
-      - redis
     ports:
       - 8800:8800
       - 8801:8801
 
 volumes:
   postgres_data:
-    driver: local
-  redis_data:
     driver: local

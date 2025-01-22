@@ -41,6 +41,7 @@ async def address_route(request: Request) -> CJSONResponse:
     unbond_state_bytes = await db.get_mapping_value("credits.aleo", "unbonding", unbonding_key_id)
     committee_state_bytes = await db.get_mapping_value("credits.aleo", "committee", committee_key_id)
     delegated_bytes = await db.get_mapping_value("credits.aleo", "delegated", delegated_key_id)
+    puzzle_reward = await db.get_address_puzzle_reward(address)
     stake_reward = await db.get_address_stake_reward(address)
     transfer_in = await db.get_address_transfer_in(address)
     transfer_out = await db.get_address_transfer_out(address)
@@ -55,6 +56,7 @@ async def address_route(request: Request) -> CJSONResponse:
         and unbond_state_bytes is None
         and committee_state_bytes is None
         and delegated_bytes is None
+        and puzzle_reward is None
         and stake_reward is None
         and transfer_in is None
         and transfer_out is None
@@ -65,11 +67,9 @@ async def address_route(request: Request) -> CJSONResponse:
 
     if len(solutions) > 0:
         solution_count = await db.get_solution_count_by_address(address)
-        total_rewards = await db.get_puzzle_reward_by_address(address)
         speed, interval = await db.get_address_speed(address)
     else:
         solution_count = 0
-        total_rewards = 0
         speed = 0
         interval = 0
     program_count = await db.get_program_count_by_address(address)
@@ -160,6 +160,8 @@ async def address_route(request: Request) -> CJSONResponse:
         value = cast(PlaintextValue, Value.load(BytesIO(delegated_bytes)))
         plaintext = cast(LiteralPlaintext, value.plaintext)
         delegated = cast(Int, plaintext.literal.primitive)
+    if puzzle_reward is None:
+        puzzle_reward = 0
     if stake_reward is None:
         stake_reward = 0
     if transfer_in is None:
@@ -186,7 +188,7 @@ async def address_route(request: Request) -> CJSONResponse:
         "address": address,
         "solutions": recent_solutions,
         "programs": recent_programs,
-        "total_rewards": str(total_rewards),
+        "total_rewards": str(puzzle_reward),
         "total_solutions": solution_count,
         "total_programs": program_count,
         "speed": speed,

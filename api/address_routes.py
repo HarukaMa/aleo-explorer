@@ -23,7 +23,7 @@ async def address_staking_route(request: Request):
         return parse_result
     height, _, block_timestamp = parse_result
 
-    value_bytes = await db.get_mapping_value_at_height("credits.aleo", "bonded", address, height)
+    value_bytes, _ = await db.get_mapping_value_at_height("credits.aleo", "bonded", address, height)
     if value_bytes is None:
         return JSONResponse(None)
     value = cast(PlaintextValue, Value.load(BytesIO(value_bytes)))
@@ -53,7 +53,7 @@ async def address_delegated_route(request: Request):
         return parse_result
     height, _, block_timestamp = parse_result
 
-    value_bytes = await db.get_mapping_value_at_height("credits.aleo", "delegated", address, height)
+    value_bytes, _ = await db.get_mapping_value_at_height("credits.aleo", "delegated", address, height)
     if value_bytes is None:
         return JSONResponse(None)
     value = cast(PlaintextValue, Value.load(BytesIO(value_bytes)))

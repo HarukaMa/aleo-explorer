@@ -2,13 +2,11 @@
 from __future__ import annotations
 
 import os
-import signal
 import time
 from collections import defaultdict
 
 import psycopg.sql
 from psycopg.rows import DictRow
-from redis.asyncio import Redis
 
 from aleo_types import *
 from aleo_types.cached import cached_get_key_id, cached_get_mapping_id, cached_compute_key_to_address
@@ -40,20 +38,6 @@ class _SupplyTracker:
 
 
 class DatabaseInsert(DatabaseBase):
-
-    def __init__(self, *args, **kwargs): # type: ignore
-        super().__init__(*args, **kwargs)
-        self.redis_last_history_time = time.monotonic() - 10800
-        self.redis_keys = [
-            "credits.aleo:bonded",
-            "credits.aleo:delegated",
-            "credits.aleo:committee",
-            "address_stake_reward",
-            "address_puzzle_reward",
-            "address_transfer_in",
-            "address_transfer_out",
-            "address_fee",
-        ]
 
     @staticmethod
     async def _insert_future(cur: psycopg.AsyncCursor[DictRow], future: Future,
@@ -144,7 +128,7 @@ class DatabaseInsert(DatabaseBase):
             else:
                 raise NotImplementedError
 
-    async def _update_address_stats(self, transaction: Transaction):
+    async def _update_address_stats(self, cur: psycopg.AsyncCursor[DictRow], height: int, transaction: Transaction):
 
         if isinstance(transaction, DeployTransaction):
             transitions = [cast(Fee, transaction.fee).transition]
@@ -216,15 +200,60 @@ class DatabaseInsert(DatabaseBase):
 
                 if transfer_from != transfer_to:
                     if transfer_from is not None:
-                        await self.redis.hincrby("address_transfer_out", transfer_from, amount) # type: ignore
+                        await cur.execute(
+                            "SELECT id, transfer_out FROM address_transfer_out_history WHERE address = %s "
+                            "ORDER BY id DESC LIMIT 1",
+                            (transfer_from,)
+                        )
+                        if (res := await cur.fetchone()) is None:
+                            last_id = None
+                            last_amount = 0
+                        else:
+                            last_id = res["id"]
+                            last_amount = res["transfer_out"]
+                        await cur.execute(
+                            "INSERT INTO address_transfer_out_history (address, transfer_out, height, previous_id) "
+                            "VALUES (%s, %s, %s, %s) RETURNING id",
+                            (transfer_from, last_amount + amount, height, last_id)
+                        )
                     if transfer_to is not None:
-                        await self.redis.hincrby("address_transfer_in", transfer_to, amount) # type: ignore
+                        await cur.execute(
+                            "SELECT id, transfer_in FROM address_transfer_in_history WHERE address = %s "
+                            "ORDER BY id DESC LIMIT 1",
+                            (transfer_to,)
+                        )
+                        if (res := await cur.fetchone()) is None:
+                            last_id = None
+                            last_amount = 0
+                        else:
+                            last_id = res["id"]
+                            last_amount = res["transfer_in"]
+                        await cur.execute(
+                            "INSERT INTO address_transfer_in_history (address, transfer_in, height, previous_id) "
+                            "VALUES (%s, %s, %s, %s) RETURNING id",
+                            (transfer_to, last_amount + amount, height, last_id)
+                        )
 
                 if fee_from is not None:
-                    await self.redis.hincrby("address_fee", fee_from, amount) # type: ignore
+                    await cur.execute(
+                        "SELECT id, fee FROM address_fee_history WHERE address = %s "
+                        "ORDER BY id DESC LIMIT 1",
+                        (fee_from,)
+                    )
+                    if (res := await cur.fetchone()) is None:
+                        last_id = None
+                        last_amount = 0
+                    else:
+                        last_id = res["id"]
+                        last_amount = res["fee"]
+                    await cur.execute(
+                        "INSERT INTO address_fee_history (address, fee, height, previous_id) "
+                        "VALUES (%s, %s, %s, %s) RETURNING id",
+                        (fee_from, last_amount + amount, height, last_id)
+                    )
 
     @staticmethod
-    async def _insert_transition(cur: psycopg.AsyncCursor[DictRow], redis_conn: Redis[str],
+    async def _insert_transition(cur: psycopg.AsyncCursor[DictRow],
                                  exe_tx_db_id: Optional[int], fee_db_id: Optional[int],
                                  transition: Transition, ts_index: int, is_rejected: bool = False, should_exist: bool = False):
         await cur.execute(
@@ -364,7 +393,7 @@ class DatabaseInsert(DatabaseBase):
 
 
     @staticmethod
-    async def _insert_deploy_transaction(cur: psycopg.AsyncCursor[DictRow], redis: Redis[str],
+    async def _insert_deploy_transaction(cur: psycopg.AsyncCursor[DictRow],
                                          deployment: Deployment, owner: ProgramOwner, fee: Fee, transaction_db_id: int,
                                          is_unconfirmed: bool = False, is_rejected: bool = False, fee_should_exist: bool = False):
         if is_unconfirmed or is_rejected:
@@ -398,10 +427,10 @@ class DatabaseInsert(DatabaseBase):
             raise RuntimeError("failed to insert row into database")
         fee_db_id = res["id"]
 
-        await DatabaseInsert._insert_transition(cur, redis, None, fee_db_id, fee.transition, 0, is_rejected, fee_should_exist)
+        await DatabaseInsert._insert_transition(cur, None, fee_db_id, fee.transition, 0, is_rejected, fee_should_exist)
 
     @staticmethod
-    async def _insert_execute_transaction(cur: psycopg.AsyncCursor[DictRow], redis: Redis[str],
+    async def _insert_execute_transaction(cur: psycopg.AsyncCursor[DictRow],
                                           execution: Execution, fee: Optional[Fee], transaction_db_id: int,
                                           is_rejected: bool = False, ts_should_exist: bool = False):
         await cur.execute(
@@ -423,7 +452,7 @@ class DatabaseInsert(DatabaseBase):
         execute_transaction_db_id = res["id"]
 
         for ts_index, transition in enumerate(execution.transitions):
-            await DatabaseInsert._insert_transition(cur, redis, execute_transaction_db_id, None, transition, ts_index, is_rejected, ts_should_exist)
+            await DatabaseInsert._insert_transition(cur, execute_transaction_db_id, None, transition, ts_index, is_rejected, ts_should_exist)
 
         if fee:
             await cur.execute(
@@ -434,9 +463,9 @@ class DatabaseInsert(DatabaseBase):
             if (res := await cur.fetchone()) is None:
                 raise RuntimeError("failed to insert row into database")
             fee_db_id = res["id"]
-            await DatabaseInsert._insert_transition(cur, redis, None, fee_db_id, fee.transition, 0, is_rejected, ts_should_exist)
+            await DatabaseInsert._insert_transition(cur, None, fee_db_id, fee.transition, 0, is_rejected, ts_should_exist)
 
-    async def _insert_transaction(self, cur: psycopg.AsyncCursor[DictRow], redis: Redis[str], transaction: Transaction,
+    async def _insert_transaction(self, cur: psycopg.AsyncCursor[DictRow], height: Optional[int], transaction: Transaction,
                                   confirmed_transaction: Optional[ConfirmedTransaction] = None, ct_index: Optional[int] = None,
                                   ignore_deploy_txids: Optional[list[str]] = None, confirmed_transaction_db_id: Optional[int] = None,
                                   reject_reasons: Optional[list[Optional[str]]] = None):
@@ -523,7 +552,7 @@ class DatabaseInsert(DatabaseBase):
                             "UPDATE transaction SET transaction_id = %s, original_transaction_id = %s, type = 'Fee' WHERE id = %s",
                             (str(transaction.id), original_transaction_id, transaction_db_id)
                         )
-                        await DatabaseInsert._insert_deploy_transaction(cur, redis, rejected_deployment.deploy, rejected_deployment.program_owner, fee, transaction_db_id, is_rejected=True, fee_should_exist=True)
+                        await DatabaseInsert._insert_deploy_transaction(cur, rejected_deployment.deploy, rejected_deployment.program_owner, fee, transaction_db_id, is_rejected=True, fee_should_exist=True)
 
                 elif isinstance(confirmed_transaction, RejectedExecute):
                     rejected_execution = cast(RejectedExecution, confirmed_transaction.rejected)
@@ -543,7 +572,7 @@ class DatabaseInsert(DatabaseBase):
                             "UPDATE transaction SET transaction_id = %s, original_transaction_id = %s, type = 'Fee' WHERE id = %s",
                             (str(transaction.id), original_transaction_id, transaction_db_id)
                         )
-                        await DatabaseInsert._insert_execute_transaction(cur, redis, rejected_execution.execution,
+                        await DatabaseInsert._insert_execute_transaction(cur, rejected_execution.execution,
                                                                          cast(Fee, transaction.fee),
                                                                          transaction_db_id, is_rejected=True,
                                                                          ts_should_exist=True)
@@ -568,22 +597,22 @@ class DatabaseInsert(DatabaseBase):
 
             if isinstance(transaction, DeployTransaction): # accepted deploy / unconfirmed
                 await DatabaseInsert._insert_deploy_transaction(
-                    cur, redis, transaction.deployment, transaction.owner, cast(Fee, transaction.fee), transaction_db_id,
+                    cur, transaction.deployment, transaction.owner, cast(Fee, transaction.fee), transaction_db_id,
                     is_unconfirmed=(confirmed_transaction is None)
                 )
 
             elif isinstance(transaction, ExecuteTransaction): # accepted execute / unconfirmed
-                await DatabaseInsert._insert_execute_transaction(cur, redis, transaction.execution,
+                await DatabaseInsert._insert_execute_transaction(cur, transaction.execution,
                                                                  cast(Option[Fee], transaction.fee).value,
                                                                  transaction_db_id)
 
             elif isinstance(transaction, FeeTransaction) and not prior_tx: # first seen rejected tx
                 if isinstance(confirmed_transaction, RejectedDeploy):
                     rejected_deployment = cast(RejectedDeployment, confirmed_transaction.rejected)
-                    await DatabaseInsert._insert_deploy_transaction(cur, redis, rejected_deployment.deploy, rejected_deployment.program_owner, cast(Fee, transaction.fee), transaction_db_id, is_rejected=True)
+                    await DatabaseInsert._insert_deploy_transaction(cur, rejected_deployment.deploy, rejected_deployment.program_owner, cast(Fee, transaction.fee), transaction_db_id, is_rejected=True)
                 elif isinstance(confirmed_transaction, RejectedExecute):
                     rejected_execution = cast(RejectedExecution, confirmed_transaction.rejected)
-                    await DatabaseInsert._insert_execute_transaction(cur, redis, rejected_execution.execution,
+                    await DatabaseInsert._insert_execute_transaction(cur, rejected_execution.execution,
                                                                      cast(Fee, transaction.fee), transaction_db_id,
                                                                      is_rejected=True)
 
@@ -619,8 +648,9 @@ class DatabaseInsert(DatabaseBase):
                     raise RuntimeError("expected a rejected reason for rejected transaction")
                 await cur.execute("UPDATE confirmed_transaction SET reject_reason = %s WHERE id = %s",
                                   (reject_reasons[ct_index], confirmed_transaction_db_id))
-
-            await self._update_address_stats(transaction)
+            if height is None:
+                raise RuntimeError("expected height to be set for confirmed transaction")
+            await self._update_address_stats(cur, height, transaction)
         else:
             # check if tx is already aborted
             await cur.execute(
@@ -749,13 +779,16 @@ class DatabaseInsert(DatabaseBase):
                 "key": key,
                 "value": value,
             }
-        await self.redis.execute_command("MULTI") # type: ignore
-        await self.redis.delete("credits.aleo:committee")
-        await self.redis.hset("credits.aleo:committee", mapping={k: json.dumps(v) for k, v in committee_mapping.items()})
-        await self.redis.execute_command("EXEC") # type: ignore
+
+        data: dict[str, dict[str, str]] = {}
+        for k, v in global_mapping_cache[committee_mapping_id].items():
+            data[cached_get_key_id("credits.aleo", "committee", v["key"].dump())] = {
+                "key": v["key"].dump().hex(),
+                "value": v["value"].dump().hex()
+            }
         await cur.execute(
             "INSERT INTO mapping_committee_history (height, content) VALUES (%s, %s) RETURNING id",
-            (height, json.dumps({str(i["key"]): i["value"].dump().hex() for i in global_mapping_cache[committee_mapping_id].values()}))
+            (height, json.dumps(data))
         )
 
         global_mapping_cache[bonded_mapping_id] = {}
@@ -784,15 +817,19 @@ class DatabaseInsert(DatabaseBase):
                 "key": key,
                 "value": value,
             }
-        await self.redis.execute_command("MULTI") # type: ignore
-        await self.redis.delete("credits.aleo:bonded")
-        await self.redis.hset("credits.aleo:bonded", mapping={k: json.dumps(v) for k, v in bonded_mapping.items()})
-        await self.redis.execute_command("EXEC") # type: ignore
+
+
+        data = {}
+        for k, v in global_mapping_cache[bonded_mapping_id].items():
+            data[cached_get_key_id("credits.aleo", "bonded", v["key"].dump())] = {
+                "key": v["key"].dump().hex(),
+                "value": v["value"].dump().hex()
+            }
         from node import Network
         if Network.network_id != 2:
             await cur.execute(
                 "INSERT INTO mapping_bonded_history (height, content) VALUES (%s, %s) RETURNING id",
-                (height, json.dumps({str(i["key"]): i["value"].dump().hex() for i in global_mapping_cache[bonded_mapping_id].values()}))
+                (height, json.dumps(data))
             )
 
         global_mapping_cache[delegated_mapping_id] = {}
@@ -809,13 +846,16 @@ class DatabaseInsert(DatabaseBase):
                 "key": key,
                 "value": value,
             }
-        await self.redis.execute_command("MULTI") # type: ignore
-        await self.redis.delete("credits.aleo:delegated")
-        await self.redis.hset("credits.aleo:delegated", mapping={k: json.dumps(v) for k, v in delegated_mapping.items()})
-        await self.redis.execute_command("EXEC") # type: ignore
+
+        data = {}
+        for k, v in global_mapping_cache[delegated_mapping_id].items():
+            data[cached_get_key_id("credits.aleo", "delegated", v["key"].dump())] = {
+                "key": v["key"].dump().hex(),
+                "value": v["value"].dump().hex()
+            }
         await cur.execute(
             "INSERT INTO mapping_delegated_history (height, content) VALUES (%s, %s) RETURNING id",
-            (height, json.dumps({str(i["key"]): str(i["value"]) for i in global_mapping_cache[delegated_mapping_id].values()}))
+            (height, json.dumps(data))
         )
 
     @staticmethod
@@ -974,11 +1014,16 @@ class DatabaseInsert(DatabaseBase):
         await execute_operations(cast("Database", self), cur, operations)
 
     @staticmethod
-    async def _get_committee_mapping_unchecked(redis_conn: Redis[str]) -> dict[Address, tuple[bool_, u8]]:
-        data = await redis_conn.hgetall("credits.aleo:committee")
+    async def _get_committee_mapping_unchecked(cur: psycopg.AsyncCursor[DictRow]) -> dict[Address, tuple[bool_, u8]]:
+        await cur.execute(
+            "SELECT content FROM mapping_committee_history ORDER BY height DESC LIMIT 1"
+        )
+        if (res := await cur.fetchone()) is None:
+            return {}
+        data = res["content"]
+
         committee_members: dict[Address, tuple[bool_, u8]] = {}
         for d in data.values():
-            d = json.loads(d)
             key = cast(LiteralPlaintext, Plaintext.load(BytesIO(bytes.fromhex(d["key"]))))
             value = cast(PlaintextValue, Value.load(BytesIO(bytes.fromhex(d["value"]))))
             plaintext = cast(StructPlaintext, value.plaintext)
@@ -991,33 +1036,48 @@ class DatabaseInsert(DatabaseBase):
         return committee_members
 
     @staticmethod
-    async def _get_delegated_mapping_unchecked(redis_conn: Redis[str]) -> dict[Address, u64]:
-        data = await redis_conn.hgetall("credits.aleo:delegated")
+    async def _get_delegated_mapping_unchecked(cur: psycopg.AsyncCursor[DictRow]) -> dict[Address, u64]:
+        await cur.execute(
+            "SELECT content FROM mapping_delegated_history ORDER BY height DESC LIMIT 1"
+        )
+        if (res := await cur.fetchone()) is None:
+            return {}
+        data = res["content"]
+
         delegators: dict[Address, u64] = {}
         for d in data.values():
-            d = json.loads(d)
             key = cast(LiteralPlaintext, Plaintext.load(BytesIO(bytes.fromhex(d["key"]))))
             value = cast(PlaintextValue, Value.load(BytesIO(bytes.fromhex(d["value"]))))
             plaintext = cast(LiteralPlaintext, value.plaintext)
             delegators[cast(Address, key.literal.primitive)] = cast(u64, plaintext.literal.primitive)
         return delegators
 
-    async def get_bonded_mapping_unchecked(self) -> dict[Address, tuple[Address, u64]]:
-        data = await self.redis.hgetall("credits.aleo:bonded")
+    @staticmethod
+    async def _get_bonded_mapping_unchecked(cur: psycopg.AsyncCursor[DictRow]) -> dict[Address, tuple[Address, u64]]:
+        await cur.execute(
+            "SELECT content FROM mapping_bonded_history ORDER BY height DESC LIMIT 1"
+        )
+        if (res := await cur.fetchone()) is None:
+            return {}
+        data = res["content"]
 
         stakers: dict[Address, tuple[Address, u64]] = {}
         for d in data.values():
-            d = json.loads(d)
-            key = Plaintext.load(BytesIO(bytes.fromhex(d["key"])))
-            value = Value.load(BytesIO(bytes.fromhex(d["value"])))
-            plaintext = cast(PlaintextValue, value).plaintext
-            validator = cast(StructPlaintext, plaintext)["validator"]
-            amount = cast(StructPlaintext, plaintext)["microcredits"]
-            stakers[cast(Address, cast(LiteralPlaintext, key).literal.primitive)] = (
-                cast(Address, cast(LiteralPlaintext, validator).literal.primitive),
-                cast(u64, cast(LiteralPlaintext, amount).literal.primitive)
+            key = cast(LiteralPlaintext, Plaintext.load(BytesIO(bytes.fromhex(d["key"]))))
+            value = cast(PlaintextValue, Value.load(BytesIO(bytes.fromhex(d["value"]))))
+            plaintext = cast(StructPlaintext, value.plaintext)
+            validator = cast(LiteralPlaintext, plaintext["validator"])
+            amount = cast(LiteralPlaintext, plaintext["microcredits"])
+            stakers[cast(Address, key.literal.primitive)] = (
+                cast(Address, validator.literal.primitive),
+                cast(u64, amount.literal.primitive)
             )
         return stakers
+
+    async def get_bonded_mapping_unchecked(self) -> dict[Address, tuple[Address, u64]]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                return await self._get_bonded_mapping_unchecked(cur)
 
     @staticmethod
     @profile
@@ -1109,14 +1169,26 @@ class DatabaseInsert(DatabaseBase):
         return delegated
 
     @profile
-    async def _post_ratify(self, cur: psycopg.AsyncCursor[dict[str, Any]], redis_conn: Redis[str], height: int, round_: int,
+    async def _post_ratify(self, cur: psycopg.AsyncCursor[dict[str, Any]], height: int, round_: int,
                            ratifications: list[Ratify], address_puzzle_rewards: dict[str, int], supply_tracker: _SupplyTracker):
         from interpreter.interpreter import global_mapping_cache
 
         for ratification in ratifications:
             if isinstance(ratification, BlockRewardRatify):
-                committee = await self._get_committee_mapping_unchecked(redis_conn)
-                delegated = await self._get_delegated_mapping_unchecked(redis_conn)
+                committee = await self._get_committee_mapping_unchecked(cur)
+
+                mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "delegated"))
+                if mapping_id in global_mapping_cache:
+                    data = global_mapping_cache[mapping_id]
+                    delegated: dict[Address, u64] = {}
+                    for v in data.values():
+                        key = cast(LiteralPlaintext, v["key"])
+                        value = v["value"]
+                        plaintext = cast(LiteralPlaintext, value.plaintext)
+                        delegated[cast(Address, key.literal.primitive)] = cast(u64, plaintext.literal.primitive)
+                else:
+                    delegated = await self._get_delegated_mapping_unchecked(cur)
+
                 mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "bonded"))
                 if mapping_id in global_mapping_cache:
                     data = global_mapping_cache[mapping_id]
@@ -1130,7 +1202,7 @@ class DatabaseInsert(DatabaseBase):
                         amount = cast(u64, cast(LiteralPlaintext, bond_state["microcredits"]).literal.primitive)
                         stakers[address] = validator, amount
                 else:
-                    stakers = await self.get_bonded_mapping_unchecked()
+                    stakers = await self._get_bonded_mapping_unchecked(cur)
 
                 committee_members = self._committee_delegated_to_members(committee, delegated)
 
@@ -1138,12 +1210,20 @@ class DatabaseInsert(DatabaseBase):
                 delegated = self._next_delegated(stakers)
                 committee_members = self._next_committee_members(committee_members, stakers)
 
-                pipe = self.redis.pipeline()
+                await cur.execute("SELECT content FROM address_stake_reward_history WHERE height = %s", (height - 1,))
+                if (res := await cur.fetchone()) is None:
+                    data = {}
+                else:
+                    data = res["content"]
                 for address, amount in stake_rewards.items():
-                    pipe.hincrby("address_stake_reward", str(address), amount)
-                    supply_tracker.mint(amount)
-                    supply_tracker.tally_block_reward(amount)
-                await pipe.execute() # type: ignore
+                    if str(address) in data:
+                        data[str(address)] += amount
+                    else:
+                        data[str(address)] = amount
+                await cur.execute(
+                    "INSERT INTO address_stake_reward_history (height, content) VALUES (%s, %s) RETURNING id",
+                    (height, json.dumps(data))
+                )
 
                 await self._update_committee_bonded_delegated_map(cur, committee_members, stakers, delegated, height)
                 starting_round = u64(round_)
@@ -1207,51 +1287,12 @@ class DatabaseInsert(DatabaseBase):
                 from interpreter.interpreter import execute_operations
                 await execute_operations(cast("Database", self), cur, operations)
 
-    @staticmethod
-    async def _backup_redis_hash_key(redis_conn: Redis[str], keys: list[str], height: int):
-        if height != 0:
-            for key in keys:
-                backup_key = f"{key}:rollback_backup:{height}"
-                if await redis_conn.exists(backup_key) == 0:
-                    if await redis_conn.exists(key) == 1:
-                        await redis_conn.copy(key, backup_key) # type: ignore[arg-type]
-                else:
-                    print("redis backup exists, rolling back")
-                    await redis_conn.copy(backup_key, key, replace=True) # type: ignore[arg-type]
-
-    async def _redis_cleanup(self, redis_conn: Redis[str], keys: list[str], height: int, rollback: bool):
-        if height != 0:
-            now = time.monotonic()
-            history = False
-            if self.redis_last_history_time + 21600 < now or height % 500000 == 0:
-                self.redis_last_history_time = now
-                history = True
-            for key in keys:
-                backup_key = f"{key}:rollback_backup:{height}"
-                if await redis_conn.exists(backup_key) == 1:
-                    if rollback:
-                        await redis_conn.copy(backup_key, key, replace=True) # type: ignore[arg-type]
-                    else:
-                        if history:
-                            history_key = f"{key}:history:{height - 1}"
-                            await redis_conn.rename(backup_key, history_key) # type: ignore[arg-type]
-                            if height % 500000 != 0:
-                                await redis_conn.expire(history_key, 60 * 60 * 24 * 3)
-                        else:
-                            await redis_conn.delete(backup_key)
-
     @profile
     async def _save_block(self, block: Block):
         try:
             async with self.pool.connection() as conn:
-                signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT})
                 async with conn.transaction():
                     async with conn.cursor() as cur:
-                        height = block.height
-                        # redis is not protected by transaction so manually saving here
-                        await self._backup_redis_hash_key(self.redis, self.redis_keys, height)
-                        signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGINT})
-
                         try:
                             if block.height != 0:
                                 from db import Database
@@ -1336,7 +1377,7 @@ class DatabaseInsert(DatabaseBase):
                                 # authority_db_id = res["id"]
                                 subdag = block.authority.subdag
                                 subdag_copy_data: list[tuple[int, int, str, str, int, str, int, str]] = []
-                                committee = await self._get_committee_mapping_unchecked(self.redis)
+                                committee = await self._get_committee_mapping_unchecked(cur)
                                 validators: set[str] = set()
                                 validators_copy_data: list[tuple[int, str]] = []
                                 max_timestamp = 0
@@ -1360,68 +1401,68 @@ class DatabaseInsert(DatabaseBase):
                                 await cur.execute("UPDATE block SET confirm_timestamp = %s WHERE id = %s", (max_timestamp, block_db_id))
                                 for validator in validators:
                                     validators_copy_data.append((block_db_id, validator))
-                                            # await cur.execute(
-                                            #     "INSERT INTO dag_vertex (authority_id, round, batch_certificate_id, batch_id, "
-                                            #     "author, timestamp, author_signature, index) "
-                                            #     "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
-                                            #     (authority_db_id, round_, str(certificate.certificate_id), str(certificate.batch_header.batch_id),
-                                            #      str(certificate.batch_header.author), certificate.batch_header.timestamp,
-                                            #      str(certificate.batch_header.signature), index)
-                                            # )
-                                        # if (res := await cur.fetchone()) is None:
-                                        #     raise RuntimeError("failed to insert row into database")
-                                        # vertex_db_id = res["id"]
+                                    # await cur.execute(
+                                    #     "INSERT INTO dag_vertex (authority_id, round, batch_certificate_id, batch_id, "
+                                    #     "author, timestamp, author_signature, index) "
+                                    #     "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                                    #     (authority_db_id, round_, str(certificate.certificate_id), str(certificate.batch_header.batch_id),
+                                    #      str(certificate.batch_header.author), certificate.batch_header.timestamp,
+                                    #      str(certificate.batch_header.signature), index)
+                                    # )
+                                    # if (res := await cur.fetchone()) is None:
+                                    #     raise RuntimeError("failed to insert row into database")
+                                    # vertex_db_id = res["id"]
 
-                                        # if isinstance(certificate, BatchCertificate1):
-                                        #     for sig_index, (signature, timestamp) in enumerate(certificate.signatures):
-                                        #         await cur.execute(
-                                        #             "INSERT INTO dag_vertex_signature (vertex_id, signature, timestamp, index) "
-                                        #             "VALUES (%s, %s, %s, %s)",
-                                        #             (vertex_db_id, str(signature), timestamp, sig_index)
-                                        #         )
-                                        # elif isinstance(certificate, BatchCertificate2):
-                                        #     for sig_index, signature in enumerate(certificate.signatures):
-                                        #         await cur.execute(
-                                        #             "INSERT INTO dag_vertex_signature (vertex_id, signature, index) "
-                                        #             "VALUES (%s, %s, %s)",
-                                        #             (vertex_db_id, str(signature), sig_index)
-                                        #         )
-                                        #
-                                        # prev_cert_ids = certificate.batch_header.previous_certificate_ids
-                                        # await cur.execute(
-                                        #     "SELECT v.id, batch_certificate_id FROM dag_vertex v "
-                                        #     "JOIN UNNEST(%s::text[]) WITH ORDINALITY c(id, ord) ON v.batch_certificate_id = c.id "
-                                        #     "ORDER BY ord",
-                                        #     (list(map(str, prev_cert_ids)),)
-                                        # )
-                                        # res = await cur.fetchall()
-                                        # temp allow
-                                        # if len(res) != len(prev_cert_ids):
-                                        #     raise RuntimeError("dag referenced unknown previous certificate")
-                                        # prev_vertex_db_ids = {x["batch_certificate_id"]: x["id"] for x in res}
-                                        # adj_copy_data: list[tuple[int, int, int]] = []
-                                        # for prev_index, prev_cert_id in enumerate(prev_cert_ids):
-                                        #     if str(prev_cert_id) in prev_vertex_db_ids:
-                                        #         adj_copy_data.append((vertex_db_id, prev_vertex_db_ids[str(prev_cert_id)], prev_index))
-                                        # async with cur.copy("COPY dag_vertex_adjacency (vertex_id, previous_vertex_id, index) FROM STDIN") as copy:
-                                        #     for row in adj_copy_data:
-                                        #         await copy.write_row(row)
+                                    # if isinstance(certificate, BatchCertificate1):
+                                    #     for sig_index, (signature, timestamp) in enumerate(certificate.signatures):
+                                    #         await cur.execute(
+                                    #             "INSERT INTO dag_vertex_signature (vertex_id, signature, timestamp, index) "
+                                    #             "VALUES (%s, %s, %s, %s)",
+                                    #             (vertex_db_id, str(signature), timestamp, sig_index)
+                                    #         )
+                                    # elif isinstance(certificate, BatchCertificate2):
+                                    #     for sig_index, signature in enumerate(certificate.signatures):
+                                    #         await cur.execute(
+                                    #             "INSERT INTO dag_vertex_signature (vertex_id, signature, index) "
+                                    #             "VALUES (%s, %s, %s)",
+                                    #             (vertex_db_id, str(signature), sig_index)
+                                    #         )
+                                    #
+                                    # prev_cert_ids = certificate.batch_header.previous_certificate_ids
+                                    # await cur.execute(
+                                    #     "SELECT v.id, batch_certificate_id FROM dag_vertex v "
+                                    #     "JOIN UNNEST(%s::text[]) WITH ORDINALITY c(id, ord) ON v.batch_certificate_id = c.id "
+                                    #     "ORDER BY ord",
+                                    #     (list(map(str, prev_cert_ids)),)
+                                    # )
+                                    # res = await cur.fetchall()
+                                    # temp allow
+                                    # if len(res) != len(prev_cert_ids):
+                                    #     raise RuntimeError("dag referenced unknown previous certificate")
+                                    # prev_vertex_db_ids = {x["batch_certificate_id"]: x["id"] for x in res}
+                                    # adj_copy_data: list[tuple[int, int, int]] = []
+                                    # for prev_index, prev_cert_id in enumerate(prev_cert_ids):
+                                    #     if str(prev_cert_id) in prev_vertex_db_ids:
+                                    #         adj_copy_data.append((vertex_db_id, prev_vertex_db_ids[str(prev_cert_id)], prev_index))
+                                    # async with cur.copy("COPY dag_vertex_adjacency (vertex_id, previous_vertex_id, index) FROM STDIN") as copy:
+                                    #     for row in adj_copy_data:
+                                    #         await copy.write_row(row)
 
-                                        # tid_copy_data: list[tuple[int, str, int, Optional[str], Optional[str]]] = []
-                                        # for tid_index, transmission_id in enumerate(certificate.batch_header.transmission_ids):
-                                        #     if isinstance(transmission_id, SolutionTransmissionID):
-                                        #         tid_copy_data.append((vertex_db_id, transmission_id.type.name, tid_index, str(transmission_id.id), None))
-                                        #         dag_transmission_ids[0][str(transmission_id.id)] = vertex_db_id
-                                        #     elif isinstance(transmission_id, TransactionTransmissionID):
-                                        #         tid_copy_data.append((vertex_db_id, transmission_id.type.name, tid_index, None, str(transmission_id.id)))
-                                        #         dag_transmission_ids[1][str(transmission_id.id)] = vertex_db_id
-                                        #     elif isinstance(transmission_id, RatificationTransmissionID):
-                                        #         tid_copy_data.append((vertex_db_id, transmission_id.type.name, tid_index, None, None))
-                                        #     else:
-                                        #         raise NotImplementedError
-                                        # async with cur.copy("COPY dag_vertex_transmission_id (vertex_id, type, index, commitment, transaction_id) FROM STDIN") as copy:
-                                        #     for row in tid_copy_data:
-                                        #         await copy.write_row(row)
+                                    # tid_copy_data: list[tuple[int, str, int, Optional[str], Optional[str]]] = []
+                                    # for tid_index, transmission_id in enumerate(certificate.batch_header.transmission_ids):
+                                    #     if isinstance(transmission_id, SolutionTransmissionID):
+                                    #         tid_copy_data.append((vertex_db_id, transmission_id.type.name, tid_index, str(transmission_id.id), None))
+                                    #         dag_transmission_ids[0][str(transmission_id.id)] = vertex_db_id
+                                    #     elif isinstance(transmission_id, TransactionTransmissionID):
+                                    #         tid_copy_data.append((vertex_db_id, transmission_id.type.name, tid_index, None, str(transmission_id.id)))
+                                    #         dag_transmission_ids[1][str(transmission_id.id)] = vertex_db_id
+                                    #     elif isinstance(transmission_id, RatificationTransmissionID):
+                                    #         tid_copy_data.append((vertex_db_id, transmission_id.type.name, tid_index, None, None))
+                                    #     else:
+                                    #         raise NotImplementedError
+                                    # async with cur.copy("COPY dag_vertex_transmission_id (vertex_id, type, index, commitment, transaction_id) FROM STDIN") as copy:
+                                    #     for row in tid_copy_data:
+                                    #         await copy.write_row(row)
                             else:
                                 raise NotImplementedError
                             if subdag_copy_data:
@@ -1469,7 +1510,7 @@ class DatabaseInsert(DatabaseBase):
                                         if transition.program_id == "credits.aleo" and transition.function_name == "split":
                                             supply_tracker.burn(10000)
 
-                                await self._insert_transaction(cur, self.redis, transaction, confirmed_transaction, ct_index, ignore_deploy_txids,
+                                await self._insert_transaction(cur, block.height, transaction, confirmed_transaction, ct_index, ignore_deploy_txids,
                                                                confirmed_transaction_db_id, reject_reasons)
 
                                 update_copy_data: list[tuple[int, str, str, str]] = []
@@ -1587,9 +1628,18 @@ class DatabaseInsert(DatabaseBase):
                                         for row in copy_data:
                                             await copy.write_row(row)
                                     for address, reward in address_puzzle_rewards.items():
-                                        pipe = self.redis.pipeline()
-                                        pipe.hincrby("address_puzzle_reward", address, reward)
-                                        await pipe.execute() # type: ignore
+                                        await cur.execute("SELECT id, puzzle_reward FROM address_puzzle_reward_history WHERE address = %s ORDER BY id DESC LIMIT 1", (address,))
+                                        if (res := await cur.fetchone()) is None:
+                                            last_reward = 0
+                                            last_id = None
+                                        else:
+                                            last_reward = res["puzzle_reward"]
+                                            last_id = res["id"]
+                                        await cur.execute(
+                                            "INSERT INTO address_puzzle_reward_history (address, height, puzzle_reward, previous_id) "
+                                            "VALUES (%s, %s, %s, %s) RETURNING id",
+                                            (address, block.height, last_reward + reward, last_id)
+                                        )
 
                             for aborted in block.aborted_transaction_ids:
                                 await cur.execute(
@@ -1605,76 +1655,76 @@ class DatabaseInsert(DatabaseBase):
                                 )
 
                             await self._post_ratify(
-                                cur, self.redis, block.height, block.round, block.ratifications.ratifications,
+                                cur, block.height, block.round, block.ratifications.ratifications,
                                 address_puzzle_rewards, supply_tracker
                             )
 
-                            if os.environ.get("DEBUG_MAPPING_DUMP", False):
-                                async def read_redis_mapping(key: str) -> list[tuple[str, str]]:
-                                    data = await self.redis.hgetall(key)
-                                    r: list[tuple[str, str]] = []
-                                    for d in data.values():
-                                        d = json.loads(d)
-                                        key = str(Plaintext.load(BytesIO(bytes.fromhex(d["key"]))))
-                                        value = Value.load(BytesIO(bytes.fromhex(d["value"])))
-                                        if isinstance(value, PlaintextValue):
-                                            plaintext = value.plaintext
-                                            if isinstance(plaintext, StructPlaintext):
-                                                s = ""
-                                                members = plaintext.members
-                                                for k, v in members:
-                                                    if not s:
-                                                        s += f"{{\n  {str(k)}: {str(v)}"
-                                                    else:
-                                                        s += f",\n  {str(k)}: {str(v)}"
-                                                s += "\n}"
-                                            else:
-                                                s = str(plaintext)
-                                        else:
-                                            s = str(value)
-                                        r.append((key, s))
-                                    return sorted(r, key=lambda x: x[0])
-
-                                def write_mapping_debug(data: list[tuple[str, str]], path: str):
-                                    with open(path, "w") as f:
-                                        for key, value in data:
-                                            f.write(f"{key} -> {value}\n")
-
-                                os.makedirs(f"/tmp/mapping_debug/{block.height}/self", exist_ok=True)
-                                committee_data = await read_redis_mapping("credits.aleo:committee")
-                                write_mapping_debug(committee_data, f"/tmp/mapping_debug/{block.height}/self/committee")
-                                delegated_data = await read_redis_mapping("credits.aleo:delegated")
-                                write_mapping_debug(delegated_data, f"/tmp/mapping_debug/{block.height}/self/delegated")
-                                bonded_data = await read_redis_mapping("credits.aleo:bonded")
-                                write_mapping_debug(bonded_data, f"/tmp/mapping_debug/{block.height}/self/bonded")
-                                await cur.execute(
-                                    "SELECT key, value FROM mapping_value mv "
-                                    "JOIN mapping m ON mv.mapping_id = m.id "
-                                    "WHERE m.program_id = 'credits.aleo' AND m.mapping = 'account'"
-                                )
-                                account_data = await cur.fetchall()
-                                values: list[tuple[str, str]] = []
-                                for ad in account_data:
-                                    key = str(Plaintext.load(BytesIO(ad["key"])))
-                                    value = Value.load(BytesIO(ad["value"]))
-                                    if isinstance(value, PlaintextValue):
-                                        plaintext = value.plaintext
-                                        if isinstance(plaintext, StructPlaintext):
-                                            s = ""
-                                            members = plaintext.members
-                                            for k, v in members:
-                                                if not s:
-                                                    s += f"{{\n  {str(k)}: {str(v)}"
-                                                else:
-                                                    s += f",\n  {str(k)}: {str(v)}"
-                                            s += "\n}"
-                                        else:
-                                            s = str(plaintext)
-                                    else:
-                                        s = str(value)
-                                    values.append((key, s))
-
-                                write_mapping_debug(sorted(values, key=lambda x: x[0]), f"/tmp/mapping_debug/{block.height}/self/account")
+                            # if os.environ.get("DEBUG_MAPPING_DUMP", False):
+                            #     async def read_redis_mapping(key: str) -> list[tuple[str, str]]:
+                            #         data = await self.redis.hgetall(key)
+                            #         r: list[tuple[str, str]] = []
+                            #         for d in data.values():
+                            #             d = json.loads(d)
+                            #             key = str(Plaintext.load(BytesIO(bytes.fromhex(d["key"]))))
+                            #             value = Value.load(BytesIO(bytes.fromhex(d["value"])))
+                            #             if isinstance(value, PlaintextValue):
+                            #                 plaintext = value.plaintext
+                            #                 if isinstance(plaintext, StructPlaintext):
+                            #                     s = ""
+                            #                     members = plaintext.members
+                            #                     for k, v in members:
+                            #                         if not s:
+                            #                             s += f"{{\n  {str(k)}: {str(v)}"
+                            #                         else:
+                            #                             s += f",\n  {str(k)}: {str(v)}"
+                            #                     s += "\n}"
+                            #                 else:
+                            #                     s = str(plaintext)
+                            #             else:
+                            #                 s = str(value)
+                            #             r.append((key, s))
+                            #         return sorted(r, key=lambda x: x[0])
+                            #
+                            #     def write_mapping_debug(data: list[tuple[str, str]], path: str):
+                            #         with open(path, "w") as f:
+                            #             for key, value in data:
+                            #                 f.write(f"{key} -> {value}\n")
+                            #
+                            #     os.makedirs(f"/tmp/mapping_debug/{block.height}/self", exist_ok=True)
+                            #     committee_data = await read_redis_mapping("credits.aleo:committee")
+                            #     write_mapping_debug(committee_data, f"/tmp/mapping_debug/{block.height}/self/committee")
+                            #     delegated_data = await read_redis_mapping("credits.aleo:delegated")
+                            #     write_mapping_debug(delegated_data, f"/tmp/mapping_debug/{block.height}/self/delegated")
+                            #     bonded_data = await read_redis_mapping("credits.aleo:bonded")
+                            #     write_mapping_debug(bonded_data, f"/tmp/mapping_debug/{block.height}/self/bonded")
+                            #     await cur.execute(
+                            #         "SELECT key, value FROM mapping_value mv "
+                            #         "JOIN mapping m ON mv.mapping_id = m.id "
+                            #         "WHERE m.program_id = 'credits.aleo' AND m.mapping = 'account'"
+                            #     )
+                            #     account_data = await cur.fetchall()
+                            #     values: list[tuple[str, str]] = []
+                            #     for ad in account_data:
+                            #         key = str(Plaintext.load(BytesIO(ad["key"])))
+                            #         value = Value.load(BytesIO(ad["value"]))
+                            #         if isinstance(value, PlaintextValue):
+                            #             plaintext = value.plaintext
+                            #             if isinstance(plaintext, StructPlaintext):
+                            #                 s = ""
+                            #                 members = plaintext.members
+                            #                 for k, v in members:
+                            #                     if not s:
+                            #                         s += f"{{\n  {str(k)}: {str(v)}"
+                            #                     else:
+                            #                         s += f",\n  {str(k)}: {str(v)}"
+                            #                 s += "\n}"
+                            #             else:
+                            #                 s = str(plaintext)
+                            #         else:
+                            #             s = str(value)
+                            #         values.append((key, s))
+                            #
+                            #     write_mapping_debug(sorted(values, key=lambda x: x[0]), f"/tmp/mapping_debug/{block.height}/self/account")
 
 
                             await cur.execute(
@@ -1702,23 +1752,34 @@ class DatabaseInsert(DatabaseBase):
                                 # temporarily disable this as it seems we don't have lingering unconfirmed tx anymore
                                 pass
                                 # await self.cleanup_unconfirmed_transactions()
-
-                            signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT})
-                            await self._redis_cleanup(self.redis, self.redis_keys, block.height, False)
-
+                                await self.prune_history(cur, block.height)
                             await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseBlockAdded, block.header.metadata.height))
                         except Exception as e:
-                            signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT})
-                            await self._redis_cleanup(self.redis, self.redis_keys, block.height, True)
-                            signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGINT})
                             await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                             raise
-                signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGINT})
-        except KeyboardInterrupt as e:
+        except KeyboardInterrupt:
             import traceback
             print("Interrupted during block insert!")
             traceback.print_exc()
             raise
+
+    @staticmethod
+    async def prune_history(cur: psycopg.AsyncCursor[DictRow], height: int):
+        network_history_interval = {
+            0: 100,
+            1: 100,
+            2: 1000,
+        }
+        from node import Network
+        interval = network_history_interval[Network.network_id]
+        await cur.execute(
+            "DELETE FROM address_stake_reward_history WHERE height < %s - %s AND height %% %s != 0",
+            (height, interval, interval)
+        )
+        await cur.execute(
+            "DELETE FROM mapping_bonded_history WHERE height < %s - %s AND height %% %s != 0",
+            (height, interval, interval)
+        )
 
     async def cleanup_unconfirmed_transactions(self):
         async with self.pool.connection() as conn:
@@ -1736,7 +1797,7 @@ class DatabaseInsert(DatabaseBase):
             raise RuntimeError("rejected transaction cannot be unconfirmed")
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
-                await self._insert_transaction(cur, self.redis, transaction)
+                await self._insert_transaction(cur, None, transaction)
 
     async def save_feedback(self, contact: str, content: str):
         async with self.pool.connection() as conn:

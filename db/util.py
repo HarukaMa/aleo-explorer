@@ -12,8 +12,6 @@ from .block import DatabaseBlock
 
 class DatabaseUtil(DatabaseBase):
 
-    redis_keys: list[str]
-
     @staticmethod
     def get_addresses_from_struct(plaintext: StructPlaintext):
         addresses: set[str] = set()
@@ -42,39 +40,52 @@ class DatabaseUtil(DatabaseBase):
                 await conn.execute("TRUNCATE TABLE mapping_bonded_history RESTART IDENTITY CASCADE")
                 await conn.execute("TRUNCATE TABLE mapping_committee_history RESTART IDENTITY CASCADE")
                 await conn.execute("TRUNCATE TABLE mapping_delegated_history RESTART IDENTITY CASCADE")
+                await conn.execute("TRUNCATE TABLE address_fee_history RESTART IDENTITY CASCADE")
+                await conn.execute("TRUNCATE TABLE address_fee_history_last_id RESTART IDENTITY CASCADE")
+                await conn.execute("TRUNCATE TABLE address_puzzle_reward_history RESTART IDENTITY CASCADE")
+                await conn.execute("TRUNCATE TABLE address_puzzle_reward_history_last_id RESTART IDENTITY CASCADE")
+                await conn.execute("TRUNCATE TABLE address_stake_reward_history RESTART IDENTITY CASCADE")
+                await conn.execute("TRUNCATE TABLE address_transfer_in_history RESTART IDENTITY CASCADE")
+                await conn.execute("TRUNCATE TABLE address_transfer_in_history_last_id RESTART IDENTITY CASCADE")
+                await conn.execute("TRUNCATE TABLE address_transfer_out_history RESTART IDENTITY CASCADE")
+                await conn.execute("TRUNCATE TABLE address_transfer_out_history_last_id RESTART IDENTITY CASCADE")
                 await conn.execute("TRUNCATE TABLE ratification_genesis_balance RESTART IDENTITY CASCADE")
-                await self.redis.flushall()
             except Exception as e:
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
 
-    async def revert_to_last_backup(self):
+    async def revert_to_last_backup(self, height: Optional[int]):
         signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT})
         async with self.pool.connection() as conn:
             async with conn.transaction():
                 async with conn.cursor() as cur:
                     try:
-                        cursor, keys = await self.redis.scan(0, f"{self.redis_keys[0]}:history:*", 500)
-                        if cursor != 0:
-                            raise RuntimeError("unsupported configuration")
-                        if not keys:
-                            raise RuntimeError("no backup found")
-                        keys = sorted(keys, key=lambda x: int(x.split(":")[-1]))
-                        last_backup = keys[-1]
-                        last_backup_height = int(last_backup.split(":")[-1])
-                        for redis_key in self.redis_keys:
-                            backup_key = f"{redis_key}:history:{last_backup_height}"
-                            if not await self.redis.exists(backup_key):
-                                raise RuntimeError(f"backup key not found: {backup_key}")
-                            await self.redis.persist(backup_key)
-                        print(f"reverting to last backup: {last_backup_height}")
+                        latest_height = await (cast(DatabaseBlock, self)).get_latest_height()
+                        if latest_height is None:
+                            raise ValueError("database is empty")
+                        if height is None:
+                            height = latest_height - 1
+                        if height >= latest_height:
+                            raise ValueError("revert height is not less than latest height")
+                        await cur.execute("select height from address_stake_reward_history where height <= %s order by height desc limit 1", (height,))
+                        if (res := await cur.fetchone()) is None:
+                            raise ValueError("no data to revert")
+                        height = res["height"]
+                        print(f"reverting to height {height}")
+
+                        print("reverting address stats")
+                        await cur.execute("delete from address_fee_history where height > %s", (height,))
+                        await cur.execute("delete from address_puzzle_reward_history where height > %s", (height,))
+                        await cur.execute("delete from address_stake_reward_history where height > %s", (height,))
+                        await cur.execute("delete from address_transfer_in_history where height > %s", (height,))
+                        await cur.execute("delete from address_transfer_out_history where height > %s", (height,))
 
                         print("fetching old mapping values from mapping history")
                         await cur.execute(
                             "select distinct on (mapping_id, key_id) id, mapping_id, key_id, key, value from mapping_history "
                             "where height <= %s "
                             "order by mapping_id, key_id, id desc",
-                            (last_backup_height,)
+                            (height,)
                         )
                         mapping_snapshot = await cur.fetchall()
                         print("truncating mapping values")
@@ -112,23 +123,23 @@ class DatabaseUtil(DatabaseBase):
                                     await copy.write_row(item)
                         await cur.execute(
                             "DELETE FROM mapping_history WHERE height > %s",
-                            (last_backup_height,)
+                            (height,)
                         )
                         await cur.execute(
                             "DELETE FROM mapping_committee_history WHERE height > %s",
-                            (last_backup_height,)
+                            (height,)
                         )
                         await cur.execute(
                             "DELETE FROM mapping_delegated_history WHERE height > %s",
-                            (last_backup_height,)
+                            (height,)
                         )
                         await cur.execute(
                             "DELETE FROM mapping_bonded_history WHERE height > %s",
-                            (last_backup_height,)
+                            (height,)
                         )
 
                         print("fetching blocks to revert")
-                        blocks_to_revert = await DatabaseBlock.get_full_block_range(u32.max, last_backup_height, conn)
+                        blocks_to_revert = await DatabaseBlock.get_full_block_range(u32.max, height, conn)
                         for block in blocks_to_revert:
                             print("reverting block", block.height)
                             for ct in block.transactions:
@@ -202,23 +213,13 @@ class DatabaseUtil(DatabaseBase):
                                     )
                         await cur.execute(
                             "DELETE FROM block WHERE height > %s",
-                            (last_backup_height,)
+                            (height,)
                         )
                         await cur.execute(
                             "DELETE FROM committee_history WHERE height > %s",
-                            (last_backup_height,)
+                            (height,)
                         )
 
-                        for redis_key in self.redis_keys:
-                            backup_key = f"{redis_key}:history:{last_backup_height}"
-                            await self.redis.copy(backup_key, redis_key, replace=True) # type: ignore[arg-type]
-                            await self.redis.persist(redis_key)
-                            await self.redis.expire(backup_key, 259200)
-
-                            # remove rollback backup as well
-                            _, keys = await self.redis.scan(0, f"{redis_key}:rollback_backup:*", 100)
-                            for key in keys:
-                                await self.redis.delete(key)
 
                     except Exception as e:
                         await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))

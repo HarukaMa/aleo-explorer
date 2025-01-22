@@ -7,7 +7,6 @@ from typing import Awaitable, ParamSpec
 from psycopg import AsyncConnection
 from psycopg.rows import DictRow, dict_row
 from psycopg_pool import AsyncConnectionPool
-from redis.asyncio import Redis
 
 from aleo_types import *
 from explorer.types import Message as ExplorerMessage
@@ -30,8 +29,7 @@ except ImportError:
 
 class DatabaseBase:
 
-    def __init__(self, *, server: str, user: str, password: str, database: str, schema: str, redis_server: str,
-                 redis_port: int, redis_db: int, redis_user: Optional[str], redis_password: Optional[str],
+    def __init__(self, *, server: str, user: str, password: str, database: str, schema: str,
                  message_callback: Callable[[ExplorerMessage], Awaitable[None]]):
         self.server = server
         self.user = user
@@ -39,14 +37,8 @@ class DatabaseBase:
         self.database = database
         self.schema = schema
         self.message_callback = message_callback
-        self.redis_server = redis_server
-        self.redis_port = redis_port
-        self.redis_db = redis_db
-        self.redis_user = redis_user
-        self.redis_password = redis_password
 
         self.pool: AsyncConnectionPool[AsyncConnection[DictRow]]
-        self.redis: Redis[str]
 
     async def connect(self):
         try:
@@ -59,9 +51,6 @@ class DatabaseBase:
                 },
                 max_size=16,
             )
-            # noinspection PyArgumentList
-            self.redis = Redis(host=self.redis_server, port=self.redis_port, db=self.redis_db, decode_responses=True,
-                               username=self.redis_user, password=self.redis_password)
         except Exception as e:
             await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseConnectError, e))
             return

@@ -185,7 +185,7 @@ declare
     finalize_operation_db_id finalize_operation.id%type;
 begin
     for finalize_operation_db_id, type, index in
-        select t.id, t.type, t.index from finalize_operation t where t.confirmed_transaction_id = confirmed_transaction_db_id
+        select t.id, t.type, t.index from finalize_operation t where t.confirmed_transaction_id = confirmed_transaction_db_id order by id
         loop
             if type = 'InitializeMapping' then
                 select t.mapping_id from finalize_operation_initialize_mapping t where t.finalize_operation_id = finalize_operation_db_id into mapping_id;
@@ -221,7 +221,7 @@ declare
     transition_input_db_id transition_input.id%type;
 begin
     for transition_input_db_id, type, index in
-        select id, t.type, t.index from transition_input t where transition_id = transition_db_id
+        select id, t.type, t.index from transition_input t where transition_id = transition_db_id order by id
         loop
             if type = 'Public' then
                 select t.plaintext_hash, t.plaintext from transition_input_public t where transition_input_id = transition_input_db_id into plaintext_hash, plaintext;
@@ -254,27 +254,27 @@ declare
     transition_output_db_id transition_output.id%type;
 begin
     for transition_output_db_id, type, index in
-        select id, t.type, t.index from transition_output t where transition_id = transition_db_id
-    loop
-        if type = 'Public' then
-            select t.plaintext_hash, t.plaintext from transition_output_public t where transition_output_id = transition_output_db_id into plaintext_hash, plaintext;
-            return next;
-        elsif type = 'Private' then
-            select t.ciphertext_hash, t.ciphertext from transition_output_private t where transition_output_id = transition_output_db_id into ciphertext_hash, ciphertext;
-            return next;
-        elsif type = 'Record' then
-            select t.commitment, t.checksum, t.record_ciphertext from transition_output_record t where transition_output_id = transition_output_db_id into record_commitment, checksum, record_ciphertext;
-            return next;
-        elsif type = 'ExternalRecord' then
-            select t.commitment from transition_output_external_record t where transition_output_id = transition_output_db_id into external_record_commitment;
-            return next;
-        elsif type = 'Future' then
-            select t.id, t.future_hash from transition_output_future t where transition_output_id = transition_output_db_id into future_id, future_hash;
-            return next;
-        else
-            raise exception 'unsupported transition output type: %', type;
-        end if;
-    end loop;
+        select id, t.type, t.index from transition_output t where transition_id = transition_db_id order by id
+        loop
+            if type = 'Public' then
+                select t.plaintext_hash, t.plaintext from transition_output_public t where transition_output_id = transition_output_db_id into plaintext_hash, plaintext;
+                return next;
+            elsif type = 'Private' then
+                select t.ciphertext_hash, t.ciphertext from transition_output_private t where transition_output_id = transition_output_db_id into ciphertext_hash, ciphertext;
+                return next;
+            elsif type = 'Record' then
+                select t.commitment, t.checksum, t.record_ciphertext from transition_output_record t where transition_output_id = transition_output_db_id into record_commitment, checksum, record_ciphertext;
+                return next;
+            elsif type = 'ExternalRecord' then
+                select t.commitment from transition_output_external_record t where transition_output_id = transition_output_db_id into external_record_commitment;
+                return next;
+            elsif type = 'Future' then
+                select t.id, t.future_hash from transition_output_future t where transition_output_id = transition_output_db_id into future_id, future_hash;
+                return next;
+            else
+                raise exception 'unsupported transition output type: %', type;
+            end if;
+        end loop;
 end;
 $$;
 
@@ -289,6 +289,235 @@ SET default_table_access_method = heap;
 
 CREATE TABLE explorer._migration (
     migrated_id integer NOT NULL
+);
+
+
+--
+-- Name: address_fee_history; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.address_fee_history (
+    id bigint NOT NULL,
+    height integer NOT NULL,
+    address text NOT NULL,
+    fee numeric(20,0) NOT NULL,
+    previous_id bigint
+);
+
+
+--
+-- Name: address_fee_history_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.address_fee_history_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: address_fee_history_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.address_fee_history_id_seq OWNED BY explorer.address_fee_history.id;
+
+
+--
+-- Name: address_fee_history_last_id; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.address_fee_history_last_id (
+    address text NOT NULL,
+    last_history_id bigint
+);
+
+
+--
+-- Name: address_puzzle_reward_history; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.address_puzzle_reward_history (
+    id bigint NOT NULL,
+    height integer NOT NULL,
+    address text NOT NULL,
+    puzzle_reward numeric(20,0) NOT NULL,
+    previous_id bigint
+);
+
+
+--
+-- Name: address_puzzle_reward_history_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.address_puzzle_reward_history_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: address_puzzle_reward_history_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.address_puzzle_reward_history_id_seq OWNED BY explorer.address_puzzle_reward_history.id;
+
+
+--
+-- Name: address_puzzle_reward_history_last_id; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.address_puzzle_reward_history_last_id (
+    address text NOT NULL,
+    last_history_id bigint NOT NULL
+);
+
+
+--
+-- Name: address_stake_reward_history; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.address_stake_reward_history (
+    id bigint NOT NULL,
+    height integer NOT NULL,
+    content jsonb NOT NULL
+);
+
+
+--
+-- Name: address_stake_reward_history_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.address_stake_reward_history_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: address_stake_reward_history_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.address_stake_reward_history_id_seq OWNED BY explorer.address_stake_reward_history.id;
+
+
+--
+-- Name: address_tag; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.address_tag (
+    id integer NOT NULL,
+    address text NOT NULL,
+    tag text NOT NULL
+);
+
+
+--
+-- Name: address_tag_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.address_tag_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: address_tag_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.address_tag_id_seq OWNED BY explorer.address_tag.id;
+
+
+--
+-- Name: address_transfer_in_history; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.address_transfer_in_history (
+    id bigint NOT NULL,
+    height integer NOT NULL,
+    address text NOT NULL,
+    transfer_in numeric(20,0) NOT NULL,
+    previous_id bigint
+);
+
+
+--
+-- Name: address_transfer_in_history_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.address_transfer_in_history_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: address_transfer_in_history_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.address_transfer_in_history_id_seq OWNED BY explorer.address_transfer_in_history.id;
+
+
+--
+-- Name: address_transfer_in_history_last_id; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.address_transfer_in_history_last_id (
+    address text NOT NULL,
+    last_history_id bigint NOT NULL
+);
+
+
+--
+-- Name: address_transfer_out_history; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.address_transfer_out_history (
+    id bigint NOT NULL,
+    height integer NOT NULL,
+    address text NOT NULL,
+    transfer_out numeric(20,0) NOT NULL,
+    previous_id bigint
+);
+
+
+--
+-- Name: address_transfer_out_history_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.address_transfer_out_history_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: address_transfer_out_history_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.address_transfer_out_history_id_seq OWNED BY explorer.address_transfer_out_history.id;
+
+
+--
+-- Name: address_transfer_out_history_last_id; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.address_transfer_out_history_last_id (
+    address text NOT NULL,
+    last_history_id bigint NOT NULL
 );
 
 
@@ -359,7 +588,8 @@ CREATE TABLE explorer.block (
     "timestamp" bigint NOT NULL,
     block_reward numeric(20,0) NOT NULL,
     coinbase_reward numeric(20,0) NOT NULL,
-    total_supply numeric(40,0) NOT NULL
+    total_supply numeric(40,0) NOT NULL,
+    confirm_timestamp bigint NOT NULL
 );
 
 
@@ -1581,7 +1811,8 @@ CREATE TABLE explorer.transaction (
     transaction_id text NOT NULL,
     type explorer.transaction_type NOT NULL,
     first_seen bigint DEFAULT EXTRACT(epoch FROM now()),
-    original_transaction_id text
+    original_transaction_id text,
+    aborted boolean DEFAULT false NOT NULL
 );
 
 
@@ -2016,6 +2247,80 @@ ALTER SEQUENCE explorer.transition_output_record_id_seq OWNED BY explorer.transi
 
 
 --
+-- Name: validator_info; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.validator_info (
+    id integer NOT NULL,
+    address text NOT NULL,
+    website text,
+    logo text
+);
+
+
+--
+-- Name: validator_info_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.validator_info_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: validator_info_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.validator_info_id_seq OWNED BY explorer.validator_info.id;
+
+
+--
+-- Name: address_fee_history id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.address_fee_history ALTER COLUMN id SET DEFAULT nextval('explorer.address_fee_history_id_seq'::regclass);
+
+
+--
+-- Name: address_puzzle_reward_history id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.address_puzzle_reward_history ALTER COLUMN id SET DEFAULT nextval('explorer.address_puzzle_reward_history_id_seq'::regclass);
+
+
+--
+-- Name: address_stake_reward_history id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.address_stake_reward_history ALTER COLUMN id SET DEFAULT nextval('explorer.address_stake_reward_history_id_seq'::regclass);
+
+
+--
+-- Name: address_tag id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.address_tag ALTER COLUMN id SET DEFAULT nextval('explorer.address_tag_id_seq'::regclass);
+
+
+--
+-- Name: address_transfer_in_history id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.address_transfer_in_history ALTER COLUMN id SET DEFAULT nextval('explorer.address_transfer_in_history_id_seq'::regclass);
+
+
+--
+-- Name: address_transfer_out_history id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.address_transfer_out_history ALTER COLUMN id SET DEFAULT nextval('explorer.address_transfer_out_history_id_seq'::regclass);
+
+
+--
 -- Name: authority id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -2370,6 +2675,93 @@ ALTER TABLE ONLY explorer.transition_output_public ALTER COLUMN id SET DEFAULT n
 --
 
 ALTER TABLE ONLY explorer.transition_output_record ALTER COLUMN id SET DEFAULT nextval('explorer.transition_output_record_id_seq'::regclass);
+
+
+--
+-- Name: validator_info id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.validator_info ALTER COLUMN id SET DEFAULT nextval('explorer.validator_info_id_seq'::regclass);
+
+
+--
+-- Name: address_fee_history_last_id address_fee_history_last_id_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.address_fee_history_last_id
+    ADD CONSTRAINT address_fee_history_last_id_pk PRIMARY KEY (address);
+
+
+--
+-- Name: address_fee_history address_fee_history_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.address_fee_history
+    ADD CONSTRAINT address_fee_history_pk PRIMARY KEY (id);
+
+
+--
+-- Name: address_puzzle_reward_history_last_id address_puzzle_reward_history_last_id_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.address_puzzle_reward_history_last_id
+    ADD CONSTRAINT address_puzzle_reward_history_last_id_pk PRIMARY KEY (address);
+
+
+--
+-- Name: address_puzzle_reward_history address_puzzle_reward_history_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.address_puzzle_reward_history
+    ADD CONSTRAINT address_puzzle_reward_history_pk PRIMARY KEY (id);
+
+
+--
+-- Name: address_stake_reward_history address_stake_reward_history_pkey; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.address_stake_reward_history
+    ADD CONSTRAINT address_stake_reward_history_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: address_tag address_tag_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.address_tag
+    ADD CONSTRAINT address_tag_pk PRIMARY KEY (id);
+
+
+--
+-- Name: address_transfer_in_history_last_id address_transfer_in_history_last_id_pkey; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.address_transfer_in_history_last_id
+    ADD CONSTRAINT address_transfer_in_history_last_id_pkey PRIMARY KEY (address);
+
+
+--
+-- Name: address_transfer_in_history address_transfer_in_history_pkey; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.address_transfer_in_history
+    ADD CONSTRAINT address_transfer_in_history_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: address_transfer_out_history_last_id address_transfer_out_history_last_id_pkey; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.address_transfer_out_history_last_id
+    ADD CONSTRAINT address_transfer_out_history_last_id_pkey PRIMARY KEY (address);
+
+
+--
+-- Name: address_transfer_out_history address_transfer_out_history_pkey; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.address_transfer_out_history
+    ADD CONSTRAINT address_transfer_out_history_pkey PRIMARY KEY (id);
 
 
 --
@@ -2813,6 +3205,126 @@ ALTER TABLE ONLY explorer.transition
 
 
 --
+-- Name: validator_info validator_info_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.validator_info
+    ADD CONSTRAINT validator_info_pk PRIMARY KEY (id);
+
+
+--
+-- Name: address_fee_history_address_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX address_fee_history_address_index ON explorer.address_fee_history USING btree (address);
+
+
+--
+-- Name: address_fee_history_height_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX address_fee_history_height_index ON explorer.address_fee_history USING btree (height);
+
+
+--
+-- Name: address_fee_history_previous_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX address_fee_history_previous_id_index ON explorer.address_fee_history USING btree (previous_id);
+
+
+--
+-- Name: address_puzzle_reward_history_address_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX address_puzzle_reward_history_address_index ON explorer.address_puzzle_reward_history USING btree (address);
+
+
+--
+-- Name: address_puzzle_reward_history_height_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX address_puzzle_reward_history_height_index ON explorer.address_puzzle_reward_history USING btree (height);
+
+
+--
+-- Name: address_puzzle_reward_history_previous_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX address_puzzle_reward_history_previous_id_index ON explorer.address_puzzle_reward_history USING btree (previous_id);
+
+
+--
+-- Name: address_stake_reward_history_content_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX address_stake_reward_history_content_index ON explorer.address_stake_reward_history USING gin (content);
+
+
+--
+-- Name: address_stake_reward_history_height_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX address_stake_reward_history_height_index ON explorer.address_stake_reward_history USING btree (height);
+
+
+--
+-- Name: address_tag_address_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE UNIQUE INDEX address_tag_address_index ON explorer.address_tag USING btree (address);
+
+
+--
+-- Name: address_tag_tag_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE UNIQUE INDEX address_tag_tag_index ON explorer.address_tag USING btree (tag);
+
+
+--
+-- Name: address_transfer_in_history_address_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX address_transfer_in_history_address_index ON explorer.address_transfer_in_history USING btree (address);
+
+
+--
+-- Name: address_transfer_in_history_height_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX address_transfer_in_history_height_index ON explorer.address_transfer_in_history USING btree (height);
+
+
+--
+-- Name: address_transfer_in_history_previous_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX address_transfer_in_history_previous_id_index ON explorer.address_transfer_in_history USING btree (previous_id);
+
+
+--
+-- Name: address_transfer_out_history_address_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX address_transfer_out_history_address_index ON explorer.address_transfer_out_history USING btree (address);
+
+
+--
+-- Name: address_transfer_out_history_height_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX address_transfer_out_history_height_index ON explorer.address_transfer_out_history USING btree (height);
+
+
+--
+-- Name: address_transfer_out_history_previous_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX address_transfer_out_history_previous_id_index ON explorer.address_transfer_out_history USING btree (previous_id);
+
+
+--
 -- Name: address_transition_address_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -2848,6 +3360,13 @@ CREATE INDEX block_aborted_solution_id_block_id_index ON explorer.block_aborted_
 
 
 --
+-- Name: block_aborted_solution_id_solution_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX block_aborted_solution_id_solution_id_index ON explorer.block_aborted_solution_id USING btree (solution_id text_pattern_ops);
+
+
+--
 -- Name: block_aborted_transaction_id_block_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
@@ -2873,6 +3392,13 @@ CREATE UNIQUE INDEX block_height_uindex ON explorer.block USING btree (height);
 --
 
 CREATE INDEX block_timestamp_index ON explorer.block USING btree ("timestamp");
+
+
+--
+-- Name: block_validator_block_id_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX block_validator_block_id_index ON explorer.block_validator USING btree (block_id);
 
 
 --
@@ -3299,7 +3825,7 @@ CREATE INDEX solution_address_index ON explorer.solution USING btree (address te
 -- Name: solution_puzzle_solution_id_index; Type: INDEX; Schema: explorer; Owner: -
 --
 
-CREATE INDEX solution_puzzle_solution_id_index ON explorer.solution USING btree (puzzle_solution_id);
+CREATE INDEX solution_puzzle_solution_id_index ON explorer.solution USING btree (solution_id text_pattern_ops);
 
 
 --
@@ -3461,6 +3987,13 @@ CREATE INDEX transition_transaction_execute_id_index ON explorer.transition USIN
 --
 
 CREATE UNIQUE INDEX transition_transition_id_uindex ON explorer.transition USING btree (transition_id text_pattern_ops);
+
+
+--
+-- Name: validator_info_address_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE UNIQUE INDEX validator_info_address_index ON explorer.validator_info USING btree (address);
 
 
 --

@@ -13,13 +13,31 @@ class DatabaseMapping(DatabaseBase):
     async def get_mapping_cache_with_cur(self, cur: psycopg.AsyncCursor[dict[str, Any]], program_name: str,
                                          mapping_name: str) -> dict[Field, Any]:
         if program_name == "credits.aleo" and mapping_name in ["committee", "bonded", "delegated"]:
-            def transform(d: dict[str, Any]):
+            try:
+                # noinspection SqlResolve
+                await cur.execute(
+                    psycopg.sql.SQL(
+                        "SELECT * FROM {} ORDER BY height DESC LIMIT 1"
+                    ).format(psycopg.sql.Identifier(f"mapping_{mapping_name}_history"))
+                )
+                if (res := await cur.fetchone()) is None:
+                    raise RuntimeError(f"genesis mapping values missing")
+                mapping_data: dict[str, dict[str, str]] = res["content"]
+
+                def transform_history(kv: tuple[str, dict[str, str]]):
+                    k, v = kv
+                    return {
+                        "key_id": k,
+                        "key": Plaintext.load(BytesIO(bytes.fromhex(v["key"]))),
+                        "value": Value.load(BytesIO(bytes.fromhex(v["value"]))),
+                    }
                 return {
-                    "key": Plaintext.load(BytesIO(bytes.fromhex(d["key"]))),
-                    "value": Value.load(BytesIO(bytes.fromhex(d["value"]))),
+                    Field.loads(cast(str, v["key_id"])): {"key": v["key"], "value": v["value"]}
+                    for v in map(transform_history, mapping_data.items())
                 }
-            data = await self.redis.hgetall(f"{program_name}:{mapping_name}")
-            return {Field.loads(k): transform(json.loads(v)) for k, v in data.items()}
+            except Exception as e:
+                await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                raise
         else:
             mapping_id = Field.loads(cached_get_mapping_id(program_name, mapping_name))
             try:
@@ -50,11 +68,18 @@ class DatabaseMapping(DatabaseBase):
             async with conn.cursor() as cur:
                 try:
                     if program_id == "credits.aleo" and mapping in ["committee", "bonded", "delegated"]:
-                        conn = self.redis
-                        data = await conn.hget(f"{program_id}:{mapping}", key_id)
-                        if data is None:
+                        await cur.execute(
+                            psycopg.sql.SQL(
+                                "SELECT content #> %s as value "
+                                "FROM {} ORDER BY height DESC LIMIT 1"
+                            ).format(
+                                psycopg.sql.Identifier(f"mapping_{mapping}_history")
+                            ),
+                            (f"{{{key_id}, value}}",)
+                        )
+                        if (res := await cur.fetchone()) is None:
                             return None
-                        return bytes.fromhex(json.loads(data)["value"])
+                        return res['value']
                     else:
                         await cur.execute(
                             "SELECT value FROM mapping_value mv "
@@ -92,14 +117,26 @@ class DatabaseMapping(DatabaseBase):
             async with conn.cursor() as cur:
                 try:
                     if program_id == "credits.aleo" and mapping in ["committee", "bonded", "delegated"]:
-                        def transform(d: dict[str, Any]):
+                        await cur.execute(
+                            psycopg.sql.SQL("SELECT * FROM {} ORDER BY height DESC LIMIT 1").format(
+                                psycopg.sql.Identifier(f"mapping_{mapping}_history")
+                            ),
+                        )
+                        if (res := await cur.fetchone()) is None:
+                            return {}, 0
+                        mapping_data: dict[str, dict[str, str]] = res["content"]
+                        mapping_tuple = tuple(mapping_data.items())
+                        data = mapping_tuple[cursor:cursor + count]
+                        cursor = cursor + count if len(data) else 0
+
+                        def transform_history(d: dict[str, Any]):
                             return {
                                 "key": Plaintext.load(BytesIO(bytes.fromhex(d["key"]))),
                                 "value": Value.load(BytesIO(bytes.fromhex(d["value"]))),
                             }
-                        conn = self.redis
-                        data = await conn.hscan(f"{program_id}:{mapping}", cursor, count=count)
-                        return {Field.loads(k): transform(json.loads(v)) for k, v in data[1].items()}, data[0]
+
+                        return {Field.loads(x[0]): transform_history(x[1]) for x in data}, cursor
+
                     else:
                         cursor_clause = psycopg.sql.SQL("AND mv.id < {} ").format(psycopg.sql.Literal(cursor)) if cursor > 0 else psycopg.sql.SQL("")
                         await cur.execute(
@@ -139,8 +176,16 @@ class DatabaseMapping(DatabaseBase):
             async with conn.cursor() as cur:
                 try:
                     if program_id == "credits.aleo" and mapping in ["committee", "bonded", "delegated"]:
-                        conn = self.redis
-                        return await conn.hlen(f"{program_id}:{mapping}")
+                        # noinspection SqlResolve
+                        await cur.execute(
+                            psycopg.sql.SQL("SELECT content FROM {} ORDER BY height DESC LIMIT 1").format(
+                                psycopg.sql.Identifier(f"mapping_{mapping}_history")
+                            )
+                        )
+                        if (res := await cur.fetchone()) is None:
+                            return 0
+                        mapping_data: dict[str, str] = res["content"]
+                        return len(mapping_data)
                     else:
                         await cur.execute(
                             "SELECT COUNT(*) FROM mapping_value mv "
@@ -183,13 +228,6 @@ class DatabaseMapping(DatabaseBase):
                                        key: bytes, value: bytes, height: int, from_transaction: bool):
         try:
             limited_tracking = program_name == "credits.aleo" and mapping_name in ["committee", "bonded", "delegated"]
-            if limited_tracking:
-                conn = self.redis
-                data = {
-                    "key": key.hex(),
-                    "value": value.hex(),
-                }
-                await conn.hset(f"{program_name}:{mapping_name}", key_id, json.dumps(data))
 
             if not limited_tracking or from_transaction:
                 await cur.execute("SELECT id FROM mapping WHERE mapping_id = %s", (mapping_id,))
@@ -236,9 +274,6 @@ class DatabaseMapping(DatabaseBase):
                                        from_transaction: bool):
         try:
             limited_tracking = program_name == "credits.aleo" and mapping_name in ["committee", "bonded", "delegated"]
-            if limited_tracking:
-                conn = self.redis
-                await conn.hdel(f"{program_name}:{mapping_name}", key_id)
 
             if not limited_tracking or from_transaction:
                 await cur.execute("SELECT id FROM mapping WHERE mapping_id = %s", (mapping_id,))
@@ -369,32 +404,20 @@ class DatabaseMapping(DatabaseBase):
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_mapping_value_at_height(self, program_id: str, mapping: str, key_id: str, height: int) -> Optional[bytes]:
+    async def get_mapping_value_at_height(self, program_id: str, mapping: str, key_id: str, height: int) -> tuple[Optional[bytes], Optional[int]]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
                     if program_id == "credits.aleo" and mapping in ["committee", "bonded", "delegated"]:
                         # noinspection SqlResolve
-                        query = psycopg.sql.SQL("SELECT content FROM {} WHERE height = %s").format(psycopg.sql.Identifier(f"mapping_{mapping}_history"))
+                        query = psycopg.sql.SQL("SELECT height, content FROM {} WHERE height <= %s ORDER BY height DESC LIMIT 1").format(psycopg.sql.Identifier(f"mapping_{mapping}_history"))
                         await cur.execute(query, (height,))
                         if (res := await cur.fetchone()) is None:
-                            return None
-                        mapping_data: dict[str, str] = res["content"]
-                        if mapping == "delegated":
-                            if (data := mapping_data.get(key_id)) is None:
-                                return None
-                            return PlaintextValue(
-                                plaintext=LiteralPlaintext(
-                                    literal=Literal(
-                                        type_=Literal.Type.U64,
-                                        primitive=u64.loads(data)
-                                    )
-                                )
-                            ).dump()
-                        else:
-                            if (data := mapping_data.get(key_id)) is None:
-                                return None
-                            return bytes.fromhex(data)
+                            return None, None
+                        mapping_data: dict[str, dict[str, str]] = res["content"]
+                        if (data := mapping_data.get(key_id)) is None:
+                            return None, None
+                        return bytes.fromhex(data["value"]), res["height"]
                     await cur.execute(
                         "SELECT value FROM mapping_history mh "
                         "JOIN mapping m on mh.mapping_id = m.id "
@@ -404,8 +427,8 @@ class DatabaseMapping(DatabaseBase):
                         (program_id, mapping, key_id, height)
                     )
                     if (res := await cur.fetchone()) is None:
-                        return None
-                    return res["value"]
+                        return None, None
+                    return res["value"], None
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise

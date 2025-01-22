@@ -10,12 +10,6 @@ from .base import DatabaseBase
 
 class DatabaseAddress(DatabaseBase):
 
-    async def get_puzzle_reward_by_address(self, address: str) -> int:
-        data = await self.redis.hget("address_puzzle_reward", address)
-        if data is None:
-            return 0
-        return int(data)
-
     async def get_recent_solutions_by_address(self, address: str) -> list[dict[str, Any]]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -135,29 +129,85 @@ LIMIT 30
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
+    async def get_address_puzzle_reward(self, address: str) -> Optional[int]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT puzzle_reward FROM address_puzzle_reward_history WHERE address = %s "
+                        "ORDER BY height DESC LIMIT 1",
+                        (address,)
+                    )
+                    if (res := await cur.fetchone()) is None:
+                        return None
+                    return res["puzzle_reward"]
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
     async def get_address_stake_reward(self, address: str) -> Optional[int]:
-        data = await self.redis.hget("address_stake_reward", address)
-        if data is None:
-            return None
-        return int(data)
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT content -> %s as stake_reward FROM address_stake_reward_history "
+                        "ORDER BY height DESC LIMIT 1",
+                        (address,)
+                    )
+                    if (res := await cur.fetchone()) is None:
+                        return None
+                    return res["stake_reward"]
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
 
     async def get_address_transfer_in(self, address: str) -> Optional[int]:
-        data = await self.redis.hget("address_transfer_in", address)
-        if data is None:
-            return None
-        return int(data)
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT transfer_in FROM address_transfer_in_history WHERE address = %s "
+                        "ORDER BY height DESC LIMIT 1",
+                        (address,)
+                    )
+                    if (res := await cur.fetchone()) is None:
+                        return None
+                    return res["transfer_in"]
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
 
     async def get_address_transfer_out(self, address: str) -> Optional[int]:
-        data = await self.redis.hget("address_transfer_out", address)
-        if data is None:
-            return None
-        return int(data)
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT transfer_out FROM address_transfer_out_history WHERE address = %s "
+                        "ORDER BY height DESC LIMIT 1",
+                        (address,)
+                    )
+                    if (res := await cur.fetchone()) is None:
+                        return None
+                    return res["transfer_out"]
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
 
     async def get_address_total_fee(self, address: str) -> Optional[int]:
-        data = await self.redis.hget("address_fee", address)
-        if data is None:
-            return None
-        return int(data)
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT fee FROM address_fee_history WHERE address = %s "
+                        "ORDER BY height DESC LIMIT 1",
+                        (address,)
+                    )
+                    if (res := await cur.fetchone()) is None:
+                        return None
+                    return res["fee"]
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
 
     async def get_address_speed(self, address: str) -> tuple[float, int]: # (speed, interval)
         async with self.pool.connection() as conn:

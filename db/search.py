@@ -52,10 +52,15 @@ class DatabaseSearch(DatabaseBase):
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
-                    puzzle_rewards = await self.redis.hgetall("address_puzzle_reward")
-                    res = set(filter(lambda x: x.startswith(address), puzzle_rewards.keys()))
-                    stake_rewards = await self.redis.hgetall("address_stake_reward")
-                    res.update(set(filter(lambda x: x.startswith(address), stake_rewards.keys())))
+                    await cur.execute(
+                        "SELECT DISTINCT address FROM address_puzzle_reward_history WHERE address LIKE %s", (f"{address}%",)
+                    )
+                    res = set(map(lambda x: x['address'], await cur.fetchall()))
+                    await cur.execute(
+                        "SELECT content FROM address_stake_reward_history ORDER BY height DESC LIMIT 1"
+                    )
+                    if (row := await cur.fetchone()) is not None:
+                        res.update(set(filter(lambda x: x.startswith(address), row['content'].keys())))
                     await cur.execute(
                         "SELECT DISTINCT owner FROM program WHERE owner LIKE %s", (f"{address}%",)
                     )

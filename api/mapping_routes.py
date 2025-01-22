@@ -1,10 +1,11 @@
 from io import BytesIO
+from typing import cast
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from aleo_types import Program, Value, LiteralPlaintextType, LiteralPlaintext, \
-    Literal, StructPlaintextType, StructPlaintext
+    Literal, StructPlaintextType, StructPlaintext, Block
 from aleo_types.cached import cached_get_key_id
 from api.utils import async_check_sync, use_program_cache, parse_history_params
 from db import Database
@@ -60,12 +61,13 @@ async def mapping_route(request: Request, program_cache: dict[str, Program]):
         if isinstance(parse_result, JSONResponse):
             return parse_result
         height, _, block_timestamp = parse_result
-        value_bytes = await db.get_mapping_value_at_height(program_id, mapping, key_id, height)
+        value_bytes, data_height = await db.get_mapping_value_at_height(program_id, mapping, key_id, height)
 
     else:
         value_bytes = await db.get_mapping_value(program_id, mapping, key_id)
         height = await db.get_latest_height()
         block_timestamp = await db.get_latest_block_timestamp()
+        data_height = height
 
     if value_bytes is None:
         value = None
@@ -75,6 +77,9 @@ async def mapping_route(request: Request, program_cache: dict[str, Program]):
     if version < 3:
         return JSONResponse(str(value))
 
+    if data_height is not None and data_height != height:
+        block_timestamp = cast(Block, (await db.get_block_by_height(data_height))).header.metadata.timestamp
+        height = data_height
     return JSONResponse({
         "height": height,
         "timestamp": block_timestamp,

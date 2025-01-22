@@ -115,6 +115,10 @@ List All Values in Mapping
       from Redis. Therefore, the response may contain more or less items than the provided ``count`` value. Make sure to
       iterate through the response values to get all data.
 
+      **Warning**: the mapping values might change over multiple calls, so there is no guarantee that all results returned
+      by this endpoint represents a consistent snapshot of the mapping. In the future, there will be a way to query the
+      values at specific heights or times.
+
       **Example request**:
 
       .. sourcecode:: http
