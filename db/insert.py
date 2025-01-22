@@ -1175,7 +1175,23 @@ class DatabaseInsert(DatabaseBase):
 
         for ratification in ratifications:
             if isinstance(ratification, BlockRewardRatify):
-                committee = await self._get_committee_mapping_unchecked(cur)
+
+                mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "committee"))
+                if mapping_id in global_mapping_cache:
+                    data = global_mapping_cache[mapping_id]
+                    committee: dict[Address, tuple[bool_, u8]] = {}
+                    for v in data.values():
+                        key = cast(LiteralPlaintext, v["key"])
+                        value = v["value"]
+                        plaintext = cast(StructPlaintext, value.plaintext)
+                        is_open = cast(LiteralPlaintext, plaintext["is_open"])
+                        commission = cast(LiteralPlaintext, plaintext["commission"])
+                        committee[cast(Address, key.literal.primitive)] = (
+                            cast(bool_, is_open.literal.primitive),
+                            cast(u8, commission.literal.primitive),
+                        )
+                else:
+                    committee = await self._get_committee_mapping_unchecked(cur)
 
                 mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "delegated"))
                 if mapping_id in global_mapping_cache:
