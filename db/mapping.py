@@ -229,6 +229,13 @@ class DatabaseMapping(DatabaseBase):
         try:
             limited_tracking = program_name == "credits.aleo" and mapping_name in ["committee", "bonded", "delegated"]
 
+            if program_name == "credits.aleo" and mapping_name == "bonded":
+                await cur.execute(
+                    "INSERT INTO mapping_bonded_value (key_id, key, value) VALUES (%s, %s, %s) "
+                    "ON CONFLICT (key_id) DO UPDATE SET value = excluded.value",
+                    (key_id, key, value)
+                )
+
             if not limited_tracking or from_transaction:
                 await cur.execute("SELECT id FROM mapping WHERE mapping_id = %s", (mapping_id,))
                 mapping = await cur.fetchone()
@@ -274,6 +281,12 @@ class DatabaseMapping(DatabaseBase):
                                        from_transaction: bool):
         try:
             limited_tracking = program_name == "credits.aleo" and mapping_name in ["committee", "bonded", "delegated"]
+
+            if program_name == "credits.aleo" and mapping_name == "bonded":
+                await cur.execute(
+                    "DELETE FROM mapping_bonded_value WHERE key_id = %s",
+                    (key_id,)
+                )
 
             if not limited_tracking or from_transaction:
                 await cur.execute("SELECT id FROM mapping WHERE mapping_id = %s", (mapping_id,))

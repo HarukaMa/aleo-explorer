@@ -57,10 +57,9 @@ class DatabaseSearch(DatabaseBase):
                     )
                     res = set(map(lambda x: x['address'], await cur.fetchall()))
                     await cur.execute(
-                        "SELECT content FROM address_stake_reward_history ORDER BY height DESC LIMIT 1"
+                        "SELECT address FROM address_stake_reward"
                     )
-                    if (row := await cur.fetchone()) is not None:
-                        res.update(set(filter(lambda x: x.startswith(address), row['content'].keys())))
+                    res.update(set(map(lambda x: x['address'], await cur.fetchall())))
                     await cur.execute(
                         "SELECT DISTINCT owner FROM program WHERE owner LIKE %s", (f"{address}%",)
                     )

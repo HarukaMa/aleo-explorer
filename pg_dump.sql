@@ -377,6 +377,17 @@ CREATE TABLE explorer.address_puzzle_reward_history_last_id (
 
 
 --
+-- Name: address_stake_reward; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.address_stake_reward (
+    id integer NOT NULL,
+    address text NOT NULL,
+    stake_reward numeric(20,0) NOT NULL
+);
+
+
+--
 -- Name: address_stake_reward_history; Type: TABLE; Schema: explorer; Owner: -
 --
 
@@ -404,6 +415,26 @@ CREATE SEQUENCE explorer.address_stake_reward_history_id_seq
 --
 
 ALTER SEQUENCE explorer.address_stake_reward_history_id_seq OWNED BY explorer.address_stake_reward_history.id;
+
+
+--
+-- Name: address_stake_reward_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.address_stake_reward_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: address_stake_reward_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.address_stake_reward_id_seq OWNED BY explorer.address_stake_reward.id;
 
 
 --
@@ -1377,6 +1408,38 @@ ALTER SEQUENCE explorer.mapping_bonded_history_id_seq OWNED BY explorer.mapping_
 
 
 --
+-- Name: mapping_bonded_value; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer.mapping_bonded_value (
+    id integer NOT NULL,
+    key_id text NOT NULL,
+    key bytea NOT NULL,
+    value bytea NOT NULL
+);
+
+
+--
+-- Name: mapping_bonded_value_id_seq; Type: SEQUENCE; Schema: explorer; Owner: -
+--
+
+CREATE SEQUENCE explorer.mapping_bonded_value_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: mapping_bonded_value_id_seq; Type: SEQUENCE OWNED BY; Schema: explorer; Owner: -
+--
+
+ALTER SEQUENCE explorer.mapping_bonded_value_id_seq OWNED BY explorer.mapping_bonded_value.id;
+
+
+--
 -- Name: mapping_committee_history; Type: TABLE; Schema: explorer; Owner: -
 --
 
@@ -2293,6 +2356,13 @@ ALTER TABLE ONLY explorer.address_puzzle_reward_history ALTER COLUMN id SET DEFA
 
 
 --
+-- Name: address_stake_reward id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.address_stake_reward ALTER COLUMN id SET DEFAULT nextval('explorer.address_stake_reward_id_seq'::regclass);
+
+
+--
 -- Name: address_stake_reward_history id; Type: DEFAULT; Schema: explorer; Owner: -
 --
 
@@ -2493,6 +2563,13 @@ ALTER TABLE ONLY explorer.mapping ALTER COLUMN id SET DEFAULT nextval('explorer.
 --
 
 ALTER TABLE ONLY explorer.mapping_bonded_history ALTER COLUMN id SET DEFAULT nextval('explorer.mapping_bonded_history_id_seq'::regclass);
+
+
+--
+-- Name: mapping_bonded_value id; Type: DEFAULT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping_bonded_value ALTER COLUMN id SET DEFAULT nextval('explorer.mapping_bonded_value_id_seq'::regclass);
 
 
 --
@@ -2725,6 +2802,22 @@ ALTER TABLE ONLY explorer.address_stake_reward_history
 
 
 --
+-- Name: address_stake_reward address_stake_reward_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.address_stake_reward
+    ADD CONSTRAINT address_stake_reward_pk PRIMARY KEY (id);
+
+
+--
+-- Name: address_stake_reward address_stake_reward_pk_2; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.address_stake_reward
+    ADD CONSTRAINT address_stake_reward_pk_2 UNIQUE (address);
+
+
+--
 -- Name: address_tag address_tag_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
 --
 
@@ -2946,6 +3039,14 @@ ALTER TABLE ONLY explorer.future
 
 ALTER TABLE ONLY explorer.mapping_bonded_history
     ADD CONSTRAINT mapping_bonded_history_pk PRIMARY KEY (id);
+
+
+--
+-- Name: mapping_bonded_value mapping_bonded_value_pk; Type: CONSTRAINT; Schema: explorer; Owner: -
+--
+
+ALTER TABLE ONLY explorer.mapping_bonded_value
+    ADD CONSTRAINT mapping_bonded_value_pk PRIMARY KEY (id);
 
 
 --
@@ -3266,6 +3367,13 @@ CREATE INDEX address_stake_reward_history_content_index ON explorer.address_stak
 --
 
 CREATE INDEX address_stake_reward_history_height_index ON explorer.address_stake_reward_history USING btree (height);
+
+
+--
+-- Name: address_stake_reward_stake_reward_index; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE INDEX address_stake_reward_stake_reward_index ON explorer.address_stake_reward USING btree (stake_reward);
 
 
 --
@@ -3651,6 +3759,13 @@ CREATE INDEX mapping_bonded_history_content_index ON explorer.mapping_bonded_his
 --
 
 CREATE INDEX mapping_bonded_history_height_index ON explorer.mapping_bonded_history USING btree (height);
+
+
+--
+-- Name: mapping_bonded_value_key_id_uindex; Type: INDEX; Schema: explorer; Owner: -
+--
+
+CREATE UNIQUE INDEX mapping_bonded_value_key_id_uindex ON explorer.mapping_bonded_value USING btree (key_id);
 
 
 --

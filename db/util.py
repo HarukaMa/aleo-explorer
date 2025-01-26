@@ -38,12 +38,14 @@ class DatabaseUtil(DatabaseBase):
                 await conn.execute("TRUNCATE TABLE committee_history RESTART IDENTITY CASCADE")
                 await conn.execute("TRUNCATE TABLE committee_history_member RESTART IDENTITY CASCADE")
                 await conn.execute("TRUNCATE TABLE mapping_bonded_history RESTART IDENTITY CASCADE")
+                await conn.execute("TRUNCATE TABLE mapping_bonded_value RESTART IDENTITY CASCADE")
                 await conn.execute("TRUNCATE TABLE mapping_committee_history RESTART IDENTITY CASCADE")
                 await conn.execute("TRUNCATE TABLE mapping_delegated_history RESTART IDENTITY CASCADE")
                 await conn.execute("TRUNCATE TABLE address_fee_history RESTART IDENTITY CASCADE")
                 await conn.execute("TRUNCATE TABLE address_fee_history_last_id RESTART IDENTITY CASCADE")
                 await conn.execute("TRUNCATE TABLE address_puzzle_reward_history RESTART IDENTITY CASCADE")
                 await conn.execute("TRUNCATE TABLE address_puzzle_reward_history_last_id RESTART IDENTITY CASCADE")
+                await conn.execute("TRUNCATE TABLE address_stake_reward RESTART IDENTITY CASCADE")
                 await conn.execute("TRUNCATE TABLE address_stake_reward_history RESTART IDENTITY CASCADE")
                 await conn.execute("TRUNCATE TABLE address_transfer_in_history RESTART IDENTITY CASCADE")
                 await conn.execute("TRUNCATE TABLE address_transfer_in_history_last_id RESTART IDENTITY CASCADE")
@@ -67,7 +69,7 @@ class DatabaseUtil(DatabaseBase):
                             height = latest_height - 1
                         if height >= latest_height:
                             raise ValueError("revert height is not less than latest height")
-                        await cur.execute("select height from address_stake_reward_history where height <= %s order by height desc limit 1", (height,))
+                        await cur.execute("select height, content from address_stake_reward_history where height <= %s order by height desc limit 1", (height,))
                         if (res := await cur.fetchone()) is None:
                             raise ValueError("no data to revert")
                         height = res["height"]
@@ -77,8 +79,15 @@ class DatabaseUtil(DatabaseBase):
                         await cur.execute("delete from address_fee_history where height > %s", (height,))
                         await cur.execute("delete from address_puzzle_reward_history where height > %s", (height,))
                         await cur.execute("delete from address_stake_reward_history where height > %s", (height,))
+                        await cur.execute("truncate table address_stake_reward restart identity")
                         await cur.execute("delete from address_transfer_in_history where height > %s", (height,))
                         await cur.execute("delete from address_transfer_out_history where height > %s", (height,))
+
+                        for address, stake_reward in res["content"].items():
+                            await cur.execute(
+                                "insert into address_stake_reward (address, stake_reward) values (%s, %s)",
+                                (address, stake_reward)
+                            )
 
                         print("fetching old mapping values from mapping history")
                         await cur.execute(
@@ -137,6 +146,19 @@ class DatabaseUtil(DatabaseBase):
                             "DELETE FROM mapping_bonded_history WHERE height > %s",
                             (height,)
                         )
+
+                        await cur.execute("truncate table mapping_bonded_value restart identity")
+
+                        await cur.execute(
+                            "select content from mapping_bonded_history where height = %s",
+                            (height,)
+                        )
+                        if (res := await cur.fetchone()) is not None:
+                            for key_id, data in res["content"].items():
+                                await cur.execute(
+                                    "insert into mapping_bonded_value (key_id, key, value) values (%s, %s, %s)",
+                                    (key_id, bytes.fromhex(data["key"]), bytes.fromhex(data["value"]))
+                                )
 
                         print("fetching blocks to revert")
                         blocks_to_revert = await DatabaseBlock.get_full_block_range(u32.max, height, conn)

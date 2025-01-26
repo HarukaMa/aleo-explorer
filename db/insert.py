@@ -822,15 +822,15 @@ class DatabaseInsert(DatabaseBase):
         data = {}
         for k, v in global_mapping_cache[bonded_mapping_id].items():
             data[cached_get_key_id("credits.aleo", "bonded", v["key"].dump())] = {
-                "key": v["key"].dump().hex(),
-                "value": v["value"].dump().hex()
+                "key": v["key"].dump(),
+                "value": v["value"].dump(),
             }
-        from node import Network
-        if Network.network_id != 2:
-            await cur.execute(
-                "INSERT INTO mapping_bonded_history (height, content) VALUES (%s, %s) RETURNING id",
-                (height, json.dumps(data))
-            )
+
+        await cur.executemany(
+            "INSERT INTO mapping_bonded_value (key_id, key, value) VALUES (%s, %s, %s) "
+            "ON CONFLICT (key_id) DO UPDATE SET value = EXCLUDED.value",
+            [(k, v["key"], v["value"]) for k, v in data.items()]
+        )
 
         global_mapping_cache[delegated_mapping_id] = {}
         delegated_mapping: dict[str, dict[str, str]] = {}
@@ -1055,16 +1055,13 @@ class DatabaseInsert(DatabaseBase):
     @staticmethod
     async def _get_bonded_mapping_unchecked(cur: psycopg.AsyncCursor[DictRow]) -> dict[Address, tuple[Address, u64]]:
         await cur.execute(
-            "SELECT content FROM mapping_bonded_history ORDER BY height DESC LIMIT 1"
+            "SELECT key, value FROM mapping_bonded_value"
         )
-        if (res := await cur.fetchone()) is None:
-            return {}
-        data = res["content"]
 
         stakers: dict[Address, tuple[Address, u64]] = {}
-        for d in data.values():
-            key = cast(LiteralPlaintext, Plaintext.load(BytesIO(bytes.fromhex(d["key"]))))
-            value = cast(PlaintextValue, Value.load(BytesIO(bytes.fromhex(d["value"]))))
+        for d in await cur.fetchall():
+            key = cast(LiteralPlaintext, Plaintext.load(BytesIO(d["key"])))
+            value = cast(PlaintextValue, Value.load(BytesIO(d["value"])))
             plaintext = cast(StructPlaintext, value.plaintext)
             validator = cast(LiteralPlaintext, plaintext["validator"])
             amount = cast(LiteralPlaintext, plaintext["microcredits"])
@@ -1226,20 +1223,15 @@ class DatabaseInsert(DatabaseBase):
                 delegated = self._next_delegated(stakers)
                 committee_members = self._next_committee_members(committee_members, stakers)
 
-                await cur.execute("SELECT content FROM address_stake_reward_history WHERE height = %s", (height - 1,))
-                if (res := await cur.fetchone()) is None:
-                    data = {}
-                else:
-                    data = res["content"]
-                for address, amount in stake_rewards.items():
-                    if str(address) in data:
-                        data[str(address)] += amount
-                    else:
-                        data[str(address)] = amount
-                await cur.execute(
-                    "INSERT INTO address_stake_reward_history (height, content) VALUES (%s, %s) RETURNING id",
-                    (height, json.dumps(data))
+                await cur.executemany(
+                    "INSERT INTO address_stake_reward (address, stake_reward) VALUES (%s, %s) "
+                    "ON CONFLICT (address) DO UPDATE SET stake_reward = address_stake_reward.stake_reward + EXCLUDED.stake_reward",
+                    [(str(address), amount) for address, amount in stake_rewards.items()]
                 )
+
+                total_stake_reward = sum(stake_rewards.values())
+                supply_tracker.mint(total_stake_reward)
+                supply_tracker.tally_block_reward(total_stake_reward)
 
                 await self._update_committee_bonded_delegated_map(cur, committee_members, stakers, delegated, height)
                 starting_round = u64(round_)
@@ -1768,7 +1760,7 @@ class DatabaseInsert(DatabaseBase):
                                 # temporarily disable this as it seems we don't have lingering unconfirmed tx anymore
                                 pass
                                 # await self.cleanup_unconfirmed_transactions()
-                                await self.prune_history(cur, block.height)
+                                await self.save_history(cur, block.height)
                             await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseBlockAdded, block.header.metadata.height))
                         except Exception as e:
                             await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
@@ -1780,7 +1772,7 @@ class DatabaseInsert(DatabaseBase):
             raise
 
     @staticmethod
-    async def prune_history(cur: psycopg.AsyncCursor[DictRow], height: int):
+    async def save_history(cur: psycopg.AsyncCursor[DictRow], height: int):
         network_history_interval = {
             0: 100,
             1: 100,
@@ -1788,14 +1780,32 @@ class DatabaseInsert(DatabaseBase):
         }
         from node import Network
         interval = network_history_interval[Network.network_id]
-        await cur.execute(
-            "DELETE FROM address_stake_reward_history WHERE height < %s - %s AND height %% %s != 0",
-            (height, interval, interval)
-        )
-        await cur.execute(
-            "DELETE FROM mapping_bonded_history WHERE height < %s - %s AND height %% %s != 0",
-            (height, interval, interval)
-        )
+        if height % interval == 0:
+            await cur.execute("SELECT * FROM address_stake_reward")
+            address_stake_rewards = await cur.fetchall()
+            stake_history: dict[str, int] = {}
+            for address_stake_reward in address_stake_rewards:
+                address = address_stake_reward["address"]
+                reward = address_stake_reward["stake_reward"]
+                stake_history[address] = int(reward)
+            await cur.execute(
+                "INSERT INTO address_stake_reward_history (height, content) VALUES (%s, %s)",
+                (height, json.dumps(stake_history))
+            )
+
+            await cur.execute("SELECT * FROM mapping_bonded_value")
+            bonded_values = await cur.fetchall()
+            bonded_history: dict[str, dict[str, str]] = {}
+            for bonded_value in bonded_values:
+                bonded_history[bonded_value["key_id"]] = {
+                    "key": bonded_value["key"].hex(),
+                    "value": bonded_value["value"].hex(),
+                }
+            await cur.execute(
+                "INSERT INTO mapping_bonded_history (height, content) VALUES (%s, %s)",
+                (height, json.dumps(bonded_history))
+            )
+
 
     async def cleanup_unconfirmed_transactions(self):
         async with self.pool.connection() as conn:

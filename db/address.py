@@ -150,8 +150,7 @@ LIMIT 30
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT content -> %s as stake_reward FROM address_stake_reward_history "
-                        "ORDER BY height DESC LIMIT 1",
+                        "SELECT stake_reward FROM address_stake_reward WHERE address = %s",
                         (address,)
                     )
                     if (res := await cur.fetchone()) is None:
