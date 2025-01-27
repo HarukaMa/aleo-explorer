@@ -284,6 +284,15 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
+-- Name: _dirty_flag; Type: TABLE; Schema: explorer; Owner: -
+--
+
+CREATE TABLE explorer._dirty_flag (
+    dirty boolean DEFAULT false NOT NULL
+);
+
+
+--
 -- Name: _migration; Type: TABLE; Schema: explorer; Owner: -
 --
 
