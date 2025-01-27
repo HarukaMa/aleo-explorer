@@ -16,7 +16,7 @@ You will need to resync from scratch if you are switching from the `mainnet` bra
 
 ## Prerequisites
 
-* Python 3.10 or 3.11.4-3.12.x (3.11.0 - 3.11.3 [won't work](https://github.com/python/cpython/pull/103514), reportedly 3.13 has some other issues)
+* Python 3.10 or 3.11.4+ (3.11.0 - 3.11.3 [won't work](https://github.com/python/cpython/pull/103514))
 * Postgres 14+
 * Rust 1.81+
 * [aleo-explorer-rust](https://github.com/HarukaMa/aleo-explorer-rust)

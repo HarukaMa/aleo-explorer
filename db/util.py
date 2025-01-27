@@ -73,6 +73,8 @@ class DatabaseUtil(DatabaseBase):
                         if (res := await cur.fetchone()) is None:
                             raise ValueError("no data to revert")
                         height = res["height"]
+                        if height is None:
+                            raise ValueError("no data to revert")
                         print(f"reverting to height {height}")
 
                         print("reverting address stats")
@@ -242,9 +244,18 @@ class DatabaseUtil(DatabaseBase):
                             (height,)
                         )
 
-
                     except Exception as e:
                         await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                         signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGINT})
                         raise
         signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGINT})
+
+    async def check_dirty(self) -> bool:
+        async with self.pool.connection() as conn:
+            async with conn.transaction():
+                async with conn.cursor() as cur:
+                    await cur.execute("SELECT dirty FROM _dirty_flag")
+                    if (res := await cur.fetchone()) is None:
+                        await cur.execute("INSERT INTO _dirty_flag (dirty) VALUES (FALSE)")
+                        return False
+                    return res["dirty"]

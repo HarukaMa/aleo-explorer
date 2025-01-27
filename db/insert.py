@@ -1,7 +1,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
+import signal
 import time
 from collections import defaultdict
 
@@ -37,11 +39,80 @@ class _SupplyTracker:
         self.supply -= delta
 
 
+class BlockTimer:
+
+    enabled = True
+
+    def __init__(self):
+        self.block_start_time = time.perf_counter_ns()
+        self.block_end_time: Optional[int] = None
+        self.sections: dict[str, tuple[int, Optional[int]]] = {}
+
+    def start_block(self):
+        self.block_start_time = time.perf_counter_ns()
+        self.block_end_time = None
+        self.sections = {}
+
+    def start_section(self, name: str):
+        self.sections[name] = (time.perf_counter_ns(), None)
+
+    def end_section(self, name: str):
+        self.sections[name] = (self.sections[name][0], time.perf_counter_ns())
+
+    def end_block(self):
+        self.block_end_time = time.perf_counter_ns()
+
+    @contextlib.contextmanager
+    def section(self, name: str):
+        self.start_section(name)
+        try:
+            yield
+        finally:
+            self.end_section(name)
+
+    def __str__(self):
+        if self.block_end_time is None:
+            return "Block time: not finished"
+        res = f"Block time: {(self.block_end_time - self.block_start_time) / 1_000_000} ms"
+        for name, (start, end) in self.sections.items():
+            if end is None:
+                res += f"\n  {name}: not finished"
+            else:
+                # in ms
+                res += f"\n  {name}: {(end - start) / 1_000_000} ms"
+        return res
+
+class DummyBlockTimer:
+
+    enabled = False
+
+    def start_block(self):
+        pass
+
+    def start_section(self, _: str):
+        pass
+
+    def end_section(self, _: str):
+        pass
+
+    def end_block(self):
+        pass
+
+    @contextlib.contextmanager
+    def section(self, _: str):
+        yield
+
+    def __str__(self):
+        return "Block timing not enabled"
+
+GlobalBlockTimer: BlockTimer | DummyBlockTimer = BlockTimer() if os.getenv("BLOCK_TIMING") else DummyBlockTimer()
+
 class DatabaseInsert(DatabaseBase):
 
     @staticmethod
     async def _insert_future(cur: psycopg.AsyncCursor[DictRow], future: Future,
                              transition_output_future_db_id: Optional[int] = None, argument_db_id: Optional[int] = None,):
+        GlobalBlockTimer.start_section(f"        insert future {future.program_id} {future.function_name}")
         if transition_output_future_db_id:
             await cur.execute(
                 "INSERT INTO future (type, transition_output_future_id, program_id, function_name) "
@@ -127,6 +198,7 @@ class DatabaseInsert(DatabaseBase):
                 await DatabaseInsert._insert_future(cur, argument.future, argument_db_id=argument_db_id)
             else:
                 raise NotImplementedError
+        GlobalBlockTimer.end_section(f"        insert future {future.program_id} {future.function_name}")
 
     async def _update_address_stats(self, cur: psycopg.AsyncCursor[DictRow], height: int, transaction: Transaction):
 
@@ -256,6 +328,7 @@ class DatabaseInsert(DatabaseBase):
     async def _insert_transition(cur: psycopg.AsyncCursor[DictRow],
                                  exe_tx_db_id: Optional[int], fee_db_id: Optional[int],
                                  transition: Transition, ts_index: int, is_rejected: bool = False, should_exist: bool = False):
+        GlobalBlockTimer.start_section(f"      insert transition {transition.id}")
         await cur.execute(
             "SELECT id FROM transition WHERE transition_id = %s", (str(transition.id),)
         )
@@ -277,6 +350,7 @@ class DatabaseInsert(DatabaseBase):
 
         transition_input: TransitionInput
         for input_index, transition_input in enumerate(transition.inputs):
+            GlobalBlockTimer.start_section(f"        insert transition input {transition.id} {input_index}")
             await cur.execute(
                 "INSERT INTO transition_input (transition_id, type, index) VALUES (%s, %s, %s) RETURNING id",
                 (transition_db_id, transition_input.type.name, input_index)
@@ -329,9 +403,11 @@ class DatabaseInsert(DatabaseBase):
 
             else:
                 raise NotImplementedError
+            GlobalBlockTimer.end_section(f"        insert transition input {transition.id} {input_index}")
 
         transition_output: TransitionOutput
         for output_index, transition_output in enumerate(transition.outputs):
+            GlobalBlockTimer.start_section(f"        insert transition output {transition.id} {output_index}")
             await cur.execute(
                 "INSERT INTO transition_output (transition_id, type, index) VALUES (%s, %s, %s) RETURNING id",
                 (transition_db_id, transition_output.type.name, output_index)
@@ -379,6 +455,7 @@ class DatabaseInsert(DatabaseBase):
                     await DatabaseInsert._insert_future(cur, transition_output.future.value, transition_output_future_db_id)
             else:
                 raise NotImplementedError
+            GlobalBlockTimer.end_section(f"        insert transition output {transition.id} {output_index}")
 
         await cur.execute(
             "SELECT id FROM program WHERE program_id = %s", (str(transition.program_id),)
@@ -390,6 +467,7 @@ class DatabaseInsert(DatabaseBase):
             "UPDATE program_function SET called = called + 1 WHERE program_id = %s AND name = %s",
             (program_db_id, str(transition.function_name))
         )
+        GlobalBlockTimer.end_section(f"      insert transition {transition.id}")
 
 
     @staticmethod
@@ -433,6 +511,7 @@ class DatabaseInsert(DatabaseBase):
     async def _insert_execute_transaction(cur: psycopg.AsyncCursor[DictRow],
                                           execution: Execution, fee: Optional[Fee], transaction_db_id: int,
                                           is_rejected: bool = False, ts_should_exist: bool = False):
+        GlobalBlockTimer.start_section(f"    insert execute transaction {transaction_db_id}")
         await cur.execute(
             "SELECT id FROM transaction_execute WHERE transaction_id = %s", (transaction_db_id,)
         )
@@ -464,11 +543,13 @@ class DatabaseInsert(DatabaseBase):
                 raise RuntimeError("failed to insert row into database")
             fee_db_id = res["id"]
             await DatabaseInsert._insert_transition(cur, None, fee_db_id, fee.transition, 0, is_rejected, ts_should_exist)
+        GlobalBlockTimer.end_section(f"    insert execute transaction {transaction_db_id}")
 
     async def _insert_transaction(self, cur: psycopg.AsyncCursor[DictRow], height: Optional[int], transaction: Transaction,
                                   confirmed_transaction: Optional[ConfirmedTransaction] = None, ct_index: Optional[int] = None,
                                   ignore_deploy_txids: Optional[list[str]] = None, confirmed_transaction_db_id: Optional[int] = None,
                                   reject_reasons: Optional[list[Optional[str]]] = None):
+        GlobalBlockTimer.start_section(f"  insert transaction {transaction.id}")
         optionals = (confirmed_transaction, ct_index, confirmed_transaction_db_id, reject_reasons)
         if not (all(x is None for x in optionals) or all(x is not None for x in optionals)):
             raise ValueError("expected all or none of confirmed_transaction, ct_index, confirmed_transaction_db_id, reject_reasons to be set")
@@ -659,6 +740,7 @@ class DatabaseInsert(DatabaseBase):
             )
             if (await cur.fetchone()) is not None:
                 await self._process_aborted_transaction(cur, transaction.id)
+        GlobalBlockTimer.end_section(f"  insert transaction {transaction.id}")
 
     @staticmethod
     async def _process_aborted_transaction(cur: psycopg.AsyncCursor[DictRow], aborted_transaction_id: TransactionID):
@@ -1302,6 +1384,10 @@ class DatabaseInsert(DatabaseBase):
                 async with conn.transaction():
                     async with conn.cursor() as cur:
                         try:
+                            signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT})
+                            await cur.execute("UPDATE _dirty_flag SET dirty = true")
+
+                            GlobalBlockTimer.start_block()
                             if block.height != 0:
                                 from db import Database
                                 last_block_timestamp = await cast(Database, self).get_latest_block_timestamp()
@@ -1344,9 +1430,12 @@ class DatabaseInsert(DatabaseBase):
                                 elif isinstance(ratification, GenesisRatify):
                                     await self._pre_ratify(cur, ratification, supply_tracker)
 
+                            GlobalBlockTimer.start_section("finalize")
                             from interpreter.interpreter import finalize_block
                             reject_reasons = await finalize_block(cast("Database", self), cur, block)
+                            GlobalBlockTimer.end_section("finalize")
 
+                            GlobalBlockTimer.start_section("insert block")
                             await cur.execute(
                                 "INSERT INTO block (height, block_hash, previous_hash, previous_state_root, transactions_root, "
                                 "finalize_root, ratifications_root, solutions_root, subdag_root, round, cumulative_weight, "
@@ -1365,9 +1454,11 @@ class DatabaseInsert(DatabaseBase):
                             if (res := await cur.fetchone()) is None:
                                 raise RuntimeError("failed to insert row into database")
                             block_db_id = res["id"]
+                            GlobalBlockTimer.end_section("insert block")
 
                             # dag_transmission_ids: tuple[dict[str, int], dict[str, int]] = {}, {}
 
+                            GlobalBlockTimer.start_section("authority")
                             if isinstance(block.authority, BeaconAuthority):
                                 await cur.execute(
                                     "INSERT INTO authority (block_id, type, signature) VALUES (%s, %s, %s)",
@@ -1484,6 +1575,7 @@ class DatabaseInsert(DatabaseBase):
                                 async with cur.copy("COPY block_validator (block_id, validator) FROM STDIN") as copy:
                                     for row in validators_copy_data:
                                         await copy.write_row(row)
+                            GlobalBlockTimer.end_section("authority")
 
                             ignore_deploy_txids: list[str] = []
                             program_name_seen: dict[str, str] = {}
@@ -1499,6 +1591,7 @@ class DatabaseInsert(DatabaseBase):
                                     else:
                                         raise ValueError("expected deploy transaction")
 
+                            GlobalBlockTimer.start_section("transactions")
                             for ct_index, confirmed_transaction in enumerate(block.transactions):
                                 confirmed_transaction: ConfirmedTransaction
                                 await cur.execute(
@@ -1572,7 +1665,9 @@ class DatabaseInsert(DatabaseBase):
                                     async with cur.copy("COPY finalize_operation_update_kv (finalize_operation_id, mapping_id, key_id, value_id) FROM STDIN") as copy:
                                         for row in update_copy_data:
                                             await copy.write_row(row)
+                            GlobalBlockTimer.end_section("transactions")
 
+                            GlobalBlockTimer.start_section("ratifications")
                             for index, ratify in enumerate(block.ratifications):
                                 if isinstance(ratify, GenesisRatify):
                                     await cur.execute(
@@ -1599,9 +1694,11 @@ class DatabaseInsert(DatabaseBase):
                                     )
                                 else:
                                     raise NotImplementedError
+                            GlobalBlockTimer.end_section("ratifications")
 
                             address_puzzle_rewards: dict[str, int] = defaultdict(int)
 
+                            GlobalBlockTimer.start_section("solutions")
                             if block.solutions.value is not None:
                                 prover_solutions = block.solutions.value.solutions
                                 solutions: list[tuple[Solution, int, int]] = []
@@ -1648,6 +1745,7 @@ class DatabaseInsert(DatabaseBase):
                                             "VALUES (%s, %s, %s, %s) RETURNING id",
                                             (address, block.height, last_reward + reward, last_id)
                                         )
+                            GlobalBlockTimer.end_section("solutions")
 
                             for aborted in block.aborted_transaction_ids:
                                 await cur.execute(
@@ -1662,10 +1760,12 @@ class DatabaseInsert(DatabaseBase):
                                     (block_db_id, str(aborted))
                                 )
 
+                            GlobalBlockTimer.start_section("post ratify")
                             await self._post_ratify(
                                 cur, block.height, block.round, block.ratifications.ratifications,
                                 address_puzzle_rewards, supply_tracker
                             )
+                            GlobalBlockTimer.end_section("post ratify")
 
                             # if os.environ.get("DEBUG_MAPPING_DUMP", False):
                             #     async def read_redis_mapping(key: str) -> list[tuple[str, str]]:
@@ -1756,13 +1856,23 @@ class DatabaseInsert(DatabaseBase):
                                     (block_diff, block_diff)
                                 )
 
+                            GlobalBlockTimer.start_section("history")
                             if block.height % 100 == 0:
                                 # temporarily disable this as it seems we don't have lingering unconfirmed tx anymore
                                 pass
                                 # await self.cleanup_unconfirmed_transactions()
                                 await self.save_history(cur, block.height)
+                            GlobalBlockTimer.end_section("history")
+
+                            await cur.execute("UPDATE _dirty_flag SET dirty = false")
+                            signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGINT})
+                            GlobalBlockTimer.end_block()
+                            if GlobalBlockTimer.enabled:
+                                print(GlobalBlockTimer)
+
                             await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseBlockAdded, block.header.metadata.height))
                         except Exception as e:
+                            signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGINT})
                             await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                             raise
         except KeyboardInterrupt:

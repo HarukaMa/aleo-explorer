@@ -70,6 +70,8 @@ class Explorer:
         try:
             await self.db.connect()
             await self.db.migrate()
+            if await self.db.check_dirty():
+                open("revert_flag", "w").close()
             await self.check_clear()
             await self.check_dev_mode()
             await self.check_genesis()
@@ -167,9 +169,9 @@ class Explorer:
                 except ValueError:
                     height = None
                 os.remove("revert_flag")
+                await self.db.revert_to_last_backup(height)
             except OSError as e:
                 print("Cannot remove revert_flag:", e)
-            await self.db.revert_to_last_backup(height)
 
     async def check_clear(self):
         if os.path.exists("clear_flag") and os.path.isfile("clear_flag"):

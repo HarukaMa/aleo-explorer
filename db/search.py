@@ -57,7 +57,7 @@ class DatabaseSearch(DatabaseBase):
                     )
                     res = set(map(lambda x: x['address'], await cur.fetchall()))
                     await cur.execute(
-                        "SELECT address FROM address_stake_reward"
+                        "SELECT address FROM address_stake_reward WHERE address LIKE %s", (f"{address}%",)
                     )
                     res.update(set(map(lambda x: x['address'], await cur.fetchall())))
                     await cur.execute(
