@@ -67,7 +67,7 @@ class DatabaseMapping(DatabaseBase):
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
-                    if program_id == "credits.aleo" and mapping in ["committee", "bonded", "delegated"]:
+                    if program_id == "credits.aleo" and mapping in ["committee", "delegated"]:
                         await cur.execute(
                             psycopg.sql.SQL(
                                 "SELECT content #> %s as value "
@@ -76,6 +76,14 @@ class DatabaseMapping(DatabaseBase):
                                 psycopg.sql.Identifier(f"mapping_{mapping}_history")
                             ),
                             (f"{{{key_id}, value}}",)
+                        )
+                        if (res := await cur.fetchone()) is None:
+                            return None
+                        return res['value']
+                    elif program_id == "credits.aleo" and mapping == "bonded":
+                        await cur.execute(
+                            "SELECT value FROM mapping_bonded_value WHERE key_id = %s",
+                            (key_id,)
                         )
                         if (res := await cur.fetchone()) is None:
                             return None
