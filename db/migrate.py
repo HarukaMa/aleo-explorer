@@ -16,7 +16,8 @@ class DatabaseMigrate(DatabaseBase):
     # migration methods
     async def migrate(self):
         migrations: list[tuple[int, Callable[[psycopg.AsyncConnection[DictRow]], Awaitable[None]]]] = [
-            (1, self.migration_1_remove_value_id_column)
+            (1, self.migration_1_remove_value_id_column),
+            (2, self.migration_2_remove_serial_id_column),
         ]
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -36,3 +37,10 @@ class DatabaseMigrate(DatabaseBase):
     @staticmethod
     async def migration_1_remove_value_id_column(conn: psycopg.AsyncConnection[DictRow]):
         await conn.execute("ALTER TABLE mapping_value DROP COLUMN value_id")
+
+    @staticmethod
+    async def migration_2_remove_serial_id_column(conn: psycopg.AsyncConnection[DictRow]):
+        await conn.execute("alter table address_stake_reward drop constraint address_stake_reward_pk")
+        await conn.execute("alter table address_stake_reward drop constraint address_stake_reward_pk_2")
+        await conn.execute("alter table address_stake_reward drop column id")
+        await conn.execute("alter table address_stake_reward add primary key (address)")
