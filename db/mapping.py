@@ -150,10 +150,9 @@ class DatabaseMapping(DatabaseBase):
 
                         return {Field.loads(x[0]): transform_history(x[1]) for x in data}, cursor
                     elif program_id == "credits.aleo" and mapping == "bonded":
-                        cursor_clause = psycopg.sql.SQL("WHERE id > {} ").format(psycopg.sql.Literal(cursor)) if cursor > 0 else psycopg.sql.SQL("")
                         await cur.execute(
-                            psycopg.sql.SQL("SELECT id, key_id, key, value FROM mapping_bonded_value {} ORDER BY id LIMIT %s").format(cursor_clause),
-                            (count,)
+                            "SELECT key_id, key, value FROM mapping_bonded_value ORDER BY key_id LIMIT %s OFFSET %s",
+                            (count, cursor)
                         )
                         data = await cur.fetchall()
                         def transform(d: dict[str, Any]):
