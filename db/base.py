@@ -47,7 +47,6 @@ class DatabaseBase:
                 f"options=-csearch_path={self.schema} application_name=aleo-explorer-{os.environ.get('NETWORK', 'unknown')}",
                 kwargs={
                     "row_factory": dict_row,
-                    "autocommit": True,
                 },
                 max_size=16,
             )

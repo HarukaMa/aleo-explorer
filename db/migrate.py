@@ -16,6 +16,7 @@ class DatabaseMigrate(DatabaseBase):
     # migration methods
     async def migrate(self):
         migrations: list[tuple[int, Callable[[psycopg.AsyncConnection[DictRow]], Awaitable[None]]]] = [
+            (1, self.migration_1_remove_value_id_column)
         ]
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -31,3 +32,7 @@ class DatabaseMigrate(DatabaseBase):
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
+
+    @staticmethod
+    async def migration_1_remove_value_id_column(conn: psycopg.AsyncConnection[DictRow]):
+        await conn.execute("ALTER TABLE mapping_value DROP COLUMN value_id")

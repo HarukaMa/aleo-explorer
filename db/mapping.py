@@ -12,7 +12,7 @@ from .base import DatabaseBase
 class DatabaseMapping(DatabaseBase):
     async def get_mapping_cache_with_cur(self, cur: psycopg.AsyncCursor[dict[str, Any]], program_name: str,
                                          mapping_name: str) -> dict[Field, Any]:
-        if program_name == "credits.aleo" and mapping_name in ["committee", "bonded", "delegated"]:
+        if program_name == "credits.aleo" and mapping_name in ["committee", "delegated"]:
             try:
                 # noinspection SqlResolve
                 await cur.execute(
@@ -39,14 +39,19 @@ class DatabaseMapping(DatabaseBase):
                 await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                 raise
         else:
-            mapping_id = Field.loads(cached_get_mapping_id(program_name, mapping_name))
             try:
-                await cur.execute(
-                    "SELECT key_id, key, value FROM mapping_value mv "
-                    "JOIN mapping m on mv.mapping_id = m.id "
-                    "WHERE m.mapping_id = %s ",
-                    (str(mapping_id),)
-                )
+                if program_name == "credits.aleo" and mapping_name == "bonded":
+                    await cur.execute(
+                        "SELECT key_id, key, value FROM mapping_bonded_value"
+                    )
+                else:
+                    mapping_id = Field.loads(cached_get_mapping_id(program_name, mapping_name))
+                    await cur.execute(
+                        "SELECT key_id, key, value FROM mapping_value mv "
+                        "JOIN mapping m on mv.mapping_id = m.id "
+                        "WHERE m.mapping_id = %s ",
+                        (str(mapping_id),)
+                    )
                 data = await cur.fetchall()
                 def transform(d: dict[str, Any]):
                     return {
@@ -124,7 +129,7 @@ class DatabaseMapping(DatabaseBase):
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
-                    if program_id == "credits.aleo" and mapping in ["committee", "bonded", "delegated"]:
+                    if program_id == "credits.aleo" and mapping in ["committee", "delegated"]:
                         await cur.execute(
                             psycopg.sql.SQL("SELECT * FROM {} ORDER BY height DESC LIMIT 1").format(
                                 psycopg.sql.Identifier(f"mapping_{mapping}_history")
@@ -137,14 +142,27 @@ class DatabaseMapping(DatabaseBase):
                         data = mapping_tuple[cursor:cursor + count]
                         cursor = cursor + count if len(data) else 0
 
-                        def transform_history(d: dict[str, Any]):
+                        def transform_history(d: dict[str, str]):
                             return {
                                 "key": Plaintext.load(BytesIO(bytes.fromhex(d["key"]))),
                                 "value": Value.load(BytesIO(bytes.fromhex(d["value"]))),
                             }
 
                         return {Field.loads(x[0]): transform_history(x[1]) for x in data}, cursor
-
+                    elif program_id == "credits.aleo" and mapping == "bonded":
+                        cursor_clause = psycopg.sql.SQL("WHERE id > {} ").format(psycopg.sql.Literal(cursor)) if cursor > 0 else psycopg.sql.SQL("")
+                        await cur.execute(
+                            psycopg.sql.SQL("SELECT id, key_id, key, value FROM mapping_bonded_value {} ORDER BY id LIMIT %s").format(cursor_clause),
+                            (count,)
+                        )
+                        data = await cur.fetchall()
+                        def transform(d: dict[str, Any]):
+                            return {
+                                "key": Plaintext.load(BytesIO(d["key"])),
+                                "value": Value.load(BytesIO(d["value"])),
+                            }
+                        cursor = cursor + count if len(data) else 0
+                        return {Field.loads(x["key_id"]): transform(x) for x in data}, cursor
                     else:
                         cursor_clause = psycopg.sql.SQL("AND mv.id < {} ").format(psycopg.sql.Literal(cursor)) if cursor > 0 else psycopg.sql.SQL("")
                         await cur.execute(
@@ -183,7 +201,7 @@ class DatabaseMapping(DatabaseBase):
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
-                    if program_id == "credits.aleo" and mapping in ["committee", "bonded", "delegated"]:
+                    if program_id == "credits.aleo" and mapping in ["committee", "delegated"]:
                         # noinspection SqlResolve
                         await cur.execute(
                             psycopg.sql.SQL("SELECT content FROM {} ORDER BY height DESC LIMIT 1").format(
@@ -195,12 +213,17 @@ class DatabaseMapping(DatabaseBase):
                         mapping_data: dict[str, str] = res["content"]
                         return len(mapping_data)
                     else:
-                        await cur.execute(
-                            "SELECT COUNT(*) FROM mapping_value mv "
-                            "JOIN mapping m on mv.mapping_id = m.id "
-                            "WHERE m.program_id = %s AND m.mapping = %s",
-                            (program_id, mapping)
-                        )
+                        if program_id == "credits.aleo" and mapping == "bonded":
+                            await cur.execute(
+                                "SELECT COUNT(*) FROM mapping_bonded_value"
+                            )
+                        else:
+                            await cur.execute(
+                                "SELECT COUNT(*) FROM mapping_value mv "
+                                "JOIN mapping m on mv.mapping_id = m.id "
+                                "WHERE m.program_id = %s AND m.mapping = %s",
+                                (program_id, mapping)
+                            )
                         if (res := await cur.fetchone()) is None:
                             return 0
                         return res['count']
@@ -208,15 +231,12 @@ class DatabaseMapping(DatabaseBase):
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def initialize_mapping(self, cur: psycopg.AsyncCursor[dict[str, Any]], mapping_id: str, program_id: str, mapping: str):
-        try:
-            await cur.execute(
-                "INSERT INTO mapping (mapping_id, program_id, mapping) VALUES (%s, %s, %s)",
-                (mapping_id, program_id, mapping)
-            )
-        except Exception as e:
-            await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
-            raise
+    @staticmethod
+    async def initialize_mapping(cur: psycopg.AsyncCursor[dict[str, Any]], mapping_id: str, program_id: str, mapping: str):
+        await cur.execute(
+            "INSERT INTO mapping (mapping_id, program_id, mapping) VALUES (%s, %s, %s)",
+            (mapping_id, program_id, mapping)
+        )
 
     async def initialize_builtin_mapping(self, mapping_id: str, program_id: str, mapping: str):
         async with self.pool.connection() as conn:
@@ -231,107 +251,100 @@ class DatabaseMapping(DatabaseBase):
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def update_mapping_key_value(self, cur: psycopg.AsyncCursor[dict[str, Any]], program_name: str,
+    @staticmethod
+    async def update_mapping_key_value(cur: psycopg.AsyncCursor[dict[str, Any]], program_name: str,
                                        mapping_name: str, mapping_id: str, key_id: str, value_id: str,
                                        key: bytes, value: bytes, height: int, from_transaction: bool):
-        try:
-            limited_tracking = program_name == "credits.aleo" and mapping_name in ["committee", "bonded", "delegated"]
+        limited_tracking = program_name == "credits.aleo" and mapping_name in ["committee", "bonded", "delegated"]
 
-            if program_name == "credits.aleo" and mapping_name == "bonded":
+        if program_name == "credits.aleo" and mapping_name == "bonded":
+            await cur.execute(
+                "INSERT INTO mapping_bonded_value (key_id, key, value) VALUES (%s, %s, %s) "
+                "ON CONFLICT (key_id) DO UPDATE SET value = excluded.value",
+                (key_id, key, value)
+            )
+
+        if not limited_tracking or from_transaction:
+            await cur.execute("SELECT id FROM mapping WHERE mapping_id = %s", (mapping_id,))
+            mapping = await cur.fetchone()
+            if mapping is None:
+                raise ValueError(f"mapping {mapping_id} not found")
+            mapping_id = mapping['id']
+
+
+            if not limited_tracking:
                 await cur.execute(
-                    "INSERT INTO mapping_bonded_value (key_id, key, value) VALUES (%s, %s, %s) "
-                    "ON CONFLICT (key_id) DO UPDATE SET value = excluded.value",
-                    (key_id, key, value)
+                    "INSERT INTO mapping_value (mapping_id, key_id, key, value) "
+                    "VALUES (%s, %s, %s, %s) "
+                    "ON CONFLICT (mapping_id, key_id) DO UPDATE SET value = excluded.value",
+                    (mapping_id, key_id, key, value)
                 )
 
-            if not limited_tracking or from_transaction:
-                await cur.execute("SELECT id FROM mapping WHERE mapping_id = %s", (mapping_id,))
-                mapping = await cur.fetchone()
-                if mapping is None:
-                    raise ValueError(f"mapping {mapping_id} not found")
-                mapping_id = mapping['id']
+            await cur.execute(
+                "SELECT last_history_id FROM mapping_history_last_id WHERE key_id = %s",
+                (key_id,)
+            )
+            previous_id = res['last_history_id'] if (res := await cur.fetchone()) is not None else None
 
-                if not limited_tracking:
-                    await cur.execute(
-                        "INSERT INTO mapping_value (mapping_id, key_id, value_id, key, value) "
-                        "VALUES (%s, %s, %s, %s, %s) "
-                        "ON CONFLICT (mapping_id, key_id) DO UPDATE SET value_id = %s, value = %s",
-                        (mapping_id, key_id, value_id, key, value, value_id, value)
-                    )
+            await cur.execute(
+                "INSERT INTO mapping_history (mapping_id, height, key_id, key, value, from_transaction, previous_id) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s) "
+                "RETURNING id",
+                (mapping_id, height, key_id, key, value, from_transaction, previous_id)
+            )
+            if (res := await cur.fetchone()) is None:
+                raise ValueError("failed to insert mapping history")
+            latest_id = res['id']
+            await cur.execute(
+                "INSERT INTO mapping_history_last_id (key_id, last_history_id) VALUES (%s, %s) "
+                "ON CONFLICT (key_id) DO UPDATE SET last_history_id = %s",
+                (key_id, latest_id, latest_id)
+            )
 
-                await cur.execute(
-                    "SELECT last_history_id FROM mapping_history_last_id WHERE key_id = %s",
-                    (key_id,)
-                )
-                previous_id = res['last_history_id'] if (res := await cur.fetchone()) is not None else None
-
-                await cur.execute(
-                    "INSERT INTO mapping_history (mapping_id, height, key_id, key, value, from_transaction, previous_id) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s) "
-                    "RETURNING id",
-                    (mapping_id, height, key_id, key, value, from_transaction, previous_id)
-                )
-                if (res := await cur.fetchone()) is None:
-                    raise ValueError("failed to insert mapping history")
-                latest_id = res['id']
-                await cur.execute(
-                    "INSERT INTO mapping_history_last_id (key_id, last_history_id) VALUES (%s, %s) "
-                    "ON CONFLICT (key_id) DO UPDATE SET last_history_id = %s",
-                    (key_id, latest_id, latest_id)
-                )
-
-        except Exception as e:
-            await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
-            raise
-
-    async def remove_mapping_key_value(self, cur: psycopg.AsyncCursor[dict[str, Any]], program_name: str,
+    @staticmethod
+    async def remove_mapping_key_value(cur: psycopg.AsyncCursor[dict[str, Any]], program_name: str,
                                        mapping_name: str, mapping_id: str, key_id: str, key: bytes, height: int,
                                        from_transaction: bool):
-        try:
-            limited_tracking = program_name == "credits.aleo" and mapping_name in ["committee", "bonded", "delegated"]
+        limited_tracking = program_name == "credits.aleo" and mapping_name in ["committee", "bonded", "delegated"]
 
-            if program_name == "credits.aleo" and mapping_name == "bonded":
+        if program_name == "credits.aleo" and mapping_name == "bonded":
+            await cur.execute(
+                "DELETE FROM mapping_bonded_value WHERE key_id = %s",
+                (key_id,)
+            )
+
+        if not limited_tracking or from_transaction:
+            await cur.execute("SELECT id FROM mapping WHERE mapping_id = %s", (mapping_id,))
+            mapping = await cur.fetchone()
+            if mapping is None:
+                raise ValueError(f"mapping {mapping_id} not found")
+            mapping_id = mapping['id']
+            if not limited_tracking:
                 await cur.execute(
-                    "DELETE FROM mapping_bonded_value WHERE key_id = %s",
-                    (key_id,)
+                    "DELETE FROM mapping_value WHERE mapping_id = %s AND key_id = %s",
+                    (mapping_id, key_id)
                 )
 
-            if not limited_tracking or from_transaction:
-                await cur.execute("SELECT id FROM mapping WHERE mapping_id = %s", (mapping_id,))
-                mapping = await cur.fetchone()
-                if mapping is None:
-                    raise ValueError(f"mapping {mapping_id} not found")
-                mapping_id = mapping['id']
-                if not limited_tracking:
-                    await cur.execute(
-                        "DELETE FROM mapping_value WHERE mapping_id = %s AND key_id = %s",
-                        (mapping_id, key_id)
-                    )
+            await cur.execute(
+                "SELECT last_history_id FROM mapping_history_last_id WHERE key_id = %s",
+                (key_id,)
+            )
+            previous_id = res['last_history_id'] if (res := await cur.fetchone()) is not None else None
 
-                await cur.execute(
-                    "SELECT last_history_id FROM mapping_history_last_id WHERE key_id = %s",
-                    (key_id,)
-                )
-                previous_id = res['last_history_id'] if (res := await cur.fetchone()) is not None else None
-
-                await cur.execute(
-                    "INSERT INTO mapping_history (mapping_id, height, key_id, key, value, from_transaction, previous_id) "
-                    "VALUES (%s, %s, %s, %s, NULL, %s, %s) "
-                    "RETURNING id",
-                    (mapping_id, height, key_id, key, from_transaction, previous_id)
-                )
-                if (res := await cur.fetchone()) is None:
-                    raise ValueError("failed to insert mapping history")
-                latest_id = res['id']
-                await cur.execute(
-                    "INSERT INTO mapping_history_last_id (key_id, last_history_id) VALUES (%s, %s) "
-                    "ON CONFLICT (key_id) DO UPDATE SET last_history_id = %s",
-                    (key_id, latest_id, latest_id)
-                )
-
-        except Exception as e:
-            await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
-            raise
+            await cur.execute(
+                "INSERT INTO mapping_history (mapping_id, height, key_id, key, value, from_transaction, previous_id) "
+                "VALUES (%s, %s, %s, %s, NULL, %s, %s) "
+                "RETURNING id",
+                (mapping_id, height, key_id, key, from_transaction, previous_id)
+            )
+            if (res := await cur.fetchone()) is None:
+                raise ValueError("failed to insert mapping history")
+            latest_id = res['id']
+            await cur.execute(
+                "INSERT INTO mapping_history_last_id (key_id, last_history_id) VALUES (%s, %s) "
+                "ON CONFLICT (key_id) DO UPDATE SET last_history_id = %s",
+                (key_id, latest_id, latest_id)
+            )
 
     async def get_finalize_operations_by_height(self, height: int) -> list[FinalizeOperation]:
         async with self.pool.connection() as conn:

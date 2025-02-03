@@ -2052,6 +2052,11 @@ class PlaintextValue(Value):
     def __repr__(self):
         return str(self.plaintext)
 
+    def __eq__(self, other):
+        if not isinstance(other, PlaintextValue):
+            return False
+        return self.plaintext == other.plaintext
+
 
 class RecordValue(Value):
     type = Value.Type.Record
