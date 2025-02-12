@@ -1,4 +1,5 @@
 import datetime
+import os
 import time
 from typing import Callable, Coroutine, Any, Optional
 
@@ -40,7 +41,7 @@ def use_program_cache(func: Callable[..., Coroutine[Any, Any, Response]]):
 
 async def get_remote_height(session: aiohttp.ClientSession, rpc_root: str) -> Optional[int]:
     try:
-        async with session.get(f"{rpc_root}/testnet3/latest/height") as resp:
+        async with session.get(f"{rpc_root}/{os.environ.get('NETWORK')}/block/height/latest") as resp:
             if resp.status == 200:
                 remote_height = int(await resp.text())
             else:

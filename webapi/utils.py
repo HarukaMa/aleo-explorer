@@ -100,7 +100,7 @@ class CJSONResponse(Response):
 
 async def get_remote_height(session: aiohttp.ClientSession, rpc_root: str) -> str:
     try:
-        async with session.get(f"{rpc_root}/{os.environ.get('NETWORK', 'unknown')}/latest/height") as resp:
+        async with session.get(f"{rpc_root}/{os.environ.get('NETWORK')}/block/height/latest") as resp:
             if resp.status == 200:
                 remote_height = await resp.text()
             else:
