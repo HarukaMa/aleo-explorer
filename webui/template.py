@@ -75,6 +75,13 @@ def format_aleo_credit(mc: int | Decimal):
         return "-"
     return format_number(Decimal(mc) / 1_000_000, 6)
 
+def format_token_amount(amount: int | Decimal, decimals: int):
+    if not isinstance(amount, Decimal):
+        amount = Decimal(amount)
+    if decimals == 0:
+        return format_number(amount)
+    return format_number(amount / 10 ** decimals, decimals)
+
 def network_tag(_: str):
     names = {
         "mainnet": "Mainnet",
@@ -93,6 +100,7 @@ templates.env.filters["format_aleo_credit"] = format_aleo_credit # type: ignore
 templates.env.filters["format_number"] = format_number # type: ignore
 templates.env.filters["format_large_number"] = format_large_number # type: ignore
 templates.env.filters["network_tag"] = network_tag # type: ignore
+templates.env.filters["format_token_amount"] = format_token_amount # type: ignore
 
 def htmx_template(template: str):
     def decorator(func: Callable[[Request], Coroutine[Any, Any, tuple[dict[str, Any], dict[str, str]] | dict[str, str] | Response]]):

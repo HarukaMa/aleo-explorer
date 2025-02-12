@@ -1,0 +1,42 @@
+{% from "macros.jinja2" import nav, htmx_title, sync_notice %}
+{{ sync_notice(sync_info) }}
+
+    <div class="content">
+
+        <div id="header" hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
+            <h3>Token Registry</h3>
+        </div>
+
+        <div id="blocks">
+
+            {{ nav(page, total_pages, "/tokens?") }}
+
+            <table class="unstriped">
+                <thead>
+                <tr>
+                    <th>Token</th>
+                    <th>Symbol</th>
+                    <th>Token ID</th>
+                    <th>Supply</th>
+                    <th>Max supply</th>
+                </tr>
+                </thead>
+                <tbody hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
+                {% for token in tokens %}
+                    <tr>
+                      <td><a href="/token?id={{ token.token_id }}">{{ token.name }}</a></td>
+                      <td>{{ token.symbol }}</td>
+                      <td><span class="mono">{{ token.token_id }}</span></td>
+                      <td>{{ token.supply | format_token_amount(token.decimals) | safe }}</td>
+                      <td>{{ token.max_supply | format_token_amount(token.decimals) | safe }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+
+            {{ nav(page, total_pages, "/tokens?") }}
+
+        </div>
+    </div>
+
+{{ htmx_title(request, "Program Registry") }}

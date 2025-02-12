@@ -21,6 +21,12 @@ def string_from_u128_list_le(array: list[u128]) -> str:
         string += value.to_bytes(16, "little").decode("utf8")
     return string.rstrip("\0")
 
+def string_from_u128_list_be(array: list[u128]) -> str:
+    string = ""
+    for value in reversed(array):
+        string += value.to_bytes(16, "big").decode("utf8")
+    return string.rstrip("\0")
+
 def string_to_u128_array_le(string: str, size: int) -> ArrayPlaintext:
     data = string.encode("utf8")
     if len(data) > size * 16:

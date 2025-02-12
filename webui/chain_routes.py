@@ -21,6 +21,7 @@ from aleo_types import u32, Transition, ExecuteTransaction, PrivateTransitionInp
 from aleo_types.cached import cached_get_key_id, cached_get_mapping_id
 from db import Database
 from node.light_node import LightNodeState
+from util import arc0021
 from util.global_cache import get_program
 from util.typing_exc import Unreachable
 from .classes import UIAddress
@@ -1033,3 +1034,29 @@ async def nodes_route(request: Request):
         "connected": connected,
     }
     return ctx, {'Cache-Control': 'no-cache'}
+
+
+@htmx_template("tokens.jinja2")
+async def tokens_route(request: Request):
+    db: Database = request.app.state.db
+    try:
+        page = request.query_params.get("p")
+        if page is None:
+            page = 1
+        else:
+            page = int(page)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid page")
+    tokens = await arc0021.token_list(db)
+    total_pages = (len(tokens) // 50) + 1
+    if page < 1 or page > total_pages:
+        raise HTTPException(status_code=400, detail="Invalid page")
+    start = 50 * (page - 1)
+    tokens = tokens[start:start + 50]
+    ctx = {
+        "tokens": tokens,
+        "page": page,
+        "total_pages": total_pages,
+    }
+    return ctx, {'Cache-Control': 'public, max-age=15'}
+
