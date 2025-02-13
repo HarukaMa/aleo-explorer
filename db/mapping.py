@@ -84,7 +84,7 @@ class DatabaseMapping(DatabaseBase):
                         )
                         if (res := await cur.fetchone()) is None:
                             return None
-                        return res['value']
+                        return bytes.fromhex(res['value'])
                     elif program_id == "credits.aleo" and mapping == "bonded":
                         await cur.execute(
                             "SELECT value FROM mapping_bonded_value WHERE key_id = %s",
