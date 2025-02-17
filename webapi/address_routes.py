@@ -48,22 +48,22 @@ async def address_route(request: Request) -> CJSONResponse:
     fee = await db.get_address_total_fee(address)
     program_name = await db.get_program_name_from_address(address)
 
-    if (len(solutions) == 0
-        and len(programs) == 0
-        and len(transitions) == 0
-        and public_balance_bytes is None
-        and bond_state_bytes is None
-        and unbond_state_bytes is None
-        and committee_state_bytes is None
-        and delegated_bytes is None
-        and puzzle_reward is None
-        and stake_reward is None
-        and transfer_in is None
-        and transfer_out is None
-        and fee is None
-        and program_name is None
-    ):
-        return CJSONResponse({"error": "Address not found"}, status_code=404)
+    # if (len(solutions) == 0
+    #     and len(programs) == 0
+    #     and len(transitions) == 0
+    #     and public_balance_bytes is None
+    #     and bond_state_bytes is None
+    #     and unbond_state_bytes is None
+    #     and committee_state_bytes is None
+    #     and delegated_bytes is None
+    #     and puzzle_reward is None
+    #     and stake_reward is None
+    #     and transfer_in is None
+    #     and transfer_out is None
+    #     and fee is None
+    #     and program_name is None
+    # ):
+    #     return CJSONResponse({"error": "Address not found"}, status_code=404)
 
     if len(solutions) > 0:
         solution_count = await db.get_solution_count_by_address(address)

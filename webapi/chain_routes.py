@@ -7,7 +7,7 @@ import aleo_explorer_rust
 from starlette.requests import Request
 
 from aleo_types import u64, DeployTransaction, ExecuteTransaction, FeeTransaction, RejectedDeploy, RejectedExecute, Fee, \
-    FinalizeOperation, UpdateKeyValue, RemoveKeyValue, Value, Plaintext
+    FinalizeOperation, UpdateKeyValue, RemoveKeyValue, Value, Plaintext, Address
 from aleo_types.cached import cached_get_mapping_id, cached_get_key_id
 from aleo_types.vm_block import AcceptedDeploy, AcceptedExecute
 from db import Database
@@ -526,6 +526,11 @@ async def search_route(request: Request):
     if query.startswith("aleo1"):
         if len(query) < 8:
             return CJSONResponse({"error": "Query too short"}, status_code=400)
+        try:
+            Address.loads(query)
+            return CJSONResponse({"type": "addresses", "addresses": [query], "too_many": too_many})
+        except ValueError:
+            pass
         addresses = await db.search_address(query)
         if len(addresses) > 50:
             too_many = True
