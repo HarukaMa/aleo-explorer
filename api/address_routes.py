@@ -4,6 +4,8 @@ from typing import cast
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from aleo_types import Literal, Address
+from aleo_types.cached import cached_get_key_id
 from aleo_types.vm_block import LiteralPlaintext, StructPlaintext, Value, PlaintextValue
 from api.utils import parse_history_params
 from db import Database
@@ -23,7 +25,14 @@ async def address_staking_route(request: Request):
         return parse_result
     height, _, block_timestamp = parse_result
 
-    value_bytes, _ = await db.get_mapping_value_at_height("credits.aleo", "bonded", address, height)
+    value = LiteralPlaintext(
+        literal=Literal(
+            type_=Literal.Type.Address,
+            primitive=Address.loads(address),
+        )
+    )
+    key_id = cached_get_key_id("credits.aleo", "bonded", value.dump())
+    value_bytes, _ = await db.get_mapping_value_at_height("credits.aleo", "bonded", key_id, height)
     if value_bytes is None:
         return JSONResponse(None)
     value = cast(PlaintextValue, Value.load(BytesIO(value_bytes)))
@@ -53,7 +62,14 @@ async def address_delegated_route(request: Request):
         return parse_result
     height, _, block_timestamp = parse_result
 
-    value_bytes, _ = await db.get_mapping_value_at_height("credits.aleo", "delegated", address, height)
+    value = LiteralPlaintext(
+        literal=Literal(
+            type_=Literal.Type.Address,
+            primitive=Address.loads(address),
+        )
+    )
+    key_id = cached_get_key_id("credits.aleo", "delegated", value.dump())
+    value_bytes, _ = await db.get_mapping_value_at_height("credits.aleo", "delegated", key_id, height)
     if value_bytes is None:
         return JSONResponse(None)
     value = cast(PlaintextValue, Value.load(BytesIO(value_bytes)))
