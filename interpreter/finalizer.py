@@ -203,15 +203,22 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
                 })
 
             elif isinstance(c, RandChaChaCommand):
+                from node import Network
                 additional_seeds = list(map(lambda x: PlaintextValue(plaintext=load_plaintext_from_operand(x, registers, finalize_state)).dump(), c.operands))
+                if finalize_state.block_height >= Network.consensus_v3_height:
+                    rand_transition_index = 0
+                else:
+                    rand_transition_index = transition_index
                 chacha_seed = aleo_explorer_rust.chacha_random_seed(
                     finalize_state.random_seed,
-                    transitions[transition_index].dump(),
+                    transitions[rand_transition_index].dump(),
                     program.id.dump(),
                     function_name.dump(),
                     int(c.destination.locator),
                     c.destination_type.value,
                     additional_seeds,
+                    finalize_state.block_height >= Network.consensus_v3_height,
+                    transition_index,
                 )
                 primitive_type = c.destination_type.primitive_type
                 value = primitive_type.load(BytesIO(aleo_explorer_rust.chacha_random_value(chacha_seed, c.destination_type)))
