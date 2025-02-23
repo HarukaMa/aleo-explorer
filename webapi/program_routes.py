@@ -107,7 +107,7 @@ async def program_route(request: Request) -> CJSONResponse:
         "functions": functions,
         "source": source,
         "has_leo_source": has_leo_source,
-        "recent_calls": await db.get_program_calls(program_id, 0, 30),
+        "recent_calls": await db.get_program_calls(program_id, 0, 50),
         "similar_count": await db.get_program_similar_count(program_id),
         "address": address,
     }
