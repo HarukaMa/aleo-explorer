@@ -547,3 +547,13 @@ async def search_route(request: Request):
     else:
         return CJSONResponse({"error": "No results found"}, status_code=404)
 
+@public_cache_seconds(5)
+async def solution_route(request: Request):
+    db: Database = request.app.state.db
+    solution_id = request.path_params.get("id")
+    if solution_id is None:
+        return CJSONResponse({"error": "Missing solution id"}, status_code=400)
+    height = await db.get_solution_block_height(solution_id)
+    if height is None:
+        return CJSONResponse({"error": "Solution not found"}, status_code=404)
+    return CJSONResponse(height)

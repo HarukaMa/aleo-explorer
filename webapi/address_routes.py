@@ -6,6 +6,7 @@ from starlette.requests import Request
 from aleo_types import LiteralPlaintext, Literal, Address, PlaintextValue, Value, Int, StructPlaintext, u64
 from aleo_types.cached import cached_get_key_id
 from db import Database
+from util import arc0137
 from webapi.utils import CJSONResponse, public_cache_seconds
 from webui.classes import UIAddress
 
@@ -15,7 +16,7 @@ async def address_route(request: Request) -> CJSONResponse:
     db: Database = request.app.state.db
     address = request.path_params["address"]
     if not address:
-        return CJSONResponse({"error": "Address not found"}, status_code=404)
+        return CJSONResponse({"error": "Address not provided"}, status_code=400)
     try:
         Address.loads(address)
     except ValueError:
@@ -211,3 +212,15 @@ async def address_route(request: Request) -> CJSONResponse:
     }
     result["resolved_addresses"] = await UIAddress.resolve_recursive_detached(result, db, {})
     return CJSONResponse(result)
+
+@public_cache_seconds(60)
+async def ans_route(request: Request) -> CJSONResponse:
+    db: Database = request.app.state.db
+    name = request.path_params["name"]
+    if not name:
+        return CJSONResponse({"error": "Name not provided"}, status_code=400)
+
+    address = await arc0137.get_address_from_domain(db, name)
+    if address is None:
+        return CJSONResponse({"error": "Name not found"}, status_code=404)
+    return CJSONResponse(address)

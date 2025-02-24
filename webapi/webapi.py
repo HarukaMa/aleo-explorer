@@ -17,10 +17,10 @@ from middleware.asgi_logger import AccessLoggerMiddleware
 from middleware.auth import AuthMiddleware
 from middleware.server_timing import ServerTimingMiddleware
 from util.set_proc_title import set_proc_title
-from .address_routes import address_route
+from .address_routes import address_route, ans_route
 from .chain_routes import blocks_route, get_summary, recent_blocks_route, index_update_route, block_route, search_route, \
     transaction_route, \
-    validators_route, transition_route
+    validators_route, transition_route, solution_route
 from .error_routes import bad_request, not_found, internal_error
 from .program_routes import programs_route, program_route
 from .utils import public_cache_seconds, out_of_sync_check, CJSONResponse
@@ -67,12 +67,14 @@ routes = [
     Route("/validators", validators_route),
     Route("/transaction/{id}", transaction_route),
     Route("/transition/{id}", transition_route),
+    Route("/solution/{id}", solution_route),
     Route("/search", search_route),
 
     Route("/programs", programs_route),
     Route("/program/{id}", program_route),
 
     Route("/address/{address}", address_route),
+    Route("/ans/{name}", ans_route),
 ]
 
 exc_handlers = {
