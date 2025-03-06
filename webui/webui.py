@@ -1,9 +1,7 @@
 import asyncio
 import logging
 import multiprocessing
-import os
 
-import aiohttp
 import uvicorn
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
@@ -178,9 +176,6 @@ async def startup():
     await db.connect()
     # noinspection PyUnresolvedReferences
     app.state.db = db
-    # noinspection PyUnresolvedReferences
-    app.state.lns.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4133")), None)
-    app.state.lns.start_listener()
     app.state.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=1))
     set_proc_title("aleo-explorer: webui")
 
@@ -209,8 +204,6 @@ async def run():
     )
     logging.getLogger("uvicorn.access").handlers = []
     server = UvicornServer(config=config)
-    # noinspection PyUnresolvedReferences
-    app.state.lns = LightNodeState()
 
     server.start()
     while True:

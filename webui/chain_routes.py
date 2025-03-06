@@ -1,9 +1,8 @@
-import copy
-import functools
-from collections import OrderedDict
+import os
 from io import BytesIO
 from typing import Any, cast, Optional, ParamSpec, TypeVar, Callable, Awaitable
 
+import aiohttp
 import aleo_explorer_rust
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
@@ -20,13 +19,12 @@ from aleo_types import u32, Transition, ExecuteTransaction, PrivateTransitionInp
     NodeType, FeeComponent, Fee, Option, Address
 from aleo_types.cached import cached_get_key_id, cached_get_mapping_id
 from db import Database
-from node.light_node import LightNodeState
 from util import arc0021
 from util.global_cache import get_program
 from util.typing_exc import Unreachable
 from .classes import UIAddress
 from .template import htmx_template
-from .utils import function_signature, out_of_sync_check, function_definition, get_relative_time
+from .utils import function_signature, out_of_sync_check, function_definition
 
 try:
     from line_profiler import profile
@@ -966,73 +964,22 @@ async def solution_route(request: Request):
 
 @htmx_template("nodes.jinja2")
 async def nodes_route(request: Request):
-    lns: LightNodeState = request.app.state.lns
-    lns.cleanup()
-    nodes = lns.states
-    data: dict[str, dict[str, Any]] = {}
-    for k, v in nodes.items():
-        if k.startswith("127.0.0.1"):
-            continue
-        data[k] = copy.deepcopy(v)
-        data[k]["last_ping"] = get_relative_time(v["last_ping"])
-    validators = 0
-    clients = 0
-    provers = 0
-    unknowns = 0
-    connected = 0
-    def sort_cmp(a: tuple[str, dict[str, Any]], b: tuple[str, dict[str, Any]]) -> int:
-        # sort by: height, address, node type, ip address
-        a_height = a[1].get("height", None)
-        b_height = b[1].get("height", None)
-        if a_height is not None and b_height is not None:
-            return int(b_height) - int(a_height)
-        if a_height is None and b_height is not None:
-            return 1
-        if a_height is not None and b_height is None:
-            return -1
-        a_address = a[1].get("address", None)
-        b_address = b[1].get("address", None)
-        if a_address is not None and b_address is not None:
-            if a_address == b_address:
-                return 0
-            return 1 if a_address > b_address else -1
-        if a_address is None and b_address is not None:
-            return 1
-        if a_address is not None and b_address is None:
-            return -1
-        a_type = a[1].get("node_type", None)
-        b_type = b[1].get("node_type", None)
-        if a_type is None and b_type is not None:
-            return 1
-        if a_type is not None and b_type is None:
-            return -1
-        if a_type == b_type:
-            if a[0] == b[0]:
-                return 0
-            return 1 if a[0] > b[0] else -1
-        return a_type.value - b_type.value
-
-    res: OrderedDict[str, dict[str, Any]] = OrderedDict(sorted(data.items(), key=functools.cmp_to_key(sort_cmp)))
-    for node in res.values():
-        node_type = node.get("node_type", None)
-        if node_type is None:
-            unknowns += 1
-        elif node_type == NodeType.Validator:
-            validators += 1
-        elif node_type == NodeType.Client:
-            clients += 1
-        elif node_type == NodeType.Prover:
-            provers += 1
-        if node.get("direction", "") != "disconnected":
-            connected += 1
-    ctx = {
-        "nodes": res,
-        "validators": validators,
-        "clients": clients,
-        "provers": provers,
-        "unknowns": unknowns,
-        "connected": connected,
-    }
+    host = os.environ.get("HOST", "127.0.0.1")
+    port = int(os.environ.get("WEBAPI_PORT", 8002));
+    session = aiohttp.ClientSession(headers={
+        "Authorization": "Token " + os.environ.get("WEBAPI_TOKEN", "token"),
+    })
+    try:
+        async with session.get(f"http://{host}:{port}/nodes") as response:
+            ctx = await response.json()
+            ctx["nodes"] = dict(ctx["nodes"])
+        for node in ctx["nodes"].values():
+            if (node_type := node.get("node_type", None)) is not None:
+                node["node_type"] = NodeType(node_type)
+    except:
+        from traceback import print_exc
+        print_exc()
+        ctx = {}
     return ctx, {'Cache-Control': 'no-cache'}
 
 

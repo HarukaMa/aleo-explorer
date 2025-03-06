@@ -16,11 +16,12 @@ from db import Database
 from middleware.asgi_logger import AccessLoggerMiddleware
 from middleware.auth import AuthMiddleware
 from middleware.server_timing import ServerTimingMiddleware
+from node.light_node import LightNodeState
 from util.set_proc_title import set_proc_title
 from .address_routes import address_route, ans_route
 from .chain_routes import blocks_route, get_summary, recent_blocks_route, index_update_route, block_route, search_route, \
     transaction_route, \
-    validators_route, transition_route, solution_route
+    validators_route, transition_route, solution_route, nodes_route
 from .error_routes import bad_request, not_found, internal_error
 from .program_routes import programs_route, program_route
 from .utils import public_cache_seconds, out_of_sync_check, CJSONResponse
@@ -69,6 +70,7 @@ routes = [
     Route("/transition/{id}", transition_route),
     Route("/solution/{id}", solution_route),
     Route("/search", search_route),
+    Route("/nodes", nodes_route),
 
     Route("/programs", programs_route),
     Route("/program/{id}", program_route),
@@ -94,7 +96,8 @@ async def startup():
     # noinspection PyUnresolvedReferences
     app.state.db = db
     # noinspection PyUnresolvedReferences
-    # app.state.lns.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4130")), None)
+    app.state.lns.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4133")), None)
+    app.state.lns.start_listener()
     app.state.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=1))
     set_proc_title("aleo-explorer: webapi")
 
@@ -122,7 +125,7 @@ async def run():
     logging.getLogger("uvicorn.access").handlers = []
     server = UvicornServer(config=config)
     # noinspection PyUnresolvedReferences
-    # app.state.lns = LightNodeState()
+    app.state.lns = LightNodeState()
 
     server.start()
     while True:

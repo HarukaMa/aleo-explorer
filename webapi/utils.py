@@ -98,6 +98,26 @@ class CJSONResponse(Response):
     def render(self, content: Any):
         return json.dumps(content, cls=CustomEncoder).encode("utf-8")
 
+
+def get_relative_time(timestamp: int):
+    now = time.time()
+    delta = int(now - timestamp)
+    if delta == 0:
+        return "just now"
+    elif delta == 1:
+        return "1 second ago"
+    elif delta < 60:
+        return f"{int(delta)} seconds ago"
+    delta = delta // 60
+    if delta == 1:
+        return "1 minute ago"
+    elif delta < 60:
+        return f"{int(delta)} minutes ago"
+    delta = delta // 60
+    if delta == 1:
+        return "1 hour ago"
+    return f"{int(delta)} hours ago"
+
 async def get_remote_height(session: aiohttp.ClientSession, rpc_root: str) -> str:
     try:
         async with session.get(f"{rpc_root}/{os.environ.get('NETWORK')}/block/height/latest") as resp:
