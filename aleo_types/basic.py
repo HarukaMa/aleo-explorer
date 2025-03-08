@@ -580,3 +580,11 @@ class SocketAddr(Serializable):
 
     def ip_port(self):
         return str(self.ip), self.port
+
+class Unit(Serializable):
+    def dump(self) -> bytes:
+        return b""
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        return cls()

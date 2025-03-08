@@ -3868,3 +3868,92 @@ class Block(Serializable, JSONSerialize):
         for fee in fees:
             total += fee.burnt + fee.storage_cost + fee.namespace_cost + sum(fee.finalize_costs)
         return total
+
+class ConfirmedTxType(EnumBaseSerialize, RustEnum, Serializable):
+
+    class Type(IntEnumu8):
+        AcceptedDeploy = 0
+        AcceptedExecute = 1
+        RejectedDeploy = 2
+        RejectedExecute = 3
+
+    type: Type
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        type_ = cls.Type.load(data)
+        if type_ == cls.Type.AcceptedDeploy:
+            return AcceptedDeployType.load(data)
+        elif type_ == cls.Type.AcceptedExecute:
+            return AcceptedExecuteType.load(data)
+        elif type_ == cls.Type.RejectedDeploy:
+            return RejectedDeployType.load(data)
+        elif type_ == cls.Type.RejectedExecute:
+            return RejectedExecuteType.load(data)
+        else:
+            raise ValueError("incorrect type")
+
+class AcceptedDeployType(ConfirmedTxType):
+    type = ConfirmedTxType.Type.AcceptedDeploy
+
+    def __init__(self, *, index: u32):
+        self.index = index
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.index.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        index = u32.load(data)
+        return cls(index=index)
+
+class AcceptedExecuteType(ConfirmedTxType):
+    type = ConfirmedTxType.Type.AcceptedExecute
+
+    def __init__(self, *, index: u32):
+        self.index = index
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.index.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        index = u32.load(data)
+        return cls(index=index)
+
+class RejectedDeployType(ConfirmedTxType):
+    type = ConfirmedTxType.Type.RejectedDeploy
+
+    def __init__(self, *, index: u32, rejected: Rejected):
+        self.index = index
+        self.rejected = rejected
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.index.dump() + self.rejected.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        index = u32.load(data)
+        rejected = Rejected.load(data)
+        return cls(index=index, rejected=rejected)
+
+class RejectedExecuteType(ConfirmedTxType):
+    type = ConfirmedTxType.Type.RejectedExecute
+
+    def __init__(self, *, index: u32, rejected: Rejected):
+        self.index = index
+        self.rejected = rejected
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.index.dump() + self.rejected.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        index = u32.load(data)
+        rejected = Rejected.load(data)
+        return cls(index=index, rejected=rejected)
+
+class TransactionType(IntEnumu32):
+    Deploy = 0
+    Execute = 1
+    Fee = 2

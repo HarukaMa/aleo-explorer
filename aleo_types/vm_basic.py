@@ -139,10 +139,13 @@ class Address(AleoObject, Cast):
         return self._data == other._data
 
 
-class Field(Serializable, JSONSerialize, Double, Sub, Square, Div, Sqrt, Compare, Pow, Inv, Neg, Cast):
+class Field(Sized, Serializable, JSONSerialize, Double, Sub, Square, Div, Sqrt, Compare, Pow, Inv, Neg, Cast):
     # Fr, Fp256
     # Just store as a large integer now
     # Hopefully this will not be used later...
+
+    size = 32
+
     def __init__(self, data: int):
         self.data = data
 
@@ -224,8 +227,11 @@ class Field(Serializable, JSONSerialize, Double, Sub, Square, Div, Sqrt, Compare
         return destination_type.primitive_type.load(BytesIO(aleo_explorer_rust.cast(str(self), LiteralType.Field, destination_type, lossy)))
 
 
-class Group(Serializable, JSONSerialize, Add, Sub, Mul, Neg, Cast):
+class Group(Sized, Serializable, JSONSerialize, Add, Sub, Mul, Neg, Cast):
     # This is definitely wrong, but we are not using the internals
+
+    size = 32
+
     def __init__(self, data: int):
         self.data = data
 
@@ -280,8 +286,11 @@ class Group(Serializable, JSONSerialize, Add, Sub, Mul, Neg, Cast):
         return hash(self.data)
 
 
-class Scalar(Serializable, JSONSerialize, Add, Sub, Mul, Compare, Cast):
+class Scalar(Sized, Serializable, JSONSerialize, Add, Sub, Mul, Compare, Cast):
     # Could be wrong as well
+
+    size = 32
+
     def __init__(self, data: int):
         self.data = data
 

@@ -10,6 +10,7 @@ from interpreter.interpreter import init_builtin_program
 # from node.light_node import LightNodeState
 from node import Network
 from node import Node
+from rdb import RocksDB
 from webapi import webapi
 from webui import webui
 from .types import Request, Message, ExplorerRequest
@@ -85,11 +86,13 @@ class Explorer:
                 raise ValueError("no block in database")
             self.latest_block_hash = latest_block_hash
             print(f"latest height: {self.latest_height}")
-            self.node = Node(explorer_message=self.message, explorer_request=self.node_request)
-            await self.node.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4133")))
             _ = asyncio.create_task(webapi.run())
             _ = asyncio.create_task(webui.run())
             _ = asyncio.create_task(api.run())
+            if rocksdb_dir := os.environ.get("SYNC_ROCKSDB"):
+                await self.sync_from_rocksdb(rocksdb_dir, latest_height)
+            self.node = Node(explorer_message=self.message, explorer_request=self.node_request)
+            await self.node.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4133")))
             while True:
                 msg = await self.message_queue.get()
                 match msg.type:
@@ -180,3 +183,18 @@ class Explorer:
             except OSError as e:
                 print("Cannot remove clear_flag:", e)
             await self.db.clear_database()
+
+    async def sync_from_rocksdb(self, rocksdb_dir: str, latest_height: int):
+        try:
+            import rocksdbpy
+        except ImportError:
+            print("rocksdb-py not installed, cannot sync from rocksdb")
+            return
+
+        print("trying to sync from local rocksdb")
+        rdb = RocksDB(rocksdb_dir)
+
+        height = latest_height + 1
+        while block := rdb.get_block(height):
+            await self.add_block(block)
+            height += 1
