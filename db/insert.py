@@ -106,6 +106,8 @@ class DummyBlockTimer:
 
 GlobalBlockTimer: BlockTimer | DummyBlockTimer = BlockTimer() if os.getenv("BLOCK_TIMING") else DummyBlockTimer()
 
+canary_stake_reward_cache: dict[Address, int] = defaultdict(int)
+
 class DatabaseInsert(DatabaseBase):
 
     @staticmethod
@@ -1313,11 +1315,28 @@ class DatabaseInsert(DatabaseBase):
                 delegated = self._next_delegated(stakers)
                 committee_members = self._next_committee_members(committee_members, stakers)
 
-                await cur.executemany(
-                    "INSERT INTO address_stake_reward (address, stake_reward) VALUES (%s, %s) "
-                    "ON CONFLICT (address) DO UPDATE SET stake_reward = address_stake_reward.stake_reward + EXCLUDED.stake_reward",
-                    [(str(address), amount) for address, amount in stake_rewards.items()]
-                )
+                from node import Network
+                if Network.network_id == 2:
+                    if not canary_stake_reward_cache:
+                        await cur.execute("SELECT * FROM address_stake_reward")
+                        for row in await cur.fetchall():
+                            canary_stake_reward_cache[Address.loads(row["address"])] = row["stake_reward"]
+                    for address, amount in stake_rewards.items():
+                        canary_stake_reward_cache[address] += amount
+                    if height % 1000 != 0:
+                        await self._set_db_dirty(True)
+                    else:
+                        await cur.executemany(
+                            "INSERT INTO address_stake_reward (address, stake_reward) VALUES (%s, %s) "
+                            "ON CONFLICT (address) DO UPDATE SET stake_reward = EXCLUDED.stake_reward",
+                            [(str(address), amount) for address, amount in canary_stake_reward_cache.items()]
+                        )
+                else:
+                    await cur.executemany(
+                        "INSERT INTO address_stake_reward (address, stake_reward) VALUES (%s, %s) "
+                        "ON CONFLICT (address) DO UPDATE SET stake_reward = address_stake_reward.stake_reward + EXCLUDED.stake_reward",
+                        [(str(address), amount) for address, amount in stake_rewards.items()]
+                    )
 
                 total_stake_reward = sum(stake_rewards.values())
                 supply_tracker.mint(total_stake_reward)
