@@ -912,11 +912,16 @@ class DatabaseInsert(DatabaseBase):
                 "value": v["value"].dump(),
             }
 
-        await cur.executemany(
-            "INSERT INTO mapping_bonded_value (key_id, key, value) VALUES (%s, %s, %s) "
-            "ON CONFLICT (key_id) DO UPDATE SET value = EXCLUDED.value",
-            [(k, v["key"], v["value"]) for k, v in data2.items()]
-        )
+        from node import Network
+        if Network.network_id == 2 and height % 1000 != 0:
+            await self._set_db_dirty(True)
+        else:
+            await cur.executemany(
+                "INSERT INTO mapping_bonded_value (key_id, key, value) VALUES (%s, %s, %s) "
+                "ON CONFLICT (key_id) DO UPDATE SET value = EXCLUDED.value",
+                [(k, v["key"], v["value"]) for k, v in data2.items()]
+            )
+            await self._set_db_dirty(False)
 
         MappingCache()[delegated_mapping_id].clear()
         delegated_mapping: dict[str, dict[str, str]] = {}
@@ -1373,13 +1378,17 @@ class DatabaseInsert(DatabaseBase):
                 from interpreter.interpreter import execute_operations
                 await execute_operations(cur, operations)
 
+    async def _set_db_dirty(self, dirty: bool):
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                # noinspection SqlWithoutWhere
+                await cur.execute("UPDATE _dirty_flag SET dirty = %s", (dirty,))
+
     @profile
     async def _save_block(self, block: Block):
         try:
             async with self.pool.connection() as conn:
                 async with conn.cursor() as cur:
-                    # noinspection SqlWithoutWhere
-                    await cur.execute("UPDATE _dirty_flag SET dirty = true")
 
                     GlobalBlockTimer.start_block()
                     if block.height != 0:
@@ -1857,7 +1866,6 @@ class DatabaseInsert(DatabaseBase):
                         await self.save_history(cur, block.height)
                     GlobalBlockTimer.end_section("history")
 
-                    await cur.execute("UPDATE _dirty_flag SET dirty = false")
                     GlobalBlockTimer.end_block()
                     if GlobalBlockTimer.enabled:
                         print(GlobalBlockTimer)
