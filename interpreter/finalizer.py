@@ -206,6 +206,10 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
                 mapping_id = Field.loads(cached_get_mapping_id(str(program.id), str(c.mapping)))
                 key = load_plaintext_from_operand(c.key, registers, finalize_state)
                 key_id = Field.loads(cached_get_key_id(str(program.id), str(c.mapping), key.dump()))
+                if await mapping_cache[mapping_id][key_id] is None:
+                    print(f"Key {key} not found in mapping {c.mapping}")
+                    pc += 1
+                    continue
                 mapping_cache[mapping_id][key_id] = None
                 if debug:
                     print(f"del {c.mapping}[{key}]")
