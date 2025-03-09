@@ -878,7 +878,6 @@ class DatabaseInsert(DatabaseBase):
         )
 
         MappingCache()[bonded_mapping_id].clear()
-        bonded_mapping: dict[str, dict[str, str]] = {}
         for address, (validator, amount) in stakers.items():
             key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=address))
             key_id = Field.loads(cached_get_key_id("credits.aleo", "bonded", key.dump()))
@@ -895,24 +894,11 @@ class DatabaseInsert(DatabaseBase):
                     members=Vec[Tuple[Identifier, Plaintext], u8]([k, v])
                 )
             )
-            bonded_mapping[str(key_id)] = {
-                "key": key.dump().hex(),
-                "value": value.dump().hex(),
-            }
             MappingCache()[bonded_mapping_id][key_id] = {
                 "key": key,
                 "value": value,
             }
 
-
-        data2: dict[str, dict[str, bytes]] = {}
-        for k, v in MappingCache()[bonded_mapping_id]:
-            if v is None:
-                continue
-            data2[cached_get_key_id("credits.aleo", "bonded", v["key"].dump())] = {
-                "key": v["key"].dump(),
-                "value": v["value"].dump(),
-            }
 
         from node import Network
         if Network.network_id == 2 and height % 1000 != 0:
@@ -921,7 +907,7 @@ class DatabaseInsert(DatabaseBase):
             await cur.executemany(
                 "INSERT INTO mapping_bonded_value (key_id, key, value) VALUES (%s, %s, %s) "
                 "ON CONFLICT (key_id) DO UPDATE SET value = EXCLUDED.value",
-                [(k, v["key"], v["value"]) for k, v in data2.items()]
+                [(str(k), v["key"].dump(), v["value"].dump()) for k, v in MappingCache()[bonded_mapping_id] if v is not None]
             )
             await self._set_db_dirty(False)
 
