@@ -234,6 +234,8 @@ class DatabaseUtil(DatabaseBase):
                         "DELETE FROM committee_history WHERE height > %s",
                         (height,)
                     )
+                    # noinspection SqlWithoutWhere
+                    await cur.execute("UPDATE _dirty_flag SET dirty = FALSE")
 
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
