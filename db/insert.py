@@ -110,8 +110,8 @@ class DatabaseInsert(DatabaseBase):
 
     @staticmethod
     async def _insert_future(cur: psycopg.AsyncCursor[DictRow], future: Future,
-                             transition_output_future_db_id: Optional[int] = None, argument_db_id: Optional[int] = None,):
-        GlobalBlockTimer.start_section(f"        insert future {future.program_id} {future.function_name}")
+                             transition_output_future_db_id: Optional[int] = None, argument_db_id: Optional[int] = None):
+        GlobalBlockTimer.start_section(f"          insert future {transition_output_future_db_id} {argument_db_id} {future.program_id} {future.function_name}")
         if transition_output_future_db_id:
             await cur.execute(
                 "INSERT INTO future (type, transition_output_future_id, program_id, function_name) "
@@ -165,7 +165,8 @@ class DatabaseInsert(DatabaseBase):
             transition_db_id = res["id"]
         else:
             raise ValueError("transition_output_db_id or argument_db_id must be set")
-        for argument in future.arguments:
+        for index, argument in enumerate(future.arguments):
+            GlobalBlockTimer.start_section(f"            insert future input {transition_output_future_db_id} {argument_db_id} {future.program_id} {future.function_name} {index}")
             if isinstance(argument, PlaintextArgument):
                 plaintext = argument.plaintext
                 await cur.execute(
@@ -197,7 +198,8 @@ class DatabaseInsert(DatabaseBase):
                 await DatabaseInsert._insert_future(cur, argument.future, argument_db_id=argument_db_id)
             else:
                 raise NotImplementedError
-        GlobalBlockTimer.end_section(f"        insert future {future.program_id} {future.function_name}")
+            GlobalBlockTimer.end_section(f"            insert future input {transition_output_future_db_id} {argument_db_id} {future.program_id} {future.function_name} {index}")
+        GlobalBlockTimer.end_section(f"          insert future {transition_output_future_db_id} {argument_db_id} {future.program_id} {future.function_name}")
 
     async def _update_address_stats(self, cur: psycopg.AsyncCursor[DictRow], height: int, transaction: Transaction):
 
