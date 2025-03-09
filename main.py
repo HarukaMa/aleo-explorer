@@ -1,6 +1,7 @@
 import asyncio
 import decimal
 import gc
+import platform
 
 import nest_asyncio
 from dotenv import load_dotenv
@@ -12,17 +13,18 @@ nest_asyncio.apply()
 load_dotenv()
 
 async def main():
-    # https://mkennedy.codes/posts/python-gc-settings-change-this-and-make-your-app-go-20pc-faster/
-    # Clean up what might be garbage so far.
-    gc.collect(2)
-    # Exclude current items from future GC.
-    gc.freeze()
+    if platform.python_implementation() == "CPython":
+        # https://mkennedy.codes/posts/python-gc-settings-change-this-and-make-your-app-go-20pc-faster/
+        # Clean up what might be garbage so far.
+        gc.collect(2)
+        # Exclude current items from future GC.
+        gc.freeze()
 
-    allocs, gen1, gen2 = gc.get_threshold()
-    allocs = 200_000  # Start the GC sequence every 200K not 700 allocations.
-    gen1 = gen1 * 5
-    gen2 = gen2 * 5
-    gc.set_threshold(allocs, gen1, gen2)
+        allocs, gen1, gen2 = gc.get_threshold()
+        allocs = 200_000  # Start the GC sequence every 200K not 700 allocations.
+        gen1 = gen1 * 5
+        gen2 = gen2 * 5
+        gc.set_threshold(allocs, gen1, gen2)
 
     set_proc_title("aleo-explorer: main")
     decimal.getcontext().prec = 80

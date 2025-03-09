@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import multiprocessing
 import os
 from typing import Any
 
@@ -28,18 +27,10 @@ from .utils import public_cache_seconds, out_of_sync_check, CJSONResponse
 
 load_dotenv()
 
-class UvicornServer(multiprocessing.Process):
+class UvicornServer(uvicorn.Server):
 
-    def __init__(self, config: uvicorn.Config):
-        super().__init__()
-        self.server = uvicorn.Server(config=config)
-        self.config = config
-
-    def stop(self):
-        self.terminate()
-
-    def run(self, *args: Any, **kwargs: Any):
-        self.server.run()
+    def install_signal_handlers(self):
+        pass
 
 async def index_route(request: Request):
     return CJSONResponse({"hello": "world"})
@@ -109,7 +100,7 @@ app = Starlette(
     on_startup=[startup],
     exception_handlers=exc_handlers,
     middleware=[
-        Middleware(AccessLoggerMiddleware, format=log_format),
+        Middleware(AccessLoggerMiddleware, format=log_format, logger_name="webapi"),
         Middleware(ServerTimingMiddleware),
         Middleware(AuthMiddleware, token=os.environ.get("WEBAPI_TOKEN", "")),
     ]
@@ -127,7 +118,7 @@ async def run():
     # noinspection PyUnresolvedReferences
     app.state.lns = LightNodeState()
 
-    server.start()
+    await server.serve()
     while True:
         await asyncio.sleep(3600)
 

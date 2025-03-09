@@ -27,11 +27,12 @@ class AccessLoggerMiddleware:
         app: ASGIApp,
         format: str | None = None,
         logger: logging.Logger | None = None,
+        logger_name: str | None = None,
     ) -> None:
         self.app = app
         self.format = format or self.DEFAULT_FORMAT
         if logger is None:
-            self.logger = logging.getLogger("access")
+            self.logger = logging.getLogger(logger_name or "access")
             self.logger.setLevel(logging.INFO)
             handler = logging.StreamHandler(sys.stdout)
             handler.setLevel(logging.INFO)

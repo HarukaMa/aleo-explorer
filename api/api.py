@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import multiprocessing
 import os
 import time
 from typing import Any
@@ -28,18 +27,10 @@ from .solution_routes import solution_by_id_route
 from .utils import get_remote_height
 
 
-class UvicornServer(multiprocessing.Process):
+class UvicornServer(uvicorn.Server):
 
-    def __init__(self, config: uvicorn.Config):
-        super().__init__()
-        self.server = uvicorn.Server(config=config)
-        self.config = config
-
-    def stop(self):
-        self.terminate()
-
-    def run(self, *args: Any, **kwargs: Any):
-        self.server.run()
+    def install_signal_handlers(self):
+        pass
 
 async def status_route(request: Request):
     session = request.app.state.session
@@ -99,7 +90,7 @@ app = Starlette(
     routes=routes,
     on_startup=[startup],
     middleware=[
-        Middleware(AccessLoggerMiddleware, format=log_format),
+        Middleware(AccessLoggerMiddleware, format=log_format, logger_name="api"),
         Middleware(CORSMiddleware, allow_origins=['*']),
         Middleware(ServerTimingMiddleware),
         Middleware(APIQuotaMiddleware),
@@ -118,6 +109,6 @@ async def run():
     logging.getLogger("uvicorn.access").handlers = []
     server = UvicornServer(config=config)
 
-    server.start()
+    await server.serve()
     while True:
         await asyncio.sleep(3600)

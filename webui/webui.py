@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import multiprocessing
 
 import uvicorn
 from starlette.applications import Starlette
@@ -21,18 +20,10 @@ from .proving_routes import *
 from .utils import out_of_sync_check
 
 
-class UvicornServer(multiprocessing.Process):
+class UvicornServer(uvicorn.Server):
 
-    def __init__(self, config: uvicorn.Config):
-        super().__init__()
-        self.server = uvicorn.Server(config=config)
-        self.config = config
-
-    def stop(self):
-        self.terminate()
-
-    def run(self, *args: Any, **kwargs: Any):
-        self.server.run()
+    def install_signal_handlers(self):
+        pass
 
 
 @htmx_template("index.jinja2")
@@ -187,7 +178,7 @@ app = Starlette(
     on_startup=[startup],
     exception_handlers=exc_handlers,
     middleware=[
-        Middleware(AccessLoggerMiddleware, format=log_format),
+        Middleware(AccessLoggerMiddleware, format=log_format, logger_name="webui"),
         Middleware(HtmxMiddleware),
         Middleware(MinifyMiddleware),
         Middleware(ServerTimingMiddleware),
@@ -205,7 +196,7 @@ async def run():
     logging.getLogger("uvicorn.access").handlers = []
     server = UvicornServer(config=config)
 
-    server.start()
+    await server.serve()
     while True:
         await asyncio.sleep(3600)
 
