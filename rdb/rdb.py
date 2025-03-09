@@ -1,3 +1,4 @@
+import os
 from enum import auto, IntEnum
 from io import BytesIO, SEEK_CUR
 from types import GenericAlias
@@ -346,10 +347,16 @@ TransitionSCMMap = DataMap[TransitionID, Field](DataID.TransitionSCMMap)
 
 class RocksDB:
     def __init__(self, path: str):
+        from node import Network
         self.path = path
         opts = rocksdbpy.Option()
         opts.create_if_missing(False)
-        self.rdb = rocksdbpy.open_for_readonly(self.path, opts, False)
+        secondary_dir_name = f"ledger-{Network.network_id}-secondary"
+        os.makedirs(secondary_dir_name, exist_ok=True)
+        self.rdb = rocksdbpy.open_as_secondary(self.path, secondary_dir_name, opts)
+
+    def catch_up(self):
+        self.rdb.try_catch_up_with_primary()
 
     def get_block(self, block_height: int):
         block_hash = self.get_block_hash_from_height(block_height)

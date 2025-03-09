@@ -13,7 +13,7 @@ from aleo_types import *
 from aleo_types.cached import cached_get_key_id, cached_get_mapping_id, cached_compute_key_to_address
 from disasm.utils import value_type_to_mode_type_str, plaintext_type_to_str
 from explorer.types import Message as ExplorerMessage
-from util.global_cache import global_mapping_cache
+from util.global_cache import MappingCache
 from .base import DatabaseBase, profile
 from .util import DatabaseUtil
 
@@ -832,8 +832,7 @@ class DatabaseInsert(DatabaseBase):
         committee_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "committee"))
         bonded_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "bonded"))
         delegated_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "delegated"))
-
-        global_mapping_cache[committee_mapping_id] = {}
+        MappingCache()[committee_mapping_id].clear()
         committee_mapping: dict[str, dict[str, str]] = {}
         for address, (_, is_open, commission) in committee_members.items():
             key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=address))
@@ -856,13 +855,15 @@ class DatabaseInsert(DatabaseBase):
                 "key": key.dump().hex(),
                 "value": value.dump().hex(),
             }
-            global_mapping_cache[committee_mapping_id][key_id] = {
+            MappingCache()[committee_mapping_id][key_id] = {
                 "key": key,
                 "value": value,
             }
 
         data: dict[str, dict[str, str]] = {}
-        for k, v in global_mapping_cache[committee_mapping_id].items():
+        for k, v in MappingCache()[committee_mapping_id]:
+            if v is None:
+                continue
             data[cached_get_key_id("credits.aleo", "committee", v["key"].dump())] = {
                 "key": v["key"].dump().hex(),
                 "value": v["value"].dump().hex()
@@ -872,7 +873,7 @@ class DatabaseInsert(DatabaseBase):
             (height, json.dumps(data))
         )
 
-        global_mapping_cache[bonded_mapping_id] = {}
+        MappingCache()[bonded_mapping_id].clear()
         bonded_mapping: dict[str, dict[str, str]] = {}
         for address, (validator, amount) in stakers.items():
             key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=address))
@@ -894,15 +895,17 @@ class DatabaseInsert(DatabaseBase):
                 "key": key.dump().hex(),
                 "value": value.dump().hex(),
             }
-            global_mapping_cache[bonded_mapping_id][key_id] = {
+            MappingCache()[bonded_mapping_id][key_id] = {
                 "key": key,
                 "value": value,
             }
 
 
-        data = {}
-        for k, v in global_mapping_cache[bonded_mapping_id].items():
-            data[cached_get_key_id("credits.aleo", "bonded", v["key"].dump())] = {
+        data2: dict[str, dict[str, bytes]] = {}
+        for k, v in MappingCache()[bonded_mapping_id]:
+            if v is None:
+                continue
+            data2[cached_get_key_id("credits.aleo", "bonded", v["key"].dump())] = {
                 "key": v["key"].dump(),
                 "value": v["value"].dump(),
             }
@@ -910,10 +913,10 @@ class DatabaseInsert(DatabaseBase):
         await cur.executemany(
             "INSERT INTO mapping_bonded_value (key_id, key, value) VALUES (%s, %s, %s) "
             "ON CONFLICT (key_id) DO UPDATE SET value = EXCLUDED.value",
-            [(k, v["key"], v["value"]) for k, v in data.items()]
+            [(k, v["key"], v["value"]) for k, v in data2.items()]
         )
 
-        global_mapping_cache[delegated_mapping_id] = {}
+        MappingCache()[delegated_mapping_id].clear()
         delegated_mapping: dict[str, dict[str, str]] = {}
         for validator, amount in delegated.items():
             key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=validator))
@@ -923,13 +926,15 @@ class DatabaseInsert(DatabaseBase):
                 "key": key.dump().hex(),
                 "value": value.dump().hex(),
             }
-            global_mapping_cache[delegated_mapping_id][key_id] = {
+            MappingCache()[delegated_mapping_id][key_id] = {
                 "key": key,
                 "value": value,
             }
 
         data = {}
-        for k, v in global_mapping_cache[delegated_mapping_id].items():
+        for k, v in MappingCache()[delegated_mapping_id]:
+            if v is None:
+                continue
             data[cached_get_key_id("credits.aleo", "delegated", v["key"].dump())] = {
                 "key": v["key"].dump().hex(),
                 "value": v["value"].dump().hex()
@@ -968,18 +973,17 @@ class DatabaseInsert(DatabaseBase):
 
     async def _pre_ratify(self, cur: psycopg.AsyncCursor[dict[str, Any]], ratification: GenesisRatify,
                           supply_tracker: _SupplyTracker):
-        from interpreter.interpreter import global_mapping_cache
         committee = ratification.committee
         await DatabaseInsert._save_committee_history(cur, 0, committee)
 
         account_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "account"))
-        global_mapping_cache[account_mapping_id] = {}
+        MappingCache()[account_mapping_id].clear()
         bonded_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "bonded"))
-        global_mapping_cache[bonded_mapping_id] = {}
+        MappingCache()[bonded_mapping_id].clear()
         withdraw_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "withdraw"))
-        global_mapping_cache[withdraw_mapping_id] = {}
+        MappingCache()[withdraw_mapping_id].clear()
         metadata_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "metadata"))
-        global_mapping_cache[metadata_mapping_id] = {}
+        MappingCache()[metadata_mapping_id].clear()
 
         bonded_balances = ratification.bonded_balances
         stakers: dict[Address, tuple[Address, u64]] = {}
@@ -996,7 +1000,7 @@ class DatabaseInsert(DatabaseBase):
             key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=address))
             key_id = Field.loads(cached_get_key_id("credits.aleo", "account", key.dump()))
             value = PlaintextValue(plaintext=LiteralPlaintext(literal=Literal(type_=Literal.Type.U64, primitive=balance)))
-            global_mapping_cache[account_mapping_id][key_id] = {
+            MappingCache()[account_mapping_id][key_id] = {
                 "key": key,
                 "value": value,
             }
@@ -1018,7 +1022,7 @@ class DatabaseInsert(DatabaseBase):
             key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=staker))
             key_id = Field.loads(cached_get_key_id("credits.aleo", "withdraw", key.dump()))
             value = PlaintextValue(plaintext=LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=withdrawal)))
-            global_mapping_cache[withdraw_mapping_id][key_id] = {
+            MappingCache()[withdraw_mapping_id][key_id] = {
                 "key": key,
                 "value": value,
             }
@@ -1045,7 +1049,7 @@ class DatabaseInsert(DatabaseBase):
         )
         key_id = Field.loads(cached_get_key_id("credits.aleo", "metadata", key.dump()))
         value = PlaintextValue(plaintext=LiteralPlaintext(literal=Literal(type_=Literal.Type.U32, primitive=u32(len(committee_members)))))
-        global_mapping_cache[metadata_mapping_id][key_id] = {
+        MappingCache()[metadata_mapping_id][key_id] = {
             "key": key,
             "value": value,
         }
@@ -1070,7 +1074,7 @@ class DatabaseInsert(DatabaseBase):
         )
         key_id = Field.loads(cached_get_key_id("credits.aleo", "metadata", key.dump()))
         value = PlaintextValue(plaintext=LiteralPlaintext(literal=Literal(type_=Literal.Type.U32, primitive=u32(len(bonded_balances) - len(committee_members)))))
-        global_mapping_cache[metadata_mapping_id][key_id] = {
+        MappingCache()[metadata_mapping_id][key_id] = {
             "key": key,
             "value": value,
         }
@@ -1245,18 +1249,18 @@ class DatabaseInsert(DatabaseBase):
     @profile
     async def _post_ratify(self, cur: psycopg.AsyncCursor[dict[str, Any]], height: int, round_: int,
                            ratifications: list[Ratify], address_puzzle_rewards: dict[str, int], supply_tracker: _SupplyTracker):
-        from interpreter.interpreter import global_mapping_cache
 
         for ratification in ratifications:
             if isinstance(ratification, BlockRewardRatify):
 
                 mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "committee"))
-                if mapping_id in global_mapping_cache:
-                    data = global_mapping_cache[mapping_id]
+                if mapping_id in MappingCache():
                     committee: dict[Address, tuple[bool_, u8]] = {}
-                    for v in data.values():
+                    for _, v in MappingCache()[mapping_id]:
+                        if v is None:
+                            continue
                         key = cast(LiteralPlaintext, v["key"])
-                        value = v["value"]
+                        value = cast(PlaintextValue, v["value"])
                         plaintext = cast(StructPlaintext, value.plaintext)
                         is_open = cast(LiteralPlaintext, plaintext["is_open"])
                         commission = cast(LiteralPlaintext, plaintext["commission"])
@@ -1268,26 +1272,28 @@ class DatabaseInsert(DatabaseBase):
                     committee = await self._get_committee_mapping_unchecked(cur)
 
                 mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "delegated"))
-                if mapping_id in global_mapping_cache:
-                    data = global_mapping_cache[mapping_id]
+                if mapping_id in MappingCache():
                     delegated: dict[Address, u64] = {}
-                    for v in data.values():
+                    for _, v in MappingCache()[mapping_id]:
+                        if v is None:
+                            continue
                         key = cast(LiteralPlaintext, v["key"])
-                        value = v["value"]
+                        value = cast(PlaintextValue, v["value"])
                         plaintext = cast(LiteralPlaintext, value.plaintext)
                         delegated[cast(Address, key.literal.primitive)] = cast(u64, plaintext.literal.primitive)
                 else:
                     delegated = await self._get_delegated_mapping_unchecked(cur)
 
                 mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "bonded"))
-                if mapping_id in global_mapping_cache:
-                    data = global_mapping_cache[mapping_id]
+                if mapping_id in MappingCache():
                     stakers: dict[Address, tuple[Address, u64]] = {}
-                    for v in data.values():
+                    for _, v in MappingCache()[mapping_id]:
+                        if v is None:
+                            continue
                         key = cast(LiteralPlaintext, v["key"])
-                        value = v["value"]
+                        value = cast(PlaintextValue, v["value"])
                         address = cast(Address, key.literal.primitive)
-                        bond_state = cast(StructPlaintext, cast(PlaintextValue, value).plaintext)
+                        bond_state = cast(StructPlaintext, value.plaintext)
                         validator = cast(Address, cast(LiteralPlaintext, bond_state["validator"]).literal.primitive)
                         amount = cast(u64, cast(LiteralPlaintext, bond_state["microcredits"]).literal.primitive)
                         stakers[address] = validator, amount
@@ -1327,20 +1333,14 @@ class DatabaseInsert(DatabaseBase):
                     continue
                 account_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "account"))
 
-                if account_mapping_id not in global_mapping_cache:
-                    from interpreter.finalizer import mapping_cache_read
-                    global_mapping_cache[account_mapping_id] = await mapping_cache_read(cast("Database", self), "credits.aleo", "account")
-
-                current_balances: dict[Field, dict[str, Any]] = global_mapping_cache[account_mapping_id]
-
                 operations: list[dict[str, Any]] = []
                 for address, amount in address_puzzle_rewards.items():
                     key = LiteralPlaintext(literal=Literal(type_=Literal.Type.Address, primitive=Address.loads(address)))
                     key_id = Field.loads(cached_get_key_id("credits.aleo", "account", key.dump()))
-                    if key_id not in current_balances:
+                    current_balance_data = await MappingCache()[account_mapping_id][key_id]
+                    if current_balance_data is None:
                         current_balance = u64()
                     else:
-                        current_balance_data = current_balances[key_id]
                         value = current_balance_data["value"]
                         if not isinstance(value, PlaintextValue):
                             raise RuntimeError("invalid account value")
@@ -1350,7 +1350,7 @@ class DatabaseInsert(DatabaseBase):
                         current_balance = plaintext.literal.primitive
                     new_value = current_balance + u64(amount)
                     value = PlaintextValue(plaintext=LiteralPlaintext(literal=Literal(type_=Literal.Type.U64, primitive=new_value)))
-                    global_mapping_cache[account_mapping_id][key_id] = {
+                    MappingCache()[account_mapping_id][key_id] = {
                         "key": key,
                         "value": value,
                     }

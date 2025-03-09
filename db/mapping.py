@@ -21,7 +21,7 @@ class DatabaseMapping(DatabaseBase):
                     ).format(psycopg.sql.Identifier(f"mapping_{mapping_name}_history"))
                 )
                 if (res := await cur.fetchone()) is None:
-                    raise RuntimeError(f"genesis mapping values missing")
+                    return {}
                 mapping_data: dict[str, dict[str, str]] = res["content"]
 
                 def transform_history(kv: tuple[str, dict[str, str]]):
@@ -464,6 +464,64 @@ class DatabaseMapping(DatabaseBase):
                     if (res := await cur.fetchone()) is None:
                         return None, None
                     return res["value"], None
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def mapping_id_exists(self, mapping_id: str):
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                            "SELECT id FROM mapping WHERE mapping_id = %s",
+                        (mapping_id,)
+                    )
+                    return bool(await cur.fetchone())
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+
+    async def get_mapping_cache_key_value(self, mapping_id: str, key_id: str) -> Optional[dict[str, bytes]]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    committee_mapping_id = cached_get_mapping_id("credits.aleo", "committee")
+                    delegated_mapping_id = cached_get_mapping_id("credits.aleo", "delegated")
+                    bonded_mapping_id = cached_get_mapping_id("credits.aleo", "bonded")
+                    if mapping_id in (committee_mapping_id, delegated_mapping_id):
+                        table = "mapping_committee_history" if mapping_id == committee_mapping_id else "mapping_delegated_history"
+                        await cur.execute(
+                            psycopg.sql.SQL(
+                                "SELECT content FROM {} ORDER BY height DESC LIMIT 1"
+                            ).format(
+                                psycopg.sql.Identifier(table)
+                            )
+                        )
+                        if (res := await cur.fetchone()) is None:
+                            return None
+                        if (data := res['content']) is None:
+                            return None
+                        return {"key": bytes.fromhex(data["key"]), "value": bytes.fromhex(data["value"])}
+                    elif mapping_id == bonded_mapping_id:
+                        await cur.execute(
+                            "SELECT key, value FROM mapping_bonded_value WHERE key_id = %s",
+                            (key_id,)
+                        )
+                        if (res := await cur.fetchone()) is None:
+                            return None
+                        return {"key": res["key"], "value": res["value"]}
+                    else:
+                        await cur.execute(
+                            "SELECT key, value FROM mapping_value mv "
+                            "JOIN mapping m on mv.mapping_id = m.id "
+                            "WHERE m.mapping_id = %s AND mv.key_id = %s",
+                            (mapping_id, key_id)
+                        )
+                        res = await cur.fetchone()
+                        if res is None:
+                            return None
+                        return {"key": res["key"], "value": res["value"]}
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise

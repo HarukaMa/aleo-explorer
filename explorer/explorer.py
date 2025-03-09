@@ -11,6 +11,7 @@ from interpreter.interpreter import init_builtin_program
 from node import Network
 from node import Node
 from rdb import RocksDB
+from util.global_cache import MappingCache
 from webapi import webapi
 from webui import webui
 from .types import Request, Message, ExplorerRequest
@@ -73,6 +74,8 @@ class Explorer:
             await self.db.migrate()
             if await self.db.check_dirty():
                 open("revert_flag", "w").close()
+            MappingCache(self.db)
+            await MappingCache().pre_populate()
             await self.check_clear()
             await self.check_dev_mode()
             await self.check_genesis()
@@ -90,9 +93,10 @@ class Explorer:
             _ = asyncio.create_task(webui.run())
             _ = asyncio.create_task(api.run())
             if rocksdb_dir := os.environ.get("SYNC_ROCKSDB"):
-                await self.sync_from_rocksdb(rocksdb_dir, latest_height)
-            self.node = Node(explorer_message=self.message, explorer_request=self.node_request)
-            await self.node.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4133")))
+                self.sync_from_rocksdb(rocksdb_dir)
+            else:
+                self.node = Node(explorer_message=self.message, explorer_request=self.node_request)
+                await self.node.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4133")))
             while True:
                 msg = await self.message_queue.get()
                 match msg.type:
@@ -184,17 +188,30 @@ class Explorer:
                 print("Cannot remove clear_flag:", e)
             await self.db.clear_database()
 
-    async def sync_from_rocksdb(self, rocksdb_dir: str, latest_height: int):
+    def sync_from_rocksdb(self, rocksdb_dir: str):
         try:
             import rocksdbpy
         except ImportError:
             print("rocksdb-py not installed, cannot sync from rocksdb")
             return
 
-        print("trying to sync from local rocksdb")
+        print("syncing from local rocksdb")
         rdb = RocksDB(rocksdb_dir)
+        _ = asyncio.create_task(self.sync_task(rdb))
 
+
+    async def sync_task(self, rdb: RocksDB):
+        latest_height = await self.db.get_latest_height()
+        if latest_height is None:
+            raise RuntimeError("no block in database")
         height = latest_height + 1
-        while block := rdb.get_block(height):
-            await self.add_block(block)
-            height += 1
+        while True:
+            rdb.catch_up()
+            try:
+                while block := rdb.get_block(height):
+                    await self.add_block(block)
+                    height += 1
+            except Exception as e:
+                print("sync error:", e)
+                traceback.print_exc()
+            await asyncio.sleep(1)

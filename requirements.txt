@@ -9,3 +9,4 @@ python_multipart~=0.0.20
 minify-html~=0.15.0
 asgiref~=3.8.1
 simplejson~=3.19.3
+nest_asyncio~=1.6.0

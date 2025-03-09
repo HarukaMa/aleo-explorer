@@ -2,11 +2,13 @@ import asyncio
 import decimal
 import gc
 
+import nest_asyncio
 from dotenv import load_dotenv
 
 from explorer import Explorer
 from util.set_proc_title import set_proc_title
 
+nest_asyncio.apply()
 load_dotenv()
 
 async def main():
