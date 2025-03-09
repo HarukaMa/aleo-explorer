@@ -19,7 +19,7 @@ PING_SLEEP_IN_SECS = 3
 
 
 class Node:
-    def __init__(self, explorer_message: Callable[[explorer.Message], Awaitable[None]], explorer_request: Callable[[explorer.ExplorerRequest], Awaitable[Any]]):
+    def __init__(self, node_sync: bool, explorer_message: Callable[[explorer.Message], Awaitable[None]], explorer_request: Callable[[explorer.ExplorerRequest], Awaitable[Any]]):
         self.reader: Optional[StreamReader] = None
         self.writer: Optional[StreamWriter] = None
         self.worker_task: asyncio.Task[None]
@@ -28,6 +28,8 @@ class Node:
 
         self.node_ip: str
         self.node_port: int
+
+        self.node_sync = node_sync
 
         # states
         self.handshake_state = 0
@@ -110,7 +112,8 @@ class Node:
                 self.is_syncing = False
                 self.block_requests_deadline = float('inf')
                 self.is_fork = False
-            await self._sync()
+            if self.node_sync:
+                await self._sync()
 
         elif isinstance(frame.message, ChallengeRequest):
             if self.handshake_state != 2:
@@ -203,7 +206,7 @@ class Node:
                 is_fork=Option[bool_](is_fork),
             )
             await self.send_message(pong)
-            if not self.is_syncing:
+            if not self.is_syncing and self.node_sync:
                 await self._sync()
 
         elif isinstance(frame.message, Pong):
@@ -231,6 +234,8 @@ class Node:
             print("unhandled message type:", frame.message.type)
 
     async def _sync(self):
+        if not self.node_sync:
+            return
         batch_size = int(os.environ.get("P2P_BLOCK_BATCH_SIZE", 1))
         if self.block_requests_deadline < time.time():
             self.block_requests.clear()

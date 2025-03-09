@@ -94,9 +94,11 @@ class Explorer:
             _ = asyncio.create_task(api.run())
             if rocksdb_dir := os.environ.get("SYNC_ROCKSDB"):
                 self.sync_from_rocksdb(rocksdb_dir)
+                node_sync = False
             else:
-                self.node = Node(explorer_message=self.message, explorer_request=self.node_request)
-                await self.node.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4133")))
+                node_sync = True
+            self.node = Node(node_sync, explorer_message=self.message, explorer_request=self.node_request)
+            await self.node.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4133")))
             while True:
                 msg = await self.message_queue.get()
                 match msg.type:
