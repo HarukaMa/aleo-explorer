@@ -1,5 +1,14 @@
 
 # noinspection PyPackageRequirements
+def set_thread_title(name: str):
+    try:
+        import setproctitle
+    except ImportError:
+        return
+
+    setproctitle.setthreadtitle(name)
+
+
 def set_proc_title(name: str):
     try:
         import setproctitle

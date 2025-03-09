@@ -12,7 +12,7 @@ from middleware.asgi_logger import AccessLoggerMiddleware
 from middleware.htmx import HtmxMiddleware
 from middleware.minify import MinifyMiddleware
 from middleware.server_timing import ServerTimingMiddleware
-from util.set_proc_title import set_proc_title
+from util.set_proc_title import set_thread_title
 from .chain_routes import *
 from .error_routes import *
 from .program_routes import *
@@ -168,7 +168,7 @@ async def startup():
     # noinspection PyUnresolvedReferences
     app.state.db = db
     app.state.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=1))
-    set_proc_title("aleo-explorer: webui")
+    set_thread_title("aleo-explorer: webui")
 
 log_format = '\033[92mACCESS\033[0m: \033[94m%(client_addr)s\033[0m - - %(t)s \033[96m"%(request_line)s"\033[0m \033[93m%(s)s\033[0m %(B)s "%(f)s" "%(a)s" %(L)s \033[95m%(htmx)s\033[0m'
 # noinspection PyTypeChecker

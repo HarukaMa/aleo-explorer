@@ -19,7 +19,7 @@ from middleware.api_quota import APIQuotaMiddleware
 from middleware.asgi_logger import AccessLoggerMiddleware
 from middleware.server_timing import ServerTimingMiddleware
 from util.cache import Cache
-from util.set_proc_title import set_proc_title
+from util.set_proc_title import set_thread_title
 from .address_routes import address_staking_route, address_delegated_route, address_program_id_route
 from .execute_routes import preview_finalize_route
 from .mapping_routes import mapping_route, mapping_list_route, mapping_value_list_route, mapping_key_count_route
@@ -81,7 +81,7 @@ async def startup():
     app.state.db = db
     app.state.program_cache = Cache()
     app.state.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=1))
-    set_proc_title("aleo-explorer: api")
+    set_thread_title("aleo-explorer: api")
 
 log_format = '\033[92mAPI\033[0m: \033[94m%(client_addr)s\033[0m - - %(t)s \033[96m"%(request_line)s"\033[0m \033[93m%(s)s\033[0m %(B)s "%(f)s" "%(a)s" %(L)s'
 # noinspection PyTypeChecker

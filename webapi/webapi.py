@@ -16,7 +16,7 @@ from middleware.asgi_logger import AccessLoggerMiddleware
 from middleware.auth import AuthMiddleware
 from middleware.server_timing import ServerTimingMiddleware
 from node.light_node import LightNodeState
-from util.set_proc_title import set_proc_title
+from util.set_proc_title import set_thread_title
 from .address_routes import address_route, ans_route
 from .chain_routes import blocks_route, get_summary, recent_blocks_route, index_update_route, block_route, search_route, \
     transaction_route, \
@@ -90,7 +90,7 @@ async def startup():
     app.state.lns.connect(os.environ.get("P2P_NODE_HOST", "127.0.0.1"), int(os.environ.get("P2P_NODE_PORT", "4133")), None)
     app.state.lns.start_listener()
     app.state.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=1))
-    set_proc_title("aleo-explorer: webapi")
+    set_thread_title("aleo-explorer: webapi")
 
 log_format = '\033[92mWEB\033[0m: \033[94m%(client_addr)s\033[0m - - %(t)s \033[96m"%(request_line)s"\033[0m \033[93m%(s)s\033[0m %(B)s "%(f)s" "%(a)s" %(L)s'
 # noinspection PyTypeChecker

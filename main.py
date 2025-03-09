@@ -7,7 +7,7 @@ import nest_asyncio
 from dotenv import load_dotenv
 
 from explorer import Explorer
-from util.set_proc_title import set_proc_title
+from util.set_proc_title import set_proc_title, set_thread_title
 
 nest_asyncio.apply()
 load_dotenv()
@@ -26,7 +26,8 @@ async def main():
         gen2 = gen2 * 5
         gc.set_threshold(allocs, gen1, gen2)
 
-    set_proc_title("aleo-explorer: main")
+    set_proc_title("aleo-explorer")
+    set_thread_title("aleo-explorer: main")
     decimal.getcontext().prec = 80
     e = Explorer()
     e.start()
