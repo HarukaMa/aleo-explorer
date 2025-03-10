@@ -493,10 +493,11 @@ class DatabaseMapping(DatabaseBase):
                         table = "mapping_committee_history" if mapping_id == committee_mapping_id else "mapping_delegated_history"
                         await cur.execute(
                             psycopg.sql.SQL(
-                                "SELECT content FROM {} ORDER BY height DESC LIMIT 1"
+                                "SELECT content #> %s as content FROM {} ORDER BY height DESC LIMIT 1"
                             ).format(
                                 psycopg.sql.Identifier(table)
-                            )
+                            ),
+                            (f"{{{key_id}}}",)
                         )
                         if (res := await cur.fetchone()) is None:
                             return None

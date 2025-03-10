@@ -56,6 +56,9 @@ class MappingCacheMapping:
     def __iter__(self):
         return iter(self.mapping_data.items())
 
+    def __contains__(self, key_id: Field):
+        return key_id in self.mapping_data
+
     def clear(self):
         self.mapping_data.clear()
 
