@@ -1264,7 +1264,7 @@ class DatabaseInsert(DatabaseBase):
                             cast(u8, commission.literal.primitive),
                         )
                 else:
-                    committee = await self._get_committee_mapping_unchecked(cur)
+                    raise RuntimeError("committee mapping not found in cache")
 
                 mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "delegated"))
                 if mapping_id in MappingCache():
@@ -1277,7 +1277,7 @@ class DatabaseInsert(DatabaseBase):
                         plaintext = cast(LiteralPlaintext, value.plaintext)
                         delegated[cast(Address, key.literal.primitive)] = cast(u64, plaintext.literal.primitive)
                 else:
-                    delegated = await self._get_delegated_mapping_unchecked(cur)
+                    raise RuntimeError("delegated mapping not found in cache")
 
                 mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "bonded"))
                 if mapping_id in MappingCache():
@@ -1293,7 +1293,7 @@ class DatabaseInsert(DatabaseBase):
                         amount = cast(u64, cast(LiteralPlaintext, bond_state["microcredits"]).literal.primitive)
                         stakers[address] = validator, amount
                 else:
-                    stakers = await self._get_bonded_mapping_unchecked(cur)
+                    raise RuntimeError("bonded mapping not found in cache")
 
                 committee_members = self._committee_delegated_to_members(committee, delegated)
 
