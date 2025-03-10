@@ -73,7 +73,8 @@ class Explorer:
             await self.db.connect()
             await self.db.migrate()
             if await self.db.check_dirty():
-                open("revert_flag", "w").close()
+                if not os.path.exists("revert_flag"):
+                    open("revert_flag", "w").close()
             MappingCache(self.db)
             await MappingCache().pre_populate()
             await self.check_clear()
