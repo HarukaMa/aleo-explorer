@@ -146,6 +146,7 @@ async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]
                            confirmed_transaction: ConfirmedTransaction
                            ) -> tuple[list[FinalizeOperation], list[dict[str, Any]], Optional[str]]:
     expected_operations = list(confirmed_transaction.finalize)
+    local_mapping_cache: dict[Field, MappingCacheDict] = {}
     if isinstance(confirmed_transaction, AcceptedExecute):
         transaction = confirmed_transaction.transaction
         if not isinstance(transaction, ExecuteTransaction):
@@ -184,7 +185,7 @@ async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]
             inputs: list[Value] = load_input_from_arguments(future.arguments)
             try:
                 operations.extend(
-                    await execute_finalizer(db, cur, finalize_state, async_order, set(), program, future.function_name, inputs, MappingCache(), {}, allow_state_change)
+                    await execute_finalizer(db, cur, finalize_state, async_order, set(), program, future.function_name, inputs, MappingCache(), local_mapping_cache, allow_state_change)
                 )
             except ExecuteError as e:
                 for ts in execution.transitions:
@@ -201,15 +202,17 @@ async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]
         transition = cast(Fee, fee).transition
         if transition.function_name == "fee_public":
             try:
-                operations.extend(await _execute_public_fee(db, cur, finalize_state, transition, MappingCache(), {}, allow_state_change))
+                operations.extend(await _execute_public_fee(db, cur, finalize_state, transition, MappingCache(), local_mapping_cache, allow_state_change))
             except ExecuteError as e:
                 reject_reason = f"execute error: {e}, at fee transition, instruction \"{e.instruction}\""
                 operations = []
             else:
                 # well we don't really know the reason, but have to continue
+                raise NotImplementedError
                 reject_reason = "unknown reason"
                 operations = []
         else:
+            raise NotImplementedError
             # same as above but for private fee
             reject_reason = "unknown reason"
             operations = []
