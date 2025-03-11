@@ -153,79 +153,83 @@ class DatabaseUtil(DatabaseBase):
                                 (key_id, bytes.fromhex(data["key"]), bytes.fromhex(data["value"]))
                             )
 
-                    print("fetching blocks to revert")
-                    blocks_to_revert = await DatabaseBlock.get_full_block_range(u32.max, height, conn)
-                    for block in blocks_to_revert:
-                        print("reverting block", block.height)
-                        for ct in block.transactions:
-                            t = ct.transaction
-                            # revert to unconfirmed transactions
-                            if isinstance(ct, (RejectedDeploy, RejectedExecute)):
-                                await cur.execute(
-                                    "SELECT original_transaction_id FROM transaction WHERE transaction_id = %s",
-                                    (str(t.id),)
-                                )
-                                if (res := await cur.fetchone()) is None:
-                                    raise RuntimeError(f"missing transaction: {t.id}")
-                                original_transaction_id = res["original_transaction_id"]
-                                if original_transaction_id is not None:
-                                    if isinstance(ct, RejectedDeploy):
-                                        original_type = "Deploy"
-                                    else:
-                                        original_type = "Execute"
+                    # do in 1000 batch so huge rollback is still possible
+                    current_height = latest_height
+                    while current_height > height:
+                        print("fetching blocks to revert")
+                        blocks_to_revert = await DatabaseBlock.get_full_block_range(current_height, max(current_height - 1000, height), conn)
+                        for block in blocks_to_revert:
+                            print("reverting block", block.height)
+                            for ct in block.transactions:
+                                t = ct.transaction
+                                # revert to unconfirmed transactions
+                                if isinstance(ct, (RejectedDeploy, RejectedExecute)):
                                     await cur.execute(
-                                        "UPDATE transaction SET "
-                                        "transaction_id = %s, "
-                                        "original_transaction_id = NULL, "
-                                        "confirmed_transaction_id = NULL,"
-                                        "type = %s "
-                                        "WHERE transaction_id = %s",
-                                        (original_transaction_id, original_type, str(t.id))
+                                        "SELECT original_transaction_id FROM transaction WHERE transaction_id = %s",
+                                        (str(t.id),)
                                     )
-                            else:
-                                await cur.execute(
-                                    "UPDATE transaction SET confirmed_transaction_id = NULL WHERE transaction_id = %s",
-                                    (str(t.id),)
-                                )
-                            # decrease program called counter
-                            if isinstance(t, ExecuteTransaction):
-                                transitions = list(t.execution.transitions)
-                                fee = cast(Option[Fee], t.fee)
-                                if fee.value is not None:
-                                    transitions.append(fee.value.transition)
-                            elif isinstance(t, DeployTransaction):
-                                fee = cast(Fee, t.fee)
-                                transitions = [fee.transition]
-                                program = t.deployment.program
-                                await cur.execute(
-                                    "DELETE FROM program WHERE program_id = %s",
-                                    (str(program.id),)
-                                )
-                                await cur.execute(
-                                    "DELETE FROM mapping WHERE program_id = %s",
-                                    (str(program.id),)
-                                )
-                            elif isinstance(t, FeeTransaction):
-                                fee = cast(Fee, t.fee)
-                                if isinstance(ct, RejectedDeploy):
-                                    transitions = [fee.transition]
-                                elif isinstance(ct, RejectedExecute):
-                                    rejected = ct.rejected
-                                    if not isinstance(rejected, RejectedExecution):
-                                        raise RuntimeError("wrong transaction data")
-                                    transitions = list(rejected.execution.transitions)
-                                    transitions.append(fee.transition)
+                                    if (res := await cur.fetchone()) is None:
+                                        raise RuntimeError(f"missing transaction: {t.id}")
+                                    original_transaction_id = res["original_transaction_id"]
+                                    if original_transaction_id is not None:
+                                        if isinstance(ct, RejectedDeploy):
+                                            original_type = "Deploy"
+                                        else:
+                                            original_type = "Execute"
+                                        await cur.execute(
+                                            "UPDATE transaction SET "
+                                            "transaction_id = %s, "
+                                            "original_transaction_id = NULL, "
+                                            "confirmed_transaction_id = NULL,"
+                                            "type = %s "
+                                            "WHERE transaction_id = %s",
+                                            (original_transaction_id, original_type, str(t.id))
+                                        )
                                 else:
-                                    raise RuntimeError("wrong transaction type")
-                            else:
-                                raise NotImplementedError
-                            for ts in transitions:
-                                await cur.execute(
-                                    "UPDATE program_function pf SET called = called - 1 "
-                                    "FROM program p "
-                                    "WHERE p.program_id = %s AND p.id = pf.program_id AND pf.name = %s",
-                                    (str(ts.program_id), str(ts.function_name))
-                                )
+                                    await cur.execute(
+                                        "UPDATE transaction SET confirmed_transaction_id = NULL WHERE transaction_id = %s",
+                                        (str(t.id),)
+                                    )
+                                # decrease program called counter
+                                if isinstance(t, ExecuteTransaction):
+                                    transitions = list(t.execution.transitions)
+                                    fee = cast(Option[Fee], t.fee)
+                                    if fee.value is not None:
+                                        transitions.append(fee.value.transition)
+                                elif isinstance(t, DeployTransaction):
+                                    fee = cast(Fee, t.fee)
+                                    transitions = [fee.transition]
+                                    program = t.deployment.program
+                                    await cur.execute(
+                                        "DELETE FROM program WHERE program_id = %s",
+                                        (str(program.id),)
+                                    )
+                                    await cur.execute(
+                                        "DELETE FROM mapping WHERE program_id = %s",
+                                        (str(program.id),)
+                                    )
+                                elif isinstance(t, FeeTransaction):
+                                    fee = cast(Fee, t.fee)
+                                    if isinstance(ct, RejectedDeploy):
+                                        transitions = [fee.transition]
+                                    elif isinstance(ct, RejectedExecute):
+                                        rejected = ct.rejected
+                                        if not isinstance(rejected, RejectedExecution):
+                                            raise RuntimeError("wrong transaction data")
+                                        transitions = list(rejected.execution.transitions)
+                                        transitions.append(fee.transition)
+                                    else:
+                                        raise RuntimeError("wrong transaction type")
+                                else:
+                                    raise NotImplementedError
+                                for ts in transitions:
+                                    await cur.execute(
+                                        "UPDATE program_function pf SET called = called - 1 "
+                                        "FROM program p "
+                                        "WHERE p.program_id = %s AND p.id = pf.program_id AND pf.name = %s",
+                                        (str(ts.program_id), str(ts.function_name))
+                                    )
+                        current_height -= 1000
                     await cur.execute(
                         "DELETE FROM block WHERE height > %s",
                         (height,)
