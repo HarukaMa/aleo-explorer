@@ -72,15 +72,15 @@ class Explorer:
         try:
             await self.db.connect()
             await self.db.migrate()
-            if await self.db.check_dirty():
-                if not os.path.exists("revert_flag"):
-                    open("revert_flag", "w").close()
             MappingCache(self.db)
-            await MappingCache().pre_populate()
             await self.check_clear()
             await self.check_dev_mode()
             await self.check_genesis()
+            if await self.db.check_dirty():
+                if not os.path.exists("revert_flag"):
+                    open("revert_flag", "w").close()
             await self.check_revert()
+            await MappingCache().pre_populate()
             latest_height = await self.db.get_latest_height()
             if latest_height is None:
                 raise ValueError("no block in database")
