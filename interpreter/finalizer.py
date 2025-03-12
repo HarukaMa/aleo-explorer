@@ -232,15 +232,39 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
                 mapping_id = load_mapping_cache_id(program.id, c.mapping)
                 key = load_plaintext_from_operand(c.key, registers, finalize_state)
                 key_id = Field.loads(cached_get_key_id(str(program.id), str(c.mapping), key.dump()))
-                effective_mapping_cache = local_mapping_cache if not allow_state_change else mapping_cache
-                if key_id not in effective_mapping_cache[mapping_id]:
-                    print(f"Key {key} not found in mapping {c.mapping}")
-                    pc += 1
-                    continue
                 if allow_state_change:
+                    # accept
+                    if (await mapping_cache[mapping_id][key_id]) is None:
+                        # accept and not exist
+                        print(f"Key {key} not found in mapping {c.mapping}")
+                        pc += 1
+                        continue
+                    # accept and exist
                     mapping_cache[mapping_id][key_id] = None
                 else:
-                    local_mapping_cache[mapping_id][key_id]["value"] = None
+                    # reject
+                    if key_id not in local_mapping_cache[mapping_id]:
+                        # reject and not in cache
+                        if (await mapping_cache[mapping_id][key_id]) is None:
+                            # reject and not in cache and not exist
+                            print(f"Key {key} not found in mapping {c.mapping}")
+                            pc += 1
+                            continue
+                        # reject and not in cache and exist
+                        local_mapping_cache[mapping_id][key_id] = {
+                            "key": key,
+                            "value": None,
+                        }
+                    else:
+                        # reject and in cache
+                        if local_mapping_cache[mapping_id][key_id]["value"] is None:
+                            # reject and in cache and not exist
+                            print(f"Key {key} not found in mapping {c.mapping}")
+                            pc += 1
+                            continue
+                        # reject and in cache and exist
+                        local_mapping_cache[mapping_id][key_id]["value"] = None
+
                 if debug:
                     print(f"del {c.mapping}[{key}]")
                 operations.append({

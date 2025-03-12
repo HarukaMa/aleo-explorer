@@ -208,11 +208,9 @@ async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]
                 operations = []
             else:
                 # well we don't really know the reason, but have to continue
-                raise NotImplementedError
                 reject_reason = "unknown reason"
                 operations = []
         else:
-            raise NotImplementedError
             # same as above but for private fee
             reject_reason = "unknown reason"
             operations = []
@@ -242,6 +240,8 @@ async def finalize_block(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]],
             print("expected:", expected_operations)
             print("actual:", operations)
             print(reject_reason)
+            MappingCache().clear()
+            await MappingCache().pre_populate()
             raise TypeError("invalid finalize operation length")
 
         for e, o in zip(expected_operations, operations):
