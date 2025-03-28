@@ -3,7 +3,7 @@ API Version History
 
 This page lists the changes made to the API since its initial release.
 
-The API uses sequential interger version numbers. The current version is v2.
+The API uses sequential interger version numbers. The current version is v3.
 
 Some endpoints will change in backwards-incompatible ways between versions. The old version will be deprecated
 for a period of time before being removed. However, depending on the change, the old version might be removed
@@ -11,6 +11,10 @@ immediately.
 
 Changes
 -------
+
+v3
+^^
+* Added history query for :ref:`mapping-get-value` endpoint.
 
 v2
 ^^

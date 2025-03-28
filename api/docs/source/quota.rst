@@ -1,8 +1,14 @@
 API Quota
 =================
 
-The explorer API uses a custom quota system to limit the total running time of requests to the API per IP address.
-This is to prevent abuse of the API and to ensure that the API is available to all users.
+.. note::
+
+    The quota system is now applied to IP prefixes instead of individual IP addresses to discourage the use of
+    multiple IP addresses in a pool to circumvent the quota system. Please play fair so everyone could still have
+    unauthenticated access to the API.
+
+The explorer API uses a custom quota system to limit the total running time of requests to the API per IP prefix
+(/24 for IPv4, /48 for IPv6). This is to prevent abuse of the API and to ensure that the API is available to all users.
 
 The running time is counted by actual *wall time* used by requests, and doesn't include network latencies. Using
 wall time means the used time will depend on the server load.
@@ -27,4 +33,4 @@ request. This means a request could time out while the returned headers indicate
 
 The quota system is implemented in the ``APIQuotaMiddleware`` middleware class.
 
-For feedback or questions, please use `the feedback form <https://testnet3.aleoscan.io/feedback>`_.
+For feedback or questions, please use `the feedback form <https://aleoscan.io/feedback>`_.

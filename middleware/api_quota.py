@@ -2,6 +2,7 @@ import asyncio
 import functools
 import time
 from collections import defaultdict
+from ipaddress import IPv6Network, IPv4Network
 
 from starlette.datastructures import MutableHeaders
 from starlette.responses import JSONResponse
@@ -71,8 +72,12 @@ class APIQuotaMiddleware:
             return await self.app(scope, receive, send)
 
         ip = scope["client"][0]
+        if ":" in ip:
+            prefix = IPv6Network(ip).supernet(new_prefix=48)
+        else:
+            prefix = IPv4Network(ip).supernet(new_prefix=24)
         try:
-            remaining = await self.start_call(ip)
+            remaining = await self.start_call(str(prefix))
         except QuotaExceeded:
             headers = {
                 "Retry-After": str(int(1 / self.recover_rate)),
@@ -105,7 +110,7 @@ class APIQuotaMiddleware:
             import traceback
             traceback.print_exc()
         finally:
-            await self.end_call(ip, cost)
+            await self.end_call(str(prefix), cost)
 
     # noinspection PyMethodMayBeStatic
     async def wrapped_receive(self, timing: RequestTiming, receive: Receive) -> Message:

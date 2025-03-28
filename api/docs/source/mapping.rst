@@ -7,6 +7,8 @@ Mapping API
    the result, add ``?outdated=1`` parameter to the request. Please note the info returned will be outdated and needs to
    be handled with caution.
 
+.. _mapping-get-value:
+
 Get Mapping Value
 -----------------
 
