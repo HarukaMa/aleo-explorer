@@ -3,12 +3,12 @@ API Quota
 
 .. note::
 
-    The quota system is now applied to IP prefixes instead of individual IP addresses to discourage the use of
-    multiple IP addresses in a pool to circumvent the quota system.
-    The unauthenticated API access is provided to the Aleo community to allow easy access to the data. If you try to
-    circumvent the quota system by any way, you will be permanently banned from using it. Please play fair so
-    everyone could still have unauthenticated access to the API.
-    Remember that you can always run your own instance of the explorer to have direct access to the database.
+    | The quota system is now applied to IP prefixes instead of individual IP addresses to discourage the use of
+      multiple IP addresses in a pool to circumvent the quota system.
+    | The unauthenticated API access is provided to the Aleo community to allow easy access to the data. If you try to
+      circumvent the quota system by any way, you will be permanently banned from using it. Please play fair so
+      everyone could still have unauthenticated access to the API.
+    | Remember that you can always run your own instance of the explorer to have direct access to the database.
 
 The explorer API uses a custom quota system to limit the total running time of requests to the API per IP prefix
 (/24 for IPv4, /48 for IPv6). This is to prevent abuse of the API and to ensure that the API is available to all users.
