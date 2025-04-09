@@ -19,6 +19,7 @@ class DatabaseMigrate(DatabaseBase):
             (1, self.migration_1_remove_value_id_column),
             (2, self.migration_2_remove_serial_id_column),
             (3, self.migration_3_remove_serial_id_column_bonded_value),
+            (4, self.migration_4_recalculate_function_call_count),
         ]
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -52,3 +53,31 @@ class DatabaseMigrate(DatabaseBase):
         await conn.execute("drop index mapping_bonded_value_key_id_uindex")
         await conn.execute("alter table mapping_bonded_value drop column id")
         await conn.execute("alter table mapping_bonded_value add primary key (key_id)")
+
+    @staticmethod
+    async def migration_4_recalculate_function_call_count(conn: psycopg.AsyncConnection[DictRow]):
+        async with conn.cursor() as cur:
+            await cur.execute("""
+    SELECT
+        COUNT(*),
+        ts.program_id,
+        function_name,
+        p.id as program_db_id
+    FROM
+        transition ts
+        JOIN transaction_execute txe ON ts.transaction_execute_id = txe.id
+        JOIN transaction tx ON txe.transaction_id = tx.id
+        JOIN program p ON ts.program_id = p.program_id
+    WHERE
+        tx.confirmed_transaction_id IS NOT NULL
+    GROUP BY
+        ts.program_id,
+        p.id,
+        ts.function_name
+        """)
+            result = await cur.fetchall()
+            await cur.executemany(
+                "UPDATE program_function SET called = %s WHERE program_id = %s AND name = %s",
+                [(row["count"], row["program_db_id"], row["function_name"]) for row in result],
+            )
+
