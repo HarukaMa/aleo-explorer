@@ -468,7 +468,7 @@ class i128(Int, AbsWrapped, Neg):
         return str(self)
 
 
-class bool_(Sized, Serializable, JSONSerialize, And, Or, Not, Xor, Nand, Nor):
+class bool_(Sized, Serializable, JSONSerialize, And, Or, Not, Xor, Nand, Nor, Cast):
 
     size = 1
 
@@ -549,6 +549,12 @@ class bool_(Sized, Serializable, JSONSerialize, And, Or, Not, Xor, Nand, Nor):
         if isinstance(other, bool_):
             return self.value == other.value
         return False
+
+    def cast(self, destination_type: Any, *, lossy: bool) -> Any:
+        from .vm_instruction import LiteralType
+        if not isinstance(destination_type, LiteralType):
+            raise ValueError("invalid type")
+        return destination_type.primitive_type.load(BytesIO(aleo_explorer_rust.cast(str(self), LiteralType.Boolean, destination_type, lossy)))
 
     __match_args__ = ("value",)
 
