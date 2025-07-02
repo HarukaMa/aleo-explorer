@@ -1,5 +1,3 @@
-from typing import cast
-
 from aleo_types import *
 from interpreter.environment import Registers
 from interpreter.utils import load_plaintext_from_operand, store_plaintext_to_register, FinalizeState
@@ -667,6 +665,34 @@ def shr_wrapped(operands: list[Operand], destination: Register, registers: Regis
     store_plaintext_to_register(res, destination, registers)
 
 
+def sign_verify(operands: tuple[Operand, Operand, Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+    signature = load_plaintext_from_operand(operands[0], registers, finalize_state)
+    address = load_plaintext_from_operand(operands[1], registers, finalize_state)
+    message = load_plaintext_from_operand(operands[2], registers, finalize_state)
+
+    if not isinstance(signature, LiteralPlaintext):
+        raise TypeError("message must be a literal")
+    if not isinstance(address, LiteralPlaintext):
+        raise TypeError("signature must be a literal")
+    if not isinstance(message, LiteralPlaintext):
+        raise TypeError("public key must be a literal")
+
+    if signature.literal.type != Literal.Type.Signature:
+        raise TypeError("message must be signature")
+    if address.literal.type != Literal.Type.Address:
+        raise TypeError("address must be address")
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=Literal.Type.Boolean,
+            primitive=bool_(aleo_explorer_rust.sign_verify(
+                signature=signature.literal.primitive.dump(),
+                address=address.literal.primitive.dump(),
+                message=message.dump(),
+            ))
+        )
+    )
+    store_plaintext_to_register(res, destination, registers)
+
 def square(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
     op = load_plaintext_from_operand(operands[0], registers, finalize_state)
     if not isinstance(op, LiteralPlaintext):
@@ -792,6 +818,7 @@ literal_ops = {
     IT.ShlWrapped: shl_wrapped,
     IT.Shr: shr,
     IT.ShrWrapped: shr_wrapped,
+    IT.SignVerify: sign_verify,
     IT.Square: square,
     IT.SquareRoot: square_root,
     IT.Sub: sub,
