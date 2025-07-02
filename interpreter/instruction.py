@@ -687,7 +687,7 @@ def sign_verify(operands: tuple[Operand, Operand, Operand], destination: Registe
             primitive=bool_(aleo_explorer_rust.sign_verify(
                 signature=signature.literal.primitive.dump(),
                 address=address.literal.primitive.dump(),
-                message=message.dump(),
+                message=PlaintextValue(plaintext=message).dump(),
             ))
         )
     )
