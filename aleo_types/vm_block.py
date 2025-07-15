@@ -1750,6 +1750,7 @@ class ArrayPlaintext(Plaintext):
 
 
 class Owner(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize, Generic[T]):
+    type: Owner.Type
     Private: TType[T]
 
     @tp_cache
@@ -1766,14 +1767,9 @@ class Owner(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize, Generic[T]
         Private = 1
 
     @classmethod
-    def load(cls, data: BytesIO):
-        type_ = Owner.Type.load(data)
-        if type_ == Owner.Type.Public:
-            return PublicOwner[T].load(data)
-        elif type_ == Owner.Type.Private:
-            return PrivateOwner[cls.Private].load(data)
-        else:
-            raise ValueError("invalid type")
+    def load(cls, _: BytesIO):  # pyright: ignore[reportIncompatibleMethodOverride]
+        # handled in new Record type
+        raise RuntimeError("directly use PublicOwner.load() or PrivateOwner.load() instead")
 
     def json(self, compatible: bool = False) -> JSONType:
         return str(self)
@@ -1797,7 +1793,7 @@ class PublicOwner(Owner[T]):
         self.owner = owner
 
     def dump(self) -> bytes:
-        return self.type.dump() + self.owner.dump()
+        return self.owner.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -1826,7 +1822,7 @@ class PrivateOwner(Owner[T]):
         return GenericAlias(param_type, item)
 
     def dump(self) -> bytes:
-        return self.type.dump() + self.owner.dump()
+        return self.owner.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -1954,10 +1950,11 @@ class PrivateEntry(Entry[T]):
 class Record(Serializable, JSONSerialize, Generic[T]):
     Private: TType[T]
 
-    def __init__(self, *, owner: Owner[T], data: Vec[Tuple[Identifier, Entry[T]], u8], nonce: Group):
+    def __init__(self, *, owner: Owner[T], data: Vec[Tuple[Identifier, Entry[T]], u8], nonce: Group, version: u8):
         self.owner = owner
         self.data = data
         self.nonce = nonce
+        self.version = version
 
     @tp_cache
     def __class_getitem__(cls, item: TType[T]) -> GenericAlias:
@@ -1970,6 +1967,17 @@ class Record(Serializable, JSONSerialize, Generic[T]):
 
     def dump(self) -> bytes:
         res = b""
+        match self.version, self.owner.type:
+            case 0, Owner.Type.Public:
+                res += u8().dump()
+            case 0, Owner.Type.Private:
+                res += u8(1).dump()
+            case 1, Owner.Type.Public:
+                res += u8(2).dump()
+            case 1, Owner.Type.Private:
+                res += u8(3).dump()
+            case _:
+                raise ValueError(f"unsupported record version {self.version} and owner type {self.owner.type}")
         res += self.owner.dump()
         res += len(self.data).to_bytes(byteorder="little")
         for identifier, entry in self.data:
@@ -1983,7 +1991,19 @@ class Record(Serializable, JSONSerialize, Generic[T]):
     @classmethod
     def load(cls, data: BytesIO):
         Private = cls.Private
-        owner = Owner[Private].load(data)
+        variant = u8.load(data)
+        if variant in (0, 1):  # pyright: ignore [reportUnnecessaryContains]
+            version = u8()
+        elif variant in (2, 3):  # pyright: ignore [reportUnnecessaryContains]
+            version = u8(1)
+        else:
+            raise ValueError(f"unsupported record variant {variant}")
+        if variant in (0, 2):
+            owner = PublicOwner[Private].load(data)
+        elif variant in (1, 3):
+            owner = PrivateOwner[Private].load(data)
+        else:
+            raise ValueError("unreachable")
         data_len = u8.load(data)
         d: list[Tuple[Identifier, Entry[T]]] = []
         for _ in range(data_len):
@@ -1993,7 +2013,7 @@ class Record(Serializable, JSONSerialize, Generic[T]):
             d.append(Tuple[Identifier, Entry[T]]((identifier, entry)))
         data_ = Vec[Tuple[Identifier, Entry[T]], u8](d)
         nonce = Group.load(data)
-        return cls(owner=owner, data=data_, nonce=nonce)
+        return cls(owner=owner, data=data_, nonce=nonce, version=version)
 
     @classmethod
     def loads(cls, data: str):
