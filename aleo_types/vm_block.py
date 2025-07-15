@@ -1767,7 +1767,7 @@ class Owner(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize, Generic[T]
         Private = 1
 
     @classmethod
-    def load(cls, _: BytesIO):  # pyright: ignore[reportIncompatibleMethodOverride]
+    def load(cls, data: BytesIO) -> Self:
         # handled in new Record type
         raise RuntimeError("directly use PublicOwner.load() or PrivateOwner.load() instead")
 
@@ -1826,7 +1826,7 @@ class PrivateOwner(Owner[T]):
 
     @classmethod
     def load(cls, data: BytesIO):
-        owner = cls.Private.load(data)
+        owner = cls.Private.load(data)  # pyright: ignore [reportGeneralTypeIssues]
         return cls(owner=owner)
 
     def __str__(self):
@@ -1857,7 +1857,7 @@ class Entry(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize, Generic[T]
         elif type_ == Entry.Type.Public:
             return PublicEntry[T].load(data)
         elif type_ == Entry.Type.Private:
-            return PrivateEntry[cls.Private].load(data)
+            return PrivateEntry[cls.Private].load(data)  # pyright: ignore [reportGeneralTypeIssues]
         else:
             raise ValueError("invalid type")
 
@@ -1940,7 +1940,7 @@ class PrivateEntry(Entry[T]):
 
     @classmethod
     def load(cls, data: BytesIO):
-        plaintext = cls.Private.load(data)
+        plaintext = cls.Private.load(data)  # pyright: ignore [reportGeneralTypeIssues]
         return cls(private=plaintext)
 
     def __str__(self):
@@ -1990,7 +1990,7 @@ class Record(Serializable, JSONSerialize, Generic[T]):
 
     @classmethod
     def load(cls, data: BytesIO):
-        Private = cls.Private
+        Private = cls.Private  # pyright: ignore [reportGeneralTypeIssues]
         variant = u8.load(data)
         if variant in (0, 1):  # pyright: ignore [reportUnnecessaryContains]
             version = u8()
@@ -2072,7 +2072,7 @@ class PlaintextValue(Value):
     def __repr__(self):
         return str(self.plaintext)
 
-    def __eq__(self, other):
+    def __eq__(self, other: object):
         if not isinstance(other, PlaintextValue):
             return False
         return self.plaintext == other.plaintext
