@@ -104,6 +104,11 @@ class DataID(IntEnumu16):
     ProgramIDMap = auto()
     KeyValueMap = auto()
 
+    # For Backwards Compatibility with Existing Databases
+    OutputRecordSenderMap = auto()
+    # Track edition based on transaction ID
+    IDEditionMap = auto()
+
 
 K = TypeVar("K", bound=Serializable)
 V = TypeVar("V", bound=Serializable)
@@ -310,6 +315,7 @@ InputExternalRecordMap = DataMap[Field, Unit](DataID.InputExternalRecordMap)
 # type PublicMap = DataMap<Field<N>, Option<Plaintext<N>>>;
 # type PrivateMap = DataMap<Field<N>, Option<Ciphertext<N>>>;
 # type RecordMap = DataMap<Field<N>, (Field<N>, Option<Record<N, Ciphertext<N>>>)>;
+# type RecordSenderMap = DataMap<Group<N>, Option<Field<N>>>;
 # type RecordNonceMap = DataMap<Group<N>, Field<N>>;
 # type ExternalRecordMap = DataMap<Field<N>, ()>;
 # type FutureMap = DataMap<Field<N>, Option<Future<N>>>;
@@ -320,6 +326,7 @@ OutputConstantMap = DataMap[Field, Option[Plaintext]](DataID.OutputConstantMap)
 OutputPublicMap = DataMap[Field, Option[Plaintext]](DataID.OutputPublicMap)
 OutputPrivateMap = DataMap[Field, Option[Ciphertext]](DataID.OutputPrivateMap)
 OutputRecordMap = DataMap[Field, Tuple[Field, Option[Record[Ciphertext]]]](DataID.OutputRecordMap)
+OutputRecordSenderMap = DataMap[Group, Option[Field]](DataID.OutputRecordSenderMap)
 OutputRecordNonceMap = DataMap[Group, Field](DataID.OutputRecordNonceMap)
 OutputExternalRecordMap = DataMap[Field, Unit](DataID.OutputExternalRecordMap)
 OutputFutureMap = DataMap[Field, Option[Future]](DataID.OutputFutureMap)
@@ -617,7 +624,19 @@ class RocksDB:
             elif private is not None:
                 outputs.append(PrivateTransitionOutput(ciphertext_hash=output_id, ciphertext=private))
             elif record is not None:
-                outputs.append(RecordTransitionOutput(commitment=output_id, checksum=record[0], record_ciphertext=record[1]))
+                if record[1].value is not None:
+                    nonce = record[1].value.nonce
+                    sender_ciphertext = OutputRecordSenderMap.read(self.rdb, nonce)
+                    if sender_ciphertext is None:
+                        sender_ciphertext = Option[Field](None)
+                else:
+                    sender_ciphertext = Option[Field](None)
+                outputs.append(RecordTransitionOutput(
+                    commitment=output_id,
+                    checksum=record[0],
+                    record_ciphertext=record[1],
+                    sender_ciphertext=sender_ciphertext
+                ))
             elif external_record is not None:
                 outputs.append(ExternalRecordTransitionOutput(commitment=output_id))
             elif future is not None:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Awaitable
+from typing import Awaitable, LiteralString
 
 import psycopg
 import psycopg.sql
@@ -20,6 +20,7 @@ class DatabaseMigrate(DatabaseBase):
             (2, self.migration_2_remove_serial_id_column),
             (3, self.migration_3_remove_serial_id_column_bonded_value),
             (4, self.migration_4_recalculate_function_call_count),
+            (5, self.migration_5_add_output_record_sender_ciphertext),
         ]
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -81,3 +82,6 @@ class DatabaseMigrate(DatabaseBase):
                 [(row["count"], row["program_db_id"], row["function_name"]) for row in result],
             )
 
+    @staticmethod
+    async def migration_5_add_output_record_sender_ciphertext(conn: psycopg.AsyncConnection[DictRow]):
+        await conn.execute(cast(LiteralString, open("db/migrate_5.sql").read()))

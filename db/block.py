@@ -152,10 +152,15 @@ class DatabaseBlock(DatabaseBase):
                         record_ciphertext = None
                     else:
                         record_ciphertext = Record[Ciphertext].loads(transition_output["record_ciphertext"])
+                    if transition_output["sender_ciphertext"] is None:
+                        sender_ciphertext = None
+                    else:
+                        sender_ciphertext = Field.loads(transition_output["sender_ciphertext"])
                     tos.append((RecordTransitionOutput(
                         commitment=Field.loads(transition_output["record_commitment"]),
                         checksum=Field.loads(transition_output["checksum"]),
-                        record_ciphertext=Option[Record[Ciphertext]](record_ciphertext)
+                        record_ciphertext=Option[Record[Ciphertext]](record_ciphertext),
+                        sender_ciphertext=Option[Field](sender_ciphertext)
                     ), transition_output["index"]))
                 elif transition_output["type"] == TransitionOutput.Type.ExternalRecord.name:
                     tos.append((ExternalRecordTransitionOutput(

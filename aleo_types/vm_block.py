@@ -2458,27 +2458,46 @@ class PrivateTransitionOutput(TransitionOutput):
 class RecordTransitionOutput(TransitionOutput):
     type = TransitionOutput.Type.Record
 
-    def __init__(self, *, commitment: Field, checksum: Field, record_ciphertext: Option[Record[Ciphertext]]):
+    def __init__(self, *, commitment: Field, checksum: Field, record_ciphertext: Option[Record[Ciphertext]],
+                 sender_ciphertext: Option[Field]):
         self.commitment = commitment
         self.checksum = checksum
         self.record_ciphertext = record_ciphertext
+        self.sender_ciphertext = sender_ciphertext
 
     def dump(self) -> bytes:
-        return self.type.dump() + self.commitment.dump() + self.checksum.dump() + self.record_ciphertext.dump()
+        res = self.type.dump() + self.commitment.dump() + self.checksum.dump() + self.record_ciphertext.dump()
+        if self.record_ciphertext.value is not None and self.record_ciphertext.value.version != 0:
+            res += u8().dump()
+            if self.sender_ciphertext.value is None:
+                raise ValueError("sender ciphertext must be present for non-zero record ciphertext version")
+            res += self.sender_ciphertext.value.dump()
+        return res
 
     @classmethod
     def load(cls, data: BytesIO):
         commitment = Field.load(data)
         checksum = Field.load(data)
         record_ciphertext = Option[Record[Ciphertext]].load(data)
-        return cls(commitment=commitment, checksum=checksum, record_ciphertext=record_ciphertext)
+        if record_ciphertext.value is not None and record_ciphertext.value.version != 0:
+            sender_ciphertext_version = u8.load(data)
+            if sender_ciphertext_version != 0:
+                raise ValueError(f"unsupported record ciphertext version {sender_ciphertext_version}")
+            else:
+                sender_ciphertext = Option[Field](Field.load(data))
+        else:
+            sender_ciphertext = Option[Field](None)
+
+        return cls(commitment=commitment, checksum=checksum, record_ciphertext=record_ciphertext,
+                   sender_ciphertext=sender_ciphertext)
 
     def json_compatible(self) -> JSONType:
         return {
             "type": enum_name_convert(self.type.name),
             "id": self.commitment.json_compatible(),
             "checksum": self.checksum.json_compatible(),
-            "value": self.record_ciphertext.json_compatible() if self.record_ciphertext else None
+            "value": self.record_ciphertext.json_compatible() if self.record_ciphertext else None,
+            "sender_ciphertext": self.sender_ciphertext.json_compatible() if self.sender_ciphertext else None,
         }
 
 

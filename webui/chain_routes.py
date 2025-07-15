@@ -626,6 +626,7 @@ async def transition_route(request: Request):
                 "commitment": output.commitment,
                 "checksum": output.checksum,
                 "record": output.record_ciphertext.value,
+                "sender_ciphertext": output.sender_ciphertext.value,
             }
             record = output.record_ciphertext.value
             if record is not None:

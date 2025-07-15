@@ -447,10 +447,11 @@ class DatabaseInsert(DatabaseBase):
                 )
             elif isinstance(transition_output, RecordTransitionOutput):
                 await cur.execute(
-                    "INSERT INTO transition_output_record (transition_output_id, commitment, checksum, record_ciphertext) "
-                    "VALUES (%s, %s, %s, %s)",
+                    "INSERT INTO transition_output_record (transition_output_id, commitment, checksum, record_ciphertext, sender_ciphertext) "
+                    "VALUES (%s, %s, %s, %s, %s)",
                     (transition_output_db_id, str(transition_output.commitment),
-                     str(transition_output.checksum), transition_output.record_ciphertext.dumps())
+                     str(transition_output.checksum), transition_output.record_ciphertext.dumps(),
+                     transition_output.sender_ciphertext.dumps())
                 )
             elif isinstance(transition_output, ExternalRecordTransitionOutput):
                 await cur.execute(
