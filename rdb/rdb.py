@@ -541,7 +541,7 @@ class RocksDB:
             return None
         edition = self.deploy_get_edition(transaction_id)
         if edition is None:
-            return None
+            raise ValueError(f"missing edition for program {program_id}")
         owner = DeploymentOwnerMap.read(self.rdb, Tuple[ProgramID, u16]((program_id, edition)))
         if owner is None:
             raise ValueError(f"missing owner for program {program_id} edition {edition}")
