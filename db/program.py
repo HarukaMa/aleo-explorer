@@ -79,10 +79,14 @@ class DatabaseProgram(DatabaseBase):
                     await cur.execute(
                         "SELECT p.program_id, SUM(pf.called) as called "
                         "FROM program p "
+                        "JOIN ("
+                        "  SELECT program_id, MAX(edition) as edition "
+                        "  FROM program "
+                        "  GROUP BY program_id"
+                        ") p2 on p.program_id = p2.program_id AND p.edition = p2.edition "
                         "JOIN program_function pf on p.id = pf.program_id "
                         "WHERE p.transaction_deploy_id IS NULL "
                         "GROUP BY p.program_id "
-                        "ORDER BY p.edition DESC "
                         "LIMIT 1"
                     )
                     return await cur.fetchall()
