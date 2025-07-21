@@ -259,6 +259,7 @@ ConfirmedTransactionsMap = DataMap[TransactionID, Tuple[BlockHash, ConfirmedTxTy
 RejectedDeploymentOrExecutionMap = DataMap[Field, Rejected](DataID.BlockRejectedDeploymentOrExecutionMap)
 
 # type IDMap = DataMap<N::TransactionID, ProgramID<N>>;
+# type IDEditionMap = DataMap<N::TransactionID, u16>;
 # type EditionMap = DataMap<ProgramID<N>, u16>;
 # type ReverseIDMap = DataMap<(ProgramID<N>, u16), N::TransactionID>;
 # type OwnerMap = DataMap<(ProgramID<N>, u16), ProgramOwner<N>>;
@@ -268,6 +269,7 @@ RejectedDeploymentOrExecutionMap = DataMap[Field, Rejected](DataID.BlockRejected
 # type FeeStorage = FeeDB<N>;
 
 DeploymentIDMap = DataMap[TransactionID, ProgramID](DataID.DeploymentIDMap)
+DeploymentIDEditionMap = DataMap[TransactionID, u16](DataID.IDEditionMap)
 DeploymentEditionMap = DataMap[ProgramID, u16](DataID.DeploymentEditionMap)
 DeploymentReverseIDMap = DataMap[Tuple[ProgramID, u16], TransactionID](DataID.DeploymentReverseIDMap)
 DeploymentOwnerMap = DataMap[Tuple[ProgramID, u16], ProgramOwner](DataID.DeploymentOwnerMap)
@@ -502,7 +504,7 @@ class RocksDB:
         fee = self.fee_get_fee(transaction_id)
         if fee is None:
             raise ValueError(f"missing fee for transaction {transaction_id}")
-        owner = self.deploy_get_owner(deployment.program.id)
+        owner = self.deploy_get_owner(transaction_id, deployment.program.id)
         if owner is None:
             raise ValueError(f"missing owner for transaction {transaction_id}")
         return DeployTransaction(id_=transaction_id, deployment=deployment, fee=fee, owner=owner)
@@ -511,7 +513,7 @@ class RocksDB:
         program_id = DeploymentIDMap.read(self.rdb, transaction_id)
         if program_id is None:
             return None
-        edition = self.deploy_get_edition(program_id)
+        edition = self.deploy_get_edition(transaction_id)
         if edition is None:
             raise ValueError(f"missing edition for program {program_id}")
         program = DeploymentProgramMap.read(self.rdb, Tuple[ProgramID, u16]((program_id, edition)))
@@ -531,15 +533,13 @@ class RocksDB:
         return Deployment(edition=edition, program=program,
                           verifying_keys=Vec[Tuple[Identifier, VerifyingKey, Certificate], u16](verifying_keys))
 
-    def deploy_get_edition(self, program_id: ProgramID):
-        if program_id == "credits.aleo":
-            return None
-        return DeploymentEditionMap.read(self.rdb, program_id)
+    def deploy_get_edition(self, transaction_id: TransactionID):
+        return DeploymentIDEditionMap.read(self.rdb, transaction_id)
 
-    def deploy_get_owner(self, program_id: ProgramID):
+    def deploy_get_owner(self, transaction_id: TransactionID, program_id: ProgramID):
         if program_id == "credits.aleo":
             return None
-        edition = self.deploy_get_edition(program_id)
+        edition = self.deploy_get_edition(transaction_id)
         if edition is None:
             return None
         owner = DeploymentOwnerMap.read(self.rdb, Tuple[ProgramID, u16]((program_id, edition)))
