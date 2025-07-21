@@ -367,9 +367,13 @@ async def transaction_route(request: Request):
                 raise HTTPException(status_code=550, detail="invalid rejected transaction")
             for transition in rejected.execution.transitions:
                 transition: Transition
+                program_id = transition.program_id
+                latest_edition = await db.get_program_latest_edition(str(program_id))
+                if latest_edition is None:
+                    raise HTTPException(status_code=550, detail="Program not found")
                 rejected_transitions.append({
                     "transition_id": transition.id,
-                    "action": await function_signature(db, str(transition.program_id), str(transition.function_name)),
+                    "action": await function_signature(db, str(program_id), str(transition.function_name), latest_edition),
                 })
         else:
             raise HTTPException(status_code=550, detail="Unsupported transaction type")
@@ -684,6 +688,9 @@ async def transition_route(request: Request):
                     "type": "Future",
                     "value": f"{future.program_id}/{future.function_name}(...)",
                 })
+    latest_edition = await db.get_program_latest_edition(str(program_id))
+    if latest_edition is None:
+        raise HTTPException(status_code=550, detail="Program not found")
 
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {
@@ -696,8 +703,8 @@ async def transition_route(request: Request):
         "function_name": function_name,
         "tpk": tpk,
         "tcm": tcm,
-        "function_signature": await function_signature(db, str(transition.program_id), str(transition.function_name)),
-        "function_definition": await function_definition(db, str(transition.program_id), str(transition.function_name)),
+        "function_signature": await function_signature(db, str(program_id), str(function_name), latest_edition),
+        "function_definition": await function_definition(db, str(program_id), str(function_name), latest_edition),
         "inputs": inputs,
         "outputs": outputs,
         "finalizes": finalizes,

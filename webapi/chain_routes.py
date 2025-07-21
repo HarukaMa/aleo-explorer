@@ -443,13 +443,17 @@ async def transition_route(request: Request):
             return CJSONResponse({"error": "Internal error: should have tx"}, status_code=500)
         if isinstance(confirmed_transaction, (AcceptedDeploy, AcceptedExecute)):
             is_accepted = True
+    program_id = str(transition.program_id)
+    latest_edition = await db.get_program_latest_edition(program_id)
+    if latest_edition is None:
+        return CJSONResponse({"error": "Program not found"}, status_code=404)
     result: dict[str, Any] = {
         "transition": transition.json(),
         "transaction_id": transaction_id,
         "is_confirmed": is_confirmed,
         "is_aborted": is_aborted,
         "is_accepted": is_accepted,
-        "function_definition": await function_definition(db, str(transition.program_id), str(transition.function_name)),
+        "function_definition": await function_definition(db, program_id, str(transition.function_name), latest_edition),
     }
     result["resolved_addresses"] = await UIAddress.resolve_recursive_detached(result, db, {})
 

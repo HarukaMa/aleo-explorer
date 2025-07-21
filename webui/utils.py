@@ -65,8 +65,8 @@ async def out_of_sync_check(session: aiohttp.ClientSession, db: Database):
     }
 
 
-async def function_signature(db: Database, program_id: str, function_name: str):
-    data = await function_definition(db, program_id, function_name)
+async def function_signature(db: Database, program_id: str, function_name: str, edition: int):
+    data = await function_definition(db, program_id, function_name, edition)
     if isinstance(data, str):
         return data
     inputs: list[str] = []
@@ -95,8 +95,8 @@ async def function_signature(db: Database, program_id: str, function_name: str):
         result += f" finalize({', '.join(finalizes)})"
     return result
 
-async def function_definition(db: Database, program_id: str, function_name: str):
-    data = await db.get_function_definition(program_id, function_name)
+async def function_definition(db: Database, program_id: str, function_name: str, edition: int):
+    data = await db.get_function_definition(program_id, function_name, edition)
     if data is None:
         return f"Unknown function {program_id}/{function_name}"
     return data

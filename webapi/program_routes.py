@@ -90,7 +90,7 @@ async def program_route(request: Request) -> CJSONResponse:
         transaction = None
     functions: list[str] = []
     for f in program.functions.keys():
-        functions.append((await function_signature(db, str(program.id), str(f))).split("/", 1)[-1])
+        functions.append((await function_signature(db, str(program.id), str(f), edition)).split("/", 1)[-1])
     leo_source = await db.get_program_leo_source_code(program_id, edition)
     if leo_source is not None:
         source = leo_source
