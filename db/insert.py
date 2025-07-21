@@ -343,7 +343,8 @@ class DatabaseInsert(DatabaseBase):
                 # confirming transition, should add to called count
                 # TODO: duplicated code sadge
                 await cur.execute(
-                    "SELECT id FROM program WHERE program_id = %s", (str(transition.program_id),)
+                    "SELECT id FROM program WHERE program_id = %s ORDER BY edition DESC",
+                    (str(transition.program_id), edition)
                 )
                 if (res := await cur.fetchone()) is None:
                     raise RuntimeError("program in transition does not exist - unconfirmed transaction?")
@@ -476,7 +477,8 @@ class DatabaseInsert(DatabaseBase):
 
         if not is_unconfirmed:
             await cur.execute(
-                "SELECT id FROM program WHERE program_id = %s", (str(transition.program_id),)
+                "SELECT id FROM program WHERE program_id = %s ORDER BY edition DESC",
+                (str(transition.program_id),)
             )
             if (res := await cur.fetchone()) is None:
                 raise RuntimeError("program in transition does not exist - unconfirmed transaction?")
@@ -795,12 +797,12 @@ class DatabaseInsert(DatabaseBase):
             await cur.execute(
                 "INSERT INTO program "
                 "(transaction_deploy_id, program_id, import, mapping, interface, record, "
-                "closure, function, raw_data, is_helloworld, feature_hash, owner, signature, address) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                "closure, function, raw_data, is_helloworld, feature_hash, owner, signature, address, edition) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
                 (deploy_transaction_db_id, str(program.id), imports, mappings, interfaces, records,
                  closures, functions, program.dump(), program.is_helloworld(), program.feature_hash(),
                  str(transaction.owner.address), str(transaction.owner.signature),
-                 aleo_explorer_rust.program_id_to_address(str(program.id)))
+                 aleo_explorer_rust.program_id_to_address(str(program.id)), transaction.deployment.edition)
             )
         else:
             await cur.execute(

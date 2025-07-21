@@ -586,8 +586,9 @@ class DatabaseBlock(DatabaseBase):
                     deploy_transaction = transaction
                     if confirmed_transaction["confirmed_transaction_type"] == ConfirmedTransaction.Type.AcceptedDeploy.name:
                         await cur.execute(
-                            "SELECT raw_data, owner, signature FROM program WHERE transaction_deploy_id = %s",
-                            (deploy_transaction["transaction_deploy_id"],)
+                            "SELECT raw_data, owner, signature FROM program "
+                            "WHERE transaction_deploy_id = %s AND edition = %s",
+                            (deploy_transaction["transaction_deploy_id"], deploy_transaction["edition"])
                         )
                         program_data = await cur.fetchone()
                         if program_data is None:

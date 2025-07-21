@@ -82,7 +82,7 @@ class DatabaseSearch(DatabaseBase):
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT program_id FROM program WHERE program_id LIKE %s", (f"{program_id}%",)
+                        "SELECT DISTINCT program_id FROM program WHERE program_id LIKE %s", (f"{program_id}%",)
                     )
                     return list(map(lambda x: x['program_id'], await cur.fetchall()))
                 except Exception as e:

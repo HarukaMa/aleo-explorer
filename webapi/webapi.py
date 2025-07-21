@@ -65,6 +65,7 @@ routes = [
 
     Route("/programs", programs_route),
     Route("/program/{id}", program_route),
+    Route("/program/{id}/{edition}", program_route),
 
     Route("/address/{address}", address_route),
     Route("/ans/{name}", ans_route),

@@ -127,8 +127,8 @@ class Explorer:
 
     async def add_block(self, block: Block):
         if block in [Network.genesis_block, Network.dev_genesis_block]:
-            for program in Network.builtin_programs:
-                await init_builtin_program(self.db, program)
+            for program, edition in Network.builtin_programs:
+                await init_builtin_program(self.db, program, edition)
             await self.db.save_block(block)
             return
         if block.previous_hash != self.latest_block_hash:

@@ -17,7 +17,7 @@ CacheMappingDict = dict[Field, CacheMappingContent | None]
 CacheDict = dict[Field, "MappingCacheMapping"]
 
 global_mapping_cache: dict[Field, MappingCacheDict] = {}
-global_program_cache: dict[str, Program] = {}
+global_program_cache: dict[str, dict[int, Program]] = {}
 
 committee_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "committee"))
 delegated_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "delegated"))
@@ -132,13 +132,13 @@ class MappingCache:
         new.mapping_data = {k: v.copy() for k, v in self.mapping_data.items()}
         return new
 
-async def get_program(db: "Database", program_id: str) -> Program | None:
+async def get_program(db: "Database", program_id: str, edition: int) -> Program | None:
     try:
-        return global_program_cache[program_id]
+        return global_program_cache[program_id][edition]
     except KeyError:
-        program = await db.get_program(program_id)
+        program = await db.get_program(program_id, edition)
         if not program:
             return None
         program = Program.load(BytesIO(program))
-        global_program_cache[program_id] = program
+        global_program_cache[program_id][edition] = program
         return program

@@ -201,8 +201,8 @@ class DatabaseUtil(DatabaseBase):
                                     transitions = [fee.transition]
                                     program = t.deployment.program
                                     await cur.execute(
-                                        "DELETE FROM program WHERE program_id = %s",
-                                        (str(program.id),)
+                                        "DELETE FROM program WHERE program_id = %s AND edition = %s",
+                                        (str(program.id), int(t.deployment.edition))
                                     )
                                     await cur.execute(
                                         "DELETE FROM mapping WHERE program_id = %s",
@@ -224,10 +224,19 @@ class DatabaseUtil(DatabaseBase):
                                     raise NotImplementedError
                                 for ts in transitions:
                                     await cur.execute(
+                                        "SELECT MAX(edition) as edition FROM program WHERE program_id = %s",
+                                        (str(ts.program_id),)
+                                    )
+                                    if (res := await cur.fetchone()) is None:
+                                        raise RuntimeError(f"missing program: {ts.program_id}")
+                                    edition = res["edition"]
+                                    if edition is None:
+                                        raise RuntimeError(f"missing program: {ts.program_id}")
+                                    await cur.execute(
                                         "UPDATE program_function pf SET called = called - 1 "
                                         "FROM program p "
-                                        "WHERE p.program_id = %s AND p.id = pf.program_id AND pf.name = %s",
-                                        (str(ts.program_id), str(ts.function_name))
+                                        "WHERE p.program_id = %s AND p.id = pf.program_id AND pf.name = %s AND p.edition = %s",
+                                        (str(ts.program_id), str(ts.function_name), edition)
                                     )
                         current_height -= 1000
                     await cur.execute(

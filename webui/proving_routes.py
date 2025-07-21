@@ -152,11 +152,12 @@ async def address_route(request: Request):
         })
     recent_programs: list[dict[str, Any]] = []
     for program in programs:
-        deploy_info = await db.get_deploy_info_by_program_id(program)
+        deploy_info = await db.get_deploy_info_by_program_id(program["program_id"], program["edition"])
         if deploy_info is None:
             raise HTTPException(status_code=550, detail="Deploy info not found")
         recent_programs.append({
-            "program_id": program,
+            "program_id": program["program_id"],
+            "edition": program["edition"],
             "height": deploy_info["height"],
             "timestamp": deploy_info["timestamp"],
             "transaction_id": deploy_info["transaction_id"],

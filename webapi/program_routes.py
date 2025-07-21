@@ -56,10 +56,20 @@ async def program_route(request: Request) -> CJSONResponse:
     program_id = request.path_params.get("id")
     if program_id is None:
         return CJSONResponse({"error": "Missing program id"}, status_code=400)
-    program_bytes = await db.get_program(program_id)
-    if not program_bytes:
+    edition = request.path_params.get("edition", "0")
+    try:
+        edition = int(edition)
+    except ValueError:
+        return CJSONResponse({"error": "Invalid edition"}, status_code=400)
+    if edition < 0:
+        return CJSONResponse({"error": "Invalid edition"}, status_code=400)
+
+    latest_edition = await db.get_program_latest_edition(program_id)
+    if latest_edition is None:
         return CJSONResponse({"error": "Program not found"}, status_code=404)
-    block = await db.get_block_by_program_id(program_id)
+    if edition > latest_edition:
+        return CJSONResponse({"error": "Edition not found"}, status_code=404)
+    block = await db.get_block_by_program_id(program_id, edition)
     if block:
         transaction: DeployTransaction | None = None
         for ct in block.transactions:
@@ -73,7 +83,7 @@ async def program_route(request: Request) -> CJSONResponse:
         deployment: Deployment = transaction.deployment
         program: Program = deployment.program
     else:
-        program_bytes = await db.get_program(program_id)
+        program_bytes = await db.get_program(program_id, edition)
         if not program_bytes:
             raise HTTPException(status_code=404, detail="Program not found")
         program = Program.load(BytesIO(program_bytes))
@@ -81,7 +91,7 @@ async def program_route(request: Request) -> CJSONResponse:
     functions: list[str] = []
     for f in program.functions.keys():
         functions.append((await function_signature(db, str(program.id), str(f))).split("/", 1)[-1])
-    leo_source = await db.get_program_leo_source_code(program_id)
+    leo_source = await db.get_program_leo_source_code(program_id, edition)
     if leo_source is not None:
         source = leo_source
         has_leo_source = True
@@ -108,7 +118,7 @@ async def program_route(request: Request) -> CJSONResponse:
         "source": source,
         "has_leo_source": has_leo_source,
         "recent_calls": await db.get_program_calls(program_id, 0, 50),
-        "similar_count": await db.get_program_similar_count(program_id),
+        "similar_count": await db.get_program_similar_count(program_id, edition),
         "address": address,
     }
     if transaction:

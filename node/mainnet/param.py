@@ -7,7 +7,7 @@ from aleo_types import u16, Block, u32, Program, Field
 
 
 def load_program(program_id: str) -> Program:
-    return Program.load(BytesIO(aleo_explorer_rust.parse_program(open(os.path.join(os.path.dirname(__file__), program_id)).read())))
+    return Program.load(BytesIO(aleo_explorer_rust.parse_program(open(os.path.join(os.path.dirname(os.path.dirname(__file__)), program_id)).read())))
 
 class Mainnet:
     edition = u16()
@@ -18,7 +18,8 @@ class Mainnet:
     dev_genesis_block = Block.load(BytesIO(open(os.path.join(os.path.dirname(__file__), "dev.genesis"), "rb").read()))
     
     builtin_programs = [
-        load_program("credits.aleo"),
+        (load_program("credits.aleo"), 0),
+        (load_program("credits_v1.aleo"), 1),
     ]
 
     block_locator_num_recents = 100

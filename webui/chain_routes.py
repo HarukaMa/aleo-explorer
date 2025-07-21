@@ -663,7 +663,11 @@ async def transition_route(request: Request):
             if isinstance(argument, PlaintextArgument):
                 struct_type = ""
                 if isinstance(argument.plaintext, StructPlaintext):
-                    program = await get_program(db, str(transition.program_id))
+                    # program signatures won't change or disappear, just use the latest edition is fine
+                    latest_edition = await db.get_program_latest_edition(str(program_id))
+                    if latest_edition is None:
+                        raise HTTPException(status_code=550, detail="Program not found")
+                    program = await get_program(db, str(program_id), latest_edition)
                     if program is None:
                         raise HTTPException(status_code=550, detail="Program not found")
                     finalize = cast(Finalize, program.functions[transition.function_name].finalize.value)

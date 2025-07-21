@@ -54,9 +54,17 @@ async def programs_route(request: Request):
 async def program_route(request: Request):
     db: Database = request.app.state.db
     program_id = request.query_params.get("id")
+    edition = request.query_params.get("edition", "0")
     if program_id is None:
         raise HTTPException(status_code=400, detail="Missing program id")
-    block = await db.get_block_by_program_id(program_id)
+    try:
+        edition = int(edition)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid edition")
+    if edition < 0:
+        raise HTTPException(status_code=400, detail="Invalid edition")
+
+    block = await db.get_block_by_program_id(program_id, edition)
     if block:
         transaction: DeployTransaction | None = None
         for ct in block.transactions:
@@ -70,7 +78,7 @@ async def program_route(request: Request):
         deployment: Deployment = transaction.deployment
         program: Program = deployment.program
     else:
-        program_bytes = await db.get_program(program_id)
+        program_bytes = await db.get_program(program_id, edition)
         if not program_bytes:
             raise HTTPException(status_code=404, detail="Program not found")
         program = Program.load(BytesIO(program_bytes))
@@ -78,7 +86,7 @@ async def program_route(request: Request):
     functions: list[str] = []
     for f in program.functions.keys():
         functions.append((await function_signature(db, str(program.id), str(f))).split("/", 1)[-1])
-    leo_source = await db.get_program_leo_source_code(program_id)
+    leo_source = await db.get_program_leo_source_code(program_id, edition)
     if leo_source is not None:
         source = leo_source
         has_leo_source = True
@@ -106,7 +114,7 @@ async def program_route(request: Request):
         "source": source,
         "has_leo_source": has_leo_source,
         "recent_calls": await db.get_program_calls(program_id, 0, 30),
-        "similar_count": await db.get_program_similar_count(program_id),
+        "similar_count": await db.get_program_similar_count(program_id, edition),
         "address": address,
         "sync_info": sync_info,
     }
@@ -139,10 +147,22 @@ async def similar_programs_route(request: Request):
     program_id = request.query_params.get("id")
     if program_id is None:
         raise HTTPException(status_code=400, detail="Missing program id")
-    feature_hash = await db.get_program_feature_hash(program_id)
+    edition = request.path_params.get("edition", "0")
+    try:
+        edition = int(edition)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid edition")
+    if edition < 0:
+        raise HTTPException(status_code=400, detail="Invalid edition")
+    latest_edition = await db.get_program_latest_edition(program_id)
+    if latest_edition is None:
+        raise HTTPException(status_code=404, detail="Program not found")
+    if edition > latest_edition:
+        raise HTTPException(status_code=404, detail="Edition not found")
+    feature_hash = await db.get_program_feature_hash(program_id, edition)
     if feature_hash is None:
         raise HTTPException(status_code=404, detail="Program not found")
-    total_programs = await db.get_program_similar_count(program_id)
+    total_programs = await db.get_program_similar_count(program_id, edition)
     total_pages = (total_programs // 50) + 1
     if page < 1 or page > total_pages:
         raise HTTPException(status_code=400, detail="Invalid page")
@@ -166,7 +186,15 @@ async def upload_source_route(request: Request):
     program_id = request.query_params.get("id")
     if program_id is None:
         raise HTTPException(status_code=400, detail="Missing program id")
-    program = await db.get_program(program_id)
+    edition = request.path_params.get("edition", "0")
+    try:
+        edition = int(edition)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid edition")
+    if edition < 0:
+        raise HTTPException(status_code=400, detail="Invalid edition")
+
+    program = await db.get_program(program_id, edition)
     if program is None:
         raise HTTPException(status_code=404, detail="Program not found")
     if request.method == "POST":
@@ -176,7 +204,7 @@ async def upload_source_route(request: Request):
         source = ""
     imports: list[str] = []
     import_programs: list[Optional[str]] = []
-    if (await db.get_program_leo_source_code(program_id)) is not None:
+    if (await db.get_program_leo_source_code(program_id, edition)) is not None:
         has_leo_source = True
     else:
         has_leo_source = False
@@ -184,7 +212,11 @@ async def upload_source_route(request: Request):
         for i in program.imports:
             imports.append(str(i.program_id.name))
             if i.program_id != "credits.aleo":
-                src = await db.get_program_leo_source_code(str(i.program_id))
+                import_latest_version = await db.get_program_latest_edition(str(i.program_id))
+                if import_latest_version is None:
+                    import_programs.append(None)
+                    continue
+                src = await db.get_program_leo_source_code(str(i.program_id), import_latest_version)
                 import_programs.append(src)
             else:
                 import_programs.append(None)
@@ -208,20 +240,30 @@ async def submit_source_route(request: Request):
     program_id = form.get("id")
     if program_id is None or isinstance(program_id, UploadFile):
         return RedirectResponse(url=f"/upload_source?id={program_id}&message=Missing program id")
-    program = await db.get_program(program_id)
+    edition = form.get("edition")
+    if edition is None or isinstance(edition, UploadFile):
+        return RedirectResponse(url=f"/upload_source?id={program_id}&message=Missing edition")
+    try:
+        edition = int(edition)
+    except ValueError:
+        return RedirectResponse(url=f"/upload_source?id={program_id}&message=Invalid edition")
+    if edition < 0:
+        return RedirectResponse(url=f"/upload_source?id={program_id}&message=Invalid edition")
+
+    program = await db.get_program(program_id, edition)
     if program is None:
-        return RedirectResponse(url=f"/upload_source?id={program_id}&message=Program not found")
+        return RedirectResponse(url=f"/upload_source?id={program_id}&edition={edition}&message=Program not found")
     source = form.get("source")
     if source is None or isinstance(source, UploadFile) or source == "":
-        return RedirectResponse(url=f"/upload_source?id={program_id}&message=Missing source code")
+        return RedirectResponse(url=f"/upload_source?id={program_id}&edition={edition}&message=Missing source code")
     imports = form.getlist("imports[]")
     import_programs = form.getlist("import_programs[]")
     if len(imports) != len(import_programs):
-        return RedirectResponse(url=f"/upload_source?id={program_id}&message=Invalid form data")
+        return RedirectResponse(url=f"/upload_source?id={program_id}&edition={edition}&message=Invalid form data")
     import_data: list[tuple[str, str]] = []
     for i, p in zip(imports, import_programs):
         if isinstance(i, UploadFile) or isinstance(p, UploadFile):
-            return RedirectResponse(url=f"/upload_source?id={program_id}&message=Invalid form data")
+            return RedirectResponse(url=f"/upload_source?id={program_id}&edition={edition}&message=Invalid form data")
         import_data.append((i, p))
     try:
         compiled = aleo_explorer_rust.compile_program(source, program_id.split(".")[0], import_data)
@@ -230,8 +272,8 @@ async def submit_source_route(request: Request):
             msg = str(e)[:255] + "[trimmed]"
         else:
             msg = str(e)
-        return RedirectResponse(url=f"/upload_source?id={program_id}&message=Failed to compile source code: {msg}")
+        return RedirectResponse(url=f"/upload_source?id={program_id}&edition={edition}&message=Failed to compile source code: {msg}")
     if program != compiled:
-        return RedirectResponse(url=f"/upload_source?id={program_id}&message=Program compiled from source code doesn't match program on chain")
-    await db.store_program_leo_source_code(program_id, source)
+        return RedirectResponse(url=f"/upload_source?id={program_id}&edition={edition}&message=Program compiled from source code doesn't match program on chain")
+    await db.store_program_leo_source_code(program_id, edition, source)
     return RedirectResponse(url=f"/program?id={program_id}", status_code=303)

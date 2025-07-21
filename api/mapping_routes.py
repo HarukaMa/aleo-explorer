@@ -13,7 +13,7 @@ from db import Database
 
 @async_check_sync
 @use_program_cache
-async def mapping_route(request: Request, program_cache: dict[str, Program]):
+async def mapping_route(request: Request, program_cache: dict[str, dict[int, Program]]):
     db: Database = request.app.state.db
     version = request.path_params["version"]
     program_id = request.path_params["program_id"]
@@ -25,14 +25,17 @@ async def mapping_route(request: Request, program_cache: dict[str, Program]):
     if (height or time_str) and version < 3:
         return JSONResponse({"error": "This endpoint does not support height or time parameter in this version"}, status_code=400)
 
+    latest_edition = await db.get_program_latest_edition(program_id)
+    if latest_edition is None:
+        return JSONResponse({"error": "Program not found"}, status_code=404)
     try:
-        program = program_cache[program_id]
+        program = program_cache[program_id][latest_edition]
     except KeyError:
-        program = await db.get_program(program_id)
+        program = await db.get_program(program_id, latest_edition)
         if not program:
             return JSONResponse({"error": "Program not found"}, status_code=404)
         program = Program.load(BytesIO(program))
-        program_cache[program_id] = program
+        program_cache[program_id][latest_edition] = program
     if mapping not in program.mappings:
         return JSONResponse({"error": "Mapping not found"}, status_code=404)
     map_key_type = program.mappings[mapping].key.plaintext_type
@@ -88,49 +91,55 @@ async def mapping_route(request: Request, program_cache: dict[str, Program]):
 
 @async_check_sync
 @use_program_cache
-async def mapping_list_route(request: Request, program_cache: dict[str, Program]):
+async def mapping_list_route(request: Request, program_cache: dict[str, dict[int, Program]]):
     db: Database = request.app.state.db
     _ = request.path_params["version"]
     program_id = request.path_params["program_id"]
+    latest_edition = await db.get_program_latest_edition(program_id)
+    if latest_edition is None:
+        return JSONResponse({"error": "Program not found"}, status_code=404)
     try:
-        program = program_cache[program_id]
+        program = program_cache[program_id][latest_edition]
     except KeyError:
-        program = await db.get_program(program_id)
+        program = await db.get_program(program_id, latest_edition)
         if not program:
             return JSONResponse({"error": "Program not found"}, status_code=404)
         program = Program.load(BytesIO(program))
-        program_cache[program_id] = program
+        program_cache[program_id][latest_edition] = program
     mappings = program.mappings
     return JSONResponse(list(map(str, mappings.keys())))
 
 @async_check_sync
 @use_program_cache
-async def mapping_value_list_route(request: Request, program_cache: dict[str, Program]):
+async def mapping_value_list_route(request: Request, program_cache: dict[str, dict[int, Program]]):
     db: Database = request.app.state.db
     version = request.path_params["version"]
     program_id = request.path_params["program_id"]
     mapping = request.path_params["mapping"]
+    latest_edition = await db.get_program_latest_edition(program_id)
+    if latest_edition is None:
+        return JSONResponse({"error": "Program not found"}, status_code=404)
     try:
-        program = program_cache[program_id]
+        program = program_cache[program_id][latest_edition]
     except KeyError:
-        program = await db.get_program(program_id)
+        program = await db.get_program(program_id, latest_edition)
         if not program:
             return JSONResponse({"error": "Program not found"}, status_code=404)
         program = Program.load(BytesIO(program))
-        program_cache[program_id] = program
+        program_cache[program_id][latest_edition] = program
     mappings = program.mappings
     if mapping not in mappings:
         return JSONResponse({"error": "Mapping not found"}, status_code=404)
 
     if version <= 1:
         mapping_cache = await db.get_mapping_cache(program_id, mapping)
-        res: dict[str, dict[str, str]] = {}
+        res_0: dict[str, dict[str, str]] = {}
         for key_id, item in mapping_cache.items():
-            res[str(key_id)] = {
+            res_0[str(key_id)] = {
                 "key": str(item["key"]),
                 "value": str(item["value"]),
             }
-        return JSONResponse(res)
+        return JSONResponse(res_0)
 
     else:
         count = int(request.query_params.get("count", 50))
@@ -149,21 +158,24 @@ async def mapping_value_list_route(request: Request, program_cache: dict[str, Pr
 
 @async_check_sync
 @use_program_cache
-async def mapping_key_count_route(request: Request, program_cache: dict[str, Program]):
+async def mapping_key_count_route(request: Request, program_cache: dict[str, dict[int, Program]]):
     db: Database = request.app.state.db
     version = request.path_params["version"]
     if version <= 1:
         return JSONResponse({"error": "This endpoint is not supported in this version"}, status_code=400)
     program_id = request.path_params["program_id"]
     mapping = request.path_params["mapping"]
+    latest_edition = await db.get_program_latest_edition(program_id)
+    if latest_edition is None:
+        return JSONResponse({"error": "Program not found"}, status_code=404)
     try:
-        program = program_cache[program_id]
+        program = program_cache[program_id][latest_edition]
     except KeyError:
-        program = await db.get_program(program_id)
+        program = await db.get_program(program_id, latest_edition)
         if not program:
             return JSONResponse({"error": "Program not found"}, status_code=404)
         program = Program.load(BytesIO(program))
-        program_cache[program_id] = program
+        program_cache[program_id][latest_edition] = program
     mappings = program.mappings
     if mapping not in mappings:
         return JSONResponse({"error": "Mapping not found"}, status_code=404)

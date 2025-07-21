@@ -8,11 +8,11 @@ from interpreter.utils import FinalizeState
 from util.global_cache import global_mapping_cache, global_program_cache, get_program, MappingCache, MappingCacheDict
 
 
-async def init_builtin_program(db: Database, program: Program):
+async def init_builtin_program(db: Database, program: Program, edition: int):
     for mapping in program.mappings.keys():
         mapping_id = Field.loads(cached_get_mapping_id(str(program.id), str(mapping)))
         await db.initialize_builtin_mapping(str(mapping_id), str(program.id), str(mapping))
-        if await db.get_program(str(program.id)) is None:
+        if await db.get_program(str(program.id), edition) is None:
             await db.save_builtin_program(program)
 
 async def _execute_public_fee(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]], finalize_state: FinalizeState,
@@ -27,7 +27,11 @@ async def _execute_public_fee(db: Database, cur: psycopg.AsyncCursor[dict[str, A
     future = output.future.value
     if future is None:
         raise RuntimeError("invalid fee transition output")
-    program = await get_program(db, str(future.program_id))
+    program_id = str(future.program_id)
+    latest_edition = await db.get_program_latest_edition(program_id)
+    if latest_edition is None:
+        raise RuntimeError("program not found")
+    program = await get_program(db, program_id, latest_edition)
     if not program:
         raise RuntimeError("program not found")
 
@@ -92,7 +96,11 @@ async def _trace_execution(db: Database, transition_ids: list[TransitionID], pro
     for inst in function.instructions:
         if isinstance(inst.literals, CallInstruction) and isinstance(inst.literals.operator, LocatorCallOperator):
             locator = inst.literals.operator.locator
-            called_program = await get_program(db, str(locator.id))
+            called_program_id = str(locator.id)
+            latest_edition = await db.get_program_latest_edition(called_program_id)
+            if latest_edition is None:
+                raise RuntimeError("program not found")
+            called_program = await get_program(db, called_program_id, latest_edition)
             if not called_program:
                 raise RuntimeError("program not found")
             called_function = called_program.functions[locator.resource]
@@ -118,7 +126,10 @@ async def _trace_execution(db: Database, transition_ids: list[TransitionID], pro
             called_node = finalize_register_map[locator]
             async_order.append(called_node["transition_id"])
             p, f = called_node["name"].split("/")
-            called_program = await get_program(db, p)
+            latest_edition = await db.get_program_latest_edition(p)
+            if latest_edition is None:
+                raise RuntimeError("program not found")
+            called_program = await get_program(db, p, latest_edition)
             if not called_program:
                 raise RuntimeError("program not found")
             if Identifier.loads(f) not in called_program.functions:
@@ -174,7 +185,11 @@ async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]
             if future_option.value is None:
                 raise RuntimeError("invalid future is None")
             future = future_option.value
-            program = await get_program(db, str(future.program_id))
+            called_program_id = str(future.program_id)
+            latest_edition = await db.get_program_latest_edition(called_program_id)
+            if latest_edition is None:
+                raise RuntimeError("program not found")
+            program = await get_program(db, called_program_id, latest_edition)
             if not program:
                 raise RuntimeError("program not found")
 
@@ -308,14 +323,18 @@ async def get_mapping_value(db: Database, program_id: str, mapping_name: str, ke
     mapping_id = Field.loads(cached_get_mapping_id(program_id, mapping_name))
     if mapping_id not in global_mapping_cache:
         global_mapping_cache[mapping_id] = await mapping_cache_read(db, program_id, mapping_name)
-    if str(program_id) in global_program_cache:
-        program = global_program_cache[str(program_id)]
+
+    latest_edition = await db.get_program_latest_edition(program_id)
+    if latest_edition is None:
+        raise RuntimeError("program not found")
+    if program_id in global_program_cache:
+        program = global_program_cache[program_id][latest_edition]
     else:
-        program_bytes = await db.get_program(str(program_id))
+        program_bytes = await db.get_program(str(program_id), latest_edition)
         if program_bytes is None:
             raise RuntimeError("program not found")
         program = Program.load(BytesIO(program_bytes))
-        global_program_cache[str(program_id)] = program
+        global_program_cache[str(program_id)][latest_edition] = program
     mapping = program.mappings[Identifier(value=mapping_name)]
     mapping_key_type = mapping.key.plaintext_type
     if not isinstance(mapping_key_type, LiteralPlaintextType):

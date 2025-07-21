@@ -948,7 +948,10 @@ class Program(Serializable, JSONSerialize):
             if isinstance(inst.literals, CallInstruction) and isinstance(inst.literals.operator, LocatorCallOperator):
                 locator = inst.literals.operator.locator
                 program_id = locator.id
-                program = await get_program(db, str(program_id))
+                edition = await db.get_program_latest_edition(str(program_id))
+                if edition is None:
+                    raise ValueError(f"Program {program_id} not found")
+                program = await get_program(db, str(program_id), edition)
                 if program is None:
                     raise ValueError(f"Program {program_id} not found")
                 calls.append({
@@ -2721,7 +2724,11 @@ class Execution(Serializable, JSONSerialize):
         finalize_costs: list[int] = []
         for transition in self.transitions:
             from util.global_cache import get_program
-            program = await get_program(db, str(transition.program_id))
+            program_id = str(transition.program_id)
+            latest_edition = await db.get_program_latest_edition(program_id)
+            if latest_edition is None:
+                raise RuntimeError("program not found")
+            program = await get_program(db, program_id, latest_edition)
             if program is None:
                 raise RuntimeError("program not found")
             finalize_costs.append(program.functions[transition.function_name].finalize_cost(program))
