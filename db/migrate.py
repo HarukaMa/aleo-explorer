@@ -91,5 +91,4 @@ class DatabaseMigrate(DatabaseBase):
     async def migration_6_add_program_edition(conn: psycopg.AsyncConnection[DictRow]):
         await conn.execute("alter table program add edition integer default 0 not null")
         await conn.execute("alter table program drop constraint program_pk2")
-        await conn.execute("drop index program_pk2")
         await conn.execute("alter table program add constraint program_pk2 unique (program_id, edition)")
