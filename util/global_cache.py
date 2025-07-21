@@ -1,5 +1,6 @@
 import asyncio
 from asyncio import Future as AFuture
+from collections import defaultdict
 from copy import deepcopy
 
 from aleo_types import *
@@ -17,7 +18,7 @@ CacheMappingDict = dict[Field, CacheMappingContent | None]
 CacheDict = dict[Field, "MappingCacheMapping"]
 
 global_mapping_cache: dict[Field, MappingCacheDict] = {}
-global_program_cache: dict[str, dict[int, Program]] = {}
+global_program_cache: dict[str, dict[int, Program]] = defaultdict(dict)
 
 committee_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "committee"))
 delegated_mapping_id = Field.loads(cached_get_mapping_id("credits.aleo", "delegated"))
