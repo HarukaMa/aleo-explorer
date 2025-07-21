@@ -740,7 +740,7 @@ class DatabaseInsert(DatabaseBase):
                 if (res := await cur.fetchone()) is None:
                     raise RuntimeError("database inconsistent")
                 deploy_transaction_db_id = res["id"]
-                await DatabaseInsert._save_program(cur, transaction.deployment.program, deploy_transaction_db_id, transaction)
+                await DatabaseInsert._save_program(cur, transaction.deployment.program, deploy_transaction_db_id, transaction, None)
 
             elif isinstance(confirmed_transaction, AcceptedExecute):
                 if reject_reasons[ct_index] is not None:
@@ -779,14 +779,15 @@ class DatabaseInsert(DatabaseBase):
         )
 
 
-    async def save_builtin_program(self, program: Program):
+    async def save_builtin_program(self, program: Program, edition: int):
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
-                await self._save_program(cur, program, None, None)
+                await self._save_program(cur, program, None, None, edition)
 
     @staticmethod
     async def _save_program(cur: psycopg.AsyncCursor[dict[str, Any]], program: Program,
-                            deploy_transaction_db_id: Optional[int], transaction: Optional[DeployTransaction]) -> None:
+                            deploy_transaction_db_id: Optional[int], transaction: Optional[DeployTransaction],
+                            edition: Optional[int]) -> None:
         imports = [str(x.program_id) for x in program.imports]
         mappings = list(map(str, program.mappings.keys()))
         interfaces = list(map(str, program.structs.keys()))
@@ -808,11 +809,11 @@ class DatabaseInsert(DatabaseBase):
             await cur.execute(
                 "INSERT INTO program "
                 "(program_id, import, mapping, interface, record, "
-                "closure, function, raw_data, is_helloworld, feature_hash, address) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                "closure, function, raw_data, is_helloworld, feature_hash, address, edition) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
                 (str(program.id), imports, mappings, interfaces, records,
                  closures, functions, program.dump(), program.is_helloworld(), program.feature_hash(),
-                 aleo_explorer_rust.program_id_to_address(str(program.id)))
+                 aleo_explorer_rust.program_id_to_address(str(program.id)), edition)
             )
         if (res := await cur.fetchone()) is None:
             raise Exception("failed to insert row into database")

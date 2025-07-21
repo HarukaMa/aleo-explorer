@@ -12,8 +12,8 @@ async def init_builtin_program(db: Database, program: Program, edition: int):
     for mapping in program.mappings.keys():
         mapping_id = Field.loads(cached_get_mapping_id(str(program.id), str(mapping)))
         await db.initialize_builtin_mapping(str(mapping_id), str(program.id), str(mapping))
-        if await db.get_program(str(program.id), edition) is None:
-            await db.save_builtin_program(program)
+    if await db.get_program(str(program.id), edition) is None:
+        await db.save_builtin_program(program, edition)
 
 async def _execute_public_fee(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]], finalize_state: FinalizeState,
                               fee_transition: Transition, mapping_cache: MappingCache,
