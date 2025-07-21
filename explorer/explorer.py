@@ -217,4 +217,5 @@ class Explorer:
             except Exception as e:
                 print("sync error:", e)
                 traceback.print_exc()
+                await asyncio.sleep(59)
             await asyncio.sleep(1)
