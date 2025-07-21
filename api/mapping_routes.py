@@ -35,7 +35,10 @@ async def mapping_route(request: Request, program_cache: dict[str, dict[int, Pro
         if not program:
             return JSONResponse({"error": "Program not found"}, status_code=404)
         program = Program.load(BytesIO(program))
-        program_cache[program_id][latest_edition] = program
+        if program_id in program_cache:
+            program_cache[program_id][latest_edition] = program
+        else:
+            program_cache[program_id] = {latest_edition: program}
     if mapping not in program.mappings:
         return JSONResponse({"error": "Mapping not found"}, status_code=404)
     map_key_type = program.mappings[mapping].key.plaintext_type
@@ -105,7 +108,10 @@ async def mapping_list_route(request: Request, program_cache: dict[str, dict[int
         if not program:
             return JSONResponse({"error": "Program not found"}, status_code=404)
         program = Program.load(BytesIO(program))
-        program_cache[program_id][latest_edition] = program
+        if program_id in program_cache:
+            program_cache[program_id][latest_edition] = program
+        else:
+            program_cache[program_id] = {latest_edition: program}
     mappings = program.mappings
     return JSONResponse(list(map(str, mappings.keys())))
 
@@ -126,7 +132,10 @@ async def mapping_value_list_route(request: Request, program_cache: dict[str, di
         if not program:
             return JSONResponse({"error": "Program not found"}, status_code=404)
         program = Program.load(BytesIO(program))
-        program_cache[program_id][latest_edition] = program
+        if program_id in program_cache:
+            program_cache[program_id][latest_edition] = program
+        else:
+            program_cache[program_id] = {latest_edition: program}
     mappings = program.mappings
     if mapping not in mappings:
         return JSONResponse({"error": "Mapping not found"}, status_code=404)
@@ -175,7 +184,10 @@ async def mapping_key_count_route(request: Request, program_cache: dict[str, dic
         if not program:
             return JSONResponse({"error": "Program not found"}, status_code=404)
         program = Program.load(BytesIO(program))
-        program_cache[program_id][latest_edition] = program
+        if program_id in program_cache:
+            program_cache[program_id][latest_edition] = program
+        else:
+            program_cache[program_id] = {latest_edition: program}
     mappings = program.mappings
     if mapping not in mappings:
         return JSONResponse({"error": "Mapping not found"}, status_code=404)
