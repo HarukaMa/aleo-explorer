@@ -119,8 +119,6 @@ class Node:
             if self.handshake_state != 2:
                 raise Exception("incorrect handshake state")
             msg = frame.message
-            if msg.version < Network.version:
-                raise ValueError("peer is outdated")
             if await self.explorer_request(explorer.Request.GetDevMode()):
                 genesis = Network.dev_genesis_block.header
             else:

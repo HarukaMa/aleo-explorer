@@ -193,8 +193,6 @@ class LightNode:
 
         if isinstance(frame.message, ChallengeRequest):
             msg = frame.message
-            if msg.version < Network.version:
-                raise ValueError("peer is outdated")
             if self.is_incoming:
                 self.port = int(msg.listener_port)
                 self.state.incoming(self.ip, self.port, self)
