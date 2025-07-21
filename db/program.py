@@ -62,7 +62,7 @@ class DatabaseProgram(DatabaseBase):
                         "JOIN block b on ct.block_id = b.id "
                         "JOIN program_function pf on p.id = pf.program_id "
                         f"{where}"
-                        "GROUP BY p.program_id, b.height, p.id, t.transaction_id "
+                        "GROUP BY p.program_id, b.height, p.id, t.transaction_id, p.edition "
                         "ORDER BY p.id DESC "
                         "LIMIT %s OFFSET %s",
                         (end - start, start)
