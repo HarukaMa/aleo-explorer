@@ -86,7 +86,7 @@ class DatabaseProgram(DatabaseBase):
                         ") p2 on p.program_id = p2.program_id AND p.edition = p2.edition "
                         "JOIN program_function pf on p.id = pf.program_id "
                         "WHERE p.transaction_deploy_id IS NULL "
-                        "GROUP BY p.program_id "
+                        "GROUP BY p.program_id, p.edition "
                         "LIMIT 1"
                     )
                     return await cur.fetchall()
