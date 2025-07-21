@@ -49,7 +49,7 @@ class DatabaseProgram(DatabaseBase):
                 try:
                     where = "WHERE feature_hash NOT IN (SELECT hash FROM program_filter_hash) " if no_helloworld else ""
                     await cur.execute(
-                        "SELECT p.program_id, b.height, t.transaction_id, SUM(pf.called) as called "
+                        "SELECT p.program_id, b.height, t.transaction_id, SUM(pf.called) as called, p.edition "
                         "FROM program p "
                         "JOIN ("
                         "  SELECT program_id, MAX(edition) as edition "
@@ -77,7 +77,7 @@ class DatabaseProgram(DatabaseBase):
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT p.program_id, SUM(pf.called) as called "
+                        "SELECT p.program_id, SUM(pf.called) as called, p.edition "
                         "FROM program p "
                         "JOIN ("
                         "  SELECT program_id, MAX(edition) as edition "

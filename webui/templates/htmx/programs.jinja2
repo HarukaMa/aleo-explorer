@@ -29,13 +29,14 @@
                     <th>Program ID</th>
                     <th>Block Height</th>
                     <th>Transaction ID</th>
+                    <th>Edition</th>
                     <th>Times called</th>
                 </tr>
                 </thead>
                 <tbody hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
                 {% for program in programs %}
                     <tr>
-                        <td><span class="mono"><a href="/program?id={{ program.program_id }}">{{ program.program_id }}</a></span></td>
+                        <td><span class="mono"><a href="/program?id={{ program.program_id }}&edition={{ program.edition }}">{{ program.program_id }}</a></span></td>
                         {% if program.height %}
                             <td><a href="/block?h={{ program.height }}">{{ program.height | format_number | safe }}</a></td>
                             <td><span class="mono"><a href="/transaction?id={{ program.transaction_id }}">{{ program.transaction_id }}</a></span></td>
@@ -43,6 +44,7 @@
                             <td>-</td>
                             <td>-</td>
                         {% endif %}
+                        <td>{{ program.edition }}</td>
                         <td>{{ program.called }}</td>
                     </tr>
                 {% endfor %}
