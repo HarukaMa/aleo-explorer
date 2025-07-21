@@ -30,6 +30,9 @@ class Cache(Generic[KT, VT]):
             else:
                 break
 
+    def __contains__(self, key: KT) -> bool:
+        return key in self._content
+
     def __getitem__(self, key: KT) -> VT:
         if key not in self._content:
             if self.__fetch_func:
