@@ -58,12 +58,13 @@ async def finalize_deploy(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]]
         expected_operations = confirmed_transaction.finalize
         for mapping in program.mappings.keys():
             mapping_id = Field.loads(cached_get_mapping_id(str(program.id), str(mapping)))
-            operations.append({
-                "type": FinalizeOperation.Type.InitializeMapping,
-                "mapping_id": mapping_id,
-                "program_id": program.id,
-                "mapping": mapping,
-            })
+            if not await db.is_mapping_exists(str(mapping_id)):
+                operations.append({
+                    "type": FinalizeOperation.Type.InitializeMapping,
+                    "mapping_id": mapping_id,
+                    "program_id": program.id,
+                    "mapping": mapping,
+                })
         rejected_reason = None
     else:
         expected_operations = confirmed_transaction.finalize
