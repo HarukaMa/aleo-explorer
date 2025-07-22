@@ -36,3 +36,4 @@ class Canary:
     consensus_v2_height = 2900000
     consensus_v3_height = 4560000
     consensus_v4_height = 5660000
+    consensus_v8_height = 7565000

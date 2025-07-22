@@ -36,3 +36,4 @@ class Testnet:
     consensus_v2_height = 2950000
     consensus_v3_height = 4800000
     consensus_v4_height = 6650000
+    consensus_v8_height = 9173000

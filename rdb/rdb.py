@@ -389,7 +389,7 @@ class RocksDB:
         aborted_solution_ids = AbortedSolutionIDsMap.read(self.rdb, block_hash)
         if aborted_solution_ids is None:
             raise ValueError(f"missing aborted solution ids for block {block_hash} in rdb")
-        transactions = self.get_block_transactions(block_hash)
+        transactions = self.get_block_transactions(block_hash, block_height)
         if transactions is None:
             raise ValueError(f"missing transactions for block {block_hash} in rdb")
         aborted_transaction_ids = AbortedTransactionIDsMap.read(self.rdb, block_hash)
@@ -430,17 +430,17 @@ class RocksDB:
     def get_block_aborted_solution_ids(self, block_hash: BlockHash):
         return AbortedSolutionIDsMap.read(self.rdb, block_hash)
 
-    def get_block_transactions(self, block_hash: BlockHash):
+    def get_block_transactions(self, block_hash: BlockHash, block_height: int):
         transaction_ids = TransactionsMap.read(self.rdb, block_hash)
         if transaction_ids is None:
             return None
         transactions: list[ConfirmedTransaction] = []
         for txid in transaction_ids:
-            transactions.append(self.get_confirmed_transaction(txid))
+            transactions.append(self.get_confirmed_transaction(txid, block_height))
         return Transactions(transactions=Vec[ConfirmedTransaction, u32](transactions))
 
-    def get_confirmed_transaction(self, transaction_id: TransactionID):
-        transaction = self.get_transaction(transaction_id)
+    def get_confirmed_transaction(self, transaction_id: TransactionID, block_height: int):
+        transaction = self.get_transaction(transaction_id, block_height)
         if transaction is None:
             raise ValueError("missing transaction in rdb")
         data = ConfirmedTransactionsMap.read(self.rdb, transaction_id)
@@ -461,11 +461,11 @@ class RocksDB:
         else:
             raise ValueError("unknown transaction type")
 
-    def get_transaction(self, transaction_id: TransactionID):
+    def get_transaction(self, transaction_id: TransactionID, block_height: int):
         block_hash = RejectedOrAbortedTransactionIDMap.read(self.rdb, transaction_id)
         if block_hash is None:
-            return self.tx_get_transaction(transaction_id)
-        transactions = self.get_block_transactions(block_hash)
+            return self.tx_get_transaction(transaction_id, block_height)
+        transactions = self.get_block_transactions(block_hash, block_height)
         if transactions is None:
             raise ValueError(f"missing transactions for block {block_hash} in rdb")
         for tx in transactions:
@@ -481,12 +481,12 @@ class RocksDB:
     def get_block_aborted_transaction_ids(self, block_hash: BlockHash):
         return AbortedTransactionIDsMap.read(self.rdb, block_hash)
 
-    def tx_get_transaction(self, transaction_id: TransactionID):
+    def tx_get_transaction(self, transaction_id: TransactionID, block_height: int):
         transaction_type = TransactionIDMap.read(self.rdb, transaction_id)
         if transaction_type is None:
             return None
         if transaction_type == TransactionType.Deploy:
-            return self.deploy_get_transaction(transaction_id)
+            return self.deploy_get_transaction(transaction_id, block_height)
         elif transaction_type == TransactionType.Execute:
             return self.execute_get_transaction(transaction_id)
         elif transaction_type == TransactionType.Fee:
@@ -497,23 +497,27 @@ class RocksDB:
         else:
             raise ValueError(f"unknown transaction type {transaction_type}")
 
-    def deploy_get_transaction(self, transaction_id: TransactionID):
-        deployment = self.deploy_get_deployment(transaction_id)
+    def deploy_get_transaction(self, transaction_id: TransactionID, block_height: int):
+        deployment = self.deploy_get_deployment(transaction_id, block_height)
         if deployment is None:
             return None
         fee = self.fee_get_fee(transaction_id)
         if fee is None:
             raise ValueError(f"missing fee for transaction {transaction_id}")
-        owner = self.deploy_get_owner(transaction_id, deployment.program.id)
+        owner = self.deploy_get_owner(transaction_id, deployment.program.id, block_height)
         if owner is None:
             raise ValueError(f"missing owner for transaction {transaction_id}")
         return DeployTransaction(id_=transaction_id, deployment=deployment, fee=fee, owner=owner)
 
-    def deploy_get_deployment(self, transaction_id: TransactionID):
+    def deploy_get_deployment(self, transaction_id: TransactionID, block_height: int):
+        from node import Network
         program_id = DeploymentIDMap.read(self.rdb, transaction_id)
         if program_id is None:
             return None
-        edition = self.deploy_get_edition(transaction_id)
+        if block_height < Network.consensus_v8_height:
+            edition = u16(0)
+        else:
+            edition = self.deploy_get_edition(transaction_id)
         if edition is None:
             raise ValueError(f"missing edition for program {program_id}")
         program = DeploymentProgramMap.read(self.rdb, Tuple[ProgramID, u16]((program_id, edition)))
@@ -536,10 +540,14 @@ class RocksDB:
     def deploy_get_edition(self, transaction_id: TransactionID):
         return DeploymentIDEditionMap.read(self.rdb, transaction_id)
 
-    def deploy_get_owner(self, transaction_id: TransactionID, program_id: ProgramID):
+    def deploy_get_owner(self, transaction_id: TransactionID, program_id: ProgramID, block_height: int):
+        from node import Network
         if program_id == "credits.aleo":
             return None
-        edition = self.deploy_get_edition(transaction_id)
+        if block_height < Network.consensus_v8_height:
+            edition = u16(0)
+        else:
+            edition = self.deploy_get_edition(transaction_id)
         if edition is None:
             raise ValueError(f"missing edition for program {program_id}")
         owner = DeploymentOwnerMap.read(self.rdb, Tuple[ProgramID, u16]((program_id, edition)))
