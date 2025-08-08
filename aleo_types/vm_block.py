@@ -937,6 +937,7 @@ class Program(Serializable, JSONSerialize):
             elif d == ProgramDefinition.Constructor:
                 c = Constructor.load(data)
                 constructor = Option[Constructor](c)
+                identifiers[Identifier(value="constructor")] = d
         return cls(id_=id_, imports=imports, constructor=constructor, mappings=mappings, structs=structs, records=records,
                    closures=closures, functions=functions, identifiers=identifiers)
 
