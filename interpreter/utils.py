@@ -1,6 +1,7 @@
 from hashlib import sha3_256
 
 from aleo_types import *
+from db import Database
 from node import Network
 from .environment import Registers
 
