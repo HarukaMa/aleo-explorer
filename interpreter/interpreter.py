@@ -3,7 +3,8 @@ import psycopg
 from aleo_types import *
 from aleo_types.cached import cached_get_key_id, cached_get_mapping_id
 from db import Database
-from interpreter.finalizer import execute_finalizer, ExecuteError, mapping_cache_read, profile
+from interpreter.finalizer import execute_finalizer, ExecuteError, mapping_cache_read, \
+    profile  # pyright: ignore [reportAttributeAccessIssue, reportUnknownVariableType]
 from interpreter.utils import FinalizeState
 from util.global_cache import global_mapping_cache, global_program_cache, get_program, MappingCache, MappingCacheDict
 
@@ -66,9 +67,20 @@ async def finalize_deploy(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]]
                     "mapping": mapping,
                 })
         rejected_reason = None
-    else:
+    elif isinstance(confirmed_transaction, RejectedDeploy):
+        rejected = cast(RejectedDeployment, confirmed_transaction.rejected)
         expected_operations = confirmed_transaction.finalize
+        deployment = rejected.deploy
+        program = deployment.program
         rejected_reason = "(detailed reason not available)"
+        if program.constructor.value is not None:
+            try:
+                await execute_finalizer(db, cur, finalize_state, [TransitionID(b"\x00" * 32)], set(), program, Identifier(value="constructor"),
+                                        [], MappingCache(), {}, False)
+            except ExecuteError as e:
+                rejected_reason = f"execute error: {e}, at constructor, instruction \"{e.instruction}\""
+    else:
+        raise NotImplementedError
     return expected_operations, operations, rejected_reason
 
 def load_input_from_arguments(arguments: list[Argument]) -> list[Value]:
@@ -238,7 +250,7 @@ async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]
             operations.extend(await _execute_public_fee(db, cur, finalize_state, transition, MappingCache(), {}, True))
     return expected_operations, operations, reject_reason
 
-@profile
+@profile  # pyright: ignore [reportUntypedFunctionDecorator]
 async def finalize_block(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]], block: Block) -> list[Optional[str]]:
     finalize_state = FinalizeState(block)
     reject_reasons: list[Optional[str]] = []

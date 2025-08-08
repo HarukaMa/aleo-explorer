@@ -37,3 +37,4 @@ class Mainnet:
     consensus_v3_height = 4900000
     consensus_v4_height = 6135000
     consensus_v8_height = 9430000
+    consensus_v9_height = 10272000

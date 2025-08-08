@@ -12,7 +12,7 @@ from aleo_types import *
 from explorer.types import Message as ExplorerMessage
 
 try:
-    from line_profiler import profile
+    from line_profiler import profile  # pyright: ignore [reportUnknownVariableType, reportMissingImports]
 except ImportError:
     P = ParamSpec('P')
     R = TypeVar('R')

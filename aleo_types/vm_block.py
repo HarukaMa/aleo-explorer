@@ -827,23 +827,45 @@ class Function(Serializable, JSONSerialize):
             return 0
         return self.finalize.value.cost(program)
 
+
+class Constructor(Serializable, JSONSerialize):
+
+    def __init__(self, *, commands: Vec[Command, u16]):
+        self.commands = commands
+        positions: dict[Identifier, int] = {}
+        for i, c in enumerate(commands):
+            if isinstance(c, PositionCommand):
+                positions[c.position] = i
+        self.positions = positions
+
+    def dump(self) -> bytes:
+        return self.commands.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        commands = Vec[Command, u16].load(data)
+        return cls(commands=commands)
+
 class ProgramDefinition(IntEnumu8):
     Mapping = 0
     Struct = 1
     Record = 2
     Closure = 3
     Function = 4
+    Constructor = 5
 
 
 class Program(Serializable, JSONSerialize):
     version = u8(1)
 
-    def __init__(self, *, id_: ProgramID, imports: Vec[Import, u8], mappings: dict[Identifier, Mapping],
+    def __init__(self, *, id_: ProgramID, imports: Vec[Import, u8], constructor: Option[Constructor],
+                 mappings: dict[Identifier, Mapping],
                  structs: dict[Identifier, Struct], records: dict[Identifier, RecordType],
                  closures: dict[Identifier, Closure], functions: dict[Identifier, Function],
                  identifiers: dict[Identifier, ProgramDefinition]):
         self.id = id_
         self.imports = imports
+        self.constructor = constructor
         self.mappings = mappings
         self.structs = structs
         self.records = records
@@ -869,6 +891,8 @@ class Program(Serializable, JSONSerialize):
                 res += self.closures[i].dump()
             elif d == ProgramDefinition.Function:
                 res += self.functions[i].dump()
+            elif d == ProgramDefinition.Constructor:
+                res += self.constructor.dump()
         return res
 
     @classmethod
@@ -884,6 +908,7 @@ class Program(Serializable, JSONSerialize):
         records: dict[Identifier, RecordType] = {}
         closures: dict[Identifier, Closure] = {}
         functions: dict[Identifier, Function] = {}
+        constructor = Option[Constructor](None)
         n = u16.load(data)
         for _ in range(n):
             d = ProgramDefinition.load(data)
@@ -907,7 +932,10 @@ class Program(Serializable, JSONSerialize):
                 f = Function.load(data)
                 functions[f.name] = f
                 identifiers[f.name] = d
-        return cls(id_=id_, imports=imports, mappings=mappings, structs=structs, records=records,
+            elif d == ProgramDefinition.Constructor:
+                c = Constructor.load(data)
+                constructor = Option[Constructor](c)
+        return cls(id_=id_, imports=imports, constructor=constructor, mappings=mappings, structs=structs, records=records,
                    closures=closures, functions=functions, identifiers=identifiers)
 
     def json(self, compatible: bool = False) -> JSONType:
@@ -1182,7 +1210,23 @@ class Certificate(Serializable, JSONSerialize):
         return str(Bech32m(self.dump(), "certificate"))
 
 
-class Deployment(Serializable, JSONSerialize):
+class Deployment(EnumBaseSerialize, Serializable, JSONSerialize):
+    version: u8
+    edition: u16
+    program: Program
+    verifying_keys: Vec[Tuple[Identifier, VerifyingKey, Certificate], u16]
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        version = u8.load(data)
+        if version == 1:
+            return DeploymentV1.load(data)
+        elif version == 2:
+            return DeploymentV2.load(data)
+        raise ValueError("invalid deployment version")
+
+
+class DeploymentV1(Deployment):
     version = u8(1)
 
     def __init__(self, *, edition: u16, program: Program,
@@ -1201,9 +1245,6 @@ class Deployment(Serializable, JSONSerialize):
 
     @classmethod
     def load(cls, data: BytesIO):
-        version = u8.load(data)
-        if version != cls.version:
-            raise ValueError("Invalid version")
         edition = u16.load(data)
         program = Program.load(data)
         verifying_keys = Vec[Tuple[Identifier, VerifyingKey, Certificate], u16].load(data)
@@ -1215,6 +1256,37 @@ class Deployment(Serializable, JSONSerialize):
         storage_cost = len(self.dump()) * Network.deployment_fee_multiplier
         namespace_cost = 10 ** max(0, 10 - len(self.program.id.name.data)) * 1000000
         return storage_cost, namespace_cost
+
+class DeploymentV2(Deployment):
+    version = u8(2)
+
+    def __init__(self, *, edition: u16, program: Program,
+                 verifying_keys: Vec[Tuple[Identifier, VerifyingKey, Certificate], u16],
+                 program_checksum: Vec[u8, FixedSize[32]], program_owner: Address):
+        self.edition = edition
+        self.program = program
+        self.verifying_keys = verifying_keys
+        self.program_checksum = program_checksum
+        self.program_owner = program_owner
+
+    def dump(self) -> bytes:
+        res = b""
+        res += self.version.dump()
+        res += self.edition.dump()
+        res += self.program.dump()
+        res += self.verifying_keys.dump()
+        res += self.program_checksum.dump()
+        res += self.program_owner.dump()
+        return res
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        edition = u16.load(data)
+        program = Program.load(data)
+        verifying_keys = Vec[Tuple[Identifier, VerifyingKey, Certificate], u16].load(data)
+        program_checksum = Vec[u8, FixedSize[32]].load(data)
+        program_owner = Address.load(data)
+        return cls(edition=edition, program=program, verifying_keys=verifying_keys, program_checksum=program_checksum, program_owner=program_owner)
 
 
 class WitnessCommitments(Serializable):

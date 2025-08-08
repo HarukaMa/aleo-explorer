@@ -342,3 +342,20 @@ class DatabaseProgram(DatabaseBase):
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
+
+    async def get_program_owner(self, program_id: str, edition: int) -> Optional[str]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT owner, checksum FROM program WHERE program_id = %s AND edition = %s",
+                        (program_id, edition)
+                    )
+                    if (res := await cur.fetchone()) is None:
+                        return None
+                    if res["checksum"] is None:
+                        return None
+                    return res["owner"]
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise

@@ -22,6 +22,7 @@ class DatabaseMigrate(DatabaseBase):
             (4, self.migration_4_recalculate_function_call_count),
             (5, self.migration_5_add_output_record_sender_ciphertext),
             (6, self.migration_6_add_program_edition),
+            (7, self.migration_7_add_program_checksum),
         ]
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -92,3 +93,7 @@ class DatabaseMigrate(DatabaseBase):
         await conn.execute("alter table program add edition integer default 0 not null")
         await conn.execute("alter table program drop constraint program_pk2")
         await conn.execute("alter table program add constraint program_pk2 unique (program_id, edition)")
+
+    @staticmethod
+    async def migration_7_add_program_checksum(conn: psycopg.AsyncConnection[DictRow]):
+        await conn.execute("alter table program add checksum bytea")

@@ -1,3 +1,5 @@
+from hashlib import sha3_256
+
 from aleo_types import *
 from node import Network
 from .environment import Registers
@@ -16,7 +18,7 @@ class FinalizeState:
         if len(self.random_seed) != 32:
             raise RuntimeError("invalid random seed length")
 
-def load_plaintext_from_operand(operand: Operand, registers: Registers, finalize_state: FinalizeState) -> Plaintext:
+async def load_plaintext_from_operand(operand: Operand, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program) -> Plaintext:
     if isinstance(operand, LiteralOperand):
         return LiteralPlaintext(literal=operand.literal)
     elif isinstance(operand, RegisterOperand):
@@ -82,6 +84,60 @@ def load_plaintext_from_operand(operand: Operand, registers: Registers, finalize
             literal=Literal(
                 type_=Literal.Type.U16,
                 primitive=Network.network_id
+            )
+        )
+    elif isinstance(operand, ChecksumOperand):
+        if operand.program_id.value is not None:
+            program_id = str(operand.program_id.value)
+            latest_edition = await db.get_program_latest_edition(program_id)
+            if latest_edition is None:
+                raise RuntimeError("program not found")
+            program_bytes = await db.get_program(program_id, latest_edition)
+            if program_bytes is None:
+                raise RuntimeError("program not found")
+        else:
+            program_bytes = program.dump()
+        program_string = aleo_explorer_rust.program_to_string(program_bytes)
+        checksum = sha3_256(program_string.encode("utf-8")).digest()
+        return ArrayPlaintext(
+            elements=Vec[Plaintext, u32]([
+                LiteralPlaintext(
+                    literal=Literal(
+                        type_=Literal.Type.U8,
+                        primitive=u8(checksum[i])
+                    )
+                ) for i in range(32)
+            ])
+        )
+    elif isinstance(operand, EditionOperand):
+        if operand.program_id.value is not None:
+            program_id = str(operand.program_id.value)
+        else:
+            program_id = str(program.id)
+        latest_edition = await db.get_program_latest_edition(program_id)
+        if latest_edition is None:
+            raise RuntimeError("program not found")
+        return LiteralPlaintext(
+            literal=Literal(
+                type_=Literal.Type.U16,
+                primitive=u16(latest_edition)
+            )
+        )
+    elif isinstance(operand, ProgramOwnerOperand):
+        if operand.program_id.value is not None:
+            program_id = str(operand.program_id.value)
+        else:
+            program_id = str(program.id)
+        latest_edition = await db.get_program_latest_edition(program_id)
+        if latest_edition is None:
+            raise RuntimeError("program not found")
+        program_owner = await db.get_program_owner(program_id, latest_edition)
+        if program_owner is None:
+            raise AssertionError("program owner is not available")
+        return LiteralPlaintext(
+            literal=Literal(
+                type_=Literal.Type.Address,
+                primitive=Address.loads(program_owner)
             )
         )
     else:

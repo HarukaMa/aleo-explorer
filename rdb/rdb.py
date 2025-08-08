@@ -12,7 +12,7 @@ from aleo_types.basic import IntEnumu16, Unit, u16, u32, u64, bool_, u8, Int
 from aleo_types.traits import Sized
 from aleo_types.vm_basic import BlockHash, StateRoot, Field, TransactionID, Group, TransitionID
 from aleo_types.vm_block import AcceptedDeploy, AcceptedExecute, AcceptedExecuteType, Block, BlockHeader, Authority, \
-    ConfirmedTxType, ConstantTransitionInput, DeployTransaction, Deployment, ExecuteTransaction, Execution, \
+    ConfirmedTxType, ConstantTransitionInput, DeployTransaction, ExecuteTransaction, Execution, \
     FeeTransaction, PublicTransitionInput, \
     Ratifications, RejectedDeployType, \
     RejectedExecuteType, Solutions, \
@@ -23,7 +23,7 @@ from aleo_types.vm_block import AcceptedDeploy, AcceptedExecute, AcceptedExecute
     TransactionType, \
     Transition, PrivateTransitionInput, RecordTransitionInput, ExternalRecordTransitionInput, ConstantTransitionOutput, \
     PublicTransitionOutput, PrivateTransitionOutput, RecordTransitionOutput, ExternalRecordTransitionOutput, \
-    FutureTransitionOutput, Fee
+    FutureTransitionOutput, Fee, DeploymentV1, DeploymentV2
 from aleo_types.vm_instruction import Identifier, ProgramID
 
 
@@ -108,6 +108,8 @@ class DataID(IntEnumu16):
     OutputRecordSenderMap = auto()
     # Track edition based on transaction ID
     IDEditionMap = auto()
+    # Track deployments that contain an optional checksum
+    DeploymentChecksumMap = auto()
 
 
 K = TypeVar("K", bound=Serializable)
@@ -264,6 +266,7 @@ RejectedDeploymentOrExecutionMap = DataMap[Field, Rejected](DataID.BlockRejected
 # type ReverseIDMap = DataMap<(ProgramID<N>, u16), N::TransactionID>;
 # type OwnerMap = DataMap<(ProgramID<N>, u16), ProgramOwner<N>>;
 # type ProgramMap = DataMap<(ProgramID<N>, u16), Program<N>>;
+# type ChecksumMap = DataMap<(ProgramID<N>, u16), [U8<N>; 32]>;
 # type VerifyingKeyMap = DataMap<(ProgramID<N>, Identifier<N>, u16), VerifyingKey<N>>;
 # type CertificateMap = DataMap<(ProgramID<N>, Identifier<N>, u16), Certificate<N>>;
 # type FeeStorage = FeeDB<N>;
@@ -274,6 +277,7 @@ DeploymentEditionMap = DataMap[ProgramID, u16](DataID.DeploymentEditionMap)
 DeploymentReverseIDMap = DataMap[Tuple[ProgramID, u16], TransactionID](DataID.DeploymentReverseIDMap)
 DeploymentOwnerMap = DataMap[Tuple[ProgramID, u16], ProgramOwner](DataID.DeploymentOwnerMap)
 DeploymentProgramMap = DataMap[Tuple[ProgramID, u16], Program](DataID.DeploymentProgramMap)
+DeploymentChecksumMap = DataMap[Tuple[ProgramID, u16], Vec[u8, FixedSize[32]]](DataID.DeploymentChecksumMap)
 DeploymentVerifyingKeyMap = DataMap[Tuple[ProgramID, Identifier, u16], VerifyingKey](DataID.DeploymentVerifyingKeyMap)
 DeploymentCertificateMap = DataMap[Tuple[ProgramID, Identifier, u16], Certificate](DataID.DeploymentCertificateMap)
 
@@ -534,8 +538,17 @@ class RocksDB:
             if cert is None:
                 raise ValueError(f"missing certificate for program {program_id} function {function} edition {edition}")
             verifying_keys.append(Tuple[Identifier, VerifyingKey, Certificate]((function, key, cert)))
-        return Deployment(edition=edition, program=program,
-                          verifying_keys=Vec[Tuple[Identifier, VerifyingKey, Certificate], u16](verifying_keys))
+        checksum = DeploymentChecksumMap.read(self.rdb, Tuple[ProgramID, u16]((program_id, edition)))
+        if checksum is None:
+            return DeploymentV1(edition=edition, program=program,
+                                verifying_keys=Vec[Tuple[Identifier, VerifyingKey, Certificate], u16](verifying_keys))
+        else:
+            owner = self.deploy_get_owner(transaction_id, program_id, block_height)
+            if owner is None:
+                raise ValueError(f"missing owner for program {program_id} edition {edition}")
+            return DeploymentV2(edition=edition, program=program,
+                                verifying_keys=Vec[Tuple[Identifier, VerifyingKey, Certificate], u16](verifying_keys),
+                                program_checksum=checksum, program_owner=owner.address)
 
     def deploy_get_edition(self, transaction_id: TransactionID):
         return DeploymentIDEditionMap.read(self.rdb, transaction_id)

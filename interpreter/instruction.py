@@ -7,40 +7,41 @@ HT = HashInstruction.Type
 CmT = CommitInstruction.Type
 CsT = CastType.Type
 
-def execute_instruction(instruction: Instruction, program: Program, registers: Registers, finalize_state: FinalizeState):
+async def execute_instruction(instruction: Instruction, program: Program, registers: Registers, finalize_state: FinalizeState,
+                        db: Database):
     literals = instruction.literals
     if isinstance(literals, Literals):
         num_operands = literals.num_operands
         operands = literals.operands[:num_operands]
         destination = literals.destination
-        literal_ops[instruction.type](operands, destination, registers, finalize_state)
+        await literal_ops[instruction.type](operands, destination, registers, finalize_state, db, program)
     elif isinstance(literals, CastInstruction):
         operands = literals.operands
         destination = literals.destination
         cast_type = literals.cast_type
-        cast_op(operands, destination, cast_type, program, registers, finalize_state)
+        await cast_op(operands, destination, cast_type, program, registers, finalize_state, db)
     elif isinstance(literals, CallInstruction):
         raise NotImplementedError
     elif isinstance(literals, AssertInstruction):
         variant = literals.variant
         if variant == 0:
-            assert_eq(literals.operands, registers, finalize_state)
+            await assert_eq(literals.operands, registers, finalize_state, db, program)
         elif variant == 1:
-            assert_neq(literals.operands, registers, finalize_state)
+            await assert_neq(literals.operands, registers, finalize_state, db, program)
         else:
             raise NotImplementedError
     elif isinstance(literals, HashInstruction):
         type_ = literals.type
-        hash_op(literals.operands, literals.destination, literals.destination_type, registers, finalize_state, type_)
+        await hash_op(literals.operands, literals.destination, literals.destination_type, registers, finalize_state, type_, db, program)
     elif isinstance(literals, CommitInstruction):
         type_ = literals.type
-        commit_op(literals.operands, literals.destination, literals.destination_type, registers, finalize_state, type_)
+        await commit_op(literals.operands, literals.destination, literals.destination_type, registers, finalize_state, type_, db, program)
     else:
         raise NotImplementedError
 
 
-def abs_(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op = load_plaintext_from_operand(operands[0], registers, finalize_state)
+async def abs_(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
     if not isinstance(op, LiteralPlaintext):
         raise TypeError("operand must be literal")
     if not isinstance(op.literal.primitive, Abs):
@@ -54,8 +55,8 @@ def abs_(operands: list[Operand], destination: Register, registers: Registers, f
     )
     store_plaintext_to_register(res, destination, registers)
 
-def abs_wrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op = load_plaintext_from_operand(operands[0], registers, finalize_state)
+async def abs_wrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
     if not isinstance(op, LiteralPlaintext):
         raise TypeError("operand must be literal")
     if not isinstance(op.literal.primitive, AbsWrapped):
@@ -69,9 +70,9 @@ def abs_wrapped(operands: list[Operand], destination: Register, registers: Regis
     )
     store_plaintext_to_register(res, destination, registers)
 
-def add(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+async def add(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
     if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
         raise TypeError("operands must be literals")
     op1_primitive = op1.literal.primitive
@@ -87,9 +88,9 @@ def add(operands: list[Operand], destination: Register, registers: Registers, fi
     )
     store_plaintext_to_register(res, destination, registers)
 
-def add_wrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+async def add_wrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
     if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
         raise TypeError("operands must be literals")
     if not isinstance(op1.literal.primitive, AddWrapped):
@@ -103,9 +104,9 @@ def add_wrapped(operands: list[Operand], destination: Register, registers: Regis
     )
     store_plaintext_to_register(res, destination, registers)
 
-def and_(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+async def and_(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
     if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
         raise TypeError("operands must be literals")
     if not isinstance(op1.literal.primitive, And):
@@ -119,22 +120,22 @@ def and_(operands: list[Operand], destination: Register, registers: Registers, f
     )
     store_plaintext_to_register(res, destination, registers)
 
-def assert_eq(operands: tuple[Operand, Operand], registers: Registers, finalize_state: FinalizeState):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+async def assert_eq(operands: tuple[Operand, Operand], registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
     if op1 != op2:
         raise AssertionError("assertion failed: {} != {}".format(op1, op2))
 
-def assert_neq(operands: tuple[Operand, Operand], registers: Registers, finalize_state: FinalizeState):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+async def assert_neq(operands: tuple[Operand, Operand], registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
     if op1 == op2:
         raise AssertionError("assertion failed: {} == {}".format(op1, op2))
 
-def call_op(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+async def call_op(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
     raise NotImplementedError
 
-def cast_op(operands: list[Operand], destination: Register, cast_type: CastType, program: Program, registers: Registers, finalize_state: FinalizeState):
+async def cast_op(operands: list[Operand], destination: Register, cast_type: CastType, program: Program, registers: Registers, finalize_state: FinalizeState, db: Database):
 
     def verify_struct_type(struct_plaintext: StructPlaintext, verify_struct_definition: Struct):
         if len(struct_plaintext.members) != len(verify_struct_definition.members):
@@ -159,7 +160,7 @@ def cast_op(operands: list[Operand], destination: Register, cast_type: CastType,
         raise NotImplementedError
     plaintext_type = cast_type.plaintext_type
     if isinstance(plaintext_type, LiteralPlaintextType):
-        plaintext = load_plaintext_from_operand(operands[0], registers, finalize_state)
+        plaintext = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
         if not isinstance(plaintext, LiteralPlaintext):
             raise TypeError("operand must be a literal")
         primitive = plaintext.literal.primitive
@@ -181,21 +182,21 @@ def cast_op(operands: list[Operand], destination: Register, cast_type: CastType,
         members: list[Tuple[Identifier, Plaintext]] = []
         for i, (name, _) in enumerate(struct_definition.members):
             name: Identifier
-            members.append(Tuple[Identifier, Plaintext]((name, load_plaintext_from_operand(operands[i], registers, finalize_state))))
+            members.append(Tuple[Identifier, Plaintext]((name, await load_plaintext_from_operand(operands[i], registers, finalize_state, db, program))))
         struct_plaintext = StructPlaintext(members=Vec[Tuple[Identifier, Plaintext], u8](members))
         verify_struct_type(struct_plaintext, struct_definition)
         store_plaintext_to_register(struct_plaintext, destination, registers)
     elif isinstance(plaintext_type, ArrayPlaintextType):
         array: list[Plaintext] = []
         for operand in operands:
-            array.append(load_plaintext_from_operand(operand, registers, finalize_state))
+            array.append(await load_plaintext_from_operand(operand, registers, finalize_state, db, program))
         store_plaintext_to_register(ArrayPlaintext(elements=Vec[Plaintext, u32](array)), destination, registers)
     else:
         raise NotImplementedError
 
-def commit_op(operands: tuple[Operand, Operand], destination: Register, destination_type: LiteralType, registers: Registers, finalize_state: FinalizeState, commit_type: CmT):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+async def commit_op(operands: tuple[Operand, Operand], destination: Register, destination_type: LiteralType, registers: Registers, finalize_state: FinalizeState, commit_type: CmT, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
     if not isinstance(op2, LiteralPlaintext):
         raise TypeError("operand must be literal")
     if op2.literal.type != Literal.Type.Scalar:
@@ -211,9 +212,9 @@ def commit_op(operands: tuple[Operand, Operand], destination: Register, destinat
     )
     store_plaintext_to_register(res, destination, registers)
 
-def div(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+async def div(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
     if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
         raise TypeError("operands must be literals")
     if not isinstance(op1.literal.primitive, Div):
@@ -227,9 +228,9 @@ def div(operands: list[Operand], destination: Register, registers: Registers, fi
     )
     store_plaintext_to_register(res, destination, registers)
 
-def div_wrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+async def div_wrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
     if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
         raise TypeError("operands must be literals")
     if not isinstance(op1.literal.primitive, DivWrapped):
@@ -243,8 +244,8 @@ def div_wrapped(operands: list[Operand], destination: Register, registers: Regis
     )
     store_plaintext_to_register(res, destination, registers)
 
-def double(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op = load_plaintext_from_operand(operands[0], registers, finalize_state)
+async def double(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
     if not isinstance(op, LiteralPlaintext):
         raise TypeError("operand must be literal")
     if not isinstance(op.literal.primitive, Double):
@@ -258,9 +259,9 @@ def double(operands: list[Operand], destination: Register, registers: Registers,
     )
     store_plaintext_to_register(res, destination, registers)
 
-def greater_than(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+async def greater_than(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
     if not isinstance(op1, LiteralPlaintext) or not isinstance(op2, LiteralPlaintext):
         raise TypeError("operands must be literals")
     if op1 > op2:
@@ -279,9 +280,9 @@ def greater_than(operands: list[Operand], destination: Register, registers: Regi
         )
     store_plaintext_to_register(res, destination, registers)
 
-def greater_than_or_equal(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+async def greater_than_or_equal(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
     if not isinstance(op1, LiteralPlaintext) or not isinstance(op2, LiteralPlaintext):
         raise TypeError("operands must be literals")
     if op1 >= op2:
@@ -300,8 +301,8 @@ def greater_than_or_equal(operands: list[Operand], destination: Register, regist
         )
     store_plaintext_to_register(res, destination, registers)
 
-def hash_op(operands: tuple[Operand, Optional[Operand]], destination: Register, destination_type: PlaintextType, registers: Registers, finalize_state: FinalizeState, hash_type: HT):
-    op = load_plaintext_from_operand(operands[0], registers, finalize_state)
+async def hash_op(operands: tuple[Operand, Optional[Operand]], destination: Register, destination_type: PlaintextType, registers: Registers, finalize_state: FinalizeState, hash_type: HT, db: Database, program: Program):
+    op = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
     if not isinstance(destination_type, LiteralPlaintextType):
         raise TypeError("destination type must be literal")
     value_type = destination_type.literal_type.primitive_type
@@ -314,17 +315,17 @@ def hash_op(operands: tuple[Operand, Optional[Operand]], destination: Register, 
     )
     store_plaintext_to_register(res, destination, registers)
 
-def hash_many_psd2(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+async def hash_many_psd2(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
     raise NotImplementedError
 
-def hash_many_psd4(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+async def hash_many_psd4(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
     raise NotImplementedError
 
-def hash_many_psd8(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
+async def hash_many_psd8(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
     raise NotImplementedError
 
-def inv(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op = load_plaintext_from_operand(operands[0], registers, finalize_state)
+async def inv(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
     if not isinstance(op, LiteralPlaintext):
         raise TypeError("operand must be literal")
     if not isinstance(op.literal.primitive, Inv):
@@ -338,9 +339,9 @@ def inv(operands: list[Operand], destination: Register, registers: Registers, fi
     )
     store_plaintext_to_register(res, destination, registers)
 
-def is_eq(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+async def is_eq(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
     # loosely check the types, we don't really expect to run into bad types here
     if op1.type != op2.type:
         raise TypeError("invalid operand types")
@@ -353,9 +354,9 @@ def is_eq(operands: list[Operand], destination: Register, registers: Registers, 
     store_plaintext_to_register(res, destination, registers)
 
 
-def is_neq(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+async def is_neq(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
     # loosely check the types, we don't really expect to run into bad types here
     if op1.type != op2.type:
         raise TypeError("invalid operand types")
@@ -367,9 +368,9 @@ def is_neq(operands: list[Operand], destination: Register, registers: Registers,
     )
     store_plaintext_to_register(res, destination, registers)
 
-def less_than(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+async def less_than(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
     if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
         raise TypeError("operands must be literals")
     if op1 < op2:
@@ -388,9 +389,9 @@ def less_than(operands: list[Operand], destination: Register, registers: Registe
         )
     store_plaintext_to_register(res, destination, registers)
 
-def less_than_or_equal(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+async def less_than_or_equal(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
     if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
         raise TypeError("operands must be literals")
     if op1 <= op2:
@@ -408,9 +409,9 @@ def less_than_or_equal(operands: list[Operand], destination: Register, registers
             )
         )
     store_plaintext_to_register(res, destination, registers)
-def modulo(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+async def modulo(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
     if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
         raise TypeError("operands must be literals")
     if not (isinstance(op1.literal.primitive, Mod) and isinstance(op2.literal.primitive, Mod)):
@@ -424,9 +425,9 @@ def modulo(operands: list[Operand], destination: Register, registers: Registers,
     )
     store_plaintext_to_register(res, destination, registers)
 
-def mul(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+async def mul(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
     if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
         raise TypeError("operands must be literals")
     if not isinstance(op1.literal.primitive, Mul):
@@ -442,9 +443,9 @@ def mul(operands: list[Operand], destination: Register, registers: Registers, fi
     )
     store_plaintext_to_register(res, destination, registers)
 
-def mul_wrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+async def mul_wrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
     if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
         raise TypeError("operands must be literals")
     if not isinstance(op1.literal.primitive, MulWrapped):
@@ -458,9 +459,9 @@ def mul_wrapped(operands: list[Operand], destination: Register, registers: Regis
     )
     store_plaintext_to_register(res, destination, registers)
 
-def nand(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+async def nand(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
     if not isinstance(op1, LiteralPlaintext) or not isinstance(op2, LiteralPlaintext):
         raise TypeError("operands must be literals")
     if not isinstance(op1.literal.primitive, Nand):
@@ -474,8 +475,8 @@ def nand(operands: list[Operand], destination: Register, registers: Registers, f
     )
     store_plaintext_to_register(res, destination, registers)
 
-def neg(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op = load_plaintext_from_operand(operands[0], registers, finalize_state)
+async def neg(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
     if not isinstance(op, LiteralPlaintext):
         raise TypeError("operand must be literal")
     if not isinstance(op.literal.primitive, Neg):
@@ -489,9 +490,9 @@ def neg(operands: list[Operand], destination: Register, registers: Registers, fi
     )
     store_plaintext_to_register(res, destination, registers)
 
-def nor(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+async def nor(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
     if not isinstance(op1, LiteralPlaintext) or not isinstance(op2, LiteralPlaintext):
         raise TypeError("operands must be literals")
     if not isinstance(op1.literal.primitive, Nor):
@@ -505,8 +506,8 @@ def nor(operands: list[Operand], destination: Register, registers: Registers, fi
     )
     store_plaintext_to_register(res, destination, registers)
 
-def not_(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op = load_plaintext_from_operand(operands[0], registers, finalize_state)
+async def not_(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
     if not isinstance(op, LiteralPlaintext):
         raise TypeError("operand must be literal")
     if not isinstance(op.literal.primitive, Not):
@@ -520,9 +521,9 @@ def not_(operands: list[Operand], destination: Register, registers: Registers, f
     )
     store_plaintext_to_register(res, destination, registers)
 
-def or_(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+async def or_(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
     if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
         raise TypeError("operands must be literals")
     if not isinstance(op1.literal.primitive, Or):
@@ -536,9 +537,9 @@ def or_(operands: list[Operand], destination: Register, registers: Registers, fi
     )
     store_plaintext_to_register(res, destination, registers)
 
-def pow_(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+async def pow_(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
     if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
         raise TypeError("operands must be literals")
     if not isinstance(op1.literal.primitive, Pow):
@@ -552,9 +553,9 @@ def pow_(operands: list[Operand], destination: Register, registers: Registers, f
     )
     store_plaintext_to_register(res, destination, registers)
 
-def pow_wrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+async def pow_wrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
     if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
         raise TypeError("operands must be literals")
     if not isinstance(op1.literal.primitive, PowWrapped):
@@ -568,9 +569,9 @@ def pow_wrapped(operands: list[Operand], destination: Register, registers: Regis
     )
     store_plaintext_to_register(res, destination, registers)
 
-def rem(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+async def rem(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
     if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
         raise TypeError("operands must be literals")
     if not isinstance(op1.literal.primitive, Rem):
@@ -584,9 +585,9 @@ def rem(operands: list[Operand], destination: Register, registers: Registers, fi
     )
     store_plaintext_to_register(res, destination, registers)
 
-def rem_wrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+async def rem_wrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
     if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
         raise TypeError("operands must be literals")
     if not isinstance(op1.literal.primitive, RemWrapped):
@@ -600,9 +601,9 @@ def rem_wrapped(operands: list[Operand], destination: Register, registers: Regis
     )
     store_plaintext_to_register(res, destination, registers)
 
-def shl(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+async def shl(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
     if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
         raise TypeError("operands must be literals")
     if not isinstance(op1.literal.primitive, Shl):
@@ -616,9 +617,9 @@ def shl(operands: list[Operand], destination: Register, registers: Registers, fi
     )
     store_plaintext_to_register(res, destination, registers)
 
-def shl_wrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+async def shl_wrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
     if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
         raise TypeError("operands must be literals")
     if not isinstance(op1.literal.primitive, ShlWrapped):
@@ -632,9 +633,9 @@ def shl_wrapped(operands: list[Operand], destination: Register, registers: Regis
     )
     store_plaintext_to_register(res, destination, registers)
 
-def shr(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+async def shr(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
     if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
         raise TypeError("operands must be literals")
     if not isinstance(op1.literal.primitive, Shr):
@@ -648,9 +649,9 @@ def shr(operands: list[Operand], destination: Register, registers: Registers, fi
     )
     store_plaintext_to_register(res, destination, registers)
 
-def shr_wrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+async def shr_wrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
     if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
         raise TypeError("operands must be literals")
     if not isinstance(op1.literal.primitive, ShrWrapped):
@@ -665,10 +666,10 @@ def shr_wrapped(operands: list[Operand], destination: Register, registers: Regis
     store_plaintext_to_register(res, destination, registers)
 
 
-def sign_verify(operands: tuple[Operand, Operand, Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    signature = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    address = load_plaintext_from_operand(operands[1], registers, finalize_state)
-    message = load_plaintext_from_operand(operands[2], registers, finalize_state)
+async def sign_verify(operands: tuple[Operand, Operand, Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    signature = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    address = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
+    message = await load_plaintext_from_operand(operands[2], registers, finalize_state, db, program)
 
     if not isinstance(signature, LiteralPlaintext):
         raise TypeError("message must be a literal")
@@ -693,8 +694,8 @@ def sign_verify(operands: tuple[Operand, Operand, Operand], destination: Registe
     )
     store_plaintext_to_register(res, destination, registers)
 
-def square(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op = load_plaintext_from_operand(operands[0], registers, finalize_state)
+async def square(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
     if not isinstance(op, LiteralPlaintext):
         raise TypeError("operand must be literal")
     if not isinstance(op.literal.primitive, Square):
@@ -708,8 +709,8 @@ def square(operands: list[Operand], destination: Register, registers: Registers,
     )
     store_plaintext_to_register(res, destination, registers)
 
-def square_root(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op = load_plaintext_from_operand(operands[0], registers, finalize_state)
+async def square_root(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
     if not isinstance(op, LiteralPlaintext):
         raise TypeError("operand must be literal")
     if not isinstance(op.literal.primitive, Sqrt):
@@ -723,9 +724,9 @@ def square_root(operands: list[Operand], destination: Register, registers: Regis
     )
     store_plaintext_to_register(res, destination, registers)
 
-def sub(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+async def sub(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
     if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
         raise TypeError("operands must be literals")
     if not isinstance(op1.literal.primitive, Sub):
@@ -739,9 +740,9 @@ def sub(operands: list[Operand], destination: Register, registers: Registers, fi
     )
     store_plaintext_to_register(res, destination, registers)
 
-def sub_wrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+async def sub_wrapped(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
     if not (isinstance(op1, LiteralPlaintext) and isinstance(op2, LiteralPlaintext)):
         raise TypeError("operands must be literals")
     if not isinstance(op1.literal.primitive, SubWrapped):
@@ -755,10 +756,10 @@ def sub_wrapped(operands: list[Operand], destination: Register, registers: Regis
     )
     store_plaintext_to_register(res, destination, registers)
 
-def ternary(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
-    op3 = load_plaintext_from_operand(operands[2], registers, finalize_state)
+async def ternary(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
+    op3 = await load_plaintext_from_operand(operands[2], registers, finalize_state, db, program)
     if not isinstance(op1, LiteralPlaintext):
         raise TypeError("condition must be a literal")
     if op1.literal.type != Literal.Type.Boolean:
@@ -768,9 +769,9 @@ def ternary(operands: list[Operand], destination: Register, registers: Registers
     else:
         store_plaintext_to_register(op3, destination, registers)
 
-def xor(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState):
-    op1 = load_plaintext_from_operand(operands[0], registers, finalize_state)
-    op2 = load_plaintext_from_operand(operands[1], registers, finalize_state)
+async def xor(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
     if not isinstance(op1, LiteralPlaintext) or not isinstance(op2, LiteralPlaintext):
         raise TypeError("operands must be literals")
     if not isinstance(op1.literal.primitive, Xor):

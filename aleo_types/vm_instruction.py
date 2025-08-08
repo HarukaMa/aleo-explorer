@@ -368,6 +368,9 @@ class Operand(EnumBaseSerialize, Serialize, JSONSerialize, RustEnum):
         Caller = 4
         BlockHeight = 5
         NetworkID = 6
+        Checksum = 7
+        Edition = 8
+        ProgramOwner = 9
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -386,6 +389,12 @@ class Operand(EnumBaseSerialize, Serialize, JSONSerialize, RustEnum):
             return BlockHeightOperand.load(data)
         elif type_ == cls.Type.NetworkID:
             return NetworkIDOperand.load(data)
+        elif type_ == cls.Type.Checksum:
+            return ChecksumOperand.load(data)
+        elif type_ == cls.Type.Edition:
+            return EditionOperand.load(data)
+        elif type_ == cls.Type.ProgramOwner:
+            return ProgramOwnerOperand.load(data)
         else:
             raise ValueError("unknown operand type")
 
@@ -484,6 +493,44 @@ class NetworkIDOperand(Operand):
     def load(cls, data: BytesIO):
         return cls()
 
+class ChecksumOperand(Operand):
+    type = Operand.Type.Checksum
+
+    def __init__(self, *, program_id: Option[ProgramID]):
+        self.program_id = program_id
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.program_id.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        return cls(program_id=Option[ProgramID].load(data))
+
+class EditionOperand(Operand):
+    type = Operand.Type.Edition
+
+    def __init__(self, *, program_id: Option[ProgramID]):
+        self.program_id = program_id
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.program_id.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        return cls(program_id=Option[ProgramID].load(data))
+
+class ProgramOwnerOperand(Operand):
+    type = Operand.Type.ProgramOwner
+
+    def __init__(self, *, program_id: Option[ProgramID]):
+        self.program_id = program_id
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.program_id.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        return cls(program_id=Option[ProgramID].load(data))
 
 N = TypeVar("N", bound=FixedSize)
 
