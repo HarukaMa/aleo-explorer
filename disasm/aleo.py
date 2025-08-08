@@ -109,11 +109,11 @@ def disasm_operand(value: Operand) -> str:
     elif isinstance(value, NetworkIDOperand):
         return "network.id"
     elif isinstance(value, ChecksumOperand):
-        return "self.checksum"
+        return "checksum"
     elif isinstance(value, EditionOperand):
-        return "self.edition"
+        return "edition"
     elif isinstance(value, ProgramOwnerOperand):
-        return "self.program_owner"
+        return "program_owner"
     else:
         raise ValueError(f"unknown operand type {type(value)}")
 
