@@ -106,6 +106,14 @@ def disasm_operand(value: Operand) -> str:
         return "self.signer"
     elif isinstance(value, BlockHeightOperand):
         return "block.height"
+    elif isinstance(value, NetworkIDOperand):
+        return "network.id"
+    elif isinstance(value, ChecksumOperand):
+        return "self.checksum"
+    elif isinstance(value, EditionOperand):
+        return "self.edition"
+    elif isinstance(value, ProgramOwnerOperand):
+        return "self.program_owner"
     else:
         raise ValueError(f"unknown operand type {type(value)}")
 
@@ -246,5 +254,14 @@ def disassemble_program(program: Program) -> str:
                     res.insert_line(f"{disasm_command(c)};")
                 res.unindent()
             res.insert_line("")
-
+        elif definition == ProgramDefinition.Constructor:
+            c = program.constructor.value
+            if c is None:
+                raise ValueError("constructor not found")
+            res.insert_line(f"constructor:")
+            res.indent()
+            for cmd in c.commands:
+                res.insert_line(f"{disasm_command(cmd)};")
+            res.unindent()
+            res.insert_line("")
     return str(res)
