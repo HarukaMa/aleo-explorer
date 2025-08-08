@@ -892,7 +892,9 @@ class Program(Serializable, JSONSerialize):
             elif d == ProgramDefinition.Function:
                 res += self.functions[i].dump()
             elif d == ProgramDefinition.Constructor:
-                res += self.constructor.dump()
+                if self.constructor.value is None:
+                    raise ValueError("constructor must be present")
+                res += self.constructor.value.dump()
         return res
 
     @classmethod
