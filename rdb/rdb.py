@@ -210,7 +210,9 @@ class DataMap(Generic[K, V]):
         )
         return GenericAlias(param_type, key)
 
-    def read(self, rdb: rocksdbpy.RocksDB, key: K):
+    def read(self, rdb: rocksdbpy.RocksDB | None, key: K):
+        if rdb is None:
+            raise Exception("rdb is not initialized")
         from node import Network
 
         raw = rdb.get(Network.network_id.dump() + self.map_id.dump() + serialize(self.key_type, key))
@@ -362,13 +364,15 @@ class RocksDB:
     def __init__(self, path: str):
         from node import Network
         self.path = path
-        opts = rocksdbpy.Option()
-        opts.create_if_missing(False)
-        secondary_dir_name = f"ledger-{Network.network_id}-secondary"
-        os.makedirs(secondary_dir_name, exist_ok=True)
-        self.rdb = rocksdbpy.open_as_secondary(self.path, secondary_dir_name, opts)
+        self.opts = rocksdbpy.Option()
+        self.opts.create_if_missing(False)
+        self.secondary_dir_name = f"ledger-{Network.network_id}-secondary"
+        os.makedirs(self.secondary_dir_name, exist_ok=True)
+        self.rdb: rocksdbpy.RocksDB | None = None
 
     def catch_up(self):
+        if self.rdb is None:
+            self.rdb = rocksdbpy.open_as_secondary(self.path, self.secondary_dir_name, self.opts)
         self.rdb.try_catch_up_with_primary()
 
     def get_block(self, block_height: int):
