@@ -130,6 +130,7 @@ async def load_plaintext_from_operand(operand: Operand, registers: Registers, fi
             )
         )
     elif isinstance(operand, ProgramOwnerOperand):
+        # this is most probably wrong impl for current program
         if operand.program_id.value is not None:
             program_id = str(operand.program_id.value)
         else:

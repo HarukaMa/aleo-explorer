@@ -16,7 +16,7 @@ from aleo_types import u32, Transition, ExecuteTransaction, PrivateTransitionInp
     FeeTransaction, RejectedDeploy, RejectedExecution, Identifier, Entry, FutureTransitionOutput, Future, \
     PlaintextArgument, FutureArgument, StructPlaintext, Finalize, \
     PlaintextFinalizeType, StructPlaintextType, UpdateKeyValue, Value, Plaintext, RemoveKeyValue, FinalizeOperation, \
-    NodeType, FeeComponent, Fee, Option, Address
+    NodeType, FeeComponent, Fee, Option, Address, RejectedDeployment
 from aleo_types.cached import cached_get_key_id, cached_get_mapping_id
 from db import Database
 from util import arc0021
@@ -375,6 +375,10 @@ async def transaction_route(request: Request):
                     "transition_id": transition.id,
                     "action": await function_signature(db, str(program_id), str(transition.function_name), latest_edition),
                 })
+        elif isinstance(confirmed_transaction, RejectedDeploy):
+            rejected = confirmed_transaction.rejected
+            if not isinstance(rejected, RejectedDeployment):
+                raise HTTPException(status_code=550, detail="invalid rejected transaction")
         else:
             raise HTTPException(status_code=550, detail="Unsupported transaction type")
         ctx.update({
