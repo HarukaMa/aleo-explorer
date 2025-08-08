@@ -113,15 +113,20 @@ async def load_plaintext_from_operand(operand: Operand, registers: Registers, fi
     elif isinstance(operand, EditionOperand):
         if operand.program_id.value is not None:
             program_id = str(operand.program_id.value)
+            current_edition = await db.get_program_latest_edition(program_id)
+            if current_edition is None:
+                raise RuntimeError("program not found")
         else:
             program_id = str(program.id)
-        latest_edition = await db.get_program_latest_edition(program_id)
-        if latest_edition is None:
-            raise RuntimeError("program not found")
+            latest_edition = await db.get_program_latest_edition(program_id)
+            if latest_edition is None:
+                current_edition = 0
+            else:
+                current_edition = latest_edition + 1
         return LiteralPlaintext(
             literal=Literal(
                 type_=Literal.Type.U16,
-                primitive=u16(latest_edition)
+                primitive=u16(current_edition)
             )
         )
     elif isinstance(operand, ProgramOwnerOperand):
