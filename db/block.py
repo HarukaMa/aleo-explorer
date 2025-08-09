@@ -620,7 +620,7 @@ class DatabaseBlock(DatabaseBase):
                             program = Program.load(BytesIO(program_data["raw_data"]))
                             program_id = program.id
                         else:
-                            program_id = ProgramID.loads("placeholder.aleo")
+                            program_id = ProgramID.loads(deploy_transaction["program_id"])
                         deployment = DeploymentV1(
                             edition=u16(deploy_transaction["edition"]),
                             program=Program(
