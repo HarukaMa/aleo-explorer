@@ -27,7 +27,7 @@ from .template import htmx_template
 from .utils import function_signature, out_of_sync_check, function_definition
 
 try:
-    from line_profiler import profile
+    from line_profiler import profile  # pyright: ignore [reportUnknownVariableType, reportMissingImports]
 except ImportError:
     P = ParamSpec('P')
     R = TypeVar('R')
@@ -38,7 +38,7 @@ except ImportError:
 
 DictList = list[dict[str, Any]]
 
-@profile
+@profile  # pyright: ignore [reportUntypedFunctionDecorator]
 @htmx_template("block.jinja2")
 async def block_route(request: Request):
     db: Database = request.app.state.db
@@ -134,6 +134,22 @@ async def block_route(request: Request):
                 "priority_fee": priority_fee,
                 "burnt_fee": burnt_fee,
                 "root_transition": f"{root_transition.program_id}/{root_transition.function_name}",
+            }
+            txs.append(t)
+        elif isinstance(ct, RejectedDeploy):
+            tx = ct.transaction
+            if not isinstance(tx, FeeTransaction):
+                raise HTTPException(status_code=550, detail="Invalid transaction type")
+            base_fee, priority_fee = cast(Fee, tx.fee).amount
+            t = {
+                "tx_id": tx.id,
+                "index": ct.index,
+                "type": "Deploy",
+                "state": "Rejected",
+                "transitions_count": 1,
+                "base_fee": base_fee - burnt_fee,
+                "priority_fee": priority_fee,
+                "burnt_fee": burnt_fee,
             }
             txs.append(t)
         elif isinstance(ct, RejectedExecute):
