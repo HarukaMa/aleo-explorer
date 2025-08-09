@@ -48,10 +48,11 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
                             transitions: list[TransitionID], transition_index_executed: set[int],
                             program: Program, function_name: Identifier, inputs: list[Value],
                             mapping_cache: MappingCache, local_mapping_cache: dict[Field, MappingCacheDict],
-                            allow_state_change: bool) -> list[dict[str, Any]]:
+                            allow_state_change: bool, deploy_owner: Optional[Address] = None) -> list[dict[str, Any]]:
     transition_index = len(transition_index_executed)
     transition_index_executed.add(transition_index)
     registers = Registers()
+    registers.owner = deploy_owner
     operations: list[dict[str, Any]] = []
     if function_name == "constructor":
         finalize = program.constructor.value

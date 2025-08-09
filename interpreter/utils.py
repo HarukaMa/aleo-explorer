@@ -130,17 +130,26 @@ async def load_plaintext_from_operand(operand: Operand, registers: Registers, fi
             )
         )
     elif isinstance(operand, ProgramOwnerOperand):
-        # this is most probably wrong impl for current program
         if operand.program_id.value is not None:
             program_id = str(operand.program_id.value)
+            latest_edition = await db.get_program_latest_edition(program_id)
+            if latest_edition is None:
+                raise RuntimeError("program not found")
+            program_owner = await db.get_program_owner(program_id, latest_edition)
+            if program_owner is None:
+                raise AssertionError("program owner is not available")
         else:
-            program_id = str(program.id)
-        latest_edition = await db.get_program_latest_edition(program_id)
-        if latest_edition is None:
-            raise RuntimeError("program not found")
-        program_owner = await db.get_program_owner(program_id, latest_edition)
-        if program_owner is None:
-            raise AssertionError("program owner is not available")
+            program_owner = registers.owner
+            if program_owner is None:
+                # from normal finalize
+                latest_edition = await db.get_program_latest_edition(str(program.id))
+                if latest_edition is None:
+                    raise RuntimeError("program not found")
+                program_owner = await db.get_program_owner(str(program.id), latest_edition)
+                if program_owner is None:
+                    raise AssertionError("program owner is not available")
+            else:
+                program_owner = str(program_owner)
         return LiteralPlaintext(
             literal=Literal(
                 type_=Literal.Type.Address,

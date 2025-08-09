@@ -67,12 +67,14 @@ async def finalize_deploy(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]]
                     "mapping": mapping,
                 })
         rejected_reason = None
+        owner = cast(DeployTransaction, transaction).owner.address
     elif isinstance(confirmed_transaction, RejectedDeploy):
         rejected = cast(RejectedDeployment, confirmed_transaction.rejected)
         expected_operations = confirmed_transaction.finalize
         deployment = rejected.deploy
         program = deployment.program
         rejected_reason = "(detailed reason not available)"
+        owner = rejected.program_owner.address
     else:
         raise NotImplementedError
 
@@ -82,7 +84,7 @@ async def finalize_deploy(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]]
                 await execute_finalizer(
                     db, cur, finalize_state, [TransitionID(b"\x00" * 32)], set(), program,
                     Identifier(value="constructor"), [], MappingCache(), {},
-                    isinstance(confirmed_transaction, AcceptedDeploy)
+                    isinstance(confirmed_transaction, AcceptedDeploy), owner
                 )
             )
         except ExecuteError as e:

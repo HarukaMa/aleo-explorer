@@ -1,10 +1,11 @@
-from aleo_types import Value
+from aleo_types import Value, Address
 
 
 class Registers:
 
     def __init__(self):
         self._registers: dict[int, Value] = {}
+        self.owner: Address | None = None
 
     def __getitem__(self, index: int):
         if index not in self._registers:
