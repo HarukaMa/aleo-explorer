@@ -140,6 +140,9 @@ async def block_route(request: Request):
             tx = ct.transaction
             if not isinstance(tx, FeeTransaction):
                 raise HTTPException(status_code=550, detail="Invalid transaction type")
+            rejected = ct.rejected
+            if not isinstance(rejected, RejectedDeployment):
+                raise HTTPException(status_code=550, detail="Invalid rejected transaction type")
             base_fee, priority_fee = cast(Fee, tx.fee).amount
             t = {
                 "tx_id": tx.id,
@@ -150,6 +153,7 @@ async def block_route(request: Request):
                 "base_fee": base_fee - burnt_fee,
                 "priority_fee": priority_fee,
                 "burnt_fee": burnt_fee,
+                "program_id": rejected.deploy.program.id,
             }
             txs.append(t)
         elif isinstance(ct, RejectedExecute):
