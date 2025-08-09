@@ -73,14 +73,20 @@ async def finalize_deploy(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]]
         deployment = rejected.deploy
         program = deployment.program
         rejected_reason = "(detailed reason not available)"
-        if program.constructor.value is not None:
-            try:
-                await execute_finalizer(db, cur, finalize_state, [TransitionID(b"\x00" * 32)], set(), program, Identifier(value="constructor"),
-                                        [], MappingCache(), {}, False)
-            except ExecuteError as e:
-                rejected_reason = f"execute error: {e}, at constructor, instruction \"{e.instruction}\""
     else:
         raise NotImplementedError
+
+    if program.constructor.value is not None:
+        try:
+            operations.extend(
+                await execute_finalizer(
+                    db, cur, finalize_state, [TransitionID(b"\x00" * 32)], set(), program,
+                    Identifier(value="constructor"), [], MappingCache(), {},
+                    isinstance(confirmed_transaction, AcceptedDeploy)
+                )
+            )
+        except ExecuteError as e:
+            rejected_reason = f"execute error: {e}, at constructor, instruction \"{e.instruction}\""
     return expected_operations, operations, rejected_reason
 
 def load_input_from_arguments(arguments: list[Argument]) -> list[Value]:
