@@ -1,3 +1,5 @@
+from typing import Iterable
+
 import psycopg
 
 from aleo_types import *
@@ -60,12 +62,14 @@ async def finalize_deploy(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]]
         for mapping in program.mappings.keys():
             mapping_id = Field.loads(cached_get_mapping_id(str(program.id), str(mapping)))
             if not await db.is_mapping_exists(str(mapping_id)):
-                operations.append({
+                operation = {
                     "type": FinalizeOperation.Type.InitializeMapping,
                     "mapping_id": mapping_id,
                     "program_id": program.id,
                     "mapping": mapping,
-                })
+                }
+                operations.append(operation)
+                await execute_operations(cur, [operation])
         rejected_reason = None
         owner = cast(DeployTransaction, transaction).owner.address
     elif isinstance(confirmed_transaction, RejectedDeploy):
@@ -304,12 +308,12 @@ async def finalize_block(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]],
                 await MappingCache().pre_populate()
                 raise
 
-        await execute_operations(cur, operations)
+        await execute_operations(cur, filter(lambda x: x["type"] != FinalizeOperation.Type.InitializeMapping, operations))
         reject_reasons.append(reject_reason)
     return reject_reasons
 
 
-async def execute_operations(cur: psycopg.AsyncCursor[dict[str, Any]], operations: list[dict[str, Any]]):
+async def execute_operations(cur: psycopg.AsyncCursor[dict[str, Any]], operations: Iterable[dict[str, Any]]):
     for operation in operations:
         match operation["type"]:
             case FinalizeOperation.Type.InitializeMapping:
