@@ -526,16 +526,3 @@ class DatabaseMapping(DatabaseBase):
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
-
-    async def is_mapping_exists(self, mapping_id: str):
-        async with self.pool.connection() as conn:
-            async with conn.cursor() as cur:
-                try:
-                    await cur.execute(
-                        "SELECT id FROM mapping WHERE mapping_id = %s",
-                        (mapping_id,)
-                    )
-                    return bool(await cur.fetchone())
-                except Exception as e:
-                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
-                    raise

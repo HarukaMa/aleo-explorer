@@ -103,13 +103,13 @@ class MappingCache:
         except KeyError:
             if self.db is None:
                 raise ValueError("database is not set up for mapping cache")
-            try:
-                loop = asyncio.get_running_loop()
-            except RuntimeError:
-                raise RuntimeError("mapping cache must be initialized in an async context")
-            result = loop.run_until_complete(self.db.mapping_id_exists(str(mapping_id)))
-            if not result:
-                raise KeyError(f"mapping not found: {mapping_id}")
+            # try:
+            #     loop = asyncio.get_running_loop()
+            # except RuntimeError:
+            #     raise RuntimeError("mapping cache must be initialized in an async context")
+            # result = loop.run_until_complete(self.db.mapping_id_exists(str(mapping_id)))
+            # if not result:
+            #     raise KeyError(f"mapping not found: {mapping_id}")
             self.mapping_data[mapping_id] = MappingCacheMapping(self.db, mapping_id)
             return self.mapping_data[mapping_id]
 
