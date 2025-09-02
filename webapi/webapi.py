@@ -22,7 +22,7 @@ from .chain_routes import blocks_route, get_summary, recent_blocks_route, index_
     transaction_route, \
     validators_route, transition_route, solution_route, nodes_route
 from .error_routes import bad_request, not_found, internal_error
-from .program_routes import programs_route, program_route
+from .program_routes import programs_route, program_route, similar_programs_route
 from .utils import public_cache_seconds, out_of_sync_check, CJSONResponse
 
 load_dotenv()
@@ -66,6 +66,8 @@ routes = [
     Route("/programs", programs_route),
     Route("/program/{id}", program_route),
     Route("/program/{id}/{edition}", program_route),
+    Route("/similar_programs/{id}", similar_programs_route),
+    Route("/similar_programs/{id}/{edition}", similar_programs_route),
 
     Route("/address/{address}", address_route),
     Route("/ans/{name}", ans_route),

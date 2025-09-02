@@ -225,7 +225,7 @@ class DatabaseProgram(DatabaseBase):
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT COUNT(*) FROM program "
+                        "SELECT COUNT(DISTINCT program_id) FROM program "
                         "WHERE feature_hash = (SELECT feature_hash FROM program WHERE program_id = %s AND edition = %s)",
                         (program_id, edition)
                     )

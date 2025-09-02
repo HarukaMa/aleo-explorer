@@ -11,7 +11,7 @@ from webapi.utils import public_cache_seconds, CJSONResponse, function_signature
 from webui.classes import UIAddress
 
 
-@public_cache_seconds(5)
+@public_cache_seconds(15)
 async def programs_route(request: Request) -> CJSONResponse:
     db: Database = request.app.state.db
     try:
@@ -20,12 +20,12 @@ async def programs_route(request: Request) -> CJSONResponse:
             page = 1
         else:
             page = int(page)
-    except:
+    except ValueError:
         return CJSONResponse({"error": "Invalid page"}, status_code=400)
     no_helloworld = request.query_params.get("no_helloworld", False)
     try:
         no_helloworld = bool(int(no_helloworld))
-    except:
+    except ValueError:
         no_helloworld = False
 
     total_programs = await db.get_program_count(no_helloworld=no_helloworld)
@@ -41,6 +41,7 @@ async def programs_route(request: Request) -> CJSONResponse:
             "id": program["program_id"],
             "called": program["called"],
             "height": program.get("height"),
+            "edition": program.get("edition"),
             "transaction_id": program.get("transaction_id"),
         })
     result: dict[str, Any] = {
@@ -50,7 +51,7 @@ async def programs_route(request: Request) -> CJSONResponse:
     }
     return CJSONResponse(result)
 
-@public_cache_seconds(5)
+@public_cache_seconds(15)
 async def program_route(request: Request) -> CJSONResponse:
     db: Database = request.app.state.db
     program_id = request.path_params.get("id")
@@ -138,4 +139,47 @@ async def program_route(request: Request) -> CJSONResponse:
         await UIAddress.resolve_recursive_detached(
             result, db, {}
         )
+    return CJSONResponse(result)
+
+@public_cache_seconds(15)
+async def similar_programs_route(request: Request) -> CJSONResponse:
+    db: Database = request.app.state.db
+    try:
+        page = request.query_params.get("p")
+        if page is None:
+            page = 1
+        else:
+            page = int(page)
+    except ValueError:
+        return CJSONResponse({"error": "Invalid page"}, status_code=400)
+    program_id = request.path_params.get("id")
+    if program_id is None:
+        return CJSONResponse({"error": "Missing program id"}, status_code=400)
+    edition = request.path_params.get("edition", "0")
+    try:
+        edition = int(edition)
+    except ValueError:
+        return CJSONResponse({"error": "Invalid edition"}, status_code=400)
+    if edition < 0:
+        return CJSONResponse({"error": "Invalid edition"}, status_code=400)
+    latest_edition = await db.get_program_latest_edition(program_id)
+    if latest_edition is None:
+        return CJSONResponse({"error": "Program not found"}, status_code=404)
+    if edition > latest_edition:
+        return CJSONResponse({"error": "Edition not found"}, status_code=404)
+    feature_hash = await db.get_program_feature_hash(program_id, edition)
+    if feature_hash is None:
+        return CJSONResponse({"error": "Program not found"}, status_code=404)
+    total_programs = await db.get_program_similar_count(program_id, edition)
+    total_pages = (total_programs // 50) + 1
+    if page < 1 or page > total_pages:
+        return CJSONResponse({"error": "Invalid page"}, status_code=400)
+    start = 50 * (page - 1)
+    programs = await db.get_programs_with_feature_hash(feature_hash, start, start + 50)
+
+    result = {
+        "programs": programs,
+        "total_programs": total_programs,
+        "total_pages": total_pages,
+    }
     return CJSONResponse(result)
