@@ -49,20 +49,24 @@ class DatabaseProgram(DatabaseBase):
                 try:
                     where = "WHERE feature_hash NOT IN (SELECT hash FROM program_filter_hash) " if no_helloworld else ""
                     await cur.execute(
-                        "SELECT p.program_id, b.height, t.transaction_id, SUM(pf.called) as called, p.edition "
+                        "SELECT p.program_id, b.height, t.transaction_id, pfc.called, p.edition "
                         "FROM program p "
                         "JOIN ("
                         "  SELECT program_id, MAX(edition) as edition "
                         "  FROM program "
                         "  GROUP BY program_id"
                         ") p2 on p.program_id = p2.program_id AND p.edition = p2.edition "
+                        "JOIN LATERAL ("
+                        "  SELECT SUM(pf.called) as called FROM program_function pf "
+                        "  JOIN program p3 on pf.program_id = p3.id "
+                        "  WHERE p3.program_id = p.program_id"
+                        ") pfc ON TRUE "
                         "JOIN transaction_deploy td on p.transaction_deploy_id = td.id "
                         "JOIN transaction t on td.transaction_id = t.id "
                         "JOIN confirmed_transaction ct on t.confirmed_transaction_id = ct.id "
                         "JOIN block b on ct.block_id = b.id "
-                        "JOIN program_function pf on p.id = pf.program_id "
                         f"{where}"
-                        "GROUP BY p.program_id, b.height, p.id, t.transaction_id, p.edition "
+                        "GROUP BY p.program_id, b.height, p.id, t.transaction_id, pfc.called, p.edition "
                         "ORDER BY p.id DESC "
                         "LIMIT %s OFFSET %s",
                         (end - start, start)
@@ -204,15 +208,20 @@ class DatabaseProgram(DatabaseBase):
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
+                        "WITH ts AS ("
+                        "  SELECT transaction_execute_id, transition_id, function_name "
+                        "  FROM transition "
+                        "  WHERE program_id = %s "
+                        "  ORDER BY id DESC "
+                        "  LIMIT %s OFFSET %s"
+                        ")"
                         "SELECT b.height, b.timestamp, ts.transition_id, function_name, ct.type "
-                        "FROM transition ts "
+                        "FROM ts "
                         "JOIN transaction_execute te on te.id = ts.transaction_execute_id "
                         "JOIN transaction t on te.transaction_id = t.id "
                         "JOIN confirmed_transaction ct on t.confirmed_transaction_id = ct.id "
                         "JOIN block b on ct.block_id = b.id "
-                        "WHERE ts.program_id = %s "
-                        "ORDER BY b.height DESC "
-                        "LIMIT %s OFFSET %s",
+                        "ORDER BY b.height DESC ",
                         (program_id, end - start, start)
                     )
                     return await cur.fetchall()
