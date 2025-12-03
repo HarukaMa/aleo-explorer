@@ -12,7 +12,7 @@ def load_program(program_id: str) -> Program:
 class Mainnet:
     edition = u16()
     network_id = u16()
-    version = u32(21)
+    version = u32(23)
 
     genesis_block = Block.load(BytesIO(open(os.path.join(os.path.dirname(__file__), "block.genesis"), "rb").read()))
     dev_genesis_block = Block.load(BytesIO(open(os.path.join(os.path.dirname(__file__), "dev.genesis"), "rb").read()))
@@ -33,8 +33,9 @@ class Mainnet:
 
     restrictions_id = Field(7562506206353711030068167991213732850758501012603348777370400520506564970105)
 
-    consensus_v2_height = 2800000
-    consensus_v3_height = 4900000
-    consensus_v4_height = 6135000
-    consensus_v8_height = 9430000
-    consensus_v9_height = 10272000
+    consensus_v2_height = 2_800_000
+    consensus_v3_height = 4_900_000
+    consensus_v4_height = 6_135_000
+    consensus_v8_height = 9_430_000
+    consensus_v9_height = 10_272_000
+    consensus_v12_height = 13_815_000

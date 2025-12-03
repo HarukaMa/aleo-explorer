@@ -9,12 +9,17 @@ from .environment import Registers
 class FinalizeState:
     def __init__(self, block: Block):
         self.block_height = block.height
+        if block.height > Network.consensus_v12_height:
+            block_timestamp = block.header.metadata.timestamp
+        else:
+            block_timestamp = None
         self.random_seed = aleo_explorer_rust.finalize_random_seed(
             block.round,
             block.height,
             block.cumulative_weight,
             block.cumulative_proof_target,
             block.previous_hash.dump(),
+            block_timestamp
         )
         if len(self.random_seed) != 32:
             raise RuntimeError("invalid random seed length")
