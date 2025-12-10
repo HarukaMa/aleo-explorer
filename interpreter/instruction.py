@@ -626,7 +626,9 @@ async def rem_wrapped(operands: list[Operand], destination: Register, registers:
 async def serialize_op(operand: Operand, destination: Register, destination_type: ArrayType, registers: Registers, finalize_state: FinalizeState, variant: int, db: Database, program: Program):
     op = await load_plaintext_from_operand(operand, registers, finalize_state, db, program)
 
-    res = PlaintextValue.load(BytesIO(aleo_explorer_rust.serialize_ops(variant, PlaintextValue(plaintext=op).dump(), destination_type.dump())))
+    res = Value.load(BytesIO(aleo_explorer_rust.serialize_ops(variant, PlaintextValue(plaintext=op).dump(), destination_type.dump())))
+    if not isinstance(res, PlaintextValue):
+        raise TypeError("result should be plaintext value")
 
     store_plaintext_to_register(res.plaintext, destination, registers)
 
