@@ -1049,7 +1049,7 @@ class CastInstruction(Serializable, JSONSerialize, Generic[V]):
         Cast = 0
         CastLossy = 1
 
-    def __init__(self, *, operands: Vec[Operand, u8], destination: Register, cast_type: CastType):
+    def __init__(self, *, operands: Vec[Operand, u16], destination: Register, cast_type: CastType):
         self.operands = operands
         self.destination = destination
         self.cast_type = cast_type
@@ -1064,14 +1064,29 @@ class CastInstruction(Serializable, JSONSerialize, Generic[V]):
         return GenericAlias(param_type, item)
 
     def dump(self) -> bytes:
-        return self.operands.dump() + self.destination.dump() + self.cast_type.dump()
+        res = bytearray()
+        if len(self.operands) < 255:
+            res.append(len(self.operands))
+        else:
+            res.append(255)
+            res.extend(len(self.operands).to_bytes(2, 'little'))
+        for operand in self.operands:
+            res.extend(operand.dump())
+        res.extend(self.destination.dump())
+        res.extend(self.cast_type.dump())
+        return bytes(res)
 
     @classmethod
     def load(cls, data: BytesIO):
-        operands = Vec[Operand, u8].load(data)
+        num_operands = u8.load(data)
+        if num_operands == 255:
+            num_operands = u16.load(data)
+        operands: list[Operand] = []
+        for _ in range(num_operands):
+            operands.append(Operand.load(data))
         destination = Register.load(data)
-        cast_Type = CastType.load(data)
-        return cls(operands=operands, destination=destination, cast_type=cast_Type)
+        cast_type = CastType.load(data)
+        return cls(operands=Vec[Operand, u16](operands), destination=destination, cast_type=cast_type)
 
 
 class EnumTypeValue(EnumType):
