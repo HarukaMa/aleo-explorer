@@ -1142,6 +1142,35 @@ class HashInstruction(Serializable, JSONSerialize, Generic[V]):
         HashManyPSD2 = auto()
         HashManyPSD4 = auto()
         HashManyPSD8 = auto()
+        # The variants that hash the raw inputs.
+        HashBHP256Raw = auto()
+        HashBHP512Raw = auto()
+        HashBHP768Raw = auto()
+        HashBHP1024Raw = auto()
+        HashKeccak256Raw = auto()
+        HashKeccak384Raw = auto()
+        HashKeccak512Raw = auto()
+        HashPED64Raw = auto()
+        HashPED128Raw = auto()
+        HashPSD2Raw = auto()
+        HashPSD4Raw = auto()
+        HashPSD8Raw = auto()
+        HashSha3_256Raw = auto()
+        HashSha3_384Raw = auto()
+        HashSha3_512Raw = auto()
+        # The variants that perform the underlying hash, returning bit arrays.
+        HashKeccak256Native = auto()
+        HashKeccak256NativeRaw = auto()
+        HashKeccak384Native = auto()
+        HashKeccak384NativeRaw = auto()
+        HashKeccak512Native = auto()
+        HashKeccak512NativeRaw = auto()
+        HashSha3_256Native = auto()
+        HashSha3_256NativeRaw = auto()
+        HashSha3_384Native = auto()
+        HashSha3_384NativeRaw = auto()
+        HashSha3_512Native = auto()
+        HashSha3_512NativeRaw = auto()
 
     # shortcut here so check doesn't work
     def __init__(self, *, operands: tuple[Operand, Optional[Operand]], destination: Register, destination_type: PlaintextType):
@@ -1203,6 +1232,120 @@ class AsyncInstruction(Serializable, JSONSerialize):
         destination = Register.load(data)
         return cls(function_name=function_name, operands=operands, destination=destination)
 
+class DeserializeInstruction(Serializable, JSONSerialize, Generic[V]):
+    variant: V
+
+    def __init__(self, *, operand: Operand, operand_type: ArrayType, destination: Register, destination_type: PlaintextType):
+        self.operand = operand
+        self.operand_type = operand_type
+        self.destination = destination
+        self.destination_type = destination_type
+
+    @tp_cache
+    def __class_getitem__(cls, item: TType[V]) -> GenericAlias:
+        param_type = type(
+            f"DeserializeInstruction[{item}]",
+            (DeserializeInstruction,),
+            {"variant": item},
+        )
+        return GenericAlias(param_type, item)
+
+    def dump(self) -> bytes:
+        return self.operand.dump() + self.operand_type.dump() + self.destination.dump() + self.destination_type.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        operand = Operand.load(data)
+        operand_type = ArrayType.load(data)
+        destination = Register.load(data)
+        destination_type = PlaintextType.load(data)
+        return cls(operand=operand, operand_type=operand_type, destination=destination, destination_type=destination_type)
+
+class SerializeInstruction(Serializable, JSONSerialize, Generic[V]):
+    variant: V
+
+    def __init__(self, *, operand: Operand, operand_type: PlaintextType, destination: Register, destination_type: ArrayType):
+        self.operand = operand
+        self.operand_type = operand_type
+        self.destination = destination
+        self.destination_type = destination_type
+
+    @tp_cache
+    def __class_getitem__(cls, item: TType[V]) -> GenericAlias:
+        param_type = type(
+            f"SerializeInstruction[{item}]",
+            (SerializeInstruction,),
+            {"variant": item},
+        )
+        return GenericAlias(param_type, item)
+
+    def dump(self) -> bytes:
+        return self.operand.dump() + self.operand_type.dump() + self.destination.dump() + self.destination_type.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        operand = Operand.load(data)
+        operand_type = PlaintextType.load(data)
+        destination = Register.load(data)
+        destination_type = ArrayType.load(data)
+        return cls(operand=operand, operand_type=operand_type, destination=destination, destination_type=destination_type)
+
+
+class ECDSAVerifyInstruction(Serializable, JSONSerialize, Generic[V]):
+    variant: V
+
+    class Type(IntEnum):
+
+        @staticmethod
+        def _generate_next_value_(name: str, start: int, count: int, last_values: list[int]):
+            return count
+        
+        Digest = auto()
+        DigestEth = auto()
+        HashKeccak256 = auto()
+        HashKeccak256Raw = auto()
+        HashKeccak256Eth = auto()
+        HashKeccak384 = auto()
+        HashKeccak384Raw = auto()
+        HashKeccak384Eth = auto()
+        HashKeccak512 = auto()
+        HashKeccak512Raw = auto()
+        HashKeccak512Eth = auto()
+        HashSha3_256 = auto()
+        HashSha3_256Raw = auto()
+        HashSha3_256Eth = auto()
+        HashSha3_384 = auto()
+        HashSha3_384Raw = auto()
+        HashSha3_384Eth = auto()
+        HashSha3_512 = auto()
+        HashSha3_512Raw = auto()
+        HashSha3_512Eth = auto()
+
+    def __init__(self, *, operands: tuple[Operand, Operand, Operand], destination: Register):
+        self.operands = operands
+        self.destination = destination
+
+    @tp_cache
+    def __class_getitem__(cls, item: TType[V]) -> GenericAlias:
+        param_type = type(
+            f"ECDSAVerifyInstruction[{item}]",
+            (ECDSAVerifyInstruction,),
+            {"variant": item},
+        )
+        return GenericAlias(param_type, item)
+
+    def dump(self) -> bytes:
+        return b"".join(op.dump() for op in self.operands) + self.destination.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        op1 = Operand.load(data)
+        op2 = Operand.load(data)
+        op3 = Operand.load(data)
+        destination = Register.load(data)
+        return cls(operands=(op1, op2, op3), destination=destination)
+
+# noinspection PyTypeHints
 class Instruction(Serializable, JSONSerialize):
 
     class Type(IntEnumu16):
@@ -1280,6 +1423,59 @@ class Instruction(Serializable, JSONSerialize):
         Ternary = auto()
         Xor = auto()
 
+        # New opcodes added in `ConsensusVersion::V11`
+        DeserializeBits = auto()
+        DeserializeBitsRaw = auto()
+        ECDSAVerifyDigest = auto()
+        ECDSAVerifyDigestEth = auto()
+        ECDSAVerifyKeccak256 = auto()
+        ECDSAVerifyKeccak256Raw = auto()
+        ECDSAVerifyKeccak256Eth = auto()
+        ECDSAVerifyKeccak384 = auto()
+        ECDSAVerifyKeccak384Raw = auto()
+        ECDSAVerifyKeccak384Eth = auto()
+        ECDSAVerifyKeccak512 = auto()
+        ECDSAVerifyKeccak512Raw = auto()
+        ECDSAVerifyKeccak512Eth = auto()
+        ECDSAVerifySha3_256 = auto()
+        ECDSAVerifySha3_256Raw = auto()
+        ECDSAVerifySha3_256Eth = auto()
+        ECDSAVerifySha3_384 = auto()
+        ECDSAVerifySha3_384Raw = auto()
+        ECDSAVerifySha3_384Eth = auto()
+        ECDSAVerifySha3_512 = auto()
+        ECDSAVerifySha3_512Raw = auto()
+        ECDSAVerifySha3_512Eth = auto()
+        HashBHP256Raw = auto()
+        HashBHP512Raw = auto()
+        HashBHP768Raw = auto()
+        HashBHP1024Raw = auto()
+        HashKeccak256Raw = auto()
+        HashKeccak256Native = auto()
+        HashKeccak256NativeRaw = auto()
+        HashKeccak384Raw = auto()
+        HashKeccak384Native = auto()
+        HashKeccak384NativeRaw = auto()
+        HashKeccak512Raw = auto()
+        HashKeccak512Native = auto()
+        HashKeccak512NativeRaw = auto()
+        HashPED64Raw = auto()
+        HashPED128Raw = auto()
+        HashPSD2Raw = auto()
+        HashPSD4Raw = auto()
+        HashPSD8Raw = auto()
+        HashSha3_256Raw = auto()
+        HashSha3_256Native = auto()
+        HashSha3_256NativeRaw = auto()
+        HashSha3_384Raw = auto()
+        HashSha3_384Native = auto()
+        HashSha3_384NativeRaw = auto()
+        HashSha3_512Raw = auto()
+        HashSha3_512Native = auto()
+        HashSha3_512NativeRaw = auto()
+        SerializeBits = auto()
+        SerializeBitsRaw = auto()
+
     type: Type
 
     # Some types are not implemented as Literals originally,
@@ -1353,6 +1549,57 @@ class Instruction(Serializable, JSONSerialize):
         Type.SubWrapped: Literals[FixedSize[2]],
         Type.Ternary: Literals[FixedSize[3]],
         Type.Xor: Literals[FixedSize[2]],
+        Type.DeserializeBits: DeserializeInstruction[Variant[0]],
+        Type.DeserializeBitsRaw: DeserializeInstruction[Variant[1]],
+        Type.ECDSAVerifyDigest: ECDSAVerifyInstruction[Variant[ECDSAVerifyInstruction.Type.Digest]],
+        Type.ECDSAVerifyDigestEth: ECDSAVerifyInstruction[Variant[ECDSAVerifyInstruction.Type.DigestEth]],
+        Type.ECDSAVerifyKeccak256: ECDSAVerifyInstruction[Variant[ECDSAVerifyInstruction.Type.HashKeccak256]],
+        Type.ECDSAVerifyKeccak256Raw: ECDSAVerifyInstruction[Variant[ECDSAVerifyInstruction.Type.HashKeccak256Raw]],
+        Type.ECDSAVerifyKeccak256Eth: ECDSAVerifyInstruction[Variant[ECDSAVerifyInstruction.Type.HashKeccak256Eth]],
+        Type.ECDSAVerifyKeccak384: ECDSAVerifyInstruction[Variant[ECDSAVerifyInstruction.Type.HashKeccak384]],
+        Type.ECDSAVerifyKeccak384Raw: ECDSAVerifyInstruction[Variant[ECDSAVerifyInstruction.Type.HashKeccak384Raw]],
+        Type.ECDSAVerifyKeccak384Eth: ECDSAVerifyInstruction[Variant[ECDSAVerifyInstruction.Type.HashKeccak384Eth]],
+        Type.ECDSAVerifyKeccak512: ECDSAVerifyInstruction[Variant[ECDSAVerifyInstruction.Type.HashKeccak512]],
+        Type.ECDSAVerifyKeccak512Raw: ECDSAVerifyInstruction[Variant[ECDSAVerifyInstruction.Type.HashKeccak512Raw]],
+        Type.ECDSAVerifyKeccak512Eth: ECDSAVerifyInstruction[Variant[ECDSAVerifyInstruction.Type.HashKeccak512Eth]],
+        Type.ECDSAVerifySha3_256: ECDSAVerifyInstruction[Variant[ECDSAVerifyInstruction.Type.HashSha3_256]],
+        Type.ECDSAVerifySha3_256Raw: ECDSAVerifyInstruction[Variant[ECDSAVerifyInstruction.Type.HashSha3_256Raw]],
+        Type.ECDSAVerifySha3_256Eth: ECDSAVerifyInstruction[Variant[ECDSAVerifyInstruction.Type.HashSha3_256Eth]],
+        Type.ECDSAVerifySha3_384: ECDSAVerifyInstruction[Variant[ECDSAVerifyInstruction.Type.HashSha3_384]],
+        Type.ECDSAVerifySha3_384Raw: ECDSAVerifyInstruction[Variant[ECDSAVerifyInstruction.Type.HashSha3_384Raw]],
+        Type.ECDSAVerifySha3_384Eth: ECDSAVerifyInstruction[Variant[ECDSAVerifyInstruction.Type.HashSha3_384Eth]],
+        Type.ECDSAVerifySha3_512: ECDSAVerifyInstruction[Variant[ECDSAVerifyInstruction.Type.HashSha3_512]],
+        Type.ECDSAVerifySha3_512Raw: ECDSAVerifyInstruction[Variant[ECDSAVerifyInstruction.Type.HashSha3_512Raw]],
+        Type.ECDSAVerifySha3_512Eth: ECDSAVerifyInstruction[Variant[ECDSAVerifyInstruction.Type.HashSha3_512Eth]],
+        Type.HashBHP256Raw: HashInstruction[Variant[HashInstruction.Type.HashBHP256Raw]],
+        Type.HashBHP512Raw: HashInstruction[Variant[HashInstruction.Type.HashBHP512Raw]],
+        Type.HashBHP768Raw: HashInstruction[Variant[HashInstruction.Type.HashBHP768Raw]],
+        Type.HashBHP1024Raw: HashInstruction[Variant[HashInstruction.Type.HashBHP1024Raw]],
+        Type.HashKeccak256Raw: HashInstruction[Variant[HashInstruction.Type.HashKeccak256Raw]],
+        Type.HashKeccak256Native: HashInstruction[Variant[HashInstruction.Type.HashKeccak256Native]],
+        Type.HashKeccak256NativeRaw: HashInstruction[Variant[HashInstruction.Type.HashKeccak256NativeRaw]],
+        Type.HashKeccak384Raw: HashInstruction[Variant[HashInstruction.Type.HashKeccak384Raw]],
+        Type.HashKeccak384Native: HashInstruction[Variant[HashInstruction.Type.HashKeccak384Native]],
+        Type.HashKeccak384NativeRaw: HashInstruction[Variant[HashInstruction.Type.HashKeccak384NativeRaw]],
+        Type.HashKeccak512Raw: HashInstruction[Variant[HashInstruction.Type.HashKeccak512Raw]],
+        Type.HashKeccak512Native: HashInstruction[Variant[HashInstruction.Type.HashKeccak512Native]],
+        Type.HashKeccak512NativeRaw: HashInstruction[Variant[HashInstruction.Type.HashKeccak512NativeRaw]],
+        Type.HashPED64Raw: HashInstruction[Variant[HashInstruction.Type.HashPED64Raw]],
+        Type.HashPED128Raw: HashInstruction[Variant[HashInstruction.Type.HashPED128Raw]],
+        Type.HashPSD2Raw: HashInstruction[Variant[HashInstruction.Type.HashPSD2Raw]],
+        Type.HashPSD4Raw: HashInstruction[Variant[HashInstruction.Type.HashPSD4Raw]],
+        Type.HashPSD8Raw: HashInstruction[Variant[HashInstruction.Type.HashPSD8Raw]],
+        Type.HashSha3_256Raw: HashInstruction[Variant[HashInstruction.Type.HashSha3_256Raw]],
+        Type.HashSha3_256Native: HashInstruction[Variant[HashInstruction.Type.HashSha3_256Native]],
+        Type.HashSha3_256NativeRaw: HashInstruction[Variant[HashInstruction.Type.HashSha3_256NativeRaw]],
+        Type.HashSha3_384Raw: HashInstruction[Variant[HashInstruction.Type.HashSha3_384Raw]],
+        Type.HashSha3_384Native: HashInstruction[Variant[HashInstruction.Type.HashSha3_384Native]],
+        Type.HashSha3_384NativeRaw: HashInstruction[Variant[HashInstruction.Type.HashSha3_384NativeRaw]],
+        Type.HashSha3_512Raw: HashInstruction[Variant[HashInstruction.Type.HashSha3_512Raw]],
+        Type.HashSha3_512Native: HashInstruction[Variant[HashInstruction.Type.HashSha3_512Native]],
+        Type.HashSha3_512NativeRaw: HashInstruction[Variant[HashInstruction.Type.HashSha3_512NativeRaw]],
+        Type.SerializeBits: SerializeInstruction[Variant[0]],
+        Type.SerializeBitsRaw: SerializeInstruction[Variant[1]],
     }
 
     # used by feature hash
@@ -1425,6 +1672,57 @@ class Instruction(Serializable, JSONSerialize):
         Type.SubWrapped: "B",
         Type.Ternary: "T",
         Type.Xor: "B",
+        Type.DeserializeBits: "S",
+        Type.DeserializeBitsRaw: "S",
+        Type.ECDSAVerifyDigest: "E",
+        Type.ECDSAVerifyDigestEth: "E",
+        Type.ECDSAVerifyKeccak256: "E",
+        Type.ECDSAVerifyKeccak256Raw: "E",
+        Type.ECDSAVerifyKeccak256Eth: "E",
+        Type.ECDSAVerifyKeccak384: "E",
+        Type.ECDSAVerifyKeccak384Raw: "E",
+        Type.ECDSAVerifyKeccak384Eth: "E",
+        Type.ECDSAVerifyKeccak512: "E",
+        Type.ECDSAVerifyKeccak512Raw: "E",
+        Type.ECDSAVerifyKeccak512Eth: "E",
+        Type.ECDSAVerifySha3_256: "E",
+        Type.ECDSAVerifySha3_256Raw: "E",
+        Type.ECDSAVerifySha3_256Eth: "E",
+        Type.ECDSAVerifySha3_384: "E",
+        Type.ECDSAVerifySha3_384Raw: "E",
+        Type.ECDSAVerifySha3_384Eth: "E",
+        Type.ECDSAVerifySha3_512: "E",
+        Type.ECDSAVerifySha3_512Raw: "E",
+        Type.ECDSAVerifySha3_512Eth: "E",
+        Type.HashBHP256Raw: "H",
+        Type.HashBHP512Raw: "H",
+        Type.HashBHP768Raw: "H",
+        Type.HashBHP1024Raw: "H",
+        Type.HashKeccak256Raw: "H",
+        Type.HashKeccak256Native: "H",
+        Type.HashKeccak256NativeRaw: "H",
+        Type.HashKeccak384Raw: "H",
+        Type.HashKeccak384Native: "H",
+        Type.HashKeccak384NativeRaw: "H",
+        Type.HashKeccak512Raw: "H",
+        Type.HashKeccak512Native: "H",
+        Type.HashKeccak512NativeRaw: "H",
+        Type.HashPED64Raw: "H",
+        Type.HashPED128Raw: "H",
+        Type.HashPSD2Raw: "H",
+        Type.HashPSD4Raw: "H",
+        Type.HashPSD8Raw: "H",
+        Type.HashSha3_256Raw: "H",
+        Type.HashSha3_256Native: "H",
+        Type.HashSha3_256NativeRaw: "H",
+        Type.HashSha3_384Raw: "H",
+        Type.HashSha3_384Native: "H",
+        Type.HashSha3_384NativeRaw: "H",
+        Type.HashSha3_512Raw: "H",
+        Type.HashSha3_512Native: "H",
+        Type.HashSha3_512NativeRaw: "H",
+        Type.SerializeBits: "S",
+        Type.SerializeBitsRaw: "S",
     }
 
     fee_map = {
@@ -1498,7 +1796,7 @@ class Instruction(Serializable, JSONSerialize):
         Type.Xor: 500,
     }
 
-    def __init__(self, *, type_: Type, literals: Literals[Any] | AssertInstruction[Any] | CallInstruction | CastInstruction[Any] | CommitInstruction[Any] | HashInstruction[Any] | AsyncInstruction):
+    def __init__(self, *, type_: Type, literals: Literals[N] | AssertInstruction[Any] | CallInstruction | CastInstruction[Any] | CommitInstruction[Any] | HashInstruction[Any] | AsyncInstruction | DeserializeInstruction[V] | SerializeInstruction[V] | ECDSAVerifyInstruction[V]):
         self.type = type_
         self.literals = literals
 

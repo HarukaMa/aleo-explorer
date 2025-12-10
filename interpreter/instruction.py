@@ -37,6 +37,15 @@ async def execute_instruction(instruction: Instruction, program: Program, regist
     elif isinstance(literals, CommitInstruction):
         type_ = literals.type
         await commit_op(literals.operands, literals.destination, literals.destination_type, registers, finalize_state, type_, db, program)
+    elif isinstance(literals, DeserializeInstruction):
+        variant = literals.variant
+        await deserialize_op(literals.operand, literals.destination, literals.destination_type, registers, finalize_state, variant, db, program)
+    elif isinstance(literals, SerializeInstruction):
+        variant = literals.variant
+        await serialize_op(literals.operand, literals.destination, literals.destination_type, registers, finalize_state, variant, db, program)
+    elif isinstance(literals, ECDSAVerifyInstruction):
+        variant = literals.variant
+        await ecdsa_verify_ops(literals.operands, literals.destination, registers, finalize_state, variant, db, program)
     else:
         raise NotImplementedError
 
@@ -213,6 +222,13 @@ async def commit_op(operands: tuple[Operand, Operand], destination: Register, de
     )
     store_plaintext_to_register(res, destination, registers)
 
+async def deserialize_op(operand: Operand, destination: Register, destination_type: PlaintextType, registers: Registers, finalize_state: FinalizeState, variant: int, db: Database, program: Program):
+    op = await load_plaintext_from_operand(operand, registers, finalize_state, db, program)
+
+    res = Plaintext.load(BytesIO(aleo_explorer_rust.deserialize_ops(variant, PlaintextValue(plaintext=op).dump(), destination_type.dump(), program.dump())))
+
+    store_plaintext_to_register(res, destination, registers)
+
 async def div(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
     op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
     op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
@@ -256,6 +272,18 @@ async def double(operands: list[Operand], destination: Register, registers: Regi
         literal=Literal(
             type_=op.literal.type,
             primitive=op.literal.primitive.double(),
+        )
+    )
+    store_plaintext_to_register(res, destination, registers)
+
+async def ecdsa_verify_ops(operands: tuple[Operand, Operand, Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, variant: int, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
+    op3 = await load_plaintext_from_operand(operands[2], registers, finalize_state, db, program)
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=Literal.Type.Boolean,
+            primitive=bool_(aleo_explorer_rust.ecdsa_verify_ops(variant, PlaintextValue(plaintext=op1).dump(), PlaintextValue(plaintext=op2).dump(), PlaintextValue(plaintext=op3).dump())),
         )
     )
     store_plaintext_to_register(res, destination, registers)
@@ -306,14 +334,7 @@ async def hash_op(operands: tuple[Operand, Optional[Operand]], destination: Regi
     op = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
     if not isinstance(destination_type, LiteralPlaintextType):
         raise TypeError("destination type must be literal")
-    value_type = destination_type.literal_type.primitive_type
-    value = value_type.load(BytesIO(aleo_explorer_rust.hash_ops(PlaintextValue(plaintext=op).dump(), hash_ops[hash_type], destination_type.literal_type)))
-    res = LiteralPlaintext(
-        literal=Literal(
-            type_=Literal.Type(destination_type.literal_type.value),
-            primitive=value,
-        )
-    )
+    res = Plaintext.load(BytesIO(aleo_explorer_rust.hash_ops(PlaintextValue(plaintext=op).dump(), hash_ops[hash_type], destination_type.dump())))
     store_plaintext_to_register(res, destination, registers)
 
 async def hash_many_psd2(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
@@ -602,6 +623,13 @@ async def rem_wrapped(operands: list[Operand], destination: Register, registers:
     )
     store_plaintext_to_register(res, destination, registers)
 
+async def serialize_op(operand: Operand, destination: Register, destination_type: ArrayType, registers: Registers, finalize_state: FinalizeState, variant: int, db: Database, program: Program):
+    op = await load_plaintext_from_operand(operand, registers, finalize_state, db, program)
+
+    res = PlaintextValue.load(BytesIO(aleo_explorer_rust.serialize_ops(variant, PlaintextValue(plaintext=op).dump(), destination_type.dump())))
+
+    store_plaintext_to_register(res.plaintext, destination, registers)
+
 async def shl(operands: list[Operand], destination: Register, registers: Registers, finalize_state: FinalizeState, db: Database, program: Program):
     op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
     op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
@@ -845,6 +873,33 @@ hash_ops = {
     HT.HashSha3_256: "sha3_256",
     HT.HashSha3_384: "sha3_384",
     HT.HashSha3_512: "sha3_512",
+    HT.HashBHP256Raw: "bhp256_raw",
+    HT.HashBHP512Raw: "bhp512_raw",
+    HT.HashBHP768Raw: "bhp768_raw",
+    HT.HashBHP1024Raw: "bhp1024_raw",
+    HT.HashKeccak256Raw: "keccak256_raw",
+    HT.HashKeccak384Raw: "keccak384_raw",
+    HT.HashKeccak512Raw: "keccak512_raw",
+    HT.HashPED64Raw: "ped64_raw",
+    HT.HashPED128Raw: "ped128_raw",
+    HT.HashPSD2Raw: "psd2_raw",
+    HT.HashPSD4Raw: "psd4_raw",
+    HT.HashPSD8Raw: "psd8_raw",
+    HT.HashSha3_256Raw: "sha3_256_raw",
+    HT.HashSha3_384Raw: "sha3_384_raw",
+    HT.HashSha3_512Raw: "sha3_512_raw",
+    HT.HashKeccak256Native: "keccak256_native",
+    HT.HashKeccak256NativeRaw: "keccak256_native_raw",
+    HT.HashKeccak384Native: "keccak384_native",
+    HT.HashKeccak384NativeRaw: "keccak384_native_raw",
+    HT.HashKeccak512Native: "keccak512_native",
+    HT.HashKeccak512NativeRaw: "keccak512_native_raw",
+    HT.HashSha3_256Native: "sha3_256_native",
+    HT.HashSha3_256NativeRaw: "sha3_256_native_raw",
+    HT.HashSha3_384Native: "sha3_384_native",
+    HT.HashSha3_384NativeRaw: "sha3_384_native_raw",
+    HT.HashSha3_512Native: "sha3_512_native",
+    HT.HashSha3_512NativeRaw: "sha3_512_native_raw",
 }
 
 commit_ops = {
