@@ -168,6 +168,15 @@ def disasm_hash(value: HashInstruction[Any]) -> str:
 def disasm_async(value: AsyncInstruction) -> str:
     return f"{value.function_name} {' '.join(map(disasm_operand, value.operands))} into {disasm_register(value.destination)}"
 
+def disasm_deserialize(value: DeserializeInstruction[Any]) -> str:
+    return f"{disasm_operand(value.operand)} ({value.operand_type}) into {disasm_register(value.destination)} ({plaintext_type_to_str(value.destination_type)})"
+
+def disasm_serialize(value: SerializeInstruction[Any]) -> str:
+    return f"{disasm_operand(value.operand)} ({plaintext_type_to_str(value.operand_type)}) into {disasm_register(value.destination)} ({value.destination_type})"
+
+def disasm_ecdsa_verify(value: ECDSAVerifyInstruction[Any]) -> str:
+    return f"{" ".join(map(disasm_operand, value.operands))} into {disasm_register(value.destination)}"
+
 def disasm_instruction(value: Instruction) -> str:
     inst_str = f"{instruction_type_to_str(value.type)} "
     literals = value.literals
@@ -185,6 +194,8 @@ def disasm_instruction(value: Instruction) -> str:
         return inst_str + disasm_async(literals)
     elif isinstance(literals, HashInstruction): # type: ignore
         return inst_str + disasm_hash(literals)
+    elif isinstance(literals, DeserializeInstruction):
+        return inst_str + disasm_deserialize(literals)
     else:
         raise ValueError("unknown instruction type")
 
