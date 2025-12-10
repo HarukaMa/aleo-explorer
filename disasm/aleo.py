@@ -192,10 +192,14 @@ def disasm_instruction(value: Instruction) -> str:
         return inst_str + disasm_commit(literals)
     elif isinstance(literals, AsyncInstruction):
         return inst_str + disasm_async(literals)
-    elif isinstance(literals, HashInstruction): # type: ignore
+    elif isinstance(literals, HashInstruction):
         return inst_str + disasm_hash(literals)
     elif isinstance(literals, DeserializeInstruction):
         return inst_str + disasm_deserialize(literals)
+    elif isinstance(literals, SerializeInstruction):
+        return inst_str + disasm_serialize(literals)
+    elif isinstance(literals, ECDSAVerifyInstruction):  # pyright: ignore [reportUnnecessaryIsInstance] future proof
+        return inst_str + disasm_ecdsa_verify(literals)
     else:
         raise ValueError("unknown instruction type")
 
