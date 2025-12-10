@@ -332,8 +332,6 @@ async def greater_than_or_equal(operands: list[Operand], destination: Register, 
 
 async def hash_op(operands: tuple[Operand, Optional[Operand]], destination: Register, destination_type: PlaintextType, registers: Registers, finalize_state: FinalizeState, hash_type: HT, db: Database, program: Program):
     op = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
-    if not isinstance(destination_type, LiteralPlaintextType):
-        raise TypeError("destination type must be literal")
     res = Plaintext.load(BytesIO(aleo_explorer_rust.hash_ops(PlaintextValue(plaintext=op).dump(), hash_ops[hash_type], destination_type.dump())))
     store_plaintext_to_register(res, destination, registers)
 
