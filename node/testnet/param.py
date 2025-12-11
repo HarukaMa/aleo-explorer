@@ -39,3 +39,4 @@ class Testnet:
     consensus_v8_height = 9_173_000
     consensus_v9_height = 9_800_000
     consensus_v12_height = 12_669_000
+    consensus_v13_height = 999_999_999
