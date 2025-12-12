@@ -10,16 +10,16 @@ class FinalizeState:
     def __init__(self, block: Block):
         self.block_height = block.height
         if block.height > Network.consensus_v12_height:
-            block_timestamp = block.header.metadata.timestamp
+            self.block_timestamp = block.header.metadata.timestamp
         else:
-            block_timestamp = None
+            self.block_timestamp = None
         self.random_seed = aleo_explorer_rust.finalize_random_seed(
             block.round,
             block.height,
             block.cumulative_weight,
             block.cumulative_proof_target,
             block.previous_hash.dump(),
-            block_timestamp
+            self.block_timestamp
         )
         if len(self.random_seed) != 32:
             raise RuntimeError("invalid random seed length")
@@ -159,6 +159,13 @@ async def load_plaintext_from_operand(operand: Operand, registers: Registers, fi
             literal=Literal(
                 type_=Literal.Type.Address,
                 primitive=Address.loads(program_owner)
+            )
+        )
+    elif isinstance(operand, BlockTimestampOperand):
+        return LiteralPlaintext(
+            literal=Literal(
+                type_=Literal.Type.I64,
+                primitive=u64(cast(i64, finalize_state.block_timestamp))
             )
         )
     else:

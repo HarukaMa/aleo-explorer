@@ -371,6 +371,7 @@ class Operand(EnumBaseSerialize, Serialize, JSONSerialize, RustEnum):
         Checksum = 7
         Edition = 8
         ProgramOwner = 9
+        BlockTimestamp = 10
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -395,6 +396,8 @@ class Operand(EnumBaseSerialize, Serialize, JSONSerialize, RustEnum):
             return EditionOperand.load(data)
         elif type_ == cls.Type.ProgramOwner:
             return ProgramOwnerOperand.load(data)
+        elif type_ == cls.Type.BlockTimestamp:
+            return BlockTimestampOperand.load(data)
         else:
             raise ValueError("unknown operand type")
 
@@ -533,6 +536,19 @@ class ProgramOwnerOperand(Operand):
         return cls(program_id=Option[ProgramID].load(data))
 
 N = TypeVar("N", bound=FixedSize)
+
+class BlockTimestampOperand(Operand):
+    type = Operand.Type.BlockTimestamp
+
+    def __init__(self):
+        pass
+
+    def dump(self) -> bytes:
+        return self.type.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        return cls()
 
 class Literals(Serializable, JSONSerialize, Generic[N]):
     types: N
