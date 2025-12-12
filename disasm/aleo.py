@@ -114,6 +114,8 @@ def disasm_operand(value: Operand) -> str:
         return "edition"
     elif isinstance(value, ProgramOwnerOperand):
         return "program_owner"
+    elif isinstance(value, BlockTimestampOperand):
+        return "block.timestamp"
     else:
         raise ValueError(f"unknown operand type {type(value)}")
 
