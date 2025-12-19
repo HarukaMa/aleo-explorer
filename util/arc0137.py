@@ -6,6 +6,7 @@ import aleo_explorer_rust
 from aleo_types import Address, Field, StructPlaintext, Vec, Tuple, Identifier, Plaintext, u8, LiteralType, Value, \
     PlaintextValue, LiteralPlaintext, Literal, ArrayPlaintext, Scalar, u32, u128
 from aleo_types.cached import cached_get_key_id, cached_get_mapping_id
+from aleo_types.vm_instruction import LiteralPlaintextType
 from db import Database
 from node import Network
 from util.aleo_strings import string_from_u128_list_le, string_to_u128_array_le, string_from_u128_array_le
@@ -30,7 +31,7 @@ async def _get_mapping_value(db: Database, program_id: str, mapping_name: str, k
 
 def _get_name_hash(name_st: StructPlaintext) -> Field:
     name_field = Field.load(BytesIO(
-        aleo_explorer_rust.hash_ops(PlaintextValue(plaintext=name_st).dump(), "psd2", LiteralType.Field)
+        aleo_explorer_rust.hash_ops(PlaintextValue(plaintext=name_st).dump(), "psd2", LiteralPlaintextType(literal_type=LiteralType.Field).dump())
     ))
     zero_field_plaintext = LiteralPlaintext(literal=Literal(type_=Literal.Type.Field, primitive=Field(data=0)))
     data_struct = PlaintextValue(
@@ -53,7 +54,7 @@ def _get_name_hash(name_st: StructPlaintext) -> Field:
         )
     )
     data_hash = Field.load(BytesIO(
-        aleo_explorer_rust.hash_ops(data_struct.dump(), "bhp256", LiteralType.Field)
+        aleo_explorer_rust.hash_ops(data_struct.dump(), "bhp256", LiteralPlaintextType(literal_type=LiteralType.Field).dump())
     ))
     data_hash_value = PlaintextValue(
         plaintext=LiteralPlaintext(literal=Literal(type_=Literal.Type.Field, primitive=data_hash)))
