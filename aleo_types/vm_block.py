@@ -971,9 +971,12 @@ class Program(Serializable, JSONSerialize):
 
     async def call_graph(self, function_name: Identifier, db: Database) -> list[CallGraphNode]:
         from util.global_cache import get_program
-        if function_name not in self.functions:
+        if function_name in self.functions:
+            function = self.functions[function_name]
+        elif function_name in self.closures:
+            function = self.closures[function_name]
+        else:
             raise ValueError("Function not found")
-        function = self.functions[function_name]
         calls: list[Program.CallGraphNode] = []
         for inst in function.instructions:
             if isinstance(inst.literals, CallInstruction) and isinstance(inst.literals.operator, LocatorCallOperator):
