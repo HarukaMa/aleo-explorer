@@ -128,6 +128,9 @@ async def _trace_execution(db: Database, transition_ids: list[TransitionID], pro
             called_program = await get_program(db, called_program_id, latest_edition)
             if not called_program:
                 raise RuntimeError("program not found")
+            if locator.resource in called_program.closures:
+                # ignore closure calls as they don't create transitions
+                continue
             called_function = called_program.functions[locator.resource]
             if called_function.finalize.value is None:
                 call_index += 1
@@ -165,6 +168,8 @@ async def _trace_execution(db: Database, transition_ids: list[TransitionID], pro
 async def build_async_order(db: Database, transition_ids: list[TransitionID], program: Program, function_name: Identifier) -> list[TransitionID]:
     call_graph = await program.call_graph(function_name, db)
 
+    if call_graph is None:
+        raise RuntimeError("call graph must exist")
     root_call_graph: Program.CallGraphNode = {
         "index": len(transition_ids) - 1,
         "name": "",
