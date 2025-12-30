@@ -90,18 +90,29 @@ class BlockRequest(Message):
 class BlockResponse(Message):
     type = Message.Type.BlockResponse
 
-    def __init__(self, *, request: BlockRequest, blocks: Data[Vec[Block, u8]]):
+    def __init__(self, *, request: BlockRequest, blocks: Data[Vec[Block, u8]], latest_consensus_version: Option[u16]):
         self.request = request
         self.blocks = blocks
+        self.latest_consensus_version = latest_consensus_version
 
     def dump(self) -> bytes:
+        # it seems we don't ever need to serialize block responses, so skipping consensus version signalling
         return self.type.dump() + self.request.dump() + self.blocks.dump()
 
     @classmethod
     def load(cls, data: BytesIO):
-        request = BlockRequest.load(data)
+        start_height = u32.load(data)
+        contains_consensus_version = start_height == 0
+        if contains_consensus_version:
+            request = BlockRequest.load(data)
+        else:
+            request = BlockRequest(start_height=start_height, end_height=u32.load(data))
         blocks = Data[Vec[Block, u8]].load(data)
-        return cls(request=request, blocks=blocks)
+        if contains_consensus_version:
+            latest_consensus_version = u16.load(data)
+        else:
+            latest_consensus_version = None
+        return cls(request=request, blocks=blocks, latest_consensus_version=Option[u16](latest_consensus_version))
 
 
 class ChallengeRequest(Message):
