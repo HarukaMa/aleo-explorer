@@ -1,4 +1,5 @@
 {% from "macros.jinja2" import nav, htmx_title, sync_notice %}
+
 {{ sync_notice(sync_info) }}
 
     <div class="content">
@@ -23,11 +24,19 @@
                 </thead>
                 <tbody hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
                 {% for token in tokens %}
-                    {% set token_id = token.token_id | string %}
+                    {% set token_id = (token.token_id | string)[:-5] %}
                     <tr>
                       <td><a href="/token?id={{ token.token_id }}">{{ token.name }}</a></td>
                       <td>{{ token.symbol }}</td>
-                      <td style="max-width: 20vw; overflow: hidden; text-overflow: ellipsis;"><span class="mono"><strong>{{ token_id[:5] }}</strong>{{ token_id[5:20] }}...{{ token_id[-20:-5] }}<strong>{{ token_id[-5:] }}</strong></span></td>
+                      <td style="max-width: 20vw; overflow: hidden; text-overflow: ellipsis;"><span class="mono">
+                          {%- if token_id | length > 40 %}
+                              <strong>{{ token_id[:5] }}</strong>{{ token_id[5:20] }}...{{ token_id[-20:-5] }}<strong>{{ token_id[-5:] }}</strong>
+                          {%- elif token_id | length > 10 %}
+                              <strong>{{ token_id[:5] }}</strong>{{ token_id[5:-5] }}<strong>{{ token_id[-10:] }}</strong>
+                          {%- else %}
+                              <strong>{{ token_id }}</strong>
+                          {%- endif %}
+                      field</span></td>
                       <td>{{ token.supply | format_token_amount(token.decimals) | safe }}</td>
                       <td>{{ token.max_supply | format_token_amount(token.decimals) | safe }}</td>
                     </tr>
