@@ -26,7 +26,7 @@
                     <tr>
                       <td><a href="/token?id={{ token.token_id }}">{{ token.name }}</a></td>
                       <td>{{ token.symbol }}</td>
-                      <td style="max-width: 20vw; overflow: hidden; text-overflow: ellipsis;"><span class="mono">{{ token.token_id }}</span></td>
+                      <td style="max-width: 20vw; overflow: hidden; text-overflow: ellipsis;"><span class="mono"><strong>{{ token.token_id[:5] }}</strong>{{ token.token_id[5:20] }}...{{ token.token_id[-20:-5] }}<strong>{{ token.token_id[-5:] }}</strong></span></td>
                       <td>{{ token.supply | format_token_amount(token.decimals) | safe }}</td>
                       <td>{{ token.max_supply | format_token_amount(token.decimals) | safe }}</td>
                     </tr>
