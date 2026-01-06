@@ -23,7 +23,7 @@
                 </thead>
                 <tbody hx-boost="true" hx-target="#htmx-body" hx-swap="innerHTML show:no" hx-push-url="true">
                 {% for token in tokens %}
-                    {% set token_id = token.token_id | str %}
+                    {% set token_id = token.token_id | string %}
                     <tr>
                       <td><a href="/token?id={{ token.token_id }}">{{ token.name }}</a></td>
                       <td>{{ token.symbol }}</td>
