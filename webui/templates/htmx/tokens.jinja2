@@ -32,11 +32,10 @@
                           {%- if token_id | length > 40 %}
                               <strong>{{ token_id[:5] }}</strong>{{ token_id[5:20] }}...{{ token_id[-20:-5] }}<strong>{{ token_id[-5:] }}</strong>
                           {%- elif token_id | length > 10 %}
-                              <strong>{{ token_id[:5] }}</strong>{{ token_id[5:-5] }}<strong>{{ token_id[-10:] }}</strong>
+                              <strong>{{ token_id[:5] }}</strong>{{ token_id[5:-5] }}<strong>{{ token_id[-5:] }}</strong>
                           {%- else %}
                               <strong>{{ token_id }}</strong>
-                          {%- endif %}
-                      field</span></td>
+                          {%- endif %}field</span></td>
                       <td>{{ token.supply | format_token_amount(token.decimals) | safe }}</td>
                       <td>{{ token.max_supply | format_token_amount(token.decimals) | safe }}</td>
                     </tr>
