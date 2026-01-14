@@ -10,7 +10,8 @@ import aleo_explorer_rust
 import requests
 
 from aleo_types import ChallengeRequest, NodeType, u16, u64, Frame, Message, ChallengeResponse, \
-    PeerRequest, Ping, PeerResponse, Pong, bool_, BlockLocators, Address, Signature, Option, Data, Vec, FixedSize, u8
+    PeerRequest, Ping, PeerResponse, Pong, bool_, BlockLocators, Address, Signature, Option, Data, Vec, FixedSize, u8, \
+    Disconnect
 from . import Network
 
 
@@ -281,6 +282,10 @@ class LightNode:
                 else:
                     peer_type = None
                 self.state.connect(str(peer.ip), peer.port, peer_type)
+
+        elif isinstance(frame.message, Disconnect):
+            msg = frame.message
+            self.log(f"Disconnected from {self.ip}:{self.port}: {msg.reason.name}")
 
         else:
             pass
