@@ -173,6 +173,8 @@ class LightNode:
             return
 
     async def __incoming_worker(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+        host, port = writer.get_extra_info('peername')
+        self.log(f"connection from {host}:{port}")
         self.reader = reader
         self.writer = writer
         try:
@@ -180,15 +182,18 @@ class LightNode:
             while True:
                 try:
                     size = await self.reader.readexactly(4)
-                except:
+                except Exception as e:
+                    self.log(f"connection from {host}:{port} closed: {e}")
                     raise Exception("connection closed")
                 size = int.from_bytes(size, byteorder="little")
                 try:
                     frame = await self.reader.readexactly(size)
-                except:
+                except Exception as e:
+                    self.log(f"connection from {host}:{port} closed: {e}")
                     raise Exception("connection closed")
                 await self.parse_message(Frame.load(BytesIO(frame)))
-        except Exception:
+        except Exception as e:
+            self.log(f"connection from {host}:{port} closed: {e}")
             await self.close()
             return
 
@@ -200,6 +205,7 @@ class LightNode:
     async def parse_message(self, frame: Frame):
 
         if isinstance(frame.message, ChallengeRequest):
+            self.log(f"received challenge request from {self.ip}:{self.port}")
             msg = frame.message
             if self.is_incoming:
                 self.port = int(msg.listener_port)
@@ -213,10 +219,12 @@ class LightNode:
                 nonce=resp_nonce,
             )
             await self.send_message(response)
+            self.log(f"sent challenge response to {self.ip}:{self.port}")
 
             if not self.is_incoming:
                 await self.send_ping()
                 self.ping_task = asyncio.create_task(self.ping_task_func())
+                self.log(f"connection to {self.ip}:{self.port} established")
             else:
                 challenge_request = ChallengeRequest(
                     version=Network.version,
@@ -227,11 +235,14 @@ class LightNode:
                     snarkos_sha=Vec[u8, FixedSize[40]](list(map(u8, b"\x00" * 40))),
                 )
                 await self.send_message(challenge_request)
+                self.log(f"sent challenge request to {self.ip}:{self.port}")
 
         elif isinstance(frame.message, ChallengeResponse):
+            self.log(f"received challenge response from {self.ip}:{self.port}")
             if self.is_incoming:
                 await self.send_ping()
                 self.ping_task = asyncio.create_task(self.ping_task_func())
+                self.log(f"connection from {self.ip}:{self.port} established")
 
         elif isinstance(frame.message, Ping):
             msg = frame.message
