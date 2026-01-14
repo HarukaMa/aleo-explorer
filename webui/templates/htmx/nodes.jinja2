@@ -51,7 +51,9 @@
                 </span></td>
                 <td>
                     {% if node.height %}
-                        {% if max_height - node["height"] > 50 %}
+                        {% if node.direction == "disconnected" %}
+                            <span style="color: #aaaaaa">{{ node.height }}</span>
+                        {% elif max_height - node["height"] > 50 %}
                             <span style="color: #cc4b37">{{ node.height }}</span>
                         {% elif max_height - node["height"] > 20 %}
                             <span style="color: #ffae00">{{ node.height }}</span>
