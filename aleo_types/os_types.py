@@ -236,7 +236,7 @@ class PeerRequest(Message):
 class PeerResponse(Message):
     type = Message.Type.PeerResponse
 
-    def __init__(self, *, peers: Vec[SocketAddr, u8]):
+    def __init__(self, *, peers: list[tuple[SocketAddr, Option[u32]]]):
         self.peers = peers
 
     def dump(self) -> bytes:
@@ -244,8 +244,21 @@ class PeerResponse(Message):
 
     @classmethod
     def load(cls, data: BytesIO):
-        _ = u8.load(data)
-        peers = Vec[SocketAddr, u8].load(data)
+        version = u8.load(data)
+        if version == 0:
+            contains_heights = True
+            count = u8.load(data)
+        else:
+            contains_heights = False
+            count = version
+        peers: list[tuple[SocketAddr, Option[u32]]] = []
+        for _ in range(count):
+            addr = SocketAddr.load(data)
+            if contains_heights:
+                height = Option[u32].load(data)
+            else:
+                height = Option[u32](None)
+            peers.append((addr, height))
         return cls(peers=peers)
 
 class BlockLocators(Serializable):

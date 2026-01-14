@@ -292,7 +292,7 @@ class LightNode:
                     peer_type = peer_types[str(peer)]
                 else:
                     peer_type = None
-                self.state.connect(str(peer.ip), peer.port, peer_type)
+                self.state.connect(str(peer[0].ip), peer[0].port, peer_type)
 
         elif isinstance(frame.message, Disconnect):
             msg = frame.message
