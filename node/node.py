@@ -65,7 +65,7 @@ class Node:
                 version=Network.version,
                 listener_port=u16(14133),
                 node_type=NodeType.Validator,
-                address=Address.loads("aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px"),
+                address=Address.loads("aleo12ux3gdauck0v60westgcpqj7v8rrcr3v346e4jtq04q7kkt22czsh808v2"),
                 nonce=self.nonce,
             )
             await self.send_message(challenge_request)
@@ -127,7 +127,7 @@ class Node:
             response = ChallengeResponse(
                 genesis_header=genesis,
                 restrictions_id=Network.restrictions_id,
-                signature=Data[Signature](Signature.load(BytesIO(aleo_explorer_rust.sign_nonce("APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH", msg.nonce.dump() + resp_nonce.dump())))),
+                signature=Data[Signature](Signature.load(BytesIO(aleo_explorer_rust.sign_nonce("APrivateKey1zkpBjpEgLo4arVUkQmcLdKQMiAKGaHAQVVwmF8HQby8vdYs", msg.nonce.dump() + resp_nonce.dump())))),
                 nonce=resp_nonce,
             )
             self.handshake_state = 1
