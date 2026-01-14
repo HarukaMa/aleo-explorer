@@ -122,6 +122,7 @@ class LightNode:
         self.last_rest_query = 0
 
         self.nonce = u64(random.randint(0, 2 ** 64 - 1))
+        self.log_enabled = bool(os.getenv("LIGHT_NODE_LOG", ""))
 
     def incoming(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         self.ip = writer.get_extra_info("peername")[0]
@@ -134,9 +135,11 @@ class LightNode:
         self.worker_task = asyncio.create_task(self.__worker(self.ip, self.port))
 
     async def __worker(self, host: str, port: int):
+        self.log(f"connecting to {host}:{port}")
         try:
             self.reader, self.writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=5)
-        except Exception:
+        except Exception as e:
+            self.log(f"connection to {host}:{port} failed: {e}")
             await self.close()
             return
         try:
@@ -144,7 +147,7 @@ class LightNode:
                 version=Network.version,
                 listener_port=u16(14134),
                 node_type=NodeType.Prover,
-                address=Address.loads("aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px"),
+                address=Address.loads("aleo1s3ws5tra87fjycnjrwsjcrnw2qxr8jfqqdugnf0xzqqw29q9m5pqem2u4t"),
                 nonce=self.nonce,
             )
             await self.send_message(challenge_request)
@@ -152,15 +155,18 @@ class LightNode:
             while True:
                 try:
                     size = await self.reader.readexactly(4)
-                except:
+                except Exception as e:
+                    self.log(f"connection to {host}:{port} closed: {e}")
                     raise Exception("connection closed")
                 size = int.from_bytes(size, byteorder="little")
                 try:
                     frame = await self.reader.readexactly(size)
-                except:
+                except Exception as e:
+                    self.log(f"connection to {host}:{port} closed: {e}")
                     raise Exception("connection closed")
                 await self.parse_message(Frame.load(BytesIO(frame)))
-        except Exception:
+        except Exception as e:
+            self.log(f"connection to {host}:{port} closed: {e}")
             await self.close()
             return
 
@@ -315,6 +321,10 @@ class LightNode:
         if self.writer is not None and not self.writer.is_closing():
             self.writer.close()
         asyncio.create_task(self.close_session())
+
+    def log(self, message: str):
+        if self.log_enabled:
+            print(f"LightNode: {message}")
 
 
 class LightNodeListener:
