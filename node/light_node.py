@@ -274,7 +274,7 @@ class LightNode:
                             peer_types[p[0]] = NodeType[p[1]]
                 except Exception:
                     pass
-            self.log(f"Peers: {msg.peers}")
+            self.log(f"Peers from {self.ip}:{self.port}: {msg.peers}")
             for peer in msg.peers:
                 if str(peer) in peer_types:
                     peer_type = peer_types[str(peer)]
