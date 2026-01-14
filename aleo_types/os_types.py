@@ -244,6 +244,7 @@ class PeerResponse(Message):
 
     @classmethod
     def load(cls, data: BytesIO):
+        _ = u8.load(data)
         peers = Vec[SocketAddr, u8].load(data)
         return cls(peers=peers)
 
