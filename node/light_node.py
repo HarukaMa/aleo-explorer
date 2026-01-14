@@ -201,7 +201,7 @@ class LightNode:
             response = ChallengeResponse(
                 genesis_header=Network.genesis_block.header,
                 restrictions_id=Network.restrictions_id,
-                signature=Data[Signature](Signature.load(BytesIO(aleo_explorer_rust.sign_nonce("APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH", msg.nonce.dump() + resp_nonce.dump())))),
+                signature=Data[Signature](Signature.load(BytesIO(aleo_explorer_rust.sign_nonce("APrivateKey1zkp2RWGDcde3efb89rjhME1VYA8QMxcxep5DShNBR6n8Yjh", msg.nonce.dump() + resp_nonce.dump())))),
                 nonce=resp_nonce,
             )
             await self.send_message(response)
@@ -214,7 +214,7 @@ class LightNode:
                     version=Network.version,
                     listener_port=u16(14134),
                     node_type=NodeType.Prover,
-                    address=Address.loads("aleo1rhgdu77hgyqd3xjj8ucu3jj9r2krwz6mnzyd80gncr5fxcwlh5rsvzp9px"),
+                    address=Address.loads("aleo1s3ws5tra87fjycnjrwsjcrnw2qxr8jfqqdugnf0xzqqw29q9m5pqem2u4t"),
                     nonce=self.nonce,
                 )
                 await self.send_message(challenge_request)
