@@ -67,6 +67,7 @@ class Node:
                 node_type=NodeType.Validator,
                 address=Address.loads("aleo12ux3gdauck0v60westgcpqj7v8rrcr3v346e4jtq04q7kkt22czsh808v2"),
                 nonce=self.nonce,
+                snarkos_sha=Vec[u8, FixedSize[40]](list(map(u8, b"\x00" * 40))),
             )
             await self.send_message(challenge_request)
             while True:

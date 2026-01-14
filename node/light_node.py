@@ -10,7 +10,7 @@ import aleo_explorer_rust
 import requests
 
 from aleo_types import ChallengeRequest, NodeType, u16, u64, Frame, Message, ChallengeResponse, \
-    PeerRequest, Ping, PeerResponse, Pong, bool_, BlockLocators, Address, Signature, Option, Data
+    PeerRequest, Ping, PeerResponse, Pong, bool_, BlockLocators, Address, Signature, Option, Data, Vec, FixedSize, u8
 from . import Network
 
 
@@ -149,6 +149,7 @@ class LightNode:
                 node_type=NodeType.Prover,
                 address=Address.loads("aleo1s3ws5tra87fjycnjrwsjcrnw2qxr8jfqqdugnf0xzqqw29q9m5pqem2u4t"),
                 nonce=self.nonce,
+                snarkos_sha=Vec[u8, FixedSize[40]](list(map(u8, b"\x00" * 40))),
             )
             await self.send_message(challenge_request)
             self.aiohttp_session = aiohttp.ClientSession(f"http://{self.ip}:3030", timeout=aiohttp.ClientTimeout(total=1))
@@ -222,6 +223,7 @@ class LightNode:
                     node_type=NodeType.Prover,
                     address=Address.loads("aleo1s3ws5tra87fjycnjrwsjcrnw2qxr8jfqqdugnf0xzqqw29q9m5pqem2u4t"),
                     nonce=self.nonce,
+                    snarkos_sha=Vec[u8, FixedSize[40]](list(map(u8, b"\x00" * 40))),
                 )
                 await self.send_message(challenge_request)
 

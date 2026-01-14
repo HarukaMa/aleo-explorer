@@ -118,12 +118,14 @@ class BlockResponse(Message):
 class ChallengeRequest(Message):
     type = Message.Type.ChallengeRequest
 
-    def __init__(self, *, version: u32, listener_port: u16, node_type: NodeType, address: Address, nonce: u64):
+    def __init__(self, *, version: u32, listener_port: u16, node_type: NodeType, address: Address, nonce: u64,
+                 snarkos_sha: Vec[u8, FixedSize[40]]):
         self.version = version
         self.listener_port = listener_port
         self.node_type = node_type
         self.address = address
         self.nonce = nonce
+        self.snarkos_sha = snarkos_sha
 
 
     def dump(self) -> bytes:
@@ -134,6 +136,7 @@ class ChallengeRequest(Message):
             self.node_type.dump(),
             self.address.dump(),
             self.nonce.dump(),
+            self.snarkos_sha.dump(),
         ])
 
     @classmethod
@@ -143,7 +146,9 @@ class ChallengeRequest(Message):
         node_type = NodeType.load(data)
         address = Address.load(data)
         nonce = u64.load(data)
-        return cls(version=version, listener_port=listener_port, node_type=node_type, address=address, nonce=nonce)
+        snarkos_sha = Vec[u8, FixedSize[40]].load(data)
+        return cls(version=version, listener_port=listener_port, node_type=node_type, address=address, nonce=nonce,
+                   snarkos_sha=snarkos_sha)
 
     def __str__(self):
         return "ChallengeRequest(version={}, listener_port={}, node_type={}, address={}, nonce={})".format(
