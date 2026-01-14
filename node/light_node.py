@@ -89,6 +89,11 @@ class LightNodeState:
         if key in self.states:
             self.states[key]["peer_count"] = peer_count
 
+    def node_height(self, ip: str, port: int, height: int):
+        key = ":".join([ip, str(port)])
+        if key in self.states:
+            self.states[key]["height"] = height
+
     def disconnected(self, ip: str, port: int):
         key = ":".join([ip, str(port)])
         if key in self.states:
@@ -293,6 +298,8 @@ class LightNode:
                 else:
                     peer_type = None
                 self.state.connect(str(peer[0].ip), peer[0].port, peer_type)
+                if peer[1].value is not None:
+                    self.state.node_height(str(peer[0].ip), peer[0].port, peer[1].value)
 
         elif isinstance(frame.message, Disconnect):
             msg = frame.message
