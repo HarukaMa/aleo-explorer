@@ -30,9 +30,14 @@ async def _get_mapping_value(db: Database, program_id: str, mapping_name: str, k
 
 
 def _get_name_hash(name_st: StructPlaintext) -> Field:
-    name_field = Field.load(BytesIO(
+    name_plaintext = Plaintext.load(BytesIO(
         aleo_explorer_rust.hash_ops(PlaintextValue(plaintext=name_st).dump(), "psd2", LiteralPlaintextType(literal_type=LiteralType.Field).dump())
     ))
+    if not isinstance(name_plaintext, LiteralPlaintext):
+        raise RuntimeError(f"name plaintext is not a literal: {name_plaintext}")
+    if not isinstance(name_plaintext.literal.primitive, Field):
+        raise RuntimeError(f"name plaintext is not a field: {name_plaintext.literal.primitive}")
+    name_field = name_plaintext.literal.primitive
     zero_field_plaintext = LiteralPlaintext(literal=Literal(type_=Literal.Type.Field, primitive=Field(data=0)))
     data_struct = PlaintextValue(
         plaintext=StructPlaintext(
@@ -53,9 +58,14 @@ def _get_name_hash(name_st: StructPlaintext) -> Field:
             ])
         )
     )
-    data_hash = Field.load(BytesIO(
+    data_plaintext = Plaintext.load(BytesIO(
         aleo_explorer_rust.hash_ops(data_struct.dump(), "bhp256", LiteralPlaintextType(literal_type=LiteralType.Field).dump())
     ))
+    if not isinstance(data_plaintext, LiteralPlaintext):
+        raise RuntimeError(f"data plaintext is not a literal: {data_plaintext}")
+    if not isinstance(data_plaintext.literal.primitive, Field):
+        raise RuntimeError(f"data plaintext is not a field: {data_plaintext.literal.primitive}")
+    data_hash = data_plaintext.literal.primitive
     data_hash_value = PlaintextValue(
         plaintext=LiteralPlaintext(literal=Literal(type_=Literal.Type.Field, primitive=data_hash)))
     return Field.load(BytesIO(
