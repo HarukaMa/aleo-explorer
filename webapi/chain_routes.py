@@ -639,3 +639,8 @@ async def nodes_route(request: Request):
     result["resolved_addresses"] = await UIAddress.resolve_recursive_detached(result, db, {})
 
     return CJSONResponse(result)
+
+async def calc_route(request: Request):
+    db: Database = request.app.state.db
+    avg_reward = await db.get_average_solution_reward()
+    return CJSONResponse({"avg_reward": avg_reward})

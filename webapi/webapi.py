@@ -20,7 +20,7 @@ from util.set_proc_title import set_thread_title
 from .address_routes import address_route, ans_route
 from .chain_routes import blocks_route, get_summary, recent_blocks_route, index_update_route, block_route, search_route, \
     transaction_route, \
-    validators_route, transition_route, solution_route, nodes_route
+    validators_route, transition_route, solution_route, nodes_route, calc_route
 from .error_routes import bad_request, not_found, internal_error
 from .program_routes import programs_route, program_route, similar_programs_route
 from .utils import public_cache_seconds, out_of_sync_check, CJSONResponse
@@ -62,6 +62,7 @@ routes = [
     Route("/solution/{id}", solution_route),
     Route("/search", search_route),
     Route("/nodes", nodes_route),
+    Route("/calc", calc_route),
 
     Route("/programs", programs_route),
     Route("/program/{id}", program_route),
