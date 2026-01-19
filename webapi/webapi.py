@@ -58,7 +58,7 @@ routes = [
     Route("/", index_route),
     Route("/sync", sync_info_route),
     Route("/summary", summary_route),
-    Route("/feedback", feedback_route),
+    Route("/feedback", feedback_route, methods=["POST"]),
 
     Route("/block/recent", recent_blocks_route),
     Route("/block/index_update", index_update_route),
