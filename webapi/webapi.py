@@ -46,10 +46,19 @@ async def summary_route(request: Request):
     db: Database = request.app.state.db
     return CJSONResponse(await get_summary(db))
 
+async def feedback_route(request: Request):
+    db: Database = request.app.state.db
+    data = await request.json()
+    contact = data.get("contact")
+    content = data.get("content")
+    await db.save_feedback(contact, content)
+    return CJSONResponse({"success": True})
+
 routes = [
     Route("/", index_route),
     Route("/sync", sync_info_route),
     Route("/summary", summary_route),
+    Route("/feedback", feedback_route),
 
     Route("/block/recent", recent_blocks_route),
     Route("/block/index_update", index_update_route),
