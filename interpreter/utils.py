@@ -165,7 +165,7 @@ async def load_plaintext_from_operand(operand: Operand, registers: Registers, fi
         return LiteralPlaintext(
             literal=Literal(
                 type_=Literal.Type.I64,
-                primitive=u64(cast(i64, finalize_state.block_timestamp))
+                primitive=cast(i64, finalize_state.block_timestamp)
             )
         )
     else:
