@@ -1,0 +1,99 @@
+[build-system]
+build-backend = "hatchling.build"
+requires = [ "hatchling>=1.20" ]
+
+[project]
+name = "aleo-explorer"
+description = "Open source explorer for the Aleo network."
+authors = [ { name = "Haruka Ma", email = "mrx@hcc.im" } ]
+version = "0.0.1+7fe5d89"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "aiohttp~=3.11.11",
+  "jinja2~=3.1.5",
+  "psycopg[binary,pool]~=3.2.4",
+  "python-dotenv~=1.0.1",
+  "requests~=2.32.3",
+  "starlette~=0.45.3",
+  "uvicorn~=0.34.0",
+  "python_multipart~=0.0.20",
+  "minify-html~=0.15.0",
+  "asgiref~=3.8.1",
+  "simplejson~=3.19.3",
+  "nest_asyncio~=1.6.0",
+  # known first-party deps
+  "aleo-explorer-rust",
+]
+
+[project.optional-dependencies]
+rocksdb = ["rocksdb-py>=0.0.6"]
+
+[dependency-groups]
+dev = [
+  "ruff>=0.6,<0.12"
+]
+docs = [
+  "sphinx",
+  "sphinxcontrib-httpdomain",
+  "sphinx-book-theme"
+]
+
+[tool.uv.sources]
+aleo-explorer-rust = [
+  { git = "https://github.com/HarukaMa/aleo-explorer-rust.git" },
+]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+  ".venv",
+  ".github",
+]
+
+[tool.hatch.build.targets.wheel]
+exclude = [
+  "**/.gitignore",
+  "**/docs",
+]
+only-include = [
+  "src",
+]
+sources = [
+  "src",
+]
+
+[tool.pyright]
+typeCheckingMode = "strict"
+exclude = [
+    "src/**/middleware/asgi_logger", ".venv"
+]
+reportUnusedImport = false
+
+[tool.ruff]
+target-version = "py310"
+include = [
+  "src/**/*.py",
+  "pyproject.toml",
+]
+extend-exclude = [
+  "src/**/middleware/asgi_logger/*.py",
+]
+
+[tool.ruff.lint]
+select = [
+  "E4",
+  "E7",
+  "E9",
+  "F",   # pyflakes
+  "Q",   # flake8-quotes
+#  "I",   # isort
+  "B",   # flake8-bugbear
+  "A",   # flake8-builtins
+  "ICN", # flake8-import-conventions
+]
+ignore = [
+  "E266", # (too many leading '#'): sometimes we use multiple # for separting sections
+  "E203", # (white space before ':'): this error conflicts with black linting
+  "E701", # (multiple statements on one line)
+  "S101", # (use of assert): mostly we use assert for typing
+]
