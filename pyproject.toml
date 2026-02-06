@@ -65,7 +65,7 @@ sources = [
 [tool.pyright]
 typeCheckingMode = "strict"
 exclude = [
-    "src/**/middleware/asgi_logger", ".venv"
+  "middleware/asgi_logger", ".venv"
 ]
 reportUnusedImport = false
 
