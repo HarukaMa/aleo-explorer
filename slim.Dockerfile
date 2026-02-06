@@ -1,8 +1,7 @@
-FROM python:3.11-slim as builder
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+FROM python:3.11-slim AS builder
 
-# Installs Aleo module build dependencies
+ENV APP_DIR="/app"
+ENV PATH="${PATH}:/root/.cargo/bin"
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
@@ -10,41 +9,23 @@ RUN set -eux; \
     curl \
     build-essential \
     pkg-config \
-    libssl-dev \ 
-    ;
+    libssl-dev; \
+    # Installs Rust compiler
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y; \
+    pip install -U pip; pip install uv; \
+    # Setup aleo-explorer
+    git clone https://github.com/HarukaMa/aleo-explorer.git ${APP_DIR}; \
+    cd ${APP_DIR}; uv sync --no-editable 
 
-# Installs Rust compiler
-RUN set -eux; \
-    curl https://sh.rustup.rs | bash -s -- -y
-ENV PATH="${PATH}:/root/.cargo/bin"
+FROM python:3.11-slim
 
-# Builds aleo rust module wheel
-RUN set -eux; \
-    pip install setuptools-rust --no-cache-dir; \
-    git clone https://github.com/HarukaMa/aleo-explorer-rust.git ; \
-    pip wheel -w /dist/ ./aleo-explorer-rust
+COPY --from=builder /app/.venv /app/
 
-# Clones repo
-RUN set -eux; \
-    git clone https://github.com/HarukaMa/aleo-explorer.git /app/
-
-# Builds requirements wheels
-RUN set -eux; \
-    pip wheel -w /dist/  -r /app/requirements.txt 
-
-
-FROM python:3.11-slim as runtime
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-
-COPY --from=builder /app/ /app/
-
-# Installs wheels from builder
-RUN --mount=source=/dist/,target=/dist/,from=builder \ 
-    pip install --no-cache-dir --no-index /dist/*.whl
-
+ENV PATH="/app/bin:${PATH}"
 WORKDIR /app/
 RUN adduser -u 5678 --disabled-password --gecos "" appuser && chown -R appuser /app
 USER appuser
 
-CMD ["python", "-m", "main"]
+CMD ["python3", "-m", "main"]
