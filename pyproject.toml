@@ -95,5 +95,7 @@ ignore = [
   "E266", # (too many leading '#'): sometimes we use multiple # for separting sections
   "E203", # (white space before ':'): this error conflicts with black linting
   "E701", # (multiple statements on one line)
+  "F403", # (from module import *)
+  "F405", # (name may be undefined, or defined from star imports)
   "S101", # (use of assert): mostly we use assert for typing
 ]
