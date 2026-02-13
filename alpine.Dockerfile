@@ -40,6 +40,7 @@ RUN set -eux; \
 FROM python:3.11-alpine as runtime
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH="/app/src"
 
 COPY --from=builder /app/ /app/
 

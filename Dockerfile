@@ -6,7 +6,7 @@ RUN apt-get update && apt-get -y upgrade && \
     apt-get clean && \
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 
-ENV INSTALL_PATH=/app PATH="/root/.cargo/bin:$PATH:$INSTALL_PATH" PYTHONPATH="$INSTALL_PATH"
+ENV INSTALL_PATH=/app PATH="/root/.cargo/bin:$PATH:$INSTALL_PATH" PYTHONPATH="$INSTALL_PATH/src"
 
 WORKDIR /app
 
@@ -26,4 +26,4 @@ ADD . .
 
 USER app
 
-CMD ["python", "main.py"]
+CMD ["python", "-m", "main"]
