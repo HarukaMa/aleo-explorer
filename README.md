@@ -27,9 +27,9 @@ You will need to resync from scratch if you are switching from the `mainnet` bra
 
 1. Import the database schema from `pg_dump.sql`.
 2. Configure through `.env` file. See `.env.example` for reference.
-3. Install `aleo-explorer-rust` to the current Python environment.
+3. Install dependencies with `uv sync` (this will install `aleo-explorer-rust`; Rust toolchain is still required). If not using uv, install `requirements.txt` and `aleo-explorer-rust` manually.
 4. Compile `aleo-explorer-wasm`, install to `webui/static/rust{.js,_bg.wasm}` with `wasm-bindgen`. (not working right now)
-5. Run `main.py`.
+5. Run with `uv run python -m main` (or `PYTHONPATH=src python -m main` if not installed).
 
 ### Use in docker
 

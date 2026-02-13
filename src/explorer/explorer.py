@@ -10,7 +10,7 @@ from interpreter.interpreter import init_builtin_program
 # from node.light_node import LightNodeState
 from node import Network
 from node import Node
-from rdb import RocksDB
+#from rdb import RocksDB
 from util.global_cache import MappingCache
 from webapi import webapi
 from webui import webui
@@ -203,7 +203,7 @@ class Explorer:
         _ = asyncio.create_task(self.sync_task(rdb))
 
 
-    async def sync_task(self, rdb: RocksDB):
+    async def sync_task(self, rdb: "RocksDB"):
         latest_height = await self.db.get_latest_height()
         if latest_height is None:
             raise RuntimeError("no block in database")
