@@ -48,7 +48,8 @@ class MinifyWrapper:
                 if not message.get("more_body", False):
                     body = minify_html.minify(
                         body.decode("utf-8"),
-                        ensure_spec_compliant_unquoted_attribute_values=True,
+                        minify_doctype=False,
+                        allow_noncompliant_unquoted_attribute_values=False,
                         keep_closing_tags=True,
                         keep_html_and_head_opening_tags=True,
                         minify_css=True,
