@@ -23,6 +23,7 @@ class DatabaseMigrate(DatabaseBase):
             (5, self.migration_5_add_output_record_sender_ciphertext),
             (6, self.migration_6_add_program_edition),
             (7, self.migration_7_add_program_checksum),
+            (8, self.migration_8_recalculate_function_call_count),
         ]
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -97,3 +98,40 @@ class DatabaseMigrate(DatabaseBase):
     @staticmethod
     async def migration_7_add_program_checksum(conn: psycopg.AsyncConnection[DictRow]):
         await conn.execute("alter table program add checksum bytea")
+
+    @staticmethod
+    async def migration_8_recalculate_function_call_count(conn: psycopg.AsyncConnection[DictRow]):
+        async with conn.cursor() as cur:
+            await cur.execute("UPDATE program_function SET called = 0")
+
+            # Count from transaction_execute transitions
+            await cur.execute("""
+                SELECT COUNT(*) as count, p.id as program_db_id, ts.function_name
+                FROM transition ts
+                JOIN transaction_execute txe ON ts.transaction_execute_id = txe.id
+                JOIN transaction tx ON txe.transaction_id = tx.id
+                JOIN program p ON ts.program_id = p.program_id
+                WHERE tx.confirmed_transaction_id IS NOT NULL
+                GROUP BY p.id, ts.function_name
+            """)
+            result = await cur.fetchall()
+            await cur.executemany(
+                "UPDATE program_function SET called = called + %s WHERE program_id = %s AND name = %s",
+                [(row["count"], row["program_db_id"], row["function_name"]) for row in result],
+            )
+
+            # Count from fee transitions
+            await cur.execute("""
+                SELECT COUNT(*) as count, p.id as program_db_id, ts.function_name
+                FROM transition ts
+                JOIN fee f ON ts.fee_id = f.id
+                JOIN transaction tx ON f.transaction_id = tx.id
+                JOIN program p ON ts.program_id = p.program_id
+                WHERE tx.confirmed_transaction_id IS NOT NULL
+                GROUP BY p.id, ts.function_name
+            """)
+            result = await cur.fetchall()
+            await cur.executemany(
+                "UPDATE program_function SET called = called + %s WHERE program_id = %s AND name = %s",
+                [(row["count"], row["program_db_id"], row["function_name"]) for row in result],
+            )
