@@ -541,6 +541,18 @@ class DatabaseInsert(DatabaseBase):
             if not ts_should_exist:
                 raise RuntimeError("transaction execute already exists in database")
             else:
+                # transaction_execute exists from unconfirmed phase, but call counts
+                # were not incremented then — increment them now
+                for transition in execution.transitions:
+                    await cur.execute(
+                        "SELECT id FROM program WHERE program_id = %s ORDER BY edition DESC",
+                        (str(transition.program_id),)
+                    )
+                    if (res := await cur.fetchone()) is not None:
+                        await cur.execute(
+                            "UPDATE program_function SET called = called + 1 WHERE program_id = %s AND name = %s",
+                            (res["id"], str(transition.function_name))
+                        )
                 return
         await cur.execute(
             "INSERT INTO transaction_execute (transaction_id, global_state_root, proof) "
