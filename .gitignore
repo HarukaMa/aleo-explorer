@@ -297,4 +297,5 @@ poetry.toml
 .env*
 ledger-*
 .claude/settings.local.json
+.planning/config.json
 uv.lock
