@@ -464,10 +464,15 @@ async def mul(operands: list[Operand], destination: Register, registers: Registe
         raise TypeError("operands must be multiplicative")
     if (op1.literal.type == Literal.Type.Group and op2.literal.type != Literal.Type.Scalar) or (op1.literal.type == Literal.Type.Scalar and op2.literal.type != Literal.Type.Group):
         raise TypeError("invalid operand types")
+    # Scalar * Group produces Group
+    if op1.literal.type == Literal.Type.Scalar and op2.literal.type == Literal.Type.Group:
+        result_type = Literal.Type.Group
+    else:
+        result_type = op1.literal.type
     # noinspection PyTypeChecker
     res = LiteralPlaintext(
         literal=Literal(
-            type_=op1.literal.type,
+            type_=result_type,
             primitive=op1.literal.primitive * op2.literal.primitive,
         )
     )

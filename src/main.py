@@ -12,6 +12,7 @@ from util.set_proc_title import set_proc_title, set_thread_title
 nest_asyncio.apply()
 load_dotenv()
 
+
 async def main():
     if platform.python_implementation() == "CPython":
         # https://mkennedy.codes/posts/python-gc-settings-change-this-and-make-your-app-go-20pc-faster/
@@ -34,5 +35,6 @@ async def main():
     while True:
         await asyncio.sleep(3600)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     asyncio.run(main())

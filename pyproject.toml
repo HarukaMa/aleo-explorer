@@ -64,6 +64,10 @@ sources = [
 
 [tool.pyright]
 typeCheckingMode = "strict"
+include = ["src"]
+extraPaths = ["src"]
+venvPath = "."
+venv = ".venv"
 exclude = [
   "src/middleware/asgi_logger", ".venv"
 ]
