@@ -296,3 +296,4 @@ poetry.toml
 
 .env*
 ledger-*
+.claude/settings.local.json
