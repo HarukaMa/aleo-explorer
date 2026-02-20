@@ -297,3 +297,4 @@ poetry.toml
 .env*
 ledger-*
 .claude/settings.local.json
+uv.lock
