@@ -81,16 +81,19 @@ class DatabaseProgram(DatabaseBase):
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT p.program_id, SUM(pf.called) as called, p.edition "
+                        "SELECT p.program_id, pfc.called, p.edition "
                         "FROM program p "
                         "JOIN ("
                         "  SELECT program_id, MAX(edition) as edition "
                         "  FROM program "
                         "  GROUP BY program_id"
                         ") p2 on p.program_id = p2.program_id AND p.edition = p2.edition "
-                        "JOIN program_function pf on p.id = pf.program_id "
+                        "JOIN LATERAL ("
+                        "  SELECT SUM(pf.called) as called FROM program_function pf "
+                        "  JOIN program p3 on pf.program_id = p3.id "
+                        "  WHERE p3.program_id = p.program_id"
+                        ") pfc ON TRUE "
                         "WHERE p.transaction_deploy_id IS NULL "
-                        "GROUP BY p.program_id, p.edition "
                         "LIMIT 1"
                     )
                     return await cur.fetchall()
