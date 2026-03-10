@@ -5,6 +5,7 @@ from db import Database
 from interpreter.environment import Registers
 from interpreter.utils import load_plaintext_from_operand, store_plaintext_to_register, FinalizeState
 from node import Network
+from util.global_cache import get_program
 
 IT = Instruction.Type
 HT = HashInstruction.Type
@@ -228,7 +229,18 @@ async def commit_op(operands: tuple[Operand, Operand], destination: Register, de
 async def deserialize_op(operand: Operand, destination: Register, destination_type: PlaintextType, registers: Registers, finalize_state: FinalizeState, variant: int, db: Database, program: Program):
     op = await load_plaintext_from_operand(operand, registers, finalize_state, db, program)
 
-    res = Plaintext.load(BytesIO(aleo_explorer_rust.deserialize_ops(variant, PlaintextValue(plaintext=op).dump(), destination_type.dump(), program.dump())))
+    imported_programs = []
+    for imp in program.imports:
+        program_id = str(imp.program_id)
+        edition = await db.get_program_latest_edition(program_id)
+        if edition is None:
+            raise RuntimeError(f"imported program '{program_id}' not found")
+        imp_program = await get_program(db, program_id, edition)
+        if imp_program is None:
+            raise RuntimeError(f"imported program '{program_id}' not found")
+        imported_programs.append(imp_program.dump())
+
+    res = Plaintext.load(BytesIO(aleo_explorer_rust.deserialize_ops(variant, PlaintextValue(plaintext=op).dump(), destination_type.dump(), program.dump(), imported_programs)))
 
     store_plaintext_to_register(res, destination, registers)
 
