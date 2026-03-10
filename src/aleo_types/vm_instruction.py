@@ -773,6 +773,7 @@ class PlaintextType(EnumBaseSerialize, Serialize, JSONSerialize, RustEnum):
         Literal = 0
         Struct = 1
         Array = 2
+        ExternalStruct = 3
 
     type: Type
 
@@ -785,6 +786,8 @@ class PlaintextType(EnumBaseSerialize, Serialize, JSONSerialize, RustEnum):
             return StructPlaintextType.load(data)
         if type_ == cls.Type.Array:
             return ArrayPlaintextType.load(data)
+        if type_ == cls.Type.ExternalStruct:
+            return ExternalStructPlaintextType.load(data)
         raise ValueError("unknown type")
 
     size_in_bytes: Callable[["Program"], int]
@@ -840,13 +843,25 @@ class ArrayType(Serializable, JSONSerialize):
         self.element_type = element_type
         self.length = length
 
+    # ArrayType uses its own variant mapping for the element type:
+    # 0=Literal, 1=Struct, 2=ExternalStruct (no Array variant since nested arrays are flattened)
+    # Initialized after ExternalStructPlaintextType is defined
+    _array_element_dump_variant: dict[int, int]
+    _array_element_load_variant: dict[int, type]
+
+    def _dump_element_type(self, element: PlaintextType) -> bytes:
+        full = element.dump()
+        # full[0] is the PlaintextType variant byte; remap it to array element variant
+        array_variant = self._array_element_dump_variant[full[0]]
+        return bytes([array_variant]) + full[1:]
+
     def dump(self) -> bytes:
         res = b""
         type_written = False
-        if isinstance(self.element_type, (LiteralPlaintextType, StructPlaintextType)):
-            res += self.element_type.dump()
-            type_written = True
         e = self.element_type
+        if not isinstance(e, ArrayPlaintextType):
+            res += self._dump_element_type(e)
+            type_written = True
         lengths: list[u32] = [self.length]
         for _ in range(32):
             if isinstance(e, ArrayPlaintextType):
@@ -854,16 +869,18 @@ class ArrayType(Serializable, JSONSerialize):
                 e = e.array_type.element_type
             else:
                 if not type_written:
-                    res += e.dump()
+                    res += self._dump_element_type(e)
                 break
         res += Vec[u32, u8](lengths).dump()
         return res
 
     @classmethod
     def load(cls, data: BytesIO):
-        plaintext_type = PlaintextType.load(data)
-        if isinstance(plaintext_type, ArrayPlaintextType):
-            raise ValueError("invalid data")
+        variant = u8.load(data)
+        element_cls = cls._array_element_load_variant.get(int(variant))
+        if element_cls is None:
+            raise ValueError(f"invalid array element type variant {variant}")
+        plaintext_type = element_cls.load(data)
         lengths = Vec[u32, u8].load(data)
         if not 0 < len(lengths) <= 32:
             raise ValueError("invalid data")
@@ -904,6 +921,38 @@ class ArrayPlaintextType(PlaintextType):
 
     def __str__(self):
         return str(self.array_type)
+
+
+class ExternalStructPlaintextType(PlaintextType):
+    type = PlaintextType.Type.ExternalStruct
+
+    def __init__(self, *, locator: Locator):
+        self.locator = locator
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.locator.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        locator = Locator.load(data)
+        return cls(locator=locator)
+
+    def __str__(self):
+        return str(self.locator)
+
+    def size_in_bytes(self, program: "Program"):
+        raise NotImplementedError("size_in_bytes not supported for external struct types")
+
+ArrayType._array_element_dump_variant = {
+    PlaintextType.Type.Literal.value: 0,
+    PlaintextType.Type.Struct.value: 1,
+    PlaintextType.Type.ExternalStruct.value: 2,
+}
+ArrayType._array_element_load_variant = {
+    0: LiteralPlaintextType,
+    1: StructPlaintextType,
+    2: ExternalStructPlaintextType,
+}
 
 
 class RegisterType(EnumBaseSerialize, Serialize, JSONSerialize, RustEnum):

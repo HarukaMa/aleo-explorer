@@ -34,6 +34,8 @@ def plaintext_type_to_str(value: PlaintextType):
         return str(value.struct)
     elif isinstance(value, ArrayPlaintextType):
         return str(value.array_type)
+    elif isinstance(value, ExternalStructPlaintextType):
+        return str(value.locator)
     else:
         raise NotImplementedError
 
