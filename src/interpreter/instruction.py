@@ -50,6 +50,10 @@ async def execute_instruction(instruction: Instruction, program: Program, regist
     elif isinstance(literals, ECDSAVerifyInstruction):
         variant = literals.variant
         await ecdsa_verify_ops(literals.operands, literals.destination, registers, finalize_state, variant, db, program)
+    elif isinstance(literals, SnarkVerifyInstruction):
+        raise NotImplementedError("snark.verify is not yet implemented in the interpreter")
+    elif isinstance(literals, CallDynamicInstruction | GetRecordDynamicInstruction):
+        raise NotImplementedError(f"{type(literals).__name__} is not supported in finalize")
     else:
         raise NotImplementedError
 

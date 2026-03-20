@@ -1371,6 +1371,109 @@ class SerializeInstruction(Serializable, JSONSerialize, Generic[V]):
         return cls(operand=operand, operand_type=operand_type, destination=destination, destination_type=destination_type)
 
 
+class CallDynamicInstruction(Serializable, JSONSerialize):
+
+    def __init__(self, *, operands: list[Operand], operand_types: list["ValueType"], destinations: list[Register], destination_types: list["ValueType"]):
+        self.operands = operands
+        self.operand_types = operand_types
+        self.destinations = destinations
+        self.destination_types = destination_types
+
+    def dump(self) -> bytes:
+        res = bytearray()
+        res.append(len(self.operands))
+        for op in self.operands:
+            res.extend(op.dump())
+        for ot in self.operand_types:
+            res.extend(ot.dump())
+        res.append(len(self.destinations))
+        for dest in self.destinations:
+            res.extend(dest.dump())
+        for dt in self.destination_types:
+            res.extend(dt.dump())
+        return bytes(res)
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        from .vm_block import ValueType
+        num_operands = u8.load(data)
+        if num_operands < 3:
+            raise ValueError("call.dynamic requires at least 3 operands")
+        operands: list[Operand] = []
+        for _ in range(num_operands):
+            operands.append(Operand.load(data))
+        num_operand_types = num_operands - 3
+        operand_types: list[ValueType] = []
+        for _ in range(num_operand_types):
+            operand_types.append(ValueType.load(data))
+        num_destinations = u8.load(data)
+        destinations: list[Register] = []
+        for _ in range(num_destinations):
+            destinations.append(Register.load(data))
+        destination_types: list[ValueType] = []
+        for _ in range(num_destinations):
+            destination_types.append(ValueType.load(data))
+        return cls(operands=operands, operand_types=operand_types, destinations=destinations, destination_types=destination_types)
+
+
+class RecordEntryVisibility(IntEnumu8):
+    Constant = 0
+    Public = 1
+    Private = 2
+
+
+class GetRecordDynamicInstruction(Serializable, JSONSerialize):
+
+    def __init__(self, *, operand: Operand, destination: Register, entry_identifier: Identifier, plaintext_type: PlaintextType, visibility: Option[RecordEntryVisibility]):
+        self.operand = operand
+        self.destination = destination
+        self.entry_identifier = entry_identifier
+        self.plaintext_type = plaintext_type
+        self.visibility = visibility
+
+    def dump(self) -> bytes:
+        return self.operand.dump() + self.destination.dump() + self.entry_identifier.dump() + self.plaintext_type.dump() + self.visibility.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        operand = Operand.load(data)
+        destination = Register.load(data)
+        entry_identifier = Identifier.load(data)
+        plaintext_type = PlaintextType.load(data)
+        visibility = Option[RecordEntryVisibility].load(data)
+        return cls(operand=operand, destination=destination, entry_identifier=entry_identifier, plaintext_type=plaintext_type, visibility=visibility)
+
+
+class SnarkVerifyInstruction(Serializable, JSONSerialize, Generic[V]):
+    variant: V
+
+    class Type(IntEnum):
+        SnarkVerify = 0
+        SnarkVerifyBatch = 1
+
+    def __init__(self, *, operands: Vec[Operand, FixedSize[4]], destination: Register):
+        self.operands = operands
+        self.destination = destination
+
+    @tp_cache
+    def __class_getitem__(cls, item: TType[V]) -> GenericAlias:
+        param_type = type(
+            f"SnarkVerifyInstruction[{item}]",
+            (SnarkVerifyInstruction,),
+            {"variant": item},
+        )
+        return GenericAlias(param_type, item)
+
+    def dump(self) -> bytes:
+        return self.operands.dump() + self.destination.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        operands = Vec[Operand, FixedSize[4]].load(data)
+        destination = Register.load(data)
+        return cls(operands=operands, destination=destination)
+
+
 class ECDSAVerifyInstruction(Serializable, JSONSerialize, Generic[V]):
     variant: V
 
@@ -1556,6 +1659,12 @@ class Instruction(Serializable, JSONSerialize):
         SerializeBits = auto()
         SerializeBitsRaw = auto()
 
+        # New opcodes added in `ConsensusVersion::V14`
+        CallDynamic = auto()
+        GetRecordDynamic = auto()
+        SnarkVerify = auto()
+        SnarkVerifyBatch = auto()
+
     type: Type
 
     # Some types are not implemented as Literals originally,
@@ -1680,6 +1789,10 @@ class Instruction(Serializable, JSONSerialize):
         Type.HashSha3_512NativeRaw: HashInstruction[Variant[HashInstruction.Type.HashSha3_512NativeRaw]],
         Type.SerializeBits: SerializeInstruction[Variant[0]],
         Type.SerializeBitsRaw: SerializeInstruction[Variant[1]],
+        Type.CallDynamic: CallDynamicInstruction,
+        Type.GetRecordDynamic: GetRecordDynamicInstruction,
+        Type.SnarkVerify: SnarkVerifyInstruction[Variant[SnarkVerifyInstruction.Type.SnarkVerify]],
+        Type.SnarkVerifyBatch: SnarkVerifyInstruction[Variant[SnarkVerifyInstruction.Type.SnarkVerifyBatch]],
     }
 
     # used by feature hash
@@ -1803,6 +1916,10 @@ class Instruction(Serializable, JSONSerialize):
         Type.HashSha3_512NativeRaw: "H",
         Type.SerializeBits: "S",
         Type.SerializeBitsRaw: "S",
+        Type.CallDynamic: "C",
+        Type.GetRecordDynamic: "G",
+        Type.SnarkVerify: "V",
+        Type.SnarkVerifyBatch: "V",
     }
 
     fee_map = {
@@ -1876,7 +1993,7 @@ class Instruction(Serializable, JSONSerialize):
         Type.Xor: 500,
     }
 
-    def __init__(self, *, type_: Type, literals: Literals[N] | AssertInstruction[Any] | CallInstruction | CastInstruction[Any] | CommitInstruction[Any] | HashInstruction[Any] | AsyncInstruction | DeserializeInstruction[V] | SerializeInstruction[V] | ECDSAVerifyInstruction[V]):
+    def __init__(self, *, type_: Type, literals: Literals[N] | AssertInstruction[Any] | CallInstruction | CallDynamicInstruction | CastInstruction[Any] | CommitInstruction[Any] | HashInstruction[Any] | AsyncInstruction | DeserializeInstruction[V] | SerializeInstruction[V] | ECDSAVerifyInstruction[V] | GetRecordDynamicInstruction | SnarkVerifyInstruction[V]):
         self.type = type_
         self.literals = literals
 

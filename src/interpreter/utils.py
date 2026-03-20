@@ -171,6 +171,35 @@ async def load_plaintext_from_operand(operand: Operand, registers: Registers, fi
     else:
         raise NotImplementedError
 
+def identifier_from_field(field: Field) -> Identifier:
+    """Decode a field element to an Identifier (reverse of Identifier::to_field)."""
+    field_bytes = field.dump()
+    # Field LE bytes encode the ASCII identifier, terminated by zero bytes
+    name_bytes = field_bytes.rstrip(b"\x00")
+    if len(name_bytes) == 0:
+        raise ValueError("empty identifier")
+    return Identifier(value=name_bytes.decode("ascii"))
+
+
+async def resolve_dynamic_program_mapping(
+    operands: list[Operand], registers: Registers, finalize_state: FinalizeState, db: Database, program: Program
+) -> tuple[ProgramID, Identifier]:
+    """Resolve program_name, program_network, mapping_name operands to (ProgramID, mapping Identifier)."""
+    program_name_plaintext = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    program_network_plaintext = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
+    mapping_name_plaintext = await load_plaintext_from_operand(operands[2], registers, finalize_state, db, program)
+
+    if not isinstance(program_name_plaintext, LiteralPlaintext) or not isinstance(program_network_plaintext, LiteralPlaintext) or not isinstance(mapping_name_plaintext, LiteralPlaintext):
+        raise TypeError("dynamic operands must be literals")
+
+    program_name = identifier_from_field(cast(Field, program_name_plaintext.literal.primitive))
+    program_network = identifier_from_field(cast(Field, program_network_plaintext.literal.primitive))
+    mapping_name = identifier_from_field(cast(Field, mapping_name_plaintext.literal.primitive))
+
+    program_id = ProgramID(name=program_name, network=program_network)
+    return program_id, mapping_name
+
+
 def load_future_from_operand(operand: Operand, registers: Registers, finalize_state: FinalizeState) -> Future:
     if not isinstance(operand, RegisterOperand):
         raise ValueError("operand is not register")

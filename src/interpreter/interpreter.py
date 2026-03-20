@@ -102,6 +102,8 @@ def load_input_from_arguments(arguments: list[Argument]) -> list[Value]:
             inputs.append(PlaintextValue(plaintext=argument.plaintext))
         elif isinstance(argument, FutureArgument):
             inputs.append(FutureValue(future=argument.future))
+        elif isinstance(argument, DynamicFutureArgument):
+            inputs.append(DynamicFutureValue(dynamic_future=argument.dynamic_future))
         else:
             raise NotImplementedError
     return inputs
@@ -225,21 +227,29 @@ async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]
 
             transition_ids = [x.id for x in execution.transitions]
 
+            # Build dynamic_future_map: for each transition with a Future output,
+            # compute the DynamicFuture key so DynamicFutureValues can be resolved at await time.
+            dynamic_future_map: dict[tuple[Field, Field, Field, Field], tuple[Future, TransitionID]] = {}
+            if hasattr(aleo_explorer_rust, 'dynamic_future_key_from_future'):
+                for t in execution.transitions:
+                    if len(t.outputs) > 0:
+                        last_output = t.outputs[-1]
+                        if isinstance(last_output, FutureTransitionOutput) and last_output.future.value is not None:
+                            future_val = last_output.future.value
+                            key_bytes = aleo_explorer_rust.dynamic_future_key_from_future(future_val.dump())
+                            key = (Field.load(BytesIO(key_bytes[0])), Field.load(BytesIO(key_bytes[1])),
+                                   Field.load(BytesIO(key_bytes[2])), Field.load(BytesIO(key_bytes[3])))
+                            dynamic_future_map[key] = (future_val, t.id)
+
             async_order = await build_async_order(db, transition_ids, program, future.function_name)
 
             inputs: list[Value] = load_input_from_arguments(future.arguments)
             try:
                 operations.extend(
-                    await execute_finalizer(db, cur, finalize_state, async_order, set(), program, future.function_name, inputs, MappingCache(), local_mapping_cache, allow_state_change)
+                    await execute_finalizer(db, cur, finalize_state, async_order, set(), program, future.function_name, inputs, MappingCache(), local_mapping_cache, allow_state_change, dynamic_future_map=dynamic_future_map)
                 )
             except ExecuteError as e:
-                for ts in execution.transitions:
-                    if ts.id == e.transition_id:
-                        index = execution.transitions.index(ts)
-                        break
-                else:
-                    raise RuntimeError("rejected transition not found in transaction")
-                reject_reason = f"execute error: {e}, at transition #{index}, instruction \"{e.instruction}\""
+                reject_reason = f"execute error: {e}, at transition #{e.transition_index}, instruction \"{e.instruction}\""
                 operations = []
     if isinstance(confirmed_transaction, RejectedExecute) and reject_reason is None:
         # execute fee as part of rejected execute as it failed here

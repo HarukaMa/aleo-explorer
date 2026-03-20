@@ -295,6 +295,9 @@ class Command(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize):
         BranchEq = auto()
         BranchNeq = auto()
         Position = auto()
+        ContainsDynamic = auto()
+        GetDynamic = auto()
+        GetOrUseDynamic = auto()
 
     fee_map = {
         Type.Instruction: 0,
@@ -335,6 +338,12 @@ class Command(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize):
             return BranchNeqCommand.load(data)
         elif type_ == cls.Type.Position:
             return PositionCommand.load(data)
+        elif type_ == cls.Type.ContainsDynamic:
+            return ContainsDynamicCommand.load(data)
+        elif type_ == cls.Type.GetDynamic:
+            return GetDynamicCommand.load(data)
+        elif type_ == cls.Type.GetOrUseDynamic:
+            return GetOrUseDynamicCommand.load(data)
         else:
             raise ValueError("Invalid variant")
 
@@ -542,11 +551,67 @@ class PositionCommand(Command):
         return cls(position=position)
 
 
+class ContainsDynamicCommand(Command):
+    type = Command.Type.ContainsDynamic
+
+    def __init__(self, *, operands: Vec[Operand, FixedSize[4]], destination: Register):
+        self.operands = operands
+        self.destination = destination
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.operands.dump() + self.destination.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        operands = Vec[Operand, FixedSize[4]].load(data)
+        destination = Register.load(data)
+        return cls(operands=operands, destination=destination)
+
+
+class GetDynamicCommand(Command):
+    type = Command.Type.GetDynamic
+
+    def __init__(self, *, operands: Vec[Operand, FixedSize[4]], destination: Register, destination_type: PlaintextType):
+        self.operands = operands
+        self.destination = destination
+        self.destination_type = destination_type
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.operands.dump() + self.destination.dump() + self.destination_type.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        operands = Vec[Operand, FixedSize[4]].load(data)
+        destination = Register.load(data)
+        destination_type = PlaintextType.load(data)
+        return cls(operands=operands, destination=destination, destination_type=destination_type)
+
+
+class GetOrUseDynamicCommand(Command):
+    type = Command.Type.GetOrUseDynamic
+
+    def __init__(self, *, operands: Vec[Operand, FixedSize[5]], destination: Register, destination_type: PlaintextType):
+        self.operands = operands
+        self.destination = destination
+        self.destination_type = destination_type
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.operands.dump() + self.destination.dump() + self.destination_type.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        operands = Vec[Operand, FixedSize[5]].load(data)
+        destination = Register.load(data)
+        destination_type = PlaintextType.load(data)
+        return cls(operands=operands, destination=destination, destination_type=destination_type)
+
+
 class FinalizeType(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize):
 
     class Type(IntEnumu8):
         Plaintext = 0
         Future = 1
+        DynamicFuture = 2
 
     type: Type
 
@@ -557,6 +622,8 @@ class FinalizeType(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize):
             return PlaintextFinalizeType.load(data)
         elif type_ == cls.Type.Future:
             return FutureFinalizeType.load(data)
+        elif type_ == cls.Type.DynamicFuture:
+            return DynamicFutureFinalizeType.load(data)
         else:
             raise ValueError("Invalid variant")
 
@@ -587,6 +654,17 @@ class FutureFinalizeType(FinalizeType):
     def load(cls, data: BytesIO):
         locator = Locator.load(data)
         return cls(locator=locator)
+
+class DynamicFutureFinalizeType(FinalizeType):
+    type = FinalizeType.Type.DynamicFuture
+
+    def dump(self) -> bytes:
+        return self.type.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        return cls()
+
 
 class FinalizeInput(Serializable, JSONSerialize):
 
@@ -647,6 +725,8 @@ class ValueType(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize):
         Record = 3
         ExternalRecord = 4
         Future = 5
+        DynamicRecord = 6
+        DynamicFuture = 7
 
     type: Type
 
@@ -665,6 +745,10 @@ class ValueType(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize):
             return ExternalRecordValueType.load(data)
         elif type_ == cls.Type.Future:
             return FutureValueType.load(data)
+        elif type_ == cls.Type.DynamicRecord:
+            return DynamicRecordValueType.load(data)
+        elif type_ == cls.Type.DynamicFuture:
+            return DynamicFutureValueType.load(data)
         else:
             raise ValueError("Invalid variant")
 
@@ -757,6 +841,28 @@ class FutureValueType(ValueType):
     def load(cls, data: BytesIO):
         locator = Locator.load(data)
         return cls(locator=locator)
+
+
+class DynamicRecordValueType(ValueType):
+    type = ValueType.Type.DynamicRecord
+
+    def dump(self) -> bytes:
+        return self.type.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        return cls()
+
+
+class DynamicFutureValueType(ValueType):
+    type = ValueType.Type.DynamicFuture
+
+    def dump(self) -> bytes:
+        return self.type.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        return cls()
 
 
 class FunctionInput(Serializable, JSONSerialize):
@@ -2126,6 +2232,8 @@ class Value(EnumBaseSerialize, RustEnum, Serializable):
         Plaintext = 0
         Record = 1
         Future = 2
+        DynamicRecord = 3
+        DynamicFuture = 4
 
     type: Type
 
@@ -2138,6 +2246,10 @@ class Value(EnumBaseSerialize, RustEnum, Serializable):
             return RecordValue.load(data)
         elif type_ == Value.Type.Future:
             return FutureValue.load(data)
+        elif type_ == Value.Type.DynamicRecord:
+            return DynamicRecordValue.load(data)
+        elif type_ == Value.Type.DynamicFuture:
+            return DynamicFutureValue.load(data)
         else:
             raise ValueError("unknown value type")
 
@@ -2214,6 +2326,7 @@ class Argument(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize):
     class Type(IntEnumu8):
         Plaintext = 0
         Future = 1
+        DynamicFuture = 2
 
     type: Type
 
@@ -2226,6 +2339,8 @@ class Argument(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize):
             return PlaintextArgument.load(data)
         elif type_ == Argument.Type.Future:
             return FutureArgument.load(data)
+        elif type_ == Argument.Type.DynamicFuture:
+            return DynamicFutureArgument.load(data)
         else:
             raise ValueError("unknown argument type")
 
@@ -2296,6 +2411,94 @@ class FutureValue(Value):
 
     def __repr__(self):
         return str(self.future)
+
+
+class DynamicFutureArgument(Argument):
+    type = Argument.Type.DynamicFuture
+
+    def __init__(self, *, dynamic_future: DynamicFuture):
+        self.dynamic_future = dynamic_future
+
+    def dump(self) -> bytes:
+        data = self.type.dump() + self.dynamic_future.dump()
+        return len(data).to_bytes(2, "little") + data
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        dynamic_future = DynamicFuture.load(data)
+        return cls(dynamic_future=dynamic_future)
+
+    def json(self, compatible: bool = False) -> JSONType:
+        return str(self)
+
+    def __str__(self):
+        return f"DynamicFuture({self.dynamic_future.program_name}, {self.dynamic_future.function_name})"
+
+    def __repr__(self):
+        return str(self)
+
+
+class DynamicRecordValue(Value):
+    type = Value.Type.DynamicRecord
+
+    def __init__(self, *, version: u8, owner: Address, root: Field, nonce: Group):
+        self.version = version
+        self.owner = owner
+        self.root = root
+        self.nonce = nonce
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.version.dump() + self.owner.dump() + self.root.dump() + self.nonce.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        version = u8.load(data)
+        owner = Address.load(data)
+        root = Field.load(data)
+        nonce = Group.load(data)
+        return cls(version=version, owner=owner, root=root, nonce=nonce)
+
+
+class DynamicFuture(Serializable):
+    """Shared DynamicFuture structure used by both Value::DynamicFuture and Argument::DynamicFuture."""
+
+    def __init__(self, *, program_name: Field, program_network: Field, function_name: Field, checksum: Field):
+        self.program_name = program_name
+        self.program_network = program_network
+        self.function_name = function_name
+        self.checksum = checksum
+
+    def dump(self) -> bytes:
+        return u8(1).dump() + self.program_name.dump() + self.program_network.dump() + self.function_name.dump() + self.checksum.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        version = u8.load(data)
+        if version != 1:
+            raise ValueError(f"invalid dynamic future version: {version}")
+        program_name = Field.load(data)
+        program_network = Field.load(data)
+        function_name = Field.load(data)
+        checksum = Field.load(data)
+        return cls(program_name=program_name, program_network=program_network, function_name=function_name, checksum=checksum)
+
+    def key(self) -> tuple[Field, Field, Field, Field]:
+        return (self.program_name, self.program_network, self.function_name, self.checksum)
+
+
+class DynamicFutureValue(Value):
+    type = Value.Type.DynamicFuture
+
+    def __init__(self, *, dynamic_future: DynamicFuture):
+        self.dynamic_future = dynamic_future
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.dynamic_future.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        dynamic_future = DynamicFuture.load(data)
+        return cls(dynamic_future=dynamic_future)
 
 
 class TransitionInput(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize):

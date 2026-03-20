@@ -44,6 +44,8 @@ def finalize_type_to_str(value: FinalizeType):
         return f"{plaintext_type_to_str(value.plaintext_type)}.public"
     elif isinstance(value, FutureFinalizeType):
         return f"{str(value.locator)}.future"
+    elif isinstance(value, DynamicFutureFinalizeType):
+        return "dynamic.future"
     else:
         raise NotImplementedError
 
@@ -187,7 +189,10 @@ _instruction_type_to_str_map = {
     Instruction.Type.HashSha3_512NativeRaw: "hash.sha3_512.native.raw",
     Instruction.Type.SerializeBits: "serialize.bits",
     Instruction.Type.SerializeBitsRaw: "serialize.bits.raw",
-    
+    Instruction.Type.CallDynamic: "call.dynamic",
+    Instruction.Type.GetRecordDynamic: "get.record.dynamic",
+    Instruction.Type.SnarkVerify: "snark.verify",
+    Instruction.Type.SnarkVerifyBatch: "snark.verify.batch",
 }
 
 def instruction_type_to_str(value: Instruction.Type):

@@ -49,6 +49,10 @@ def disasm_value_type(value: ValueType) -> str:
         return str(value.locator) + ".record"
     elif isinstance(value, FutureValueType):
         return str(value.locator) + ".future"
+    elif isinstance(value, DynamicRecordValueType):
+        return "dynamic.record"
+    elif isinstance(value, DynamicFutureValueType):
+        return "dynamic.future"
     else:
         raise TypeError("invalid value type")
 
@@ -78,6 +82,12 @@ def disasm_command(value: Command) -> str:
         return f"position {value.position}"
     elif isinstance(value, AwaitCommand):
         return f"await {disasm_register(value.register)}"
+    elif isinstance(value, ContainsDynamicCommand):
+        return f"contains.dynamic {disasm_operand(value.operands[0])} {disasm_operand(value.operands[1])} {disasm_operand(value.operands[2])}[{disasm_operand(value.operands[3])}] into {disasm_register(value.destination)}"
+    elif isinstance(value, GetDynamicCommand):
+        return f"get.dynamic {disasm_operand(value.operands[0])} {disasm_operand(value.operands[1])} {disasm_operand(value.operands[2])}[{disasm_operand(value.operands[3])}] into {disasm_register(value.destination)} as {plaintext_type_to_str(value.destination_type)}"
+    elif isinstance(value, GetOrUseDynamicCommand):
+        return f"get.or_use.dynamic {disasm_operand(value.operands[0])} {disasm_operand(value.operands[1])} {disasm_operand(value.operands[2])}[{disasm_operand(value.operands[3])}] {disasm_operand(value.operands[4])} into {disasm_register(value.destination)} as {plaintext_type_to_str(value.destination_type)}"
     else:
         raise TypeError("invalid command type")
 
@@ -179,6 +189,27 @@ def disasm_serialize(value: SerializeInstruction[Any]) -> str:
 def disasm_ecdsa_verify(value: ECDSAVerifyInstruction[Any]) -> str:
     return f"{" ".join(map(disasm_operand, value.operands))} into {disasm_register(value.destination)}"
 
+def disasm_call_dynamic(value: CallDynamicInstruction) -> str:
+    parts = [disasm_operand(op) for op in value.operands[:3]]
+    if value.operands[3:]:
+        parts.append("with")
+        parts.extend(disasm_operand(op) for op in value.operands[3:])
+        parts.append(f"(as {' '.join(disasm_value_type(t) for t in value.operand_types)})")
+    if value.destinations:
+        parts.append("into")
+        parts.extend(disasm_register(d) for d in value.destinations)
+        parts.append(f"(as {' '.join(disasm_value_type(t) for t in value.destination_types)})")
+    return " ".join(parts)
+
+def disasm_get_record_dynamic(value: GetRecordDynamicInstruction) -> str:
+    vis = ""
+    if value.visibility.value is not None:
+        vis = f".{value.visibility.value.name.lower()}"
+    return f"{disasm_operand(value.operand)}.{value.entry_identifier} into {disasm_register(value.destination)} as {plaintext_type_to_str(value.plaintext_type)}{vis}"
+
+def disasm_snark_verify(value: SnarkVerifyInstruction[Any]) -> str:
+    return f"{' '.join(disasm_operand(op) for op in value.operands)} into {disasm_register(value.destination)}"
+
 def disasm_instruction(value: Instruction) -> str:
     inst_str = f"{instruction_type_to_str(value.type)} "
     literals = value.literals
@@ -202,6 +233,12 @@ def disasm_instruction(value: Instruction) -> str:
         return inst_str + disasm_serialize(literals)
     elif isinstance(literals, ECDSAVerifyInstruction):  # pyright: ignore [reportUnnecessaryIsInstance] future proof
         return inst_str + disasm_ecdsa_verify(literals)
+    elif isinstance(literals, CallDynamicInstruction):
+        return inst_str + disasm_call_dynamic(literals)
+    elif isinstance(literals, GetRecordDynamicInstruction):
+        return inst_str + disasm_get_record_dynamic(literals)
+    elif isinstance(literals, SnarkVerifyInstruction):
+        return inst_str + disasm_snark_verify(literals)
     else:
         raise ValueError("unknown instruction type")
 

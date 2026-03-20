@@ -12,7 +12,7 @@ from disasm.aleo import disasm_instruction, disasm_command
 from util.global_cache import MappingCacheDict, get_program, MappingCache
 from .environment import Registers
 from .instruction import execute_instruction
-from .utils import load_plaintext_from_operand, store_plaintext_to_register, FinalizeState, load_future_from_register
+from .utils import load_plaintext_from_operand, store_plaintext_to_register, FinalizeState, load_future_from_register, resolve_dynamic_program_mapping
 
 try:
     from line_profiler import profile  # pyright: ignore [reportUnknownVariableType, reportMissingImports]
@@ -33,12 +33,12 @@ async def mapping_cache_read_with_cur(db: Database, cur: psycopg.AsyncCursor[dic
     return await db.get_mapping_cache_with_cur(cur, program_name, mapping_name)
 
 class ExecuteError(Exception):
-    def __init__(self, message: str, exception: Optional[Exception], instruction: str, transition_id: TransitionID,
+    def __init__(self, message: str, exception: Optional[Exception], instruction: str, transition_index: int,
                  program: Optional[str] = None, function_name: Optional[str] = None):
         super().__init__(message)
         self.original_exception = exception
         self.instruction = instruction
-        self.transition_id = transition_id
+        self.transition_index = transition_index
         self.program = program
         self.function_name = function_name
 
@@ -48,7 +48,9 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
                             transitions: list[TransitionID], transition_index_executed: set[int],
                             program: Program, function_name: Identifier, inputs: list[Value],
                             mapping_cache: MappingCache, local_mapping_cache: dict[Field, MappingCacheDict],
-                            allow_state_change: bool, deploy_owner: Optional[Address] = None) -> list[dict[str, Any]]:
+                            allow_state_change: bool, deploy_owner: Optional[Address] = None,
+                            dynamic_future_map: Optional[dict[tuple[Field, Field, Field, Field], tuple[Future, TransitionID]]] = None,
+                            ) -> list[dict[str, Any]]:
     transition_index = len(transition_index_executed)
     transition_index_executed.add(transition_index)
     registers = Registers()
@@ -69,7 +71,10 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
         if len(inputs) != len(finalize.inputs):
             raise TypeError("invalid number of inputs")
         for fi, i in zip(finalize.inputs, inputs):
-            if fi.finalize_type.type.name != i.type.name:
+            if isinstance(fi.finalize_type, DynamicFutureFinalizeType):
+                if not isinstance(i, (FutureValue, DynamicFutureValue)):
+                    raise TypeError("invalid input type: expected future or dynamic future")
+            elif fi.finalize_type.type.name != i.type.name:
                 raise TypeError("invalid input type")
             ir = fi.register
             if not isinstance(ir, LocatorRegister):
@@ -104,7 +109,7 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
                 try:
                     await execute_instruction(instruction, program, registers, finalize_state, db)
                 except (AssertionError, OverflowError, ZeroDivisionError, RustExecuteError) as e:
-                    raise ExecuteError(str(e), e, disasm_instruction(instruction), transitions[transition_index], str(program.id), str(function_name))
+                    raise ExecuteError(str(e), e, disasm_instruction(instruction), transition_index, str(program.id), str(function_name))
                 except Exception:
                     registers.dump()
                     raise
@@ -156,7 +161,7 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
                 if not allow_state_change and key_id in local_mapping_cache[mapping_id]:
                     if local_mapping_cache[mapping_id][key_id]["value"] is None:
                         if isinstance(c, GetCommand):
-                            raise ExecuteError(f"key {key} not found in mapping {mapping}", None, disasm_command(c), transitions[transition_index], str(program.id), str(function_name))
+                            raise ExecuteError(f"key {key} not found in mapping {mapping}", None, disasm_command(c), transition_index, str(program.id), str(function_name))
                         default = await load_plaintext_from_operand(c.default, registers, finalize_state, db, program)
                         value = PlaintextValue(plaintext=default)
                     else:
@@ -165,7 +170,7 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
                     data = await mapping_cache[mapping_id][key_id]
                     if data is None:
                         if isinstance(c, GetCommand):
-                            raise ExecuteError(f"key {key} not found in mapping {mapping}", None, disasm_command(c), transitions[transition_index], str(program.id), str(function_name))
+                            raise ExecuteError(f"key {key} not found in mapping {mapping}", None, disasm_command(c), transition_index, str(program.id), str(function_name))
                         default = await load_plaintext_from_operand(c.default, registers, finalize_state, db, program)
                         value = PlaintextValue(plaintext=default)
                     else:
@@ -300,7 +305,21 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
                 pass
 
             elif isinstance(c, AwaitCommand):
-                call_future = load_future_from_register(c.register, registers, finalize_state)
+                register = c.register
+                if not isinstance(register, LocatorRegister):
+                    raise ValueError("register is not locator")
+                reg_value = registers[int(register.locator)]
+
+                if isinstance(reg_value, DynamicFutureValue):
+                    if dynamic_future_map is None:
+                        raise RuntimeError("dynamic future encountered but no dynamic_future_map provided")
+                    key = reg_value.dynamic_future.key()
+                    if key not in dynamic_future_map:
+                        raise RuntimeError("dynamic future key not found in map")
+                    call_future, _transition_id = dynamic_future_map[key]
+                else:
+                    call_future = load_future_from_register(c.register, registers, finalize_state)
+
                 call_program_id = call_future.program_id
                 latest_edition = await db.get_program_latest_edition(str(call_program_id))
                 if latest_edition is None:
@@ -313,14 +332,58 @@ async def execute_finalizer(db: Database, cur: Optional[psycopg.AsyncCursor[dict
                 call_inputs: list[Value] = load_input_from_arguments(call_future.arguments)
 
                 operations.extend(
-                    await execute_finalizer(db, cur, finalize_state, transitions, transition_index_executed, call_program, call_future.function_name, call_inputs, mapping_cache, local_mapping_cache, allow_state_change)
+                    await execute_finalizer(db, cur, finalize_state, transitions, transition_index_executed, call_program, call_future.function_name, call_inputs, mapping_cache, local_mapping_cache, allow_state_change, dynamic_future_map=dynamic_future_map)
                 )
+
+            elif isinstance(c, ContainsDynamicCommand):
+                program_id, mapping = await resolve_dynamic_program_mapping(list(c.operands[:3]), registers, finalize_state, db, program)
+                mapping_id = load_mapping_cache_id(program_id, mapping)
+                key = await load_plaintext_from_operand(c.operands[3], registers, finalize_state, db, program)
+                key_id = Field.loads(cached_get_key_id(str(program_id), str(mapping), key.dump()))
+                if not allow_state_change and key_id in local_mapping_cache[mapping_id]:
+                    contains = local_mapping_cache[mapping_id][key_id]["value"] is not None
+                else:
+                    data = await mapping_cache[mapping_id][key_id]
+                    contains = data is not None
+                value = PlaintextValue(
+                    plaintext=LiteralPlaintext(
+                        literal=Literal(type_=Literal.Type.Boolean, primitive=bool_(contains))
+                    )
+                )
+                store_plaintext_to_register(value.plaintext, c.destination, registers)
+
+            elif isinstance(c, GetDynamicCommand | GetOrUseDynamicCommand):
+                program_id, mapping = await resolve_dynamic_program_mapping(list(c.operands[:3]), registers, finalize_state, db, program)
+                mapping_id = load_mapping_cache_id(program_id, mapping)
+                key = await load_plaintext_from_operand(c.operands[3], registers, finalize_state, db, program)
+                key_id = Field.loads(cached_get_key_id(str(program_id), str(mapping), key.dump()))
+
+                if not allow_state_change and key_id in local_mapping_cache[mapping_id]:
+                    if local_mapping_cache[mapping_id][key_id]["value"] is None:
+                        if isinstance(c, GetDynamicCommand):
+                            raise ExecuteError(f"key {key} not found in mapping {program_id}/{mapping}", None, disasm_command(c), transition_index, str(program.id), str(function_name))
+                        default = await load_plaintext_from_operand(c.operands[4], registers, finalize_state, db, program)
+                        value = PlaintextValue(plaintext=default)
+                    else:
+                        value = local_mapping_cache[mapping_id][key_id]["value"]
+                else:
+                    data = await mapping_cache[mapping_id][key_id]
+                    if data is None:
+                        if isinstance(c, GetDynamicCommand):
+                            raise ExecuteError(f"key {key} not found in mapping {program_id}/{mapping}", None, disasm_command(c), transition_index, str(program.id), str(function_name))
+                        default = await load_plaintext_from_operand(c.operands[4], registers, finalize_state, db, program)
+                        value = PlaintextValue(plaintext=default)
+                    else:
+                        value = data["value"]
+                if not isinstance(value, PlaintextValue):
+                    raise TypeError("invalid value type")
+                store_plaintext_to_register(value.plaintext, c.destination, registers)
 
             else:
                 raise NotImplementedError
 
         except IndexError as e:
-            raise ExecuteError(f"r{e} does not exist", e, disasm_command(c), transitions[transition_index], str(program.id), str(function_name))
+            raise ExecuteError(f"r{e} does not exist", e, disasm_command(c), transition_index, str(program.id), str(function_name))
 
         pc += 1
 
