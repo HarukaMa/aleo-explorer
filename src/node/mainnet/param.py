@@ -39,4 +39,4 @@ class Mainnet:
     consensus_v8_height = 9_430_000
     consensus_v9_height = 10_272_000
     consensus_v12_height = 13_815_000
-    consensus_v13_height = 999_999_999
+    consensus_v13_height = 16_850_000

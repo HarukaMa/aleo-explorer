@@ -39,4 +39,4 @@ class Canary:
     consensus_v8_height = 7_565_000
     consensus_v9_height = 8_028_000
     consensus_v12_height = 10_030_000
-    consensus_v13_height = 999_999_999
+    consensus_v13_height = 10_881_000

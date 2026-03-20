@@ -4,7 +4,6 @@ from aleo_types import *
 from db import Database
 from interpreter.environment import Registers
 from interpreter.utils import load_plaintext_from_operand, store_plaintext_to_register, FinalizeState
-from node import Network
 from util.global_cache import get_program
 
 IT = Instruction.Type
@@ -320,10 +319,7 @@ async def ecdsa_verify_ops(operands: tuple[Operand, Operand, Operand], destinati
     try:
         hash_result = aleo_explorer_rust.ecdsa_verify_ops(variant, PlaintextValue(plaintext=op1).dump(), PlaintextValue(plaintext=op2).dump(), PlaintextValue(plaintext=op3).dump())
     except ValueError as e:
-        if finalize_state.block_height < Network.consensus_v13_height:
-            raise RustExecuteError(e)
-        else:
-            raise
+        raise RustExecuteError(e)
     res = LiteralPlaintext(
         literal=Literal(
             type_=Literal.Type.Boolean,
