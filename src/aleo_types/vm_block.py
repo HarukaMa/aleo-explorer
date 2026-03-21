@@ -1344,6 +1344,8 @@ class Deployment(EnumBaseSerialize, Serializable, JSONSerialize):
             return DeploymentV1.load(data)
         elif version == 2:
             return DeploymentV2.load(data)
+        elif version == 3:
+            return DeploymentV3.load(data)
         raise ValueError("invalid deployment version")
 
 
@@ -1408,6 +1410,35 @@ class DeploymentV2(Deployment):
         program_checksum = Vec[u8, FixedSize[32]].load(data)
         program_owner = Address.load(data)
         return cls(edition=edition, program=program, verifying_keys=verifying_keys, program_checksum=program_checksum, program_owner=program_owner)
+
+
+class DeploymentV3(Deployment):
+    version = u8(3)
+
+    def __init__(self, *, edition: u16, program: Program,
+                 verifying_keys: Vec[Tuple[Identifier, VerifyingKey, Certificate], u16],
+                 program_checksum: Vec[u8, FixedSize[32]]):
+        self.edition = edition
+        self.program = program
+        self.verifying_keys = verifying_keys
+        self.program_checksum = program_checksum
+
+    def dump(self) -> bytes:
+        res = b""
+        res += self.version.dump()
+        res += self.edition.dump()
+        res += self.program.dump()
+        res += self.verifying_keys.dump()
+        res += self.program_checksum.dump()
+        return res
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        edition = u16.load(data)
+        program = Program.load(data)
+        verifying_keys = Vec[Tuple[Identifier, VerifyingKey, Certificate], u16].load(data)
+        program_checksum = Vec[u8, FixedSize[32]].load(data)
+        return cls(edition=edition, program=program, verifying_keys=verifying_keys, program_checksum=program_checksum)
 
 
 class WitnessCommitments(Serializable):
