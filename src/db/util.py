@@ -200,22 +200,24 @@ class DatabaseUtil(DatabaseBase):
                                     fee = cast(Fee, t.fee)
                                     transitions = [fee.transition]
                                     program = t.deployment.program
-                                    await cur.execute(
-                                        "DELETE FROM program WHERE program_id = %s AND edition = %s",
-                                        (str(program.id), int(t.deployment.edition))
-                                    )
-                                    # Only delete mappings if no editions of this program remain.
-                                    # CASCADE on mapping deletes mapping_value and mapping_history;
-                                    # doing this while other editions exist destroys restored state.
-                                    await cur.execute(
-                                        "SELECT 1 FROM program WHERE program_id = %s LIMIT 1",
-                                        (str(program.id),)
-                                    )
-                                    if await cur.fetchone() is None:
+                                    if not isinstance(t.deployment, DeploymentV3):
+                                        # V3 amendments don't create program rows, so nothing to delete
                                         await cur.execute(
-                                            "DELETE FROM mapping WHERE program_id = %s",
+                                            "DELETE FROM program WHERE program_id = %s AND edition = %s",
+                                            (str(program.id), int(t.deployment.edition))
+                                        )
+                                        # Only delete mappings if no editions of this program remain.
+                                        # CASCADE on mapping deletes mapping_value and mapping_history;
+                                        # doing this while other editions exist destroys restored state.
+                                        await cur.execute(
+                                            "SELECT 1 FROM program WHERE program_id = %s LIMIT 1",
                                             (str(program.id),)
                                         )
+                                        if await cur.fetchone() is None:
+                                            await cur.execute(
+                                                "DELETE FROM mapping WHERE program_id = %s",
+                                                (str(program.id),)
+                                            )
                                 elif isinstance(t, FeeTransaction):
                                     fee = cast(Fee, t.fee)
                                     if isinstance(ct, RejectedDeploy):

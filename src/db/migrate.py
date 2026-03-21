@@ -24,7 +24,9 @@ class DatabaseMigrate(DatabaseBase):
             (6, self.migration_6_add_program_edition),
             (7, self.migration_7_add_program_checksum),
             (8, self.migration_8_recalculate_function_call_count),
+            (9, self.migration_9_deploy_function_select_program_id),
         ]
+
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -135,3 +137,7 @@ class DatabaseMigrate(DatabaseBase):
                 "UPDATE program_function SET called = called + %s WHERE program_id = %s AND name = %s",
                 [(row["count"], row["program_db_id"], row["function_name"]) for row in result],
             )
+
+    @staticmethod
+    async def migration_9_deploy_function_select_program_id(conn: psycopg.AsyncConnection[DictRow]):
+        await conn.execute(cast(LiteralString, open("db/migrate_9.sql").read()))

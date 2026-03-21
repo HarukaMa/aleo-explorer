@@ -593,6 +593,16 @@ class DatabaseBlock(DatabaseBase):
                         (deploy_transaction["transaction_deploy_id"], deploy_transaction["edition"])
                     )
                     program_data = await cur.fetchone()
+                    is_v3_amendment = False
+                    if program_data is None:
+                        # V3 amendment: program row points to the original deploy, not this one
+                        is_v3_amendment = True
+                        await cur.execute(
+                            "SELECT raw_data, owner, signature, checksum FROM program "
+                            "WHERE program_id = %s AND edition = %s",
+                            (deploy_transaction["program_id"], deploy_transaction["edition"])
+                        )
+                        program_data = await cur.fetchone()
                     if confirmed_transaction["confirmed_transaction_type"] == ConfirmedTransaction.Type.AcceptedDeploy.name:
                         if program_data is None:
                             raise RuntimeError("database inconsistent")
@@ -600,7 +610,14 @@ class DatabaseBlock(DatabaseBase):
                         edition = u16(deploy_transaction["edition"])
                         program = Program.load(BytesIO(program))
                         verifying_keys = Vec[Tuple[Identifier, VerifyingKey, Certificate], u16].load(BytesIO(deploy_transaction["verifying_keys"]))
-                        if program_data["checksum"] is None:
+                        if is_v3_amendment:
+                            deployment = DeploymentV3(
+                                edition=edition,
+                                program=program,
+                                verifying_keys=verifying_keys,
+                                program_checksum=Vec[u8, FixedSize[32]].load(BytesIO(program_data["checksum"])),
+                            )
+                        elif program_data["checksum"] is None:
                             deployment = DeploymentV1(
                                 edition=edition,
                                 program=program,
@@ -789,7 +806,7 @@ class DatabaseBlock(DatabaseBase):
                             )
                         else:
                             await cur.execute(
-                                "SELECT id as transaction_deploy_id, edition, verifying_keys FROM transaction_deploy WHERE transaction_id = %s",
+                                "SELECT id as transaction_deploy_id, edition, verifying_keys, program_id FROM transaction_deploy WHERE transaction_id = %s",
                                 (confirmed_transaction["transaction_db_id"],)
                             )
                         deploy = await cur.fetchone()

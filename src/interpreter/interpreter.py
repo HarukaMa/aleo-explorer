@@ -57,23 +57,26 @@ async def finalize_deploy(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]]
 
     if isinstance(confirmed_transaction, AcceptedDeploy):
         deployment = cast(DeployTransaction, transaction).deployment
+        is_amendment = isinstance(deployment, DeploymentV3)
         program = deployment.program
         expected_operations = confirmed_transaction.finalize
-        for mapping in program.mappings.keys():
-            mapping_id = Field.loads(cached_get_mapping_id(str(program.id), str(mapping)))
-            if not await db.mapping_id_exists(str(mapping_id)):
-                operation = {
-                    "type": FinalizeOperation.Type.InitializeMapping,
-                    "mapping_id": mapping_id,
-                    "program_id": program.id,
-                    "mapping": mapping,
-                }
-                operations.append(operation)
-                await execute_operations(cur, [operation])
+        if not is_amendment:
+            for mapping in program.mappings.keys():
+                mapping_id = Field.loads(cached_get_mapping_id(str(program.id), str(mapping)))
+                if not await db.mapping_id_exists(str(mapping_id)):
+                    operation = {
+                        "type": FinalizeOperation.Type.InitializeMapping,
+                        "mapping_id": mapping_id,
+                        "program_id": program.id,
+                        "mapping": mapping,
+                    }
+                    operations.append(operation)
+                    await execute_operations(cur, [operation])
         rejected_reason = None
         owner = cast(DeployTransaction, transaction).owner.address
     elif isinstance(confirmed_transaction, RejectedDeploy):
         rejected = cast(RejectedDeployment, confirmed_transaction.rejected)
+        is_amendment = isinstance(rejected.deploy, DeploymentV3)
         expected_operations = confirmed_transaction.finalize
         deployment = rejected.deploy
         program = deployment.program
@@ -82,7 +85,8 @@ async def finalize_deploy(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]]
     else:
         raise NotImplementedError
 
-    if program.constructor.value is not None:
+    # V3 amendments don't run constructors or initialize mappings
+    if not is_amendment and program.constructor.value is not None:
         try:
             operations.extend(
                 await execute_finalizer(
