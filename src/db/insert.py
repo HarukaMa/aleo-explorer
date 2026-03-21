@@ -744,7 +744,7 @@ class DatabaseInsert(DatabaseBase):
                 deployment = transaction.deployment
                 if isinstance(deployment, DeploymentV1):
                     checksum = None
-                elif isinstance(deployment, DeploymentV2):
+                elif isinstance(deployment, (DeploymentV2, DeploymentV3)):
                     checksum = bytes(deployment.program_checksum)
                 else:
                     raise NotImplementedError
