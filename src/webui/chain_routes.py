@@ -14,9 +14,11 @@ from aleo_types import u32, Transition, ExecuteTransaction, PrivateTransitionInp
     PublicTransitionOutput, PrivateTransitionOutput, ExternalRecordTransitionInput, \
     ExternalRecordTransitionOutput, AcceptedDeploy, AcceptedExecute, RejectedExecute, \
     FeeTransaction, RejectedDeploy, RejectedExecution, Identifier, Entry, FutureTransitionOutput, Future, \
-    PlaintextArgument, FutureArgument, StructPlaintext, Finalize, \
+    PlaintextArgument, FutureArgument, DynamicFutureArgument, StructPlaintext, Finalize, \
     PlaintextFinalizeType, StructPlaintextType, UpdateKeyValue, Value, Plaintext, RemoveKeyValue, FinalizeOperation, \
-    NodeType, FeeComponent, Fee, Option, Address, RejectedDeployment
+    NodeType, FeeComponent, Fee, Option, Address, RejectedDeployment, \
+    DynamicRecordTransitionInput, RecordWithDynamicIDTransitionInput, ExternalRecordWithDynamicIDTransitionInput, \
+    DynamicRecordTransitionOutput, RecordWithDynamicIDTransitionOutput, ExternalRecordWithDynamicIDTransitionOutput
 from aleo_types.cached import cached_get_key_id, cached_get_mapping_id
 from db import Database
 from util import arc0021
@@ -629,6 +631,24 @@ async def transition_route(request: Request):
                 "type": "External record",
                 "commitment": input_.input_commitment,
             })
+        elif isinstance(input_, DynamicRecordTransitionInput):
+            inputs.append({
+                "type": "Dynamic record",
+                "hash": input_.input_hash,
+            })
+        elif isinstance(input_, RecordWithDynamicIDTransitionInput):
+            inputs.append({
+                "type": "Record",
+                "serial_number": input_.serial_number,
+                "tag": input_.tag,
+                "dynamic_id": input_.dynamic_id,
+            })
+        elif isinstance(input_, ExternalRecordWithDynamicIDTransitionInput):
+            inputs.append({
+                "type": "External record",
+                "commitment": input_.external_hash,
+                "dynamic_id": input_.dynamic_id,
+            })
         else:
             raise HTTPException(status_code=550, detail="Not implemented")
 
@@ -682,6 +702,37 @@ async def transition_route(request: Request):
                 future = output.future.value
                 if future.program_id == program_id and future.function_name == function_name:
                     self_future = future
+        elif isinstance(output, DynamicRecordTransitionOutput):
+            outputs.append({
+                "type": "Dynamic record",
+                "commitment": output.commitment,
+            })
+        elif isinstance(output, RecordWithDynamicIDTransitionOutput):
+            output_data: dict[str, Any] = {
+                "type": "Record",
+                "commitment": output.commitment,
+                "checksum": output.checksum,
+                "record": output.record_ciphertext.value,
+                "sender_ciphertext": output.sender_ciphertext.value,
+                "dynamic_id": output.dynamic_id,
+            }
+            record = output.record_ciphertext.value
+            if record is not None:
+                record_data: dict[str, Any] = {
+                    "owner": record.owner,
+                }
+                data: list[tuple[Identifier, Entry[Any]]] = []
+                for identifier, entry in record.data:
+                    data.append((identifier, entry))
+                record_data["data"] = data
+                output_data["record_data"] = record_data
+            outputs.append(output_data)
+        elif isinstance(output, ExternalRecordWithDynamicIDTransitionOutput):
+            outputs.append({
+                "type": "External record",
+                "commitment": output.external_hash,
+                "dynamic_id": output.dynamic_id,
+            })
         else:
             raise HTTPException(status_code=550, detail="Not implemented")
 
@@ -711,6 +762,11 @@ async def transition_route(request: Request):
                 finalizes.append({
                     "type": "Future",
                     "value": f"{future.program_id}/{future.function_name}(...)",
+                })
+            elif isinstance(argument, DynamicFutureArgument):
+                finalizes.append({
+                    "type": "Dynamic future",
+                    "value": str(argument.dynamic_future.checksum),
                 })
     latest_edition = await db.get_program_latest_edition(str(program_id))
     if latest_edition is None:

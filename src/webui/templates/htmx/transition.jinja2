@@ -66,6 +66,10 @@
                         {% call data_line("Commitment") %}
                             <span class="mono">{{ input.commitment }}</span>
                         {% endcall %}
+                    {% elif input.type == "Dynamic record" %}
+                        {% call data_line("Hash") %}
+                            <span class="mono">{{ input.hash }}</span>
+                        {% endcall %}
                     {% endif %}
                     <br>
                 {% endfor %}
@@ -110,6 +114,10 @@
                                 {% endfor %}
                             </span>
                         {% elif output.type == "External record" %}
+                            {% call data_line("Commitment") %}
+                                <span class="mono">{{ output.commitment }}</span>
+                            {% endcall %}
+                        {% elif output.type == "Dynamic record" %}
                             {% call data_line("Commitment") %}
                                 <span class="mono">{{ output.commitment }}</span>
                             {% endcall %}
