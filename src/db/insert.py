@@ -172,7 +172,7 @@ class DatabaseInsert(DatabaseBase):
             if isinstance(argument, PlaintextArgument):
                 plaintext = argument.plaintext
                 await cur.execute(
-                    "INSERT INTO future_argument (future_id, type, plaintext) VALUES (%s, %s, %s)",
+                    "INSERT INTO future_argument (future_id, type, data) VALUES (%s, %s, %s)",
                     (future_db_id, argument.type.name, plaintext.dump())
                 )
                 if isinstance(plaintext, LiteralPlaintext) and plaintext.literal.type == Literal.Type.Address:
@@ -198,6 +198,11 @@ class DatabaseInsert(DatabaseBase):
                     raise RuntimeError("failed to insert row into database")
                 argument_db_id = res["id"]
                 await DatabaseInsert._insert_future(cur, argument.future, argument_db_id=argument_db_id)
+            elif isinstance(argument, DynamicFutureArgument):
+                await cur.execute(
+                    "INSERT INTO future_argument (future_id, type, data) VALUES (%s, %s, %s)",
+                    (future_db_id, argument.type.name, argument.dynamic_future.dump())
+                )
             else:
                 raise NotImplementedError
             GlobalBlockTimer.end_section(f"            insert future input {transition_output_future_db_id} {argument_db_id} {future.program_id} {future.function_name} {index}")

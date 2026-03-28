@@ -64,18 +64,22 @@ class DatabaseBlock(DatabaseBase):
             program_id = res["program_id"]
             function_name = res["function_name"]
             await cur.execute(
-                "SELECT id, type, plaintext FROM future_argument WHERE future_id = %s ORDER BY id",
+                "SELECT id, type, data FROM future_argument WHERE future_id = %s ORDER BY id",
                 (future_db_id,)
             )
             arguments: list[Argument] = []
             for res in await cur.fetchall():
                 if res["type"] == "Plaintext":
                     arguments.append(PlaintextArgument(
-                        plaintext=Plaintext.load(BytesIO(res["plaintext"]))
+                        plaintext=Plaintext.load(BytesIO(res["data"]))
                     ))
                 elif res["type"] == "Future":
                     arguments.append(FutureArgument(
                         future=await DatabaseBlock._load_future(conn, None, res["id"]) # type: ignore
+                    ))
+                elif res["type"] == "DynamicFuture":
+                    arguments.append(DynamicFutureArgument(
+                        dynamic_future=DynamicFuture.load(BytesIO(res["data"]))
                     ))
                 else:
                     raise NotImplementedError
