@@ -51,15 +51,24 @@ def finalize_type_to_str(value: FinalizeType):
 
 
 def value_type_to_mode_type_str(value: ValueType):
-    mode = value.type.name.lower()
-    if "record" in mode:
-        mode = "private"
     if isinstance(value, ConstantValueType | PublicValueType | PrivateValueType):
+        mode = value.type.name.lower()
         t = plaintext_type_to_str(value.plaintext_type)
     elif isinstance(value, RecordValueType):
+        mode = "record"
         t = str(value.identifier)
     elif isinstance(value, ExternalRecordValueType):
+        mode = "record"
         t = str(value.locator)
+    elif isinstance(value, FutureValueType):
+        mode = "future"
+        t = str(value.locator)
+    elif isinstance(value, DynamicRecordValueType):
+        mode = "record"
+        t = "dynamic"
+    elif isinstance(value, DynamicFutureValueType):
+        mode = "future"
+        t = "dynamic"
     else:
         raise NotImplementedError
     return mode, t
