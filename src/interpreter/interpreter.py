@@ -156,7 +156,8 @@ async def _trace_execution(db: Database, transition_ids: list[TransitionID], pro
         if isinstance(cmd, AwaitCommand):
             locator = cmd.register.locator
             if locator not in finalize_register_map:
-                raise RuntimeError("invalid await command")
+                # dynamic call - resolved at runtime via dynamic_future_map
+                continue
             called_node = finalize_register_map[locator]
             async_order.append(called_node["transition_id"])
             p, f = called_node["name"].split("/")
