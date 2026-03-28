@@ -26,6 +26,7 @@ class DatabaseMigrate(DatabaseBase):
             (8, self.migration_8_recalculate_function_call_count),
             (9, self.migration_9_deploy_function_select_program_id),
             (10, self.migration_10_add_dynamic_future_argument_type),
+            (11, self.migration_11_add_dynamic_transition_types),
         ]
 
         async with self.pool.connection() as conn:
@@ -147,3 +148,7 @@ class DatabaseMigrate(DatabaseBase):
     async def migration_10_add_dynamic_future_argument_type(conn: psycopg.AsyncConnection[DictRow]):
         await conn.execute("ALTER TYPE argument_type ADD VALUE 'DynamicFuture'")
         await conn.execute("ALTER TABLE future_argument RENAME COLUMN plaintext TO data")
+
+    @staticmethod
+    async def migration_11_add_dynamic_transition_types(conn: psycopg.AsyncConnection[DictRow]):
+        await conn.execute(cast(LiteralString, open("db/migrate_11.sql").read()))

@@ -124,6 +124,21 @@ class DatabaseBlock(DatabaseBase):
                     tis.append((ExternalRecordTransitionInput(
                         input_commitment=Field.loads(transition_input["commitment"]),
                     ), transition_input["index"]))
+                elif transition_input["type"] == TransitionInput.Type.DynamicRecord.name:
+                    tis.append((DynamicRecordTransitionInput(
+                        input_hash=Field.loads(transition_input["input_hash"])
+                    ), transition_input["index"]))
+                elif transition_input["type"] == TransitionInput.Type.RecordWithDynamicID.name:
+                    tis.append((RecordWithDynamicIDTransitionInput(
+                        serial_number=Field.loads(transition_input["serial_number"]),
+                        tag=Field.loads(transition_input["tag"]),
+                        dynamic_id=Field.loads(transition_input["dynamic_id"])
+                    ), transition_input["index"]))
+                elif transition_input["type"] == TransitionInput.Type.ExternalRecordWithDynamicID.name:
+                    tis.append((ExternalRecordWithDynamicIDTransitionInput(
+                        external_hash=Field.loads(transition_input["external_hash"]),
+                        dynamic_id=Field.loads(transition_input["dynamic_id"])
+                    ), transition_input["index"]))
                 else:
                     raise NotImplementedError
             tis.sort(key=lambda x: x[1])
@@ -175,6 +190,31 @@ class DatabaseBlock(DatabaseBase):
                     tos.append((FutureTransitionOutput(
                         future_hash=Field.loads(transition_output["future_hash"]),
                         future=Option[Future](future)
+                    ), transition_output["index"]))
+                elif transition_output["type"] == TransitionOutput.Type.DynamicRecord.name:
+                    tos.append((DynamicRecordTransitionOutput(
+                        commitment=Field.loads(transition_output["dynamic_commitment"])
+                    ), transition_output["index"]))
+                elif transition_output["type"] == TransitionOutput.Type.RecordWithDynamicID.name:
+                    if transition_output["dynamic_record_ciphertext"] is None:
+                        record_ciphertext = None
+                    else:
+                        record_ciphertext = Record[Ciphertext].loads(transition_output["dynamic_record_ciphertext"])
+                    if transition_output["dynamic_record_sender_ciphertext"] is None:
+                        sender_ciphertext = None
+                    else:
+                        sender_ciphertext = Field.loads(transition_output["dynamic_record_sender_ciphertext"])
+                    tos.append((RecordWithDynamicIDTransitionOutput(
+                        commitment=Field.loads(transition_output["dynamic_record_commitment"]),
+                        checksum=Field.loads(transition_output["dynamic_record_checksum"]),
+                        record_ciphertext=Option[Record[Ciphertext]](record_ciphertext),
+                        sender_ciphertext=Option[Field](sender_ciphertext),
+                        dynamic_id=Field.loads(transition_output["dynamic_record_dynamic_id"])
+                    ), transition_output["index"]))
+                elif transition_output["type"] == TransitionOutput.Type.ExternalRecordWithDynamicID.name:
+                    tos.append((ExternalRecordWithDynamicIDTransitionOutput(
+                        external_hash=Field.loads(transition_output["external_dynamic_hash"]),
+                        dynamic_id=Field.loads(transition_output["external_dynamic_id"])
                     ), transition_output["index"]))
                 else:
                     raise NotImplementedError

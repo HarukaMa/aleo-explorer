@@ -423,6 +423,26 @@ class DatabaseInsert(DatabaseBase):
                     "VALUES (%s, %s)",
                     (transition_input_db_id, str(transition_input.input_commitment))
                 )
+            elif isinstance(transition_input, DynamicRecordTransitionInput):
+                await cur.execute(
+                    "INSERT INTO transition_input_dynamic_record (transition_input_id, input_hash) "
+                    "VALUES (%s, %s)",
+                    (transition_input_db_id, str(transition_input.input_hash))
+                )
+            elif isinstance(transition_input, RecordWithDynamicIDTransitionInput):
+                await cur.execute(
+                    "INSERT INTO transition_input_record_with_dynamic_id (transition_input_id, serial_number, tag, dynamic_id) "
+                    "VALUES (%s, %s, %s, %s)",
+                    (transition_input_db_id, str(transition_input.serial_number),
+                     str(transition_input.tag), str(transition_input.dynamic_id))
+                )
+            elif isinstance(transition_input, ExternalRecordWithDynamicIDTransitionInput):
+                await cur.execute(
+                    "INSERT INTO transition_input_external_record_with_dynamic_id (transition_input_id, external_hash, dynamic_id) "
+                    "VALUES (%s, %s, %s)",
+                    (transition_input_db_id, str(transition_input.external_hash),
+                     str(transition_input.dynamic_id))
+                )
 
             else:
                 raise NotImplementedError
@@ -477,6 +497,27 @@ class DatabaseInsert(DatabaseBase):
                 transition_output_future_db_id = res["id"]
                 if transition_output.future.value is not None:
                     await DatabaseInsert._insert_future(cur, transition_output.future.value, transition_output_future_db_id)
+            elif isinstance(transition_output, DynamicRecordTransitionOutput):
+                await cur.execute(
+                    "INSERT INTO transition_output_dynamic_record (transition_output_id, commitment) "
+                    "VALUES (%s, %s)",
+                    (transition_output_db_id, str(transition_output.commitment))
+                )
+            elif isinstance(transition_output, RecordWithDynamicIDTransitionOutput):
+                await cur.execute(
+                    "INSERT INTO transition_output_record_with_dynamic_id (transition_output_id, commitment, checksum, record_ciphertext, sender_ciphertext, dynamic_id) "
+                    "VALUES (%s, %s, %s, %s, %s, %s)",
+                    (transition_output_db_id, str(transition_output.commitment),
+                     str(transition_output.checksum), transition_output.record_ciphertext.dumps(),
+                     transition_output.sender_ciphertext.dumps(), str(transition_output.dynamic_id))
+                )
+            elif isinstance(transition_output, ExternalRecordWithDynamicIDTransitionOutput):
+                await cur.execute(
+                    "INSERT INTO transition_output_external_record_with_dynamic_id (transition_output_id, external_hash, dynamic_id) "
+                    "VALUES (%s, %s, %s)",
+                    (transition_output_db_id, str(transition_output.external_hash),
+                     str(transition_output.dynamic_id))
+                )
             else:
                 raise NotImplementedError
             GlobalBlockTimer.end_section(f"        insert transition output {transition.id} {output_index}")

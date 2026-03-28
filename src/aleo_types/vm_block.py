@@ -2540,6 +2540,9 @@ class TransitionInput(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize):
         Private = 2
         Record = 3
         ExternalRecord = 4
+        DynamicRecord = 5
+        RecordWithDynamicID = 6
+        ExternalRecordWithDynamicID = 7
 
     type: Type
 
@@ -2556,6 +2559,12 @@ class TransitionInput(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize):
             return RecordTransitionInput.load(data)
         elif type_ == TransitionInput.Type.ExternalRecord:
             return ExternalRecordTransitionInput.load(data)
+        elif type_ == TransitionInput.Type.DynamicRecord:
+            return DynamicRecordTransitionInput.load(data)
+        elif type_ == TransitionInput.Type.RecordWithDynamicID:
+            return RecordWithDynamicIDTransitionInput.load(data)
+        elif type_ == TransitionInput.Type.ExternalRecordWithDynamicID:
+            return ExternalRecordWithDynamicIDTransitionInput.load(data)
         else:
             raise ValueError("unknown transition input type")
 
@@ -2676,6 +2685,78 @@ class ExternalRecordTransitionInput(TransitionInput):
         }
 
 
+class DynamicRecordTransitionInput(TransitionInput):
+    type = TransitionInput.Type.DynamicRecord
+
+    def __init__(self, *, input_hash: Field):
+        self.input_hash = input_hash
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.input_hash.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        input_hash = Field.load(data)
+        return cls(input_hash=input_hash)
+
+    def json_compatible(self) -> JSONType:
+        return {
+            "type": enum_name_convert(self.type.name),
+            "id": self.input_hash.json_compatible()
+        }
+
+
+class RecordWithDynamicIDTransitionInput(TransitionInput):
+    type = TransitionInput.Type.RecordWithDynamicID
+
+    def __init__(self, *, serial_number: Field, tag: Field, dynamic_id: Field):
+        self.serial_number = serial_number
+        self.tag = tag
+        self.dynamic_id = dynamic_id
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.serial_number.dump() + self.tag.dump() + self.dynamic_id.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        serial_number = Field.load(data)
+        tag = Field.load(data)
+        dynamic_id = Field.load(data)
+        return cls(serial_number=serial_number, tag=tag, dynamic_id=dynamic_id)
+
+    def json_compatible(self) -> JSONType:
+        return {
+            "type": enum_name_convert(self.type.name),
+            "id": self.serial_number.json_compatible(),
+            "tag": self.tag.json_compatible(),
+            "dynamic_id": self.dynamic_id.json_compatible()
+        }
+
+
+class ExternalRecordWithDynamicIDTransitionInput(TransitionInput):
+    type = TransitionInput.Type.ExternalRecordWithDynamicID
+
+    def __init__(self, *, external_hash: Field, dynamic_id: Field):
+        self.external_hash = external_hash
+        self.dynamic_id = dynamic_id
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.external_hash.dump() + self.dynamic_id.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        external_hash = Field.load(data)
+        dynamic_id = Field.load(data)
+        return cls(external_hash=external_hash, dynamic_id=dynamic_id)
+
+    def json_compatible(self) -> JSONType:
+        return {
+            "type": enum_name_convert(self.type.name),
+            "id": self.external_hash.json_compatible(),
+            "dynamic_id": self.dynamic_id.json_compatible()
+        }
+
+
 class TransitionOutput(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize):
 
     class Type(IntEnumu8):
@@ -2685,6 +2766,9 @@ class TransitionOutput(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize)
         Record = 3
         ExternalRecord = 4
         Future = 5
+        DynamicRecord = 6
+        RecordWithDynamicID = 7
+        ExternalRecordWithDynamicID = 8
 
     type: Type
 
@@ -2703,6 +2787,12 @@ class TransitionOutput(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize)
             return ExternalRecordTransitionOutput.load(data)
         elif type_ == TransitionOutput.Type.Future:
             return FutureTransitionOutput.load(data)
+        elif type_ == TransitionOutput.Type.DynamicRecord:
+            return DynamicRecordTransitionOutput.load(data)
+        elif type_ == TransitionOutput.Type.RecordWithDynamicID:
+            return RecordWithDynamicIDTransitionOutput.load(data)
+        elif type_ == TransitionOutput.Type.ExternalRecordWithDynamicID:
+            return ExternalRecordWithDynamicIDTransitionOutput.load(data)
         else:
             raise ValueError("unknown transition output type")
 
@@ -2866,6 +2956,99 @@ class FutureTransitionOutput(TransitionOutput):
             "type": enum_name_convert(self.type.name),
             "id": self.future_hash.json_compatible(),
             "value": self.future.json_compatible() if self.future else None
+        }
+
+
+class DynamicRecordTransitionOutput(TransitionOutput):
+    type = TransitionOutput.Type.DynamicRecord
+
+    def __init__(self, *, commitment: Field):
+        self.commitment = commitment
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.commitment.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        commitment = Field.load(data)
+        return cls(commitment=commitment)
+
+    def json_compatible(self) -> JSONType:
+        return {
+            "type": enum_name_convert(self.type.name),
+            "id": self.commitment.json_compatible()
+        }
+
+
+class RecordWithDynamicIDTransitionOutput(TransitionOutput):
+    type = TransitionOutput.Type.RecordWithDynamicID
+
+    def __init__(self, *, commitment: Field, checksum: Field, record_ciphertext: Option[Record[Ciphertext]],
+                 sender_ciphertext: Option[Field], dynamic_id: Field):
+        self.commitment = commitment
+        self.checksum = checksum
+        self.record_ciphertext = record_ciphertext
+        self.sender_ciphertext = sender_ciphertext
+        self.dynamic_id = dynamic_id
+
+    def dump(self) -> bytes:
+        res = self.type.dump() + self.commitment.dump() + self.checksum.dump() + self.record_ciphertext.dump()
+        if self.record_ciphertext.value is not None and self.record_ciphertext.value.version != 0:
+            res += u8().dump()
+            if self.sender_ciphertext.value is None:
+                raise ValueError("sender ciphertext must be present for non-zero record ciphertext version")
+            res += self.sender_ciphertext.value.dump()
+        res += self.dynamic_id.dump()
+        return res
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        commitment = Field.load(data)
+        checksum = Field.load(data)
+        record_ciphertext = Option[Record[Ciphertext]].load(data)
+        if record_ciphertext.value is not None and record_ciphertext.value.version != 0:
+            sender_ciphertext_version = u8.load(data)
+            if sender_ciphertext_version != 0:
+                raise ValueError(f"unsupported record ciphertext version {sender_ciphertext_version}")
+            else:
+                sender_ciphertext = Option[Field](Field.load(data))
+        else:
+            sender_ciphertext = Option[Field](None)
+        dynamic_id = Field.load(data)
+        return cls(commitment=commitment, checksum=checksum, record_ciphertext=record_ciphertext,
+                   sender_ciphertext=sender_ciphertext, dynamic_id=dynamic_id)
+
+    def json_compatible(self) -> JSONType:
+        return {
+            "type": enum_name_convert(self.type.name),
+            "id": self.commitment.json_compatible(),
+            "checksum": self.checksum.json_compatible(),
+            "value": self.record_ciphertext.json_compatible() if self.record_ciphertext else None,
+            "dynamic_id": self.dynamic_id.json_compatible()
+        }
+
+
+class ExternalRecordWithDynamicIDTransitionOutput(TransitionOutput):
+    type = TransitionOutput.Type.ExternalRecordWithDynamicID
+
+    def __init__(self, *, external_hash: Field, dynamic_id: Field):
+        self.external_hash = external_hash
+        self.dynamic_id = dynamic_id
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.external_hash.dump() + self.dynamic_id.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        external_hash = Field.load(data)
+        dynamic_id = Field.load(data)
+        return cls(external_hash=external_hash, dynamic_id=dynamic_id)
+
+    def json_compatible(self) -> JSONType:
+        return {
+            "type": enum_name_convert(self.type.name),
+            "id": self.external_hash.json_compatible(),
+            "dynamic_id": self.dynamic_id.json_compatible()
         }
 
 
