@@ -235,16 +235,17 @@ async def finalize_execute(db: Database, cur: psycopg.AsyncCursor[dict[str, Any]
             # Build dynamic_future_map: for each transition with a Future output,
             # compute the DynamicFuture key so DynamicFutureValues can be resolved at await time.
             dynamic_future_map: dict[tuple[Field, Field, Field, Field], tuple[Future, TransitionID]] = {}
-            if hasattr(aleo_explorer_rust, 'dynamic_future_key_from_future'):
-                for t in execution.transitions:
-                    if len(t.outputs) > 0:
-                        last_output = t.outputs[-1]
-                        if isinstance(last_output, FutureTransitionOutput) and last_output.future.value is not None:
-                            future_val = last_output.future.value
-                            key_bytes = aleo_explorer_rust.dynamic_future_key_from_future(future_val.dump())
-                            key = (Field.load(BytesIO(key_bytes[0])), Field.load(BytesIO(key_bytes[1])),
-                                   Field.load(BytesIO(key_bytes[2])), Field.load(BytesIO(key_bytes[3])))
-                            dynamic_future_map[key] = (future_val, t.id)
+            if not hasattr(aleo_explorer_rust, 'dynamic_future_key_from_future'):
+                raise RuntimeError("aleo_explorer_rust.dynamic_future_key_from_future not available - update aleo-explorer-rust")
+            for t in execution.transitions:
+                if len(t.outputs) > 0:
+                    last_output = t.outputs[-1]
+                    if isinstance(last_output, FutureTransitionOutput) and last_output.future.value is not None:
+                        future_val = last_output.future.value
+                        key_bytes = aleo_explorer_rust.dynamic_future_key_from_future(future_val.dump())
+                        key = (Field.load(BytesIO(key_bytes[0])), Field.load(BytesIO(key_bytes[1])),
+                               Field.load(BytesIO(key_bytes[2])), Field.load(BytesIO(key_bytes[3])))
+                        dynamic_future_map[key] = (future_val, t.id)
 
             async_order = await build_async_order(db, transition_ids, program, future.function_name)
 
