@@ -33,6 +33,47 @@ class StringType(Serializable):
     def __str__(self):
         return self.string
 
+class Identifier(Serializable, JSONSerialize):
+
+    def __init__(self, *, value: str):
+        self.data = value
+
+    def dump(self) -> bytes:
+        return len(self.data).to_bytes(1, "little") + self.data.encode("ascii")
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        length = data.read(1)[0]
+        value = data.read(length).decode("ascii") # let the exception propagate
+        return cls(value=value)
+
+    @classmethod
+    def loads(cls, data: str):
+        return cls(value=data)
+
+    def json(self, compatible: bool = False) -> JSONType:
+        return self.data
+
+    def __str__(self):
+        return self.data
+
+    def __repr__(self):
+        return self.data
+
+    def __eq__(self, other: object):
+        if isinstance(other, str):
+            return self.data == other
+        if isinstance(other, Identifier):
+            return self.data == other.data
+        return False
+
+    def __hash__(self):
+        return hash(self.data)
+
+    def __len__(self):
+        return len(self.data)
+
+
 class Literal(Serializable, JSONSerialize): # enum
 
     class Type(IntEnumu16):
@@ -53,6 +94,7 @@ class Literal(Serializable, JSONSerialize): # enum
         Scalar = 14
         Signature = 15
         String = 16
+        Identifier = 17
 
     primitive_type_map = {
         Type.Address: Address,
@@ -72,6 +114,7 @@ class Literal(Serializable, JSONSerialize): # enum
         Type.Scalar: Scalar,
         Type.Signature: Signature,
         Type.String: StringType,
+        Type.Identifier: Identifier,
     }
 
     reverse_primitive_type_map = {
@@ -92,6 +135,7 @@ class Literal(Serializable, JSONSerialize): # enum
         Scalar: Type.Scalar,
         Signature: Type.Signature,
         StringType: Type.String,
+        Identifier: Type.Identifier,
     }
 
     def __init__(self, *, type_: Type, primitive: Serializable):
@@ -132,46 +176,6 @@ class Literal(Serializable, JSONSerialize): # enum
             return False
         return self.type == other.type and self.primitive >= other.primitive
 
-
-class Identifier(Serializable, JSONSerialize):
-
-    def __init__(self, *, value: str):
-        self.data = value
-
-    def dump(self) -> bytes:
-        return len(self.data).to_bytes(1, "little") + self.data.encode("ascii")
-
-    @classmethod
-    def load(cls, data: BytesIO):
-        length = data.read(1)[0]
-        value = data.read(length).decode("ascii") # let the exception propagate
-        return cls(value=value)
-
-    @classmethod
-    def loads(cls, data: str):
-        return cls(value=data)
-
-    def json(self, compatible: bool = False) -> JSONType:
-        return self.data
-
-    def __str__(self):
-        return self.data
-
-    def __repr__(self):
-        return self.data
-
-    def __eq__(self, other: object):
-        if isinstance(other, str):
-            return self.data == other
-        if isinstance(other, Identifier):
-            return self.data == other.data
-        return False
-
-    def __hash__(self):
-        return hash(self.data)
-
-    def __len__(self):
-        return len(self.data)
 
 class ProgramID(Serializable, JSONSerialize):
 
@@ -722,6 +726,7 @@ class LiteralType(IntEnumu8):
     Scalar = 14
     Signature = 15
     String = 16
+    Identifier = 17
 
     @property
     def primitive_type(self):
@@ -743,6 +748,7 @@ class LiteralType(IntEnumu8):
             self.Scalar: Scalar,
             self.Signature: Signature,
             self.String: StringType,
+            self.Identifier: Identifier,
         }[self]
 
     def __str__(self):
@@ -764,6 +770,7 @@ class LiteralType(IntEnumu8):
             self.Scalar: "scalar",
             self.Signature: "signature",
             self.String: "string",
+            self.Identifier: "identifier",
         }[self]
 
 
