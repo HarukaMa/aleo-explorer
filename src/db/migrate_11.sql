@@ -2,6 +2,9 @@ ALTER TYPE transition_data_type ADD VALUE 'DynamicRecord';
 ALTER TYPE transition_data_type ADD VALUE 'RecordWithDynamicID';
 ALTER TYPE transition_data_type ADD VALUE 'ExternalRecordWithDynamicID';
 
+DROP FUNCTION get_transition_inputs(integer);
+DROP FUNCTION get_transition_outputs(integer);
+
 CREATE TABLE transition_input_dynamic_record (
     id serial PRIMARY KEY,
     transition_input_id integer NOT NULL REFERENCES transition_input(id),
