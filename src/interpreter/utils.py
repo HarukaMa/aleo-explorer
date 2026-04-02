@@ -1,9 +1,18 @@
 from hashlib import sha3_256
+from io import BytesIO
 
 from aleo_types import *
 from db import Database
 from node import Network
 from .environment import Registers
+
+_g_powers_cache: list[Group] | None = None
+
+def _get_g_powers() -> list[Group]:
+    global _g_powers_cache
+    if _g_powers_cache is None:
+        _g_powers_cache = [Group.load(BytesIO(b)) for b in aleo_explorer_rust.aleo_g_powers()]
+    return _g_powers_cache
 
 
 class FinalizeState:
@@ -168,6 +177,34 @@ async def load_plaintext_from_operand(operand: Operand, registers: Registers, fi
                 primitive=cast(i64, finalize_state.block_timestamp)
             )
         )
+    elif isinstance(operand, AleoGeneratorOperand):
+        g_powers = _get_g_powers()
+        return LiteralPlaintext(
+            literal=Literal(
+                type_=Literal.Type.Group,
+                primitive=g_powers[0]
+            )
+        )
+    elif isinstance(operand, AleoGeneratorPowersOperand):
+        g_powers = _get_g_powers()
+        if operand.index.value is not None:
+            return LiteralPlaintext(
+                literal=Literal(
+                    type_=Literal.Type.Group,
+                    primitive=g_powers[int(operand.index.value)]
+                )
+            )
+        else:
+            return ArrayPlaintext(
+                elements=Vec[Plaintext, u32]([
+                    LiteralPlaintext(
+                        literal=Literal(
+                            type_=Literal.Type.Group,
+                            primitive=g
+                        )
+                    ) for g in g_powers
+                ])
+            )
     else:
         raise NotImplementedError
 

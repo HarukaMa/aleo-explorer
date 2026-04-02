@@ -130,6 +130,12 @@ def disasm_operand(value: Operand) -> str:
         return "program_owner"
     elif isinstance(value, BlockTimestampOperand):
         return "block.timestamp"
+    elif isinstance(value, AleoGeneratorOperand):
+        return "aleo::GENERATOR"
+    elif isinstance(value, AleoGeneratorPowersOperand):
+        if value.index.value is not None:
+            return f"aleo::GENERATOR_POWERS[{value.index.value}]"
+        return "aleo::GENERATOR_POWERS"
     else:
         raise ValueError(f"unknown operand type {type(value)}")
 

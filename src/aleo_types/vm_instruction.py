@@ -376,6 +376,8 @@ class Operand(EnumBaseSerialize, Serialize, JSONSerialize, RustEnum):
         Edition = 8
         ProgramOwner = 9
         BlockTimestamp = 10
+        AleoGenerator = 11
+        AleoGeneratorPowers = 12
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -402,6 +404,10 @@ class Operand(EnumBaseSerialize, Serialize, JSONSerialize, RustEnum):
             return ProgramOwnerOperand.load(data)
         elif type_ == cls.Type.BlockTimestamp:
             return BlockTimestampOperand.load(data)
+        elif type_ == cls.Type.AleoGenerator:
+            return AleoGeneratorOperand.load(data)
+        elif type_ == cls.Type.AleoGeneratorPowers:
+            return AleoGeneratorPowersOperand.load(data)
         else:
             raise ValueError("unknown operand type")
 
@@ -553,6 +559,32 @@ class BlockTimestampOperand(Operand):
     @classmethod
     def load(cls, data: BytesIO):
         return cls()
+
+class AleoGeneratorOperand(Operand):
+    type = Operand.Type.AleoGenerator
+
+    def __init__(self):
+        pass
+
+    def dump(self) -> bytes:
+        return self.type.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        return cls()
+
+class AleoGeneratorPowersOperand(Operand):
+    type = Operand.Type.AleoGeneratorPowers
+
+    def __init__(self, *, index: Option[u32]):
+        self.index = index
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.index.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        return cls(index=Option[u32].load(data))
 
 class Literals(Serializable, JSONSerialize, Generic[N]):
     types: N
