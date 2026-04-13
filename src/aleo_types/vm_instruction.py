@@ -1066,6 +1066,7 @@ class CastType(EnumBaseSerialize, Serialize, JSONSerialize, RustEnum):
         Plaintext = 2
         Record = 3
         ExternalRecord = 4
+        DynamicRecord = 5
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -1080,6 +1081,8 @@ class CastType(EnumBaseSerialize, Serialize, JSONSerialize, RustEnum):
             return RecordCastType.load(data)
         elif type_ == cls.Type.ExternalRecord:
             return ExternalRecordCastType.load(data)
+        elif type_ == cls.Type.DynamicRecord:
+            return DynamicRecordCastType.load(data)
         else:
             raise ValueError(f"Invalid cast type {type_}")
 
@@ -1144,6 +1147,16 @@ class ExternalRecordCastType(CastType):
     def load(cls, data: BytesIO):
         locator = Locator.load(data)
         return cls(locator=locator)
+
+class DynamicRecordCastType(CastType):
+    type = CastType.Type.DynamicRecord
+
+    def dump(self) -> bytes:
+        return self.type.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        return cls()
 
 
 class CastInstruction(Serializable, JSONSerialize, Generic[V]):

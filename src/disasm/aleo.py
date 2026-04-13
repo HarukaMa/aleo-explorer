@@ -171,6 +171,8 @@ def disasm_cast(value: CastInstruction[Any]) -> str:
         destination_type = str(cast_type.identifier) + ".record"
     elif isinstance(cast_type, ExternalRecordCastType):
         destination_type = str(cast_type.locator) + ".record"
+    elif isinstance(cast_type, DynamicRecordCastType):
+        destination_type = "dynamic.record"
     else:
         raise ValueError(f"unknown cast type")
     return f"{' '.join(map(disasm_operand, value.operands))} into {disasm_register(value.destination)} as {destination_type}"
