@@ -50,7 +50,9 @@ class Node:
 
     async def worker(self, host: str, port: int):
         try:
-            self.reader, self.writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=5)
+            source_ip = os.environ.get("SOURCE_IP")
+            local_addr = (source_ip, 0) if source_ip else None
+            self.reader, self.writer = await asyncio.wait_for(asyncio.open_connection(host, port, local_addr=local_addr), timeout=5)
         except asyncio.TimeoutError as e:
             await self.explorer_message(explorer.Message(explorer.Message.Type.NodeConnectError, e))
             await self.close()
