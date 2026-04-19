@@ -359,8 +359,10 @@ class LightNodeListener:
         self.listen_task: Optional[asyncio.Task[asyncio.Server]] = None
 
     def start(self):
+        host = os.environ.get("LNL_HOST", "0.0.0.0")
+        port = int(os.environ.get("LNL_PORT", 14134))
         print("Starting light node listener")
-        self.listen_task = asyncio.create_task(asyncio.start_server(self.incoming, host="0.0.0.0", port=14134))
+        self.listen_task = asyncio.create_task(asyncio.start_server(self.incoming, host=host, port=port))
 
     async def incoming(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         node = LightNode(self.state, is_incoming=True)
