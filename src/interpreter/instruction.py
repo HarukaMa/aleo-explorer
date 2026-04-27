@@ -50,7 +50,8 @@ async def execute_instruction(instruction: Instruction, program: Program, regist
         variant = literals.variant
         await ecdsa_verify_ops(literals.operands, literals.destination, registers, finalize_state, variant, db, program)
     elif isinstance(literals, SnarkVerifyInstruction):
-        raise NotImplementedError("snark.verify is not yet implemented in the interpreter")
+        variant = literals.variant
+        await snark_verify_ops(literals.operands, literals.destination, registers, finalize_state, variant, db, program)
     elif isinstance(literals, CallDynamicInstruction | GetRecordDynamicInstruction):
         raise NotImplementedError(f"{type(literals).__name__} is not supported in finalize")
     else:
@@ -324,6 +325,29 @@ async def ecdsa_verify_ops(operands: tuple[Operand, Operand, Operand], destinati
         literal=Literal(
             type_=Literal.Type.Boolean,
             primitive=bool_(hash_result),
+        )
+    )
+    store_plaintext_to_register(res, destination, registers)
+
+async def snark_verify_ops(operands: Vec[Operand, FixedSize[4]], destination: Register, registers: Registers, finalize_state: FinalizeState, variant: int, db: Database, program: Program):
+    op1 = await load_plaintext_from_operand(operands[0], registers, finalize_state, db, program)
+    op2 = await load_plaintext_from_operand(operands[1], registers, finalize_state, db, program)
+    op3 = await load_plaintext_from_operand(operands[2], registers, finalize_state, db, program)
+    op4 = await load_plaintext_from_operand(operands[3], registers, finalize_state, db, program)
+    try:
+        result = aleo_explorer_rust.snark_verify_ops(
+            variant,
+            PlaintextValue(plaintext=op1).dump(),
+            PlaintextValue(plaintext=op2).dump(),
+            PlaintextValue(plaintext=op3).dump(),
+            PlaintextValue(plaintext=op4).dump(),
+        )
+    except ValueError as e:
+        raise RustExecuteError(e)
+    res = LiteralPlaintext(
+        literal=Literal(
+            type_=Literal.Type.Boolean,
+            primitive=bool_(result),
         )
     )
     store_plaintext_to_register(res, destination, registers)
