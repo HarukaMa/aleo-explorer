@@ -29,13 +29,16 @@ class UvicornServer(uvicorn.Server):
 @htmx_template("index.jinja2")
 async def index_route(request: Request):
     db: Database = request.app.state.db
-    recent_blocks = await db.get_recent_blocks_fast()
-    network_speed = await db.get_network_speed()
-    validators = await db.get_current_validator_count()
-    participation_rate = await db.get_network_participation_rate()
-    sync_info = await out_of_sync_check(request.app.state.session, db)
+    recent_blocks, network_speed, validators, participation_rate, sync_info, latest_block = await asyncio.gather(
+        db.get_recent_blocks_fast(),
+        db.get_network_speed(),
+        db.get_current_validator_count(),
+        db.get_network_participation_rate(),
+        out_of_sync_check(request.app.state.session, db),
+        db.get_latest_block(),
+    )
     ctx = {
-        "latest_block": await db.get_latest_block(),
+        "latest_block": latest_block,
         "recent_blocks": recent_blocks,
         "network_speed": network_speed,
         "validators": validators,
