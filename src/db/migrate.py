@@ -27,6 +27,7 @@ class DatabaseMigrate(DatabaseBase):
             (9, self.migration_9_deploy_function_select_program_id),
             (10, self.migration_10_add_dynamic_future_argument_type),
             (11, self.migration_11_add_dynamic_transition_types),
+            (12, self.migration_12_add_solution_puzzle_solution_id_index),
         ]
 
         async with self.pool.connection() as conn:
@@ -152,3 +153,14 @@ class DatabaseMigrate(DatabaseBase):
     @staticmethod
     async def migration_11_add_dynamic_transition_types(conn: psycopg.AsyncConnection[DictRow]):
         await conn.execute(cast(LiteralString, open("db/migrate_11.sql").read()))
+
+    @staticmethod
+    async def migration_12_add_solution_puzzle_solution_id_index(conn: psycopg.AsyncConnection[DictRow]):
+        await conn.execute(
+            "ALTER INDEX IF EXISTS explorer.solution_puzzle_solution_id_index "
+            "RENAME TO solution_solution_id_index"
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS solution_puzzle_solution_id_index "
+            "ON explorer.solution (puzzle_solution_id)"
+        )
