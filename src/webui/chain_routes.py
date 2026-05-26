@@ -751,7 +751,7 @@ async def transition_route(request: Request):
                         raise HTTPException(status_code=550, detail="Program not found")
                     finalize = cast(Finalize, program.functions[transition.function_name].finalize.value)
                     finalize_type = cast(PlaintextFinalizeType, finalize.inputs[i].finalize_type)
-                    struct_type = str(cast(StructPlaintextType, finalize_type.plaintext_type).struct)
+                    struct_type = str(finalize_type.plaintext_type)
                 finalizes.append({
                     "type": "Plaintext",
                     "struct_type": struct_type,
