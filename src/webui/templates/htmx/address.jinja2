@@ -119,7 +119,7 @@
                     <span class="note">/</span>
                     {% if uptime_windows["30d"] is not none %}{{ "%0.2f" | format(uptime_windows["30d"] * 100) }}%{% else %}-{% endif %}
                 {% endcall %}
-                {% call data_line("Block participation (last 24 hours)", '<i class="fa-regular fa-circle-question" data-tippy-content="Each block represents 10 min of consensus blocks. Green = at most 5% missed; yellow = 5 to 10% missed; red = over 10% missed; striped = not in committee; gray = no blocks produced."></i>') %}
+                {% call data_line("Block participation (last 24 hours)", '<i class="fa-regular fa-circle-question" data-tippy-content="Each block represents 10 min of consensus blocks. Green = at most 5% missed; yellow = 5 to 50% missed; red = over 50% missed; striped = not in committee; gray = no blocks produced."></i>') %}
                     <svg class="status-blocks" viewBox="0 0 720 18" preserveAspectRatio="none">
                         <defs>
                             <pattern id="sb-hatch" width="4" height="4" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
@@ -134,8 +134,8 @@
                     </div>
                     <div class="status-blocks-legend">
                         <span><span class="sw sw-ok"></span>at most 5% missed</span>
-                        <span><span class="sw sw-warn"></span>5 to 10% missed</span>
-                        <span><span class="sw sw-miss"></span>over 10% missed</span>
+                        <span><span class="sw sw-warn"></span>5 to 50% missed</span>
+                        <span><span class="sw sw-miss"></span>over 50% missed</span>
                         <span><span class="sw sw-absent"></span>not in committee</span>
                         <span><span class="sw sw-empty"></span>no blocks</span>
                     </div>
