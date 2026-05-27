@@ -133,27 +133,36 @@ class DatabaseValidator(DatabaseBase):
                     for name, secs in windows:
                         cutoff_ts = now_ts - secs
                         await cur.execute(
-                            "SELECT height FROM block WHERE timestamp > %s ORDER BY timestamp LIMIT 1",
+                            "SELECT MIN(id) AS min_block_id, MIN(height) AS min_height "
+                            "FROM block WHERE timestamp > %s",
                             (cutoff_ts,)
                         )
-                        start = await cur.fetchone()
-                        if start is None:
+                        block_bound = await cur.fetchone()
+                        if block_bound is None or block_bound["min_block_id"] is None:
                             result[name] = None
                             continue
-                        start_height = start["height"]
+                        min_block_id = block_bound["min_block_id"]
+                        min_height = block_bound["min_height"]
                         await cur.execute(
-                            "SELECT count(*) FROM block_validator bv "
-                            "JOIN block b ON bv.block_id = b.id "
-                            "WHERE b.timestamp > %s AND bv.validator = %s",
-                            (cutoff_ts, address)
+                            "SELECT MIN(id) AS min_id FROM committee_history WHERE height >= %s",
+                            (min_height,)
+                        )
+                        ch_bound = await cur.fetchone()
+                        if ch_bound is None or ch_bound["min_id"] is None:
+                            result[name] = None
+                            continue
+                        min_committee_id = ch_bound["min_id"]
+                        await cur.execute(
+                            "SELECT count(*) FROM block_validator "
+                            "WHERE validator = %s AND block_id >= %s",
+                            (address, min_block_id)
                         )
                         row = await cur.fetchone()
                         signed = row["count"] if row else 0
                         await cur.execute(
-                            "SELECT count(*) FROM committee_history_member chm "
-                            "JOIN committee_history ch ON chm.committee_id = ch.id "
-                            "WHERE ch.height >= %s AND chm.address = %s",
-                            (start_height, address)
+                            "SELECT count(*) FROM committee_history_member "
+                            "WHERE address = %s AND committee_id >= %s",
+                            (address, min_committee_id)
                         )
                         row = await cur.fetchone()
                         in_committee = row["count"] if row else 0
@@ -185,22 +194,44 @@ class DatabaseValidator(DatabaseBase):
                     totals = {row["bucket"]: row["total"] for row in await cur.fetchall()}
 
                     await cur.execute(
-                        "SELECT LEAST(((b.timestamp - %s) / %s)::int, %s) AS bucket, count(*) AS signed "
-                        "FROM block_validator bv JOIN block b ON bv.block_id = b.id "
-                        "WHERE bv.validator = %s AND b.timestamp > %s GROUP BY bucket",
-                        (start_ts, bucket_size, bucket_count - 1, address, start_ts)
+                        "SELECT MIN(id) AS min_block_id, MIN(height) AS min_height "
+                        "FROM block WHERE timestamp > %s",
+                        (start_ts,)
                     )
-                    signed = {row["bucket"]: row["signed"] for row in await cur.fetchall()}
+                    block_bound = await cur.fetchone()
+                    if block_bound is None or block_bound["min_block_id"] is None:
+                        signed: dict[int, int] = {}
+                        in_committee: dict[int, int] = {}
+                    else:
+                        min_block_id = block_bound["min_block_id"]
+                        min_height = block_bound["min_height"]
+                        await cur.execute(
+                            "SELECT LEAST(((b.timestamp - %s) / %s)::int, %s) AS bucket, count(*) AS signed "
+                            "FROM block_validator bv JOIN block b ON b.id = bv.block_id "
+                            "WHERE bv.validator = %s AND bv.block_id >= %s "
+                            "GROUP BY bucket",
+                            (start_ts, bucket_size, bucket_count - 1, address, min_block_id)
+                        )
+                        signed = {row["bucket"]: row["signed"] for row in await cur.fetchall()}
 
-                    await cur.execute(
-                        "SELECT LEAST(((b.timestamp - %s) / %s)::int, %s) AS bucket, count(*) AS in_committee "
-                        "FROM committee_history_member chm "
-                        "JOIN committee_history ch ON chm.committee_id = ch.id "
-                        "JOIN block b ON ch.height = b.height "
-                        "WHERE chm.address = %s AND b.timestamp > %s GROUP BY bucket",
-                        (start_ts, bucket_size, bucket_count - 1, address, start_ts)
-                    )
-                    in_committee = {row["bucket"]: row["in_committee"] for row in await cur.fetchall()}
+                        await cur.execute(
+                            "SELECT MIN(id) AS min_id FROM committee_history WHERE height >= %s",
+                            (min_height,)
+                        )
+                        ch_bound = await cur.fetchone()
+                        if ch_bound is None or ch_bound["min_id"] is None:
+                            in_committee = {}
+                        else:
+                            await cur.execute(
+                                "SELECT LEAST(((b.timestamp - %s) / %s)::int, %s) AS bucket, count(*) AS in_committee "
+                                "FROM committee_history_member chm "
+                                "JOIN committee_history ch ON ch.id = chm.committee_id "
+                                "JOIN block b ON b.height = ch.height "
+                                "WHERE chm.address = %s AND chm.committee_id >= %s "
+                                "GROUP BY bucket",
+                                (start_ts, bucket_size, bucket_count - 1, address, ch_bound["min_id"])
+                            )
+                            in_committee = {row["bucket"]: row["in_committee"] for row in await cur.fetchall()}
 
                     result: list[dict[str, int]] = []
                     for i in range(bucket_count):

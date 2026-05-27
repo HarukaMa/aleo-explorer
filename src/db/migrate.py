@@ -28,6 +28,7 @@ class DatabaseMigrate(DatabaseBase):
             (10, self.migration_10_add_dynamic_future_argument_type),
             (11, self.migration_11_add_dynamic_transition_types),
             (12, self.migration_12_add_solution_puzzle_solution_id_index),
+            (13, self.migration_13_add_chm_address_committee_id_index),
         ]
 
         async with self.pool.connection() as conn:
@@ -163,4 +164,15 @@ class DatabaseMigrate(DatabaseBase):
         await conn.execute(
             "CREATE INDEX IF NOT EXISTS solution_puzzle_solution_id_index "
             "ON explorer.solution (puzzle_solution_id)"
+        )
+
+    @staticmethod
+    async def migration_13_add_chm_address_committee_id_index(conn: psycopg.AsyncConnection[DictRow]):
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS committee_history_member_address_committee_id_index "
+            "ON explorer.committee_history_member (address, committee_id)"
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS block_validator_validator_block_id_index "
+            "ON explorer.block_validator (validator, block_id)"
         )
