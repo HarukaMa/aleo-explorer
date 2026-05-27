@@ -133,25 +133,24 @@ class DatabaseValidator(DatabaseBase):
                     for name, secs in windows:
                         cutoff_ts = now_ts - secs
                         await cur.execute(
-                            "SELECT MIN(id) AS min_block_id, MIN(height) AS min_height "
-                            "FROM block WHERE timestamp > %s",
+                            "SELECT id, height FROM block WHERE timestamp > %s ORDER BY timestamp LIMIT 1",
                             (cutoff_ts,)
                         )
                         block_bound = await cur.fetchone()
-                        if block_bound is None or block_bound["min_block_id"] is None:
+                        if block_bound is None:
                             result[name] = None
                             continue
-                        min_block_id = block_bound["min_block_id"]
-                        min_height = block_bound["min_height"]
+                        min_block_id = block_bound["id"]
+                        min_height = block_bound["height"]
                         await cur.execute(
-                            "SELECT MIN(id) AS min_id FROM committee_history WHERE height >= %s",
+                            "SELECT id FROM committee_history WHERE height >= %s ORDER BY height LIMIT 1",
                             (min_height,)
                         )
                         ch_bound = await cur.fetchone()
-                        if ch_bound is None or ch_bound["min_id"] is None:
+                        if ch_bound is None:
                             result[name] = None
                             continue
-                        min_committee_id = ch_bound["min_id"]
+                        min_committee_id = ch_bound["id"]
                         await cur.execute(
                             "SELECT count(*) FROM block_validator "
                             "WHERE validator = %s AND block_id >= %s",
@@ -194,17 +193,16 @@ class DatabaseValidator(DatabaseBase):
                     totals = {row["bucket"]: row["total"] for row in await cur.fetchall()}
 
                     await cur.execute(
-                        "SELECT MIN(id) AS min_block_id, MIN(height) AS min_height "
-                        "FROM block WHERE timestamp > %s",
+                        "SELECT id, height FROM block WHERE timestamp > %s ORDER BY timestamp LIMIT 1",
                         (start_ts,)
                     )
                     block_bound = await cur.fetchone()
-                    if block_bound is None or block_bound["min_block_id"] is None:
+                    if block_bound is None:
                         signed: dict[int, int] = {}
                         in_committee: dict[int, int] = {}
                     else:
-                        min_block_id = block_bound["min_block_id"]
-                        min_height = block_bound["min_height"]
+                        min_block_id = block_bound["id"]
+                        min_height = block_bound["height"]
                         await cur.execute(
                             "SELECT LEAST(((b.timestamp - %s) / %s)::int, %s) AS bucket, count(*) AS signed "
                             "FROM block_validator bv JOIN block b ON b.id = bv.block_id "
@@ -215,11 +213,11 @@ class DatabaseValidator(DatabaseBase):
                         signed = {row["bucket"]: row["signed"] for row in await cur.fetchall()}
 
                         await cur.execute(
-                            "SELECT MIN(id) AS min_id FROM committee_history WHERE height >= %s",
+                            "SELECT id FROM committee_history WHERE height >= %s ORDER BY height LIMIT 1",
                             (min_height,)
                         )
                         ch_bound = await cur.fetchone()
-                        if ch_bound is None or ch_bound["min_id"] is None:
+                        if ch_bound is None:
                             in_committee = {}
                         else:
                             await cur.execute(
@@ -229,7 +227,7 @@ class DatabaseValidator(DatabaseBase):
                                 "JOIN block b ON b.height = ch.height "
                                 "WHERE chm.address = %s AND chm.committee_id >= %s "
                                 "GROUP BY bucket",
-                                (start_ts, bucket_size, bucket_count - 1, address, ch_bound["min_id"])
+                                (start_ts, bucket_size, bucket_count - 1, address, ch_bound["id"])
                             )
                             in_committee = {row["bucket"]: row["in_committee"] for row in await cur.fetchall()}
 
