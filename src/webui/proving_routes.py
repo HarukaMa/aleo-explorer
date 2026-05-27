@@ -1,3 +1,4 @@
+import asyncio
 import time
 from io import BytesIO
 from typing import Any, cast, Optional
@@ -67,6 +68,25 @@ async def incentive_route(request: Request):
         "sync_info": sync_info,
     }
     return ctx, {'Cache-Control': 'public, max-age=15'}
+
+
+def _classify_participation(b: dict[str, int]) -> dict[str, Any]:
+    total = b["total_blocks"]
+    in_committee = b["in_committee"]
+    signed = b["signed"]
+    if total == 0:
+        return {"cls": "empty", "tip": "no blocks produced"}
+    if in_committee == 0:
+        return {"cls": "absent", "tip": f"not in committee ({total} blocks)"}
+    missed = in_committee - signed
+    miss_rate = missed / in_committee
+    if miss_rate > 0.05:
+        cls = "miss"
+    elif miss_rate > 0.01:
+        cls = "warn"
+    else:
+        cls = "ok"
+    return {"cls": cls, "tip": f"{missed}/{in_committee} missed ({miss_rate * 100:.2f}%)"}
 
 
 @htmx_template("address.jinja2")
@@ -201,7 +221,8 @@ async def address_route(request: Request):
     if committee_state_bytes is None:
         committee_state = None
         address_stakes: Optional[dict[str, int]] = None
-        uptime = None
+        uptime_windows: Optional[dict[str, Optional[float]]] = None
+        participation: Optional[list[dict[str, Any]]] = None
     else:
         value = cast(PlaintextValue, Value.load(BytesIO(committee_state_bytes)))
         plaintext = cast(StructPlaintext, value.plaintext)
@@ -211,15 +232,20 @@ async def address_route(request: Request):
             "commission": int(cast(Int, commission.literal.primitive)),
             "is_open": bool(is_open.literal.primitive),
         }
-        bonded_mapping = await db.get_bonded_mapping_unchecked()
-        bonded_mapping = sorted(bonded_mapping.items(), key=lambda x: x[1][1], reverse=True)
+        bonded_mapping_task = db.get_bonded_mapping_unchecked()
+        uptime_windows_task = db.get_validator_uptime_windows(address)
+        participation_buckets_task = db.get_validator_participation_buckets(address)
+        bonded_mapping_raw, uptime_windows, participation_buckets = await asyncio.gather(
+            bonded_mapping_task, uptime_windows_task, participation_buckets_task,
+        )
+        bonded_mapping = sorted(bonded_mapping_raw.items(), key=lambda x: x[1][1], reverse=True)
         address_stakes = {}
         for staker_addr, (validator_addr, stake_amount) in bonded_mapping:
             if str(validator_addr) == address:
                 address_stakes[str(staker_addr)] = int(stake_amount)
                 if len(address_stakes) >= 50:
                     break
-        uptime = await db.get_validator_uptime(address)
+        participation = [_classify_participation(b) for b in participation_buckets]
     if delegated_bytes is None:
         delegated = None
     else:
@@ -267,7 +293,8 @@ async def address_route(request: Request):
         "address_stakes": address_stakes,
         "delegated": delegated,
         "withdrawal_address": withdrawal_address,
-        "uptime": uptime,
+        "uptime_windows": uptime_windows,
+        "participation": participation,
         "stake_reward": stake_reward,
         "transfer_in": transfer_in,
         "transfer_out": transfer_out,

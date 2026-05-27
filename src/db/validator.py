@@ -119,6 +119,94 @@ class DatabaseValidator(DatabaseBase):
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
+    async def get_validator_uptime_windows(self, address: str) -> dict[str, Optional[float]]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute("SELECT timestamp FROM block ORDER BY height DESC LIMIT 1")
+                    res = await cur.fetchone()
+                    if res is None:
+                        return {"24h": None, "7d": None, "30d": None}
+                    now_ts = res["timestamp"]
+                    t_24h = now_ts - 86400
+                    t_7d = now_ts - 604800
+                    t_30d = now_ts - 2592000
+                    await cur.execute(
+                        "SELECT "
+                        "COUNT(*) FILTER (WHERE b.timestamp > %s AND chm.address IS NOT NULL) AS in_24h, "
+                        "COUNT(*) FILTER (WHERE b.timestamp > %s AND bv.validator IS NOT NULL) AS sg_24h, "
+                        "COUNT(*) FILTER (WHERE b.timestamp > %s AND chm.address IS NOT NULL) AS in_7d, "
+                        "COUNT(*) FILTER (WHERE b.timestamp > %s AND bv.validator IS NOT NULL) AS sg_7d, "
+                        "COUNT(*) FILTER (WHERE chm.address IS NOT NULL) AS in_30d, "
+                        "COUNT(*) FILTER (WHERE bv.validator IS NOT NULL) AS sg_30d "
+                        "FROM block b "
+                        "LEFT JOIN committee_history ch ON ch.height = b.height "
+                        "LEFT JOIN committee_history_member chm ON chm.committee_id = ch.id AND chm.address = %s "
+                        "LEFT JOIN block_validator bv ON bv.block_id = b.id AND bv.validator = %s "
+                        "WHERE b.timestamp > %s",
+                        (t_24h, t_24h, t_7d, t_7d, address, address, t_30d)
+                    )
+                    row = await cur.fetchone()
+                    if row is None:
+                        return {"24h": None, "7d": None, "30d": None}
+                    def ratio(s: int, i: int) -> Optional[float]:
+                        return s / i if i > 0 else None
+                    return {
+                        "24h": ratio(row["sg_24h"], row["in_24h"]),
+                        "7d": ratio(row["sg_7d"], row["in_7d"]),
+                        "30d": ratio(row["sg_30d"], row["in_30d"]),
+                    }
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def get_validator_participation_buckets(
+        self, address: str, window_seconds: int = 86400, bucket_count: int = 144
+    ) -> list[dict[str, int]]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute("SELECT timestamp FROM block ORDER BY height DESC LIMIT 1")
+                    res = await cur.fetchone()
+                    if res is None:
+                        return [{"bucket": i, "total_blocks": 0, "in_committee": 0, "signed": 0} for i in range(bucket_count)]
+                    now_ts = res["timestamp"]
+                    start_ts = now_ts - window_seconds
+                    bucket_size = window_seconds // bucket_count
+                    await cur.execute(
+                        "SELECT "
+                        "LEAST(((b.timestamp - %s) / %s)::int, %s) AS bucket, "
+                        "COUNT(*) AS total_blocks, "
+                        "COUNT(*) FILTER (WHERE chm.address IS NOT NULL) AS in_committee, "
+                        "COUNT(*) FILTER (WHERE bv.validator IS NOT NULL) AS signed "
+                        "FROM block b "
+                        "LEFT JOIN committee_history ch ON ch.height = b.height "
+                        "LEFT JOIN committee_history_member chm ON chm.committee_id = ch.id AND chm.address = %s "
+                        "LEFT JOIN block_validator bv ON bv.block_id = b.id AND bv.validator = %s "
+                        "WHERE b.timestamp > %s "
+                        "GROUP BY bucket "
+                        "ORDER BY bucket",
+                        (start_ts, bucket_size, bucket_count - 1, address, address, start_ts)
+                    )
+                    rows = await cur.fetchall()
+                    by_bucket = {row["bucket"]: row for row in rows}
+                    result: list[dict[str, int]] = []
+                    for i in range(bucket_count):
+                        row = by_bucket.get(i)
+                        if row is not None:
+                            result.append({
+                                "bucket": i,
+                                "total_blocks": row["total_blocks"],
+                                "in_committee": row["in_committee"],
+                                "signed": row["signed"],
+                            })
+                        else:
+                            result.append({"bucket": i, "total_blocks": 0, "in_committee": 0, "signed": 0})
+                    return result
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
     async def get_current_validator_count(self) -> int:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
