@@ -119,17 +119,23 @@
                     <span class="note">/</span>
                     {% if uptime_windows["30d"] is not none %}{{ "%0.2f" | format(uptime_windows["30d"] * 100) }}%{% else %}-{% endif %}
                 {% endcall %}
-                {% call data_line("Block participation (last 24 hours)", '<i class="fa-regular fa-circle-question" data-tippy-content="Each block represents 10 min of consensus blocks. Green = at most 1% missed; yellow = 1 to 5% missed; red = over 5% missed; striped = not in committee; gray = no blocks produced."></i>') %}
-                    <div class="status-blocks">
-                        {% for b in participation %}<span class="sb sb-{{ b.cls }}" data-tippy-content="{{ b.tip }}"></span>{% endfor %}
-                    </div>
+                {% call data_line("Block participation (last 24 hours)", '<i class="fa-regular fa-circle-question" data-tippy-content="Each block represents 10 min of consensus blocks. Green = at most 5% missed; yellow = 5 to 10% missed; red = over 10% missed; striped = not in committee; gray = no blocks produced."></i>') %}
+                    <svg class="status-blocks" viewBox="0 0 720 18" preserveAspectRatio="none">
+                        <defs>
+                            <pattern id="sb-hatch" width="4" height="4" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+                                <rect width="2" height="4" fill="#ececec"/>
+                                <rect x="2" width="2" height="4" fill="#f7f7f7"/>
+                            </pattern>
+                        </defs>
+                        {% for b in participation %}<rect class="sb sb-{{ b.cls }}" x="{{ loop.index0 * 5 }}" y="0" width="4" height="18" data-tippy-content="{{ b.tip }}"/>{% endfor %}
+                    </svg>
                     <div class="status-blocks-axis">
                         <span>24 hours ago</span><span>12h ago</span><span>now</span>
                     </div>
                     <div class="status-blocks-legend">
-                        <span><span class="sw sw-ok"></span>at most 1% missed</span>
-                        <span><span class="sw sw-warn"></span>1 to 5% missed</span>
-                        <span><span class="sw sw-miss"></span>over 5% missed</span>
+                        <span><span class="sw sw-ok"></span>at most 5% missed</span>
+                        <span><span class="sw sw-warn"></span>5 to 10% missed</span>
+                        <span><span class="sw sw-miss"></span>over 10% missed</span>
                         <span><span class="sw sw-absent"></span>not in committee</span>
                         <span><span class="sw sw-empty"></span>no blocks</span>
                     </div>

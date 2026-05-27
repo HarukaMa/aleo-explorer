@@ -80,9 +80,9 @@ def _classify_participation(b: dict[str, int]) -> dict[str, Any]:
         return {"cls": "absent", "tip": f"not in committee ({total} blocks)"}
     missed = in_committee - signed
     miss_rate = missed / in_committee
-    if miss_rate > 0.05:
+    if miss_rate > 0.10:
         cls = "miss"
-    elif miss_rate > 0.01:
+    elif miss_rate > 0.05:
         cls = "warn"
     else:
         cls = "ok"

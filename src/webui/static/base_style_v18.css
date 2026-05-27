@@ -427,29 +427,21 @@ code, pre {
 }
 
 .status-blocks {
-    display: flex;
+    display: block;
     width: 100%;
-    align-items: stretch;
     height: 18px;
-    gap: 1px;
     margin: 0.25rem 0;
 }
 .status-blocks .sb {
-    flex: 1 1 0;
-    min-width: 0;
-    height: 100%;
-    background: #3adb76;
-    transition: opacity 0.12s;
     cursor: help;
+    transition: opacity 0.12s;
 }
 .status-blocks .sb:hover { opacity: 0.7; }
-.status-blocks .sb.sb-ok { background: #3adb76; }
-.status-blocks .sb.sb-warn { background: #ffae00; }
-.status-blocks .sb.sb-miss { background: #cc4b37; }
-.status-blocks .sb.sb-absent {
-    background: repeating-linear-gradient(45deg, #ececec 0 3px, #f7f7f7 3px 6px);
-}
-.status-blocks .sb.sb-empty { background: #f0f0f0; }
+.status-blocks .sb.sb-ok { fill: #3adb76; }
+.status-blocks .sb.sb-warn { fill: #ffae00; }
+.status-blocks .sb.sb-miss { fill: #cc4b37; }
+.status-blocks .sb.sb-absent { fill: url(#sb-hatch); }
+.status-blocks .sb.sb-empty { fill: #f0f0f0; }
 
 .status-blocks-axis {
     display: flex;
