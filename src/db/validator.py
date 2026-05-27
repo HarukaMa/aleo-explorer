@@ -120,53 +120,63 @@ class DatabaseValidator(DatabaseBase):
                     raise
 
     async def get_validator_uptime_windows(self, address: str) -> dict[str, Optional[float]]:
-        windows = (("24h", 86400), ("7d", 604800), ("30d", 2592000))
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute("SELECT timestamp FROM block ORDER BY height DESC LIMIT 1")
                     res = await cur.fetchone()
                     if res is None:
-                        return {name: None for name, _ in windows}
+                        return {"24h": None, "7d": None, "30d": None}
                     now_ts = res["timestamp"]
-                    result: dict[str, Optional[float]] = {}
-                    for name, secs in windows:
-                        cutoff_ts = now_ts - secs
-                        await cur.execute(
-                            "SELECT id, height FROM block WHERE timestamp > %s ORDER BY timestamp LIMIT 1",
-                            (cutoff_ts,)
-                        )
-                        block_bound = await cur.fetchone()
-                        if block_bound is None:
-                            result[name] = None
-                            continue
-                        min_block_id = block_bound["id"]
-                        min_height = block_bound["height"]
-                        await cur.execute(
-                            "SELECT id FROM committee_history WHERE height >= %s ORDER BY height LIMIT 1",
-                            (min_height,)
-                        )
-                        ch_bound = await cur.fetchone()
-                        if ch_bound is None:
-                            result[name] = None
-                            continue
-                        min_committee_id = ch_bound["id"]
-                        await cur.execute(
-                            "SELECT count(*) FROM block_validator "
-                            "WHERE validator = %s AND block_id >= %s",
-                            (address, min_block_id)
-                        )
-                        row = await cur.fetchone()
-                        signed = row["count"] if row else 0
-                        await cur.execute(
-                            "SELECT count(*) FROM committee_history_member "
-                            "WHERE address = %s AND committee_id >= %s",
-                            (address, min_committee_id)
-                        )
-                        row = await cur.fetchone()
-                        in_committee = row["count"] if row else 0
-                        result[name] = signed / in_committee if in_committee > 0 else None
-                    return result
+                    await cur.execute(
+                        "SELECT "
+                        "(SELECT id FROM block WHERE timestamp > %s ORDER BY timestamp LIMIT 1) AS bid_24h, "
+                        "(SELECT id FROM block WHERE timestamp > %s ORDER BY timestamp LIMIT 1) AS bid_7d, "
+                        "(SELECT id FROM block WHERE timestamp > %s ORDER BY timestamp LIMIT 1) AS bid_30d, "
+                        "(SELECT id FROM committee_history WHERE height >= "
+                        "  (SELECT height FROM block WHERE timestamp > %s ORDER BY timestamp LIMIT 1) "
+                        "  ORDER BY height LIMIT 1) AS chid_24h, "
+                        "(SELECT id FROM committee_history WHERE height >= "
+                        "  (SELECT height FROM block WHERE timestamp > %s ORDER BY timestamp LIMIT 1) "
+                        "  ORDER BY height LIMIT 1) AS chid_7d, "
+                        "(SELECT id FROM committee_history WHERE height >= "
+                        "  (SELECT height FROM block WHERE timestamp > %s ORDER BY timestamp LIMIT 1) "
+                        "  ORDER BY height LIMIT 1) AS chid_30d",
+                        (now_ts - 86400, now_ts - 604800, now_ts - 2592000,
+                         now_ts - 86400, now_ts - 604800, now_ts - 2592000)
+                    )
+                    bounds = await cur.fetchone()
+                    if bounds is None or bounds["bid_30d"] is None or bounds["chid_30d"] is None:
+                        return {"24h": None, "7d": None, "30d": None}
+                    await cur.execute(
+                        "SELECT "
+                        "count(*) FILTER (WHERE block_id >= %s) AS sg_24h, "
+                        "count(*) FILTER (WHERE block_id >= %s) AS sg_7d, "
+                        "count(*) AS sg_30d "
+                        "FROM block_validator "
+                        "WHERE validator = %s AND block_id >= %s",
+                        (bounds["bid_24h"], bounds["bid_7d"], address, bounds["bid_30d"])
+                    )
+                    sg = await cur.fetchone()
+                    await cur.execute(
+                        "SELECT "
+                        "count(*) FILTER (WHERE committee_id >= %s) AS in_24h, "
+                        "count(*) FILTER (WHERE committee_id >= %s) AS in_7d, "
+                        "count(*) AS in_30d "
+                        "FROM committee_history_member "
+                        "WHERE address = %s AND committee_id >= %s",
+                        (bounds["chid_24h"], bounds["chid_7d"], address, bounds["chid_30d"])
+                    )
+                    inc = await cur.fetchone()
+                    if sg is None or inc is None:
+                        return {"24h": None, "7d": None, "30d": None}
+                    def ratio(s: int, i: int) -> Optional[float]:
+                        return s / i if i > 0 else None
+                    return {
+                        "24h": ratio(sg["sg_24h"], inc["in_24h"]),
+                        "7d": ratio(sg["sg_7d"], inc["in_7d"]),
+                        "30d": ratio(sg["sg_30d"], inc["in_30d"]),
+                    }
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
