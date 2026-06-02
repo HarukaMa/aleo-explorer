@@ -1000,6 +1000,9 @@ class RegisterType(EnumBaseSerialize, Serialize, JSONSerialize, RustEnum):
         Plaintext = 0
         Record = 1
         ExternalRecord = 2
+        Future = 3
+        DynamicRecord = 4
+        DynamicFuture = 5
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -1010,6 +1013,12 @@ class RegisterType(EnumBaseSerialize, Serialize, JSONSerialize, RustEnum):
             return RecordRegisterType.load(data)
         elif type_ == cls.Type.ExternalRecord:
             return ExternalRecordRegisterType.load(data)
+        elif type_ == cls.Type.Future:
+            return FutureRegisterType.load(data)
+        elif type_ == cls.Type.DynamicRecord:
+            return DynamicRecordRegisterType.load(data)
+        elif type_ == cls.Type.DynamicFuture:
+            return DynamicFutureRegisterType.load(data)
         else:
             raise ValueError(f"Invalid register type {type_}")
 
@@ -1057,6 +1066,44 @@ class ExternalRecordRegisterType(RegisterType):
     def load(cls, data: BytesIO):
         locator = Locator.load(data)
         return cls(locator=locator)
+
+
+class FutureRegisterType(RegisterType):
+    type = RegisterType.Type.Future
+
+    def __init__(self, *, locator: Locator):
+        self.locator = locator
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.locator.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        locator = Locator.load(data)
+        return cls(locator=locator)
+
+
+class DynamicRecordRegisterType(RegisterType):
+    type = RegisterType.Type.DynamicRecord
+
+    def dump(self) -> bytes:
+        return self.type.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        return cls()
+
+
+class DynamicFutureRegisterType(RegisterType):
+    type = RegisterType.Type.DynamicFuture
+
+    def dump(self) -> bytes:
+        return self.type.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        return cls()
+
 
 class CastType(EnumBaseSerialize, Serialize, JSONSerialize, RustEnum):
 
@@ -1220,6 +1267,12 @@ class CommitInstruction(Serializable, Generic[V]):
         CommitBHP1024 = 3
         CommitPED64 = 4
         CommitPED128 = 5
+        CommitBHP256Raw = 6
+        CommitBHP512Raw = 7
+        CommitBHP768Raw = 8
+        CommitBHP1024Raw = 9
+        CommitPED64Raw = 10
+        CommitPED128Raw = 11
 
     def __init__(self, *, operands: tuple[Operand, Operand], destination: Register, destination_type: LiteralType):
         self.operands = operands
@@ -1717,6 +1770,14 @@ class Instruction(Serializable, JSONSerialize):
         SnarkVerify = auto()
         SnarkVerifyBatch = auto()
 
+        # New opcodes added in `ConsensusVersion::V15`
+        CommitBHP256Raw = auto()
+        CommitBHP512Raw = auto()
+        CommitBHP768Raw = auto()
+        CommitBHP1024Raw = auto()
+        CommitPED64Raw = auto()
+        CommitPED128Raw = auto()
+
     type: Type
 
     # Some types are not implemented as Literals originally,
@@ -1845,6 +1906,12 @@ class Instruction(Serializable, JSONSerialize):
         Type.GetRecordDynamic: GetRecordDynamicInstruction,
         Type.SnarkVerify: SnarkVerifyInstruction[Variant[SnarkVerifyInstruction.Type.SnarkVerify]],
         Type.SnarkVerifyBatch: SnarkVerifyInstruction[Variant[SnarkVerifyInstruction.Type.SnarkVerifyBatch]],
+        Type.CommitBHP256Raw: CommitInstruction[Variant[CommitInstruction.Type.CommitBHP256Raw]],
+        Type.CommitBHP512Raw: CommitInstruction[Variant[CommitInstruction.Type.CommitBHP512Raw]],
+        Type.CommitBHP768Raw: CommitInstruction[Variant[CommitInstruction.Type.CommitBHP768Raw]],
+        Type.CommitBHP1024Raw: CommitInstruction[Variant[CommitInstruction.Type.CommitBHP1024Raw]],
+        Type.CommitPED64Raw: CommitInstruction[Variant[CommitInstruction.Type.CommitPED64Raw]],
+        Type.CommitPED128Raw: CommitInstruction[Variant[CommitInstruction.Type.CommitPED128Raw]],
     }
 
     # used by feature hash
@@ -1972,6 +2039,12 @@ class Instruction(Serializable, JSONSerialize):
         Type.GetRecordDynamic: "G",
         Type.SnarkVerify: "V",
         Type.SnarkVerifyBatch: "V",
+        Type.CommitBHP256Raw: "M",
+        Type.CommitBHP512Raw: "M",
+        Type.CommitBHP768Raw: "M",
+        Type.CommitBHP1024Raw: "M",
+        Type.CommitPED64Raw: "M",
+        Type.CommitPED128Raw: "M",
     }
 
     fee_map = {
@@ -1992,6 +2065,12 @@ class Instruction(Serializable, JSONSerialize):
         Type.CommitBHP1024: -2,
         Type.CommitPED64: -2,
         Type.CommitPED128: -2,
+        Type.CommitBHP256Raw: -2,
+        Type.CommitBHP512Raw: -2,
+        Type.CommitBHP768Raw: -2,
+        Type.CommitBHP1024Raw: -2,
+        Type.CommitPED64Raw: -2,
+        Type.CommitPED128Raw: -2,
         Type.Div: -2,
         Type.DivWrapped: 500,
         Type.Double: 500,
@@ -2075,7 +2154,7 @@ class Instruction(Serializable, JSONSerialize):
                         cost = instruction.cast_type.plaintext_type.size_in_bytes(program) * Network.cast_per_byte_cost + Network.cast_base_cost
                 else:
                     cost = 500
-            elif self.type in [self.Type.CommitBHP256, self.Type.CommitBHP512, self.Type.CommitBHP768, self.Type.CommitBHP1024, self.Type.CommitPED64, self.Type.CommitPED128]:
+            elif self.type in [self.Type.CommitBHP256, self.Type.CommitBHP512, self.Type.CommitBHP768, self.Type.CommitBHP1024, self.Type.CommitPED64, self.Type.CommitPED128, self.Type.CommitBHP256Raw, self.Type.CommitBHP512Raw, self.Type.CommitBHP768Raw, self.Type.CommitBHP1024Raw, self.Type.CommitPED64Raw, self.Type.CommitPED128Raw]:
                 instruction = cast(CommitInstruction[Any], self.literals)
 
 

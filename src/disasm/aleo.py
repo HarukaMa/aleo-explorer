@@ -33,6 +33,12 @@ def disasm_register_type(value: RegisterType) -> str:
         return str(value.identifier) + ".record"
     elif isinstance(value, ExternalRecordRegisterType):
         return str(value.locator) + ".record"
+    elif isinstance(value, FutureRegisterType):
+        return str(value.locator) + ".future"
+    elif isinstance(value, DynamicRecordRegisterType):
+        return "dynamic.record"
+    elif isinstance(value, DynamicFutureRegisterType):
+        return "dynamic.future"
     else:
         raise TypeError("invalid register type")
 
@@ -319,6 +325,18 @@ def disassemble_program(program: Program) -> str:
                 for c in finalize.commands:
                     res.insert_line(f"{disasm_command(c)};")
                 res.unindent()
+            res.insert_line("")
+        elif definition == ProgramDefinition.View:
+            v = program.views[identifier]
+            res.insert_line(f"view {v.name}:")
+            res.indent()
+            for i in v.inputs:
+                res.insert_line(f"input {disasm_register(i.register)} as {finalize_type_to_str(i.finalize_type)};")
+            for c in v.commands:
+                res.insert_line(f"{disasm_command(c)};")
+            for o in v.outputs:
+                res.insert_line(f"output {disasm_operand(o.operand)} as {finalize_type_to_str(o.finalize_type)};")
+            res.unindent()
             res.insert_line("")
         elif definition == ProgramDefinition.Constructor:
             c = program.constructor.value

@@ -952,6 +952,57 @@ class Constructor(Serializable, JSONSerialize):
         commands = Vec[Command, u16].load(data)
         return cls(commands=commands)
 
+
+class ViewOutput(Serializable, JSONSerialize):
+
+    def __init__(self, *, operand: Operand, finalize_type: FinalizeType):
+        self.operand = operand
+        self.finalize_type = finalize_type
+
+    def dump(self) -> bytes:
+        return self.operand.dump() + self.finalize_type.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        operand = Operand.load(data)
+        finalize_type = FinalizeType.load(data)
+        return cls(operand=operand, finalize_type=finalize_type)
+
+
+class View(Serializable, JSONSerialize):
+
+    def __init__(self, *, name: Identifier, inputs: Vec[FinalizeInput, u16], commands: Vec[Command, u16],
+                 outputs: Vec[ViewOutput, u16]):
+        self.name = name
+        self.inputs = inputs
+        self.commands = commands
+        self.outputs = outputs
+        positions: dict[Identifier, int] = {}
+        for i, c in enumerate(commands):
+            if isinstance(c, PositionCommand):
+                positions[c.position] = i
+        self.positions = positions
+
+    def dump(self) -> bytes:
+        return self.name.dump() + self.inputs.dump() + self.commands.dump() + self.outputs.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        name = Identifier.load(data)
+        inputs = Vec[FinalizeInput, u16].load(data)
+        commands = Vec[Command, u16].load(data)
+        outputs = Vec[ViewOutput, u16].load(data)
+        return cls(name=name, inputs=inputs, commands=commands, outputs=outputs)
+
+    def json(self, compatible: bool = False) -> JSONType:
+        return {
+            "name": self.name.json(),
+            "inputs": self.inputs.json(),
+            "commands": self.commands.json(),
+            "outputs": self.outputs.json(),
+        }
+
+
 class ProgramDefinition(IntEnumu8):
     Mapping = 0
     Struct = 1
@@ -959,6 +1010,7 @@ class ProgramDefinition(IntEnumu8):
     Closure = 3
     Function = 4
     Constructor = 5
+    View = 6
 
 
 class Program(Serializable, JSONSerialize):
@@ -968,6 +1020,7 @@ class Program(Serializable, JSONSerialize):
                  mappings: dict[Identifier, Mapping],
                  structs: dict[Identifier, Struct], records: dict[Identifier, RecordType],
                  closures: dict[Identifier, Closure], functions: dict[Identifier, Function],
+                 views: dict[Identifier, View],
                  identifiers: dict[Identifier, ProgramDefinition]):
         self.id = id_
         self.imports = imports
@@ -977,6 +1030,7 @@ class Program(Serializable, JSONSerialize):
         self.records = records
         self.closures = closures
         self.functions = functions
+        self.views = views
         self.identifiers = identifiers
 
     def dump(self) -> bytes:
@@ -997,6 +1051,8 @@ class Program(Serializable, JSONSerialize):
                 res += self.closures[i].dump()
             elif d == ProgramDefinition.Function:
                 res += self.functions[i].dump()
+            elif d == ProgramDefinition.View:
+                res += self.views[i].dump()
             elif d == ProgramDefinition.Constructor:
                 if self.constructor.value is None:
                     raise ValueError("constructor must be present")
@@ -1016,6 +1072,7 @@ class Program(Serializable, JSONSerialize):
         records: dict[Identifier, RecordType] = {}
         closures: dict[Identifier, Closure] = {}
         functions: dict[Identifier, Function] = {}
+        views: dict[Identifier, View] = {}
         constructor = Option[Constructor](None)
         n = u16.load(data)
         for _ in range(n):
@@ -1040,12 +1097,16 @@ class Program(Serializable, JSONSerialize):
                 f = Function.load(data)
                 functions[f.name] = f
                 identifiers[f.name] = d
+            elif d == ProgramDefinition.View:
+                v = View.load(data)
+                views[v.name] = v
+                identifiers[v.name] = d
             elif d == ProgramDefinition.Constructor:
                 c = Constructor.load(data)
                 constructor = Option[Constructor](c)
                 identifiers[Identifier(value="constructor")] = d
         return cls(id_=id_, imports=imports, constructor=constructor, mappings=mappings, structs=structs, records=records,
-                   closures=closures, functions=functions, identifiers=identifiers)
+                   closures=closures, functions=functions, views=views, identifiers=identifiers)
 
     def json(self, compatible: bool = False) -> JSONType:
         res = super().json()

@@ -978,4 +978,10 @@ commit_ops = {
     CmT.CommitBHP1024: "bhp1024",
     CmT.CommitPED64: "ped64",
     CmT.CommitPED128: "ped128",
+    CmT.CommitBHP256Raw: "bhp256_raw",
+    CmT.CommitBHP512Raw: "bhp512_raw",
+    CmT.CommitBHP768Raw: "bhp768_raw",
+    CmT.CommitBHP1024Raw: "bhp1024_raw",
+    CmT.CommitPED64Raw: "ped64_raw",
+    CmT.CommitPED128Raw: "ped128_raw",
 }
