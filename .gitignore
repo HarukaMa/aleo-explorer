@@ -296,6 +296,8 @@ poetry.toml
 
 .env*
 ledger-*
-.claude/settings.local.json
-.planning/config.json
+.claude
+.planning
 uv.lock
+_bmad
+_bmad-output
