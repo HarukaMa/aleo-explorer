@@ -128,6 +128,10 @@ def disasm_operand(value: Operand) -> str:
         return "block.height"
     elif isinstance(value, NetworkIDOperand):
         return "network.id"
+    elif isinstance(value, ComponentChecksumOperand):
+        if value.program_id.value is not None:
+            return f"{value.program_id.value}/{value.name}/checksum"
+        return f"{value.name}/checksum"
     elif isinstance(value, ChecksumOperand):
         return "checksum"
     elif isinstance(value, EditionOperand):

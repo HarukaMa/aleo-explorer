@@ -124,6 +124,29 @@ async def load_plaintext_from_operand(operand: Operand, registers: Registers, fi
                 ) for i in range(32)
             ])
         )
+    elif isinstance(operand, ComponentChecksumOperand):
+        if operand.program_id.value is not None:
+            program_id = str(operand.program_id.value)
+            latest_edition = await db.get_program_latest_edition(program_id)
+            if latest_edition is None:
+                raise RuntimeError("program not found")
+            program_bytes = await db.get_program(program_id, latest_edition)
+            if program_bytes is None:
+                raise RuntimeError("program not found")
+        else:
+            program_bytes = program.dump()
+        component_string = aleo_explorer_rust.component_to_string(program_bytes, str(operand.name))
+        checksum = sha3_256(component_string.encode("utf-8")).digest()
+        return ArrayPlaintext(
+            elements=Vec[Plaintext, u32]([
+                LiteralPlaintext(
+                    literal=Literal(
+                        type_=Literal.Type.U8,
+                        primitive=u8(checksum[i])
+                    )
+                ) for i in range(32)
+            ])
+        )
     elif isinstance(operand, EditionOperand):
         if operand.program_id.value is not None:
             program_id = str(operand.program_id.value)

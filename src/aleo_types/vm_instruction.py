@@ -378,6 +378,7 @@ class Operand(EnumBaseSerialize, Serialize, JSONSerialize, RustEnum):
         BlockTimestamp = 10
         AleoGenerator = 11
         AleoGeneratorPowers = 12
+        ComponentChecksum = 13
 
     @classmethod
     def load(cls, data: BytesIO):
@@ -408,6 +409,8 @@ class Operand(EnumBaseSerialize, Serialize, JSONSerialize, RustEnum):
             return AleoGeneratorOperand.load(data)
         elif type_ == cls.Type.AleoGeneratorPowers:
             return AleoGeneratorPowersOperand.load(data)
+        elif type_ == cls.Type.ComponentChecksum:
+            return ComponentChecksumOperand.load(data)
         else:
             raise ValueError("unknown operand type")
 
@@ -544,6 +547,20 @@ class ProgramOwnerOperand(Operand):
     @classmethod
     def load(cls, data: BytesIO):
         return cls(program_id=Option[ProgramID].load(data))
+
+class ComponentChecksumOperand(Operand):
+    type = Operand.Type.ComponentChecksum
+
+    def __init__(self, *, program_id: Option[ProgramID], name: Identifier):
+        self.program_id = program_id
+        self.name = name
+
+    def dump(self) -> bytes:
+        return self.type.dump() + self.program_id.dump() + self.name.dump()
+
+    @classmethod
+    def load(cls, data: BytesIO):
+        return cls(program_id=Option[ProgramID].load(data), name=Identifier.load(data))
 
 N = TypeVar("N", bound=FixedSize)
 
