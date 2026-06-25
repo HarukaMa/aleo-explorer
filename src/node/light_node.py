@@ -173,7 +173,7 @@ class LightNode:
                 except Exception as e:
                     self.log(f"connection to {host}:{port} closed: {e}")
                     raise Exception("connection closed")
-                await self.parse_message(Frame.load(BytesIO(frame)))
+                await self.dispatch_frame(frame)
         except Exception as e:
             self.log(f"connection to {host}:{port} closed: {e}")
             await self.close()
@@ -198,7 +198,7 @@ class LightNode:
                 except Exception as e:
                     self.log(f"connection from {host}:{port} closed: {e}")
                     raise Exception("connection closed")
-                await self.parse_message(Frame.load(BytesIO(frame)))
+                await self.dispatch_frame(frame)
         except Exception as e:
             self.log(f"connection from {host}:{port} closed: {e}")
             await self.close()
@@ -208,6 +208,25 @@ class LightNode:
         while True:
             await asyncio.sleep(5)
             await self.send_ping()
+
+    __handled_message_types = (
+        Message.Type.ChallengeRequest,
+        Message.Type.ChallengeResponse,
+        Message.Type.Ping,
+        Message.Type.PeerResponse,
+        Message.Type.Disconnect,
+    )
+
+    async def dispatch_frame(self, frame: bytes):
+        if len(frame) < 2:
+            return
+        try:
+            message_type = Message.Type(int.from_bytes(frame[:2], "little"))
+        except ValueError:
+            return
+        if message_type not in self.__handled_message_types:
+            return
+        await self.parse_message(Frame.load(BytesIO(frame)))
 
     async def parse_message(self, frame: Frame):
 

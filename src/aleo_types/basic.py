@@ -486,7 +486,6 @@ class bool_(Sized, Serializable, JSONSerialize, And, Or, Not, Xor, Nand, Nor, Ca
         elif value == 1:
             value = True
         else:
-            breakpoint()
             raise ValueError("invalid value for bool")
         self = cls(value)
         return self
