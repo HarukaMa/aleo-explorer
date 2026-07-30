@@ -145,6 +145,32 @@ class DatabaseProgram(DatabaseBase):
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
+    async def get_program_edition_at_context(
+        self,
+        program_id: str,
+        block_height: int,
+        transaction_index: int,
+    ) -> int | None:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT p.edition FROM program p "
+                        "JOIN transaction_deploy td ON p.transaction_deploy_id = td.id "
+                        "JOIN transaction t ON td.transaction_id = t.id "
+                        "JOIN confirmed_transaction ct ON t.confirmed_transaction_id = ct.id "
+                        "JOIN block b ON ct.block_id = b.id "
+                        "WHERE p.program_id = %s AND "
+                        "(b.height < %s OR (b.height = %s AND ct.index < %s)) "
+                        "ORDER BY b.height DESC, ct.index DESC LIMIT 1",
+                        (program_id, block_height, block_height, transaction_index),
+                    )
+                    res = await cur.fetchone()
+                    return None if res is None else res["edition"]
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
     async def get_block_by_program_id(self, program_id: str, edition: int) -> Block | None:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:

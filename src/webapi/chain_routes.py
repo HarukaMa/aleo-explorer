@@ -249,7 +249,6 @@ async def transaction_route(request: Request):
     else:
         return CJSONResponse({"error": "Unsupported transaction type"}, status_code=500)
 
-    # TODO: use proper fee calculation
     if aborted:
         height = await db.get_transaction_aborted_height(tx_id)
         if height is None:
@@ -259,11 +258,9 @@ async def transaction_route(request: Request):
             return CJSONResponse({"error": "Internal error: block missing"}, status_code=500)
         block_confirm_time = await db.get_block_confirm_time(height)
     elif confirmed_transaction is None:
-        # storage_cost, namespace_cost, finalize_costs, priority_fee, burnt = await transaction.get_fee_breakdown(db)
         block = None
         block_confirm_time = None
     else:
-        # storage_cost, namespace_cost, finalize_costs, priority_fee, burnt = await confirmed_transaction.get_fee_breakdown(db)
         block = await db.get_block_from_transaction_id(tx_id)
         if block is None:
             return CJSONResponse({"error": "Internal error: block missing"}, status_code=500)
@@ -271,14 +268,32 @@ async def transaction_route(request: Request):
 
     fee = transaction.fee
     if isinstance(fee, Fee):
-        storage_cost, priority_fee = fee.amount
+        base_fee, priority_fee = fee.amount
     elif fee.value is not None:
-        storage_cost, priority_fee = fee.value.amount
+        base_fee, priority_fee = fee.value.amount
     else:
-        storage_cost, priority_fee = 0, 0
+        base_fee, priority_fee = 0, 0
+
+    minimum_fee = base_fee
+    storage_cost = 0
+    synthesis_cost = 0
+    constructor_cost = 0
     namespace_cost = 0
     finalize_costs: list[int] = []
     burnt = 0
+    if isinstance(confirmed_transaction, (AcceptedDeploy, AcceptedExecute)):
+        if block is None:
+            return CJSONResponse({"error": "Internal error: block missing"}, status_code=500)
+        breakdown = await confirmed_transaction.get_fee_breakdown(db, int(block.height))
+        minimum_fee = breakdown.minimum_fee
+        storage_cost = breakdown.storage_cost
+        synthesis_cost = breakdown.synthesis_cost
+        constructor_cost = breakdown.constructor_cost
+        namespace_cost = breakdown.namespace_cost
+        finalize_costs = breakdown.finalize_costs
+        if priority_fee != breakdown.priority_fee:
+            return CJSONResponse({"error": "Internal error: fee mismatch"}, status_code=500)
+        burnt = breakdown.burnt
 
     result: dict[str, Any] = {
         "tx_id": tx_id,
@@ -287,9 +302,14 @@ async def transaction_route(request: Request):
         "block_timestamp": block.header.metadata.timestamp if block is not None else None,
         "type": transaction_type,
         "state": transaction_state,
-        "total_fee": u64(storage_cost + namespace_cost + sum(finalize_costs) + priority_fee + burnt),
+        "total_fee": u64(base_fee + priority_fee),
+        "base_fee": u64(base_fee),
+        "minimum_fee": u64(minimum_fee),
         "storage_cost": u64(storage_cost),
+        "synthesis_cost": u64(synthesis_cost),
+        "constructor_cost": u64(constructor_cost),
         "namespace_cost": u64(namespace_cost),
+        "finalize_cost": u64(sum(finalize_costs)),
         "finalize_costs": list(map(u64, finalize_costs)),
         "priority_fee": u64(priority_fee),
         "burnt_fee": u64(burnt),

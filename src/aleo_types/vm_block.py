@@ -3299,12 +3299,56 @@ class Execution(Serializable, JSONSerialize):
             finalize_costs.append(program.functions[transition.function_name].finalize_cost(program))
         return finalize_costs
 
+async def _fee_programs(
+    db: "Database",
+    block_height: int,
+    transaction_index: int,
+    program_ids: list[str],
+) -> list[tuple[bytes, int]]:
+    from util.global_cache import get_program
+
+    result: list[tuple[bytes, int]] = []
+    seen: set[str] = set()
+
+    async def add_program(program_id: str):
+        if program_id in seen:
+            return
+        seen.add(program_id)
+        if program_id == "credits.aleo":
+            from node import Network
+            program, edition = Network.builtin_programs[block_height >= Network.consensus_v8_height]
+            result.append((program.dump(), int(edition)))
+            return
+        edition = await db.get_program_edition_at_context(program_id, block_height, transaction_index)
+        if edition is None:
+            raise RuntimeError(f"program {program_id} not found at transaction")
+        program = await get_program(db, program_id, edition)
+        if program is None:
+            raise RuntimeError(f"program {program_id} edition {edition} not found")
+        for imported in program.imports:
+            await add_program(str(imported.program_id))
+        result.append((program.dump(), edition))
+
+    for program_id in program_ids:
+        await add_program(program_id)
+    return result
+
+
+def _burnt_fee(base_fee: int, minimum_fee: int) -> int:
+    if base_fee < minimum_fee:
+        raise RuntimeError("transaction base fee is below the canonical minimum")
+    return base_fee - minimum_fee
+
+
 FeeComponent = NamedTuple("FeeComponent", [
+    ("minimum_fee", int),
     ("storage_cost", int),
+    ("synthesis_cost", int),
+    ("constructor_cost", int),
     ("namespace_cost", int),
     ("finalize_costs", list[int]),
     ("priority_fee", int),
-    ("burnt", int)
+    ("burnt", int),
 ])
 
 class Transaction(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize):
@@ -3334,29 +3378,6 @@ class Transaction(EnumBaseSerialize, RustEnum, Serializable, JSONSerialize):
         else:
             raise ValueError("incorrect type")
 
-    async def get_fee_breakdown(self, db: "Database") -> FeeComponent:
-        if isinstance(self, DeployTransaction):
-            fee = cast(Fee, self.fee)
-            deployment = self.deployment
-            storage_cost, namespace_cost = deployment.cost
-            base_fee, priority_fee = fee.amount
-            burnt = base_fee - storage_cost - namespace_cost
-            return FeeComponent(storage_cost, namespace_cost, [], priority_fee, burnt)
-        elif isinstance(self, ExecuteTransaction):
-            execution = self.execution
-            fee = cast(Option[Fee], self.fee).value
-            storage_cost = execution.storage_cost
-            finalize_costs = await execution.finalize_costs(db)
-            if fee is not None:
-                base_fee, priority_fee = fee.amount
-            else:
-                return FeeComponent(0, 0, [], 0, 0)
-            burnt = base_fee - storage_cost - sum(finalize_costs)
-            return FeeComponent(storage_cost, 0, finalize_costs, priority_fee, burnt)
-        elif isinstance(self, FeeTransaction):
-            raise TypeError("use ConfirmedTransaction to get fee breakdown")
-        else:
-            raise NotImplementedError
 
 
 class ProgramOwner(Serializable, JSONSerialize):
@@ -3493,52 +3514,74 @@ class ConfirmedTransaction(EnumBaseSerialize, RustEnum, Serializable, JSONSerial
         else:
             raise ValueError("incorrect type")
 
-    async def get_fee_breakdown(self, db: "Database") -> FeeComponent:
-        """
-        Returns (storage_cost, namespace_cost, finalize_costs, priority_fee, burnt)
-        """
-        tx = self.transaction
-        # TODO: better way to express this?
-        if isinstance(tx, DeployTransaction) or isinstance(self, RejectedDeploy):
-            if isinstance(tx, DeployTransaction):
-                fee = cast(Fee, tx.fee)
-                deployment = tx.deployment
-            elif isinstance(self, RejectedDeploy):
-                if not isinstance(self.rejected, RejectedDeployment):
-                    raise RuntimeError("bad transaction data")
-                if not isinstance(tx, FeeTransaction):
-                    raise RuntimeError("bad transaction data")
-                deployment = self.rejected.deploy
-                fee = cast(Fee, tx.fee)
-            else:
-                raise RuntimeError("bad transaction data")
-            storage_cost, namespace_cost = deployment.cost
+    async def get_fee_breakdown(self, db: "Database", block_height: int | None = None) -> FeeComponent:
+        import aleo_explorer_rust
+        from node import Network
+        if block_height is None:
+            block = await db.get_block_from_transaction_id(str(self.transaction.id))
+            if block is None:
+                raise RuntimeError("transaction block not found")
+            block_height = int(block.height)
+
+        if isinstance(self, AcceptedDeploy):
+            tx = self.transaction
+            if not isinstance(tx, DeployTransaction):
+                raise RuntimeError("bad accepted deployment transaction")
+            deployment = tx.deployment
+            programs = await _fee_programs(
+                db,
+                block_height,
+                int(self.index),
+                [str(imported.program_id) for imported in deployment.program.imports],
+            )
+            minimum, storage, synthesis, constructor, namespace = aleo_explorer_rust.deployment_cost(
+                deployment.dump(),
+                int(Network.network_id),
+                block_height,
+                programs,
+            )
+            base_fee, priority_fee = cast(Fee, tx.fee).amount
+            return FeeComponent(
+                minimum,
+                storage,
+                synthesis,
+                constructor,
+                namespace,
+                [],
+                priority_fee,
+                _burnt_fee(base_fee, minimum),
+            )
+        if isinstance(self, AcceptedExecute):
+            tx = self.transaction
+            if not isinstance(tx, ExecuteTransaction):
+                raise RuntimeError("bad accepted execution transaction")
+            fee = cast(Option[Fee], tx.fee).value
+            if fee is None:
+                return FeeComponent(0, 0, 0, 0, 0, [], 0, 0)
+            programs = await _fee_programs(
+                db,
+                block_height,
+                int(self.index),
+                list(dict.fromkeys(str(transition.program_id) for transition in tx.execution.transitions)),
+            )
+            minimum, storage, finalize = aleo_explorer_rust.execution_cost(
+                tx.execution.dump(),
+                int(Network.network_id),
+                block_height,
+                programs,
+            )
             base_fee, priority_fee = fee.amount
-            burnt = base_fee - storage_cost - namespace_cost
-            return FeeComponent(storage_cost, namespace_cost, [], priority_fee, burnt)
-        elif isinstance(tx, ExecuteTransaction) or isinstance(self, RejectedExecute):
-            if isinstance(tx, ExecuteTransaction):
-                execution = tx.execution
-                fee = cast(Option[Fee], tx.fee).value
-            elif isinstance(self, RejectedExecute):
-                if not isinstance(self.rejected, RejectedExecution):
-                    raise RuntimeError("bad transaction data")
-                if not isinstance(tx, FeeTransaction):
-                    raise RuntimeError("bad transaction data")
-                execution = self.rejected.execution
-                fee = cast(Fee, tx.fee)
-            else:
-                raise RuntimeError("bad transaction data")
-            storage_cost = execution.storage_cost
-            finalize_costs = await execution.finalize_costs(db)
-            if fee is not None:
-                base_fee, priority_fee = fee.amount
-            else:
-                return FeeComponent(0, 0, [], 0, 0)
-            burnt = base_fee - storage_cost - sum(finalize_costs)
-            return FeeComponent(storage_cost, 0, finalize_costs, priority_fee, burnt)
-        else:
-            raise NotImplementedError
+            return FeeComponent(
+                minimum,
+                storage,
+                0,
+                0,
+                0,
+                [finalize] if finalize else [],
+                priority_fee,
+                _burnt_fee(base_fee, minimum),
+            )
+        raise TypeError("detailed fee breakdown is only available for accepted transactions")
 
 
 class InitializeMapping(FinalizeOperation):
@@ -4469,16 +4512,6 @@ class Block(Serializable, JSONSerialize):
     def cumulative_proof_target(self) -> u128:
         return self.header.metadata.cumulative_proof_target
 
-    async def get_total_priority_fee(self, db: "Database"):
-        return sum([(await t.get_fee_breakdown(db)).priority_fee for t in self.transactions])
-
-    async def get_total_burnt_fee(self, db: "Database"):
-        """Includes both explicitly burnt fee and costs"""
-        fees: list[FeeComponent] = [await t.get_fee_breakdown(db) for t in self.transactions]
-        total = 0
-        for fee in fees:
-            total += fee.burnt + fee.storage_cost + fee.namespace_cost + sum(fee.finalize_costs)
-        return total
 
 class ConfirmedTxType(EnumBaseSerialize, RustEnum, Serializable):
 

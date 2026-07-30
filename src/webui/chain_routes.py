@@ -16,7 +16,7 @@ from aleo_types import u32, Transition, ExecuteTransaction, PrivateTransitionInp
     FeeTransaction, RejectedDeploy, RejectedExecution, Identifier, Entry, FutureTransitionOutput, Future, \
     PlaintextArgument, FutureArgument, DynamicFutureArgument, StructPlaintext, Finalize, \
     PlaintextFinalizeType, StructPlaintextType, UpdateKeyValue, Value, Plaintext, RemoveKeyValue, FinalizeOperation, \
-    NodeType, FeeComponent, Fee, Option, Address, RejectedDeployment, \
+    NodeType, Fee, Option, Address, RejectedDeployment, \
     DynamicRecordTransitionInput, RecordWithDynamicIDTransitionInput, ExternalRecordWithDynamicIDTransitionInput, \
     DynamicRecordTransitionOutput, RecordWithDynamicIDTransitionOutput, ExternalRecordWithDynamicIDTransitionOutput
 from aleo_types.cached import cached_get_key_id, cached_get_mapping_id
@@ -92,11 +92,7 @@ async def block_route(request: Request):
             base_fee, priority_fee = fee.value.amount
         else:
             base_fee, priority_fee = 0, 0
-        fee_breakdown = FeeComponent(base_fee, 0, [0], priority_fee, 0)
-        print(fee_breakdown)
-        base_fee = fee_breakdown.storage_cost + fee_breakdown.namespace_cost + sum(fee_breakdown.finalize_costs)
-        priority_fee = fee_breakdown.priority_fee
-        burnt_fee = fee_breakdown.burnt
+        burnt_fee = 0
         total_base_fee += base_fee
         total_priority_fee += priority_fee
         total_burnt_fee += burnt_fee
@@ -278,7 +274,6 @@ async def transaction_route(request: Request):
     else:
         raise HTTPException(status_code=550, detail="Unsupported transaction type")
 
-    # TODO: use proper fee calculation
     if aborted:
         height = await db.get_transaction_aborted_height(tx_id)
         if height is None:
@@ -288,11 +283,9 @@ async def transaction_route(request: Request):
             raise HTTPException(status_code=550, detail="Database inconsistent")
         block_confirm_time = await db.get_block_confirm_time(height)
     elif confirmed_transaction is None:
-        # storage_cost, namespace_cost, finalize_costs, priority_fee, burnt = await transaction.get_fee_breakdown(db)
         block = None
         block_confirm_time = None
     else:
-        # storage_cost, namespace_cost, finalize_costs, priority_fee, burnt = await confirmed_transaction.get_fee_breakdown(db)
         block = await db.get_block_from_transaction_id(tx_id)
         if block is None:
             raise HTTPException(status_code=550, detail="Database inconsistent")
@@ -300,14 +293,33 @@ async def transaction_route(request: Request):
 
     fee = transaction.fee
     if isinstance(fee, Fee):
-        storage_cost, priority_fee = fee.amount
+        base_fee, priority_fee = fee.amount
     elif fee.value is not None:
-        storage_cost, priority_fee = fee.value.amount
+        base_fee, priority_fee = fee.value.amount
     else:
-        storage_cost, priority_fee = 0, 0
+        base_fee, priority_fee = 0, 0
+
+    minimum_fee = base_fee
+    storage_cost = 0
+    synthesis_cost = 0
+    constructor_cost = 0
     namespace_cost = 0
     finalize_costs: list[int] = []
     burnt = 0
+    detailed_fee_breakdown = isinstance(confirmed_transaction, (AcceptedDeploy, AcceptedExecute))
+    if detailed_fee_breakdown:
+        if block is None:
+            raise HTTPException(status_code=550, detail="Database inconsistent")
+        breakdown = await confirmed_transaction.get_fee_breakdown(db, int(block.height))
+        minimum_fee = breakdown.minimum_fee
+        storage_cost = breakdown.storage_cost
+        synthesis_cost = breakdown.synthesis_cost
+        constructor_cost = breakdown.constructor_cost
+        namespace_cost = breakdown.namespace_cost
+        finalize_costs = breakdown.finalize_costs
+        if priority_fee != breakdown.priority_fee:
+            raise HTTPException(status_code=550, detail="Fee mismatch")
+        burnt = breakdown.burnt
 
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx: dict[str, Any] = {
@@ -319,12 +331,17 @@ async def transaction_route(request: Request):
         "transaction": transaction,
         "type": transaction_type,
         "state": transaction_state,
-        "total_fee": storage_cost + namespace_cost + sum(finalize_costs) + priority_fee + burnt,
+        "total_fee": base_fee + priority_fee,
+        "base_fee": base_fee,
+        "minimum_fee": minimum_fee,
         "storage_cost": storage_cost,
+        "synthesis_cost": synthesis_cost,
+        "constructor_cost": constructor_cost,
         "namespace_cost": namespace_cost,
         "finalize_costs": finalize_costs,
         "priority_fee": priority_fee,
         "burnt_fee": burnt,
+        "detailed_fee_breakdown": detailed_fee_breakdown,
         "first_seen": first_seen,
         "original_txid": original_txid,
         "program_info": program_info,
