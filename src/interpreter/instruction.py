@@ -770,14 +770,12 @@ async def sign_verify(operands: tuple[Operand, Operand, Operand], destination: R
     message = await load_plaintext_from_operand(operands[2], registers, finalize_state, db, program)
 
     if not isinstance(signature, LiteralPlaintext):
-        raise TypeError("message must be a literal")
-    if not isinstance(address, LiteralPlaintext):
         raise TypeError("signature must be a literal")
-    if not isinstance(message, LiteralPlaintext):
-        raise TypeError("public key must be a literal")
+    if not isinstance(address, LiteralPlaintext):
+        raise TypeError("address must be a literal")
 
     if signature.literal.type != Literal.Type.Signature:
-        raise TypeError("message must be signature")
+        raise TypeError("signature must be signature")
     if address.literal.type != Literal.Type.Address:
         raise TypeError("address must be address")
     res = LiteralPlaintext(
