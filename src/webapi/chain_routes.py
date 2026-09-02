@@ -4,13 +4,14 @@ import math
 from collections import OrderedDict
 from decimal import Decimal
 from io import BytesIO
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 import aleo_explorer_rust
 from starlette.requests import Request
 
 from aleo_types import u64, DeployTransaction, ExecuteTransaction, FeeTransaction, RejectedDeploy, RejectedExecute, Fee, \
-    FinalizeOperation, UpdateKeyValue, RemoveKeyValue, Value, Plaintext, Address, NodeType
+    FinalizeOperation, UpdateKeyValue, RemoveKeyValue, Value, Plaintext, Address, NodeType, Transaction, \
+    ConfirmedTransaction
 from aleo_types.cached import cached_get_mapping_id, cached_get_key_id
 from aleo_types.vm_block import AcceptedDeploy, AcceptedExecute
 from db import Database
@@ -35,6 +36,64 @@ async def get_summary(db: Database):
         "participation_rate": participation_rate,
     }
     return summary
+
+
+async def _fee_breakdown(
+    db: Database,
+    transaction: Transaction,
+    confirmed_transaction: ConfirmedTransaction | None,
+    block_height: int | None,
+) -> dict[str, Any]:
+    fee = transaction.fee
+    if isinstance(fee, Fee):
+        base_fee, priority_fee = fee.amount
+    elif fee.value is not None:
+        base_fee, priority_fee = fee.value.amount
+    else:
+        base_fee, priority_fee = 0, 0
+
+    minimum_fee = base_fee
+    storage_cost = 0
+    synthesis_cost = 0
+    constructor_cost = 0
+    namespace_cost = 0
+    finalize_costs: list[int] = []
+    burnt_fee = 0
+    split_fee = 0
+    if isinstance(confirmed_transaction, (AcceptedDeploy, AcceptedExecute)):
+        breakdown = await confirmed_transaction.get_fee_breakdown(db, block_height)
+        minimum_fee = breakdown.minimum_fee
+        storage_cost = breakdown.storage_cost
+        synthesis_cost = breakdown.synthesis_cost
+        constructor_cost = breakdown.constructor_cost
+        namespace_cost = breakdown.namespace_cost
+        finalize_costs = breakdown.finalize_costs
+        if priority_fee != breakdown.priority_fee:
+            raise RuntimeError("fee mismatch")
+        burnt_fee = breakdown.burnt
+
+    if isinstance(confirmed_transaction, AcceptedExecute):
+        execution = cast(ExecuteTransaction, confirmed_transaction.transaction).execution
+        split_fee = 10_000 * sum(
+            str(transition.program_id) == "credits.aleo" and str(transition.function_name) == "split"
+            for transition in execution.transitions
+        )
+
+    return {
+        "total_fee": u64(base_fee + priority_fee),
+        "base_fee": u64(base_fee),
+        "minimum_fee": u64(minimum_fee),
+        "storage_cost": u64(storage_cost),
+        "synthesis_cost": u64(synthesis_cost),
+        "constructor_cost": u64(constructor_cost),
+        "namespace_cost": u64(namespace_cost),
+        "finalize_cost": u64(sum(finalize_costs)),
+        "finalize_costs": list(map(u64, finalize_costs)),
+        "priority_fee": u64(priority_fee),
+        "burnt_fee": u64(burnt_fee),
+        "split_fee": u64(split_fee),
+    }
+
 
 @public_cache_seconds(5)
 async def recent_blocks_route(request: Request):
@@ -98,6 +157,10 @@ async def block_route(request: Request):
                 "solution_id": solution["solution_id"],
             })
             target_sum += solution["target"]
+    fee_breakdowns = {
+        str(transaction.transaction.id): await _fee_breakdown(db, transaction.transaction, transaction, height)
+        for transaction in block.transactions
+    }
     result: dict[str, Any] = {
         "block": block,
         "coinbase_reward": coinbase_reward,
@@ -105,6 +168,7 @@ async def block_route(request: Request):
         "all_validators": all_validators,
         "solutions": css,
         "total_supply": Decimal(await db.get_total_supply_at_height(height)),
+        "fee_breakdowns": fee_breakdowns,
     }
     result["resolved_addresses"] = \
         await UIAddress.resolve_recursive_detached(
@@ -266,35 +330,13 @@ async def transaction_route(request: Request):
             return CJSONResponse({"error": "Internal error: block missing"}, status_code=500)
         block_confirm_time = await db.get_block_confirm_time(block.height)
 
-    fee = transaction.fee
-    if isinstance(fee, Fee):
-        base_fee, priority_fee = fee.amount
-    elif fee.value is not None:
-        base_fee, priority_fee = fee.value.amount
-    else:
-        base_fee, priority_fee = 0, 0
 
-    minimum_fee = base_fee
-    storage_cost = 0
-    synthesis_cost = 0
-    constructor_cost = 0
-    namespace_cost = 0
-    finalize_costs: list[int] = []
-    burnt = 0
-    if isinstance(confirmed_transaction, (AcceptedDeploy, AcceptedExecute)):
-        if block is None:
-            return CJSONResponse({"error": "Internal error: block missing"}, status_code=500)
-        breakdown = await confirmed_transaction.get_fee_breakdown(db, int(block.height))
-        minimum_fee = breakdown.minimum_fee
-        storage_cost = breakdown.storage_cost
-        synthesis_cost = breakdown.synthesis_cost
-        constructor_cost = breakdown.constructor_cost
-        namespace_cost = breakdown.namespace_cost
-        finalize_costs = breakdown.finalize_costs
-        if priority_fee != breakdown.priority_fee:
-            return CJSONResponse({"error": "Internal error: fee mismatch"}, status_code=500)
-        burnt = breakdown.burnt
-
+    fee_breakdown = await _fee_breakdown(
+        db,
+        transaction,
+        confirmed_transaction,
+        int(block.height) if block is not None else None,
+    )
     result: dict[str, Any] = {
         "tx_id": tx_id,
         "height": block.height if block is not None else None,
@@ -302,17 +344,7 @@ async def transaction_route(request: Request):
         "block_timestamp": block.header.metadata.timestamp if block is not None else None,
         "type": transaction_type,
         "state": transaction_state,
-        "total_fee": u64(base_fee + priority_fee),
-        "base_fee": u64(base_fee),
-        "minimum_fee": u64(minimum_fee),
-        "storage_cost": u64(storage_cost),
-        "synthesis_cost": u64(synthesis_cost),
-        "constructor_cost": u64(constructor_cost),
-        "namespace_cost": u64(namespace_cost),
-        "finalize_cost": u64(sum(finalize_costs)),
-        "finalize_costs": list(map(u64, finalize_costs)),
-        "priority_fee": u64(priority_fee),
-        "burnt_fee": u64(burnt),
+        **fee_breakdown,
         "first_seen": first_seen,
         "original_txid": original_txid,
         "program_info": program_info,
