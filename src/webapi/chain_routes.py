@@ -524,9 +524,10 @@ async def transition_route(request: Request):
     transition = await db.get_transition(transition_id)
     if transition is None:
         return CJSONResponse({"error": "Transition not found"}, status_code=404)
-    transaction_id = await db.get_transaction_id_from_transition_id(transition_id)
-    if transaction_id is None:
+    transaction_context = await db.get_transaction_context_from_transition_id(transition_id)
+    if transaction_context is None:
         return CJSONResponse({"error": "Transaction not found"}, status_code=404)
+    transaction_id = transaction_context["transaction_id"]
     is_confirmed = await db.is_transaction_confirmed(transaction_id)
     is_aborted = await db.is_transaction_aborted(transaction_id)
     is_accepted = False
@@ -537,8 +538,15 @@ async def transition_route(request: Request):
         if isinstance(confirmed_transaction, (AcceptedDeploy, AcceptedExecute)):
             is_accepted = True
     program_id = str(transition.program_id)
-    latest_edition = await db.get_program_latest_edition(program_id)
-    if latest_edition is None:
+    if transaction_context["height"] is None or transaction_context["index"] is None:
+        program_edition = await db.get_program_latest_edition(program_id)
+    else:
+        program_edition = await db.get_program_edition_at_context(
+            program_id,
+            transaction_context["height"],
+            transaction_context["index"],
+        )
+    if program_edition is None:
         return CJSONResponse({"error": "Program not found"}, status_code=404)
     result: dict[str, Any] = {
         "transition": transition.json(),
@@ -546,7 +554,8 @@ async def transition_route(request: Request):
         "is_confirmed": is_confirmed,
         "is_aborted": is_aborted,
         "is_accepted": is_accepted,
-        "function_definition": await function_definition(db, program_id, str(transition.function_name), latest_edition),
+        "program_edition": program_edition,
+        "function_definition": await function_definition(db, program_id, str(transition.function_name), program_edition),
     }
     result["resolved_addresses"] = await UIAddress.resolve_recursive_detached(result, db, {})
 

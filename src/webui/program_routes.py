@@ -167,7 +167,7 @@ async def similar_programs_route(request: Request):
     if page < 1 or page > total_pages:
         raise HTTPException(status_code=400, detail="Invalid page")
     start = 50 * (page - 1)
-    programs = await db.get_programs_with_feature_hash(feature_hash, start, start + 50)
+    programs = await db.get_programs_with_feature_hash(feature_hash, program_id, start, start + 50)
 
     sync_info = await out_of_sync_check(request.app.state.session, db)
     ctx = {

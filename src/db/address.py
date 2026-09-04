@@ -96,7 +96,8 @@ WITH ats AS
      LIMIT 30)
 SELECT DISTINCT ts.transition_id,
                 b.height,
-                b.timestamp
+                b.timestamp,
+                ct.index AS transaction_index
 FROM ats
 JOIN transition ts ON ats.transition_id = ts.id
 JOIN transaction_execute te ON te.id = ts.transaction_execute_id
@@ -106,7 +107,8 @@ JOIN block b ON b.id = ct.block_id
 UNION
 SELECT DISTINCT ts.transition_id,
                 b.height,
-                b.timestamp
+                b.timestamp,
+                ct.index AS transaction_index
 FROM ats
 JOIN transition ts ON ats.transition_id = ts.id
 JOIN fee f ON f.id = ts.fee_id
@@ -122,7 +124,8 @@ LIMIT 30
                         return {
                             "transition_id": x["transition_id"],
                             "height": x["height"],
-                            "timestamp": x["timestamp"]
+                            "timestamp": x["timestamp"],
+                            "transaction_index": x["transaction_index"]
                         }
                     return list(map(lambda x: transform(x), await cur.fetchall()))
                 except Exception as e:

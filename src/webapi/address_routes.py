@@ -178,12 +178,20 @@ async def address_route(request: Request) -> CJSONResponse:
         transition = await db.get_transition(transition_data["transition_id"])
         if transition is None:
             return CJSONResponse({"error": "Transition not found"}, status_code=500)
+        program_edition = await db.get_program_edition_at_context(
+            str(transition.program_id),
+            transition_data["height"],
+            transition_data["transaction_index"],
+        )
+        if program_edition is None:
+            return CJSONResponse({"error": "Program not found"}, status_code=500)
         recent_transitions.append({
             "transition_id": transition_data["transition_id"],
             "height": transition_data["height"],
             "timestamp": transition_data["timestamp"],
             "program_id": transition.program_id,
             "function_name": transition.function_name,
+            "program_edition": program_edition,
         })
 
     result = {

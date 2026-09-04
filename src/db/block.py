@@ -521,12 +521,12 @@ class DatabaseBlock(DatabaseBase):
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_deploy_transaction_program_info(self, transaction_id: str) -> Optional[dict[str, Optional[str]]]:
+    async def get_deploy_transaction_program_info(self, transaction_id: str) -> Optional[dict[str, Any]]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT program_id, owner FROM transaction_deploy td "
+                        "SELECT program_id, edition, owner FROM transaction_deploy td "
                         "JOIN transaction t ON td.transaction_id = t.id "
                         "WHERE t.transaction_id = %s",
                         (transaction_id,)
@@ -1497,28 +1497,32 @@ class DatabaseBlock(DatabaseBase):
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_transaction_id_from_transition_id(self, transition_id: str) -> Optional[str]:
+    async def get_transaction_context_from_transition_id(self, transition_id: str) -> Optional[dict[str, Any]]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT t.transaction_id FROM transition ts "
+                        "SELECT t.transaction_id, b.height, ct.index FROM transition ts "
                         "JOIN transaction_execute te on ts.transaction_execute_id = te.id "
                         "JOIN transaction t on te.transaction_id = t.id "
+                        "LEFT JOIN confirmed_transaction ct on t.confirmed_transaction_id = ct.id "
+                        "LEFT JOIN block b on ct.block_id = b.id "
                         "WHERE ts.transition_id = %s",
                         (transition_id,)
                     )
                     if (res := await cur.fetchone()) is None:
                         await cur.execute(
-                            "SELECT t.transaction_id FROM transition ts "
+                            "SELECT t.transaction_id, b.height, ct.index FROM transition ts "
                             "JOIN fee f on ts.fee_id = f.id "
                             "JOIN transaction t on f.transaction_id = t.id "
+                            "LEFT JOIN confirmed_transaction ct on t.confirmed_transaction_id = ct.id "
+                            "LEFT JOIN block b on ct.block_id = b.id "
                             "WHERE ts.transition_id = %s",
                             (transition_id,)
                         )
                         if (res := await cur.fetchone()) is None:
                             return None
-                    return res["transaction_id"]
+                    return res
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise

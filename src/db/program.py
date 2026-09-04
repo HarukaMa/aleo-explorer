@@ -101,28 +101,50 @@ class DatabaseProgram(DatabaseBase):
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
-    async def get_programs_with_feature_hash(self, feature_hash: bytes, start: int, end: int) -> list[dict[str, Any]]:
+    async def get_programs_with_feature_hash(self, feature_hash: bytes, exclude_program_id: str, start: int, end: int) -> list[dict[str, Any]]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
                     await cur.execute(
-                        "SELECT p.program_id, b.height, t.transaction_id, SUM(pf.called) as called "
-                        "FROM program p "
-                        "JOIN ("
-                        "  SELECT program_id, MAX(edition) as edition "
+                        "WITH matching AS ("
+                        "  SELECT DISTINCT ON (program_id) id, program_id, edition, transaction_deploy_id "
                         "  FROM program "
-                        "  GROUP BY program_id"
-                        ") p2 on p.program_id = p2.program_id AND p.edition = p2.edition "
-                        "JOIN transaction_deploy td on p.transaction_deploy_id = td.id "
-                        "JOIN transaction t on td.transaction_id = t.id "
-                        "JOIN confirmed_transaction ct on t.confirmed_transaction_id = ct.id "
-                        "JOIN block b on ct.block_id = b.id "
-                        "JOIN program_function pf on p.id = pf.program_id "
-                        "WHERE feature_hash = %s "
-                        "GROUP BY p.program_id, b.height, t.transaction_id "
+                        "  WHERE feature_hash = %s AND program_id != %s "
+                        "  ORDER BY program_id, edition DESC"
+                        ") "
+                        "SELECT p.program_id, p.edition, b.height, t.transaction_id, "
+                        "COALESCE(calls.called, 0) AS called "
+                        "FROM matching p "
+                        "JOIN transaction_deploy td ON p.transaction_deploy_id = td.id "
+                        "JOIN transaction t ON td.transaction_id = t.id "
+                        "JOIN confirmed_transaction ct ON t.confirmed_transaction_id = ct.id "
+                        "JOIN block b ON ct.block_id = b.id "
+                        "LEFT JOIN LATERAL ("
+                        "  SELECT nb.height, nct.index "
+                        "  FROM program np "
+                        "  JOIN transaction_deploy ntd ON np.transaction_deploy_id = ntd.id "
+                        "  JOIN transaction nt ON ntd.transaction_id = nt.id "
+                        "  JOIN confirmed_transaction nct ON nt.confirmed_transaction_id = nct.id "
+                        "  JOIN block nb ON nct.block_id = nb.id "
+                        "  WHERE np.program_id = p.program_id AND np.edition > p.edition "
+                        "  ORDER BY np.edition LIMIT 1"
+                        ") next_deployment ON TRUE "
+                        "LEFT JOIN LATERAL ("
+                        "  SELECT COUNT(*) AS called "
+                        "  FROM transition ts "
+                        "  LEFT JOIN transaction_execute te ON ts.transaction_execute_id = te.id "
+                        "  LEFT JOIN fee f ON ts.fee_id = f.id "
+                        "  JOIN transaction tx ON tx.id = COALESCE(te.transaction_id, f.transaction_id) "
+                        "  JOIN confirmed_transaction ctx ON tx.confirmed_transaction_id = ctx.id "
+                        "  JOIN block bx ON ctx.block_id = bx.id "
+                        "  WHERE ts.program_id = p.program_id "
+                        "  AND (bx.height, ctx.index) > (b.height, ct.index) "
+                        "  AND (next_deployment.height IS NULL "
+                        "       OR (bx.height, ctx.index) < (next_deployment.height, next_deployment.index))"
+                        ") calls ON TRUE "
                         "ORDER BY b.height "
                         "LIMIT %s OFFSET %s",
-                        (feature_hash, end - start, start)
+                        (feature_hash, exclude_program_id, end - start, start)
                     )
                     return await cur.fetchall()
                 except Exception as e:
@@ -145,12 +167,28 @@ class DatabaseProgram(DatabaseBase):
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
+    async def get_program_editions(self, program_id: str) -> list[int]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        "SELECT edition FROM program WHERE program_id = %s ORDER BY edition",
+                        (program_id,)
+                    )
+                    return [row["edition"] for row in await cur.fetchall()]
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
     async def get_program_edition_at_context(
         self,
         program_id: str,
         block_height: int,
         transaction_index: int,
     ) -> int | None:
+        if program_id == "credits.aleo":
+            from node import Network
+            return int(block_height >= Network.consensus_v8_height)
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
@@ -214,10 +252,58 @@ class DatabaseProgram(DatabaseBase):
                     raise
 
 
-    async def get_program_called_times(self, program_id: str) -> int:
+    async def _get_program_call_bounds(self, cur: Any, program_id: str, edition: int) -> tuple[tuple[int, int], tuple[int, int] | None] | None:
+        if program_id == "credits.aleo":
+            from node import Network
+            if edition == 0:
+                return (0, -1), (Network.consensus_v8_height, -1)
+            if edition == 1:
+                return (Network.consensus_v8_height, -1), None
+            return None
+        await cur.execute(
+            "SELECT p.edition, b.height, ct.index FROM program p "
+            "JOIN transaction_deploy td ON p.transaction_deploy_id = td.id "
+            "JOIN transaction t ON td.transaction_id = t.id "
+            "JOIN confirmed_transaction ct ON t.confirmed_transaction_id = ct.id "
+            "JOIN block b ON ct.block_id = b.id "
+            "WHERE p.program_id = %s AND p.edition >= %s "
+            "ORDER BY p.edition LIMIT 2",
+            (program_id, edition)
+        )
+        bounds = await cur.fetchall()
+        if not bounds or bounds[0]["edition"] != edition:
+            return None
+        lower = (bounds[0]["height"], bounds[0]["index"])
+        upper = None if len(bounds) == 1 else (bounds[1]["height"], bounds[1]["index"])
+        return lower, upper
+
+    async def get_program_called_times(self, program_id: str, edition: int | None = None) -> int:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
+                    if edition is not None:
+                        bounds = await self._get_program_call_bounds(cur, program_id, edition)
+                        if bounds is None:
+                            return 0
+                        lower, upper = bounds
+                        query = (
+                            "SELECT COUNT(*) FROM transition ts "
+                            "LEFT JOIN transaction_execute te ON ts.transaction_execute_id = te.id "
+                            "LEFT JOIN fee f ON ts.fee_id = f.id "
+                            "JOIN transaction t ON t.id = COALESCE(te.transaction_id, f.transaction_id) "
+                            "JOIN confirmed_transaction ct ON t.confirmed_transaction_id = ct.id "
+                            "JOIN block b ON ct.block_id = b.id "
+                            "WHERE ts.program_id = %s "
+                            "AND (b.height, ct.index) > (%s, %s) "
+                        )
+                        params: list[Any] = [program_id, lower[0], lower[1]]
+                        if upper is not None:
+                            query += "AND (b.height, ct.index) < (%s, %s) "
+                            params.extend(upper)
+                        await cur.execute(query, params)
+                        if (res := await cur.fetchone()) is None:
+                            return 0
+                        return res["count"] or 0
                     await cur.execute(
                         "SELECT sum(called) FROM program_function "
                         "JOIN program ON program.id = program_function.program_id "
@@ -226,32 +312,41 @@ class DatabaseProgram(DatabaseBase):
                     )
                     if (res := await cur.fetchone()) is None:
                         return 0
-                    return res['sum']
+                    return res['sum'] or 0
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
 
 
-    async def get_program_calls(self, program_id: str, start: int, end: int) -> list[dict[str, Any]]:
+    async def get_program_calls(self, program_id: str, start: int, end: int, edition: int | None = None) -> list[dict[str, Any]]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
+                    params: list[Any] = [program_id]
+                    edition_filter = ""
+                    if edition is not None:
+                        bounds = await self._get_program_call_bounds(cur, program_id, edition)
+                        if bounds is None:
+                            return []
+                        lower, upper = bounds
+                        edition_filter = "AND (b.height, ct.index) > (%s, %s) "
+                        params.extend(lower)
+                        if upper is not None:
+                            edition_filter += "AND (b.height, ct.index) < (%s, %s) "
+                            params.extend(upper)
+                    params.extend([end - start, start])
                     await cur.execute(
-                        "WITH ts AS ("
-                        "  SELECT transaction_execute_id, transition_id, function_name "
-                        "  FROM transition "
-                        "  WHERE program_id = %s "
-                        "  ORDER BY id DESC "
-                        "  LIMIT %s OFFSET %s"
-                        ")"
-                        "SELECT b.height, b.timestamp, ts.transition_id, function_name, ct.type "
-                        "FROM ts "
+                        "SELECT b.height, b.timestamp, ts.transition_id, ts.function_name, ct.type "
+                        "FROM transition ts "
                         "JOIN transaction_execute te on te.id = ts.transaction_execute_id "
                         "JOIN transaction t on te.transaction_id = t.id "
                         "JOIN confirmed_transaction ct on t.confirmed_transaction_id = ct.id "
                         "JOIN block b on ct.block_id = b.id "
-                        "ORDER BY b.height DESC ",
-                        (program_id, end - start, start)
+                        "WHERE ts.program_id = %s "
+                        f"{edition_filter}"
+                        "ORDER BY b.height DESC, ct.index DESC, ts.id DESC "
+                        "LIMIT %s OFFSET %s",
+                        params
                     )
                     return await cur.fetchall()
                 except Exception as e:
@@ -264,12 +359,14 @@ class DatabaseProgram(DatabaseBase):
                 try:
                     await cur.execute(
                         "SELECT COUNT(DISTINCT program_id) FROM program "
-                        "WHERE feature_hash = (SELECT feature_hash FROM program WHERE program_id = %s AND edition = %s)",
-                        (program_id, edition)
+                        "WHERE feature_hash = ("
+                        "  SELECT feature_hash FROM program WHERE program_id = %s AND edition = %s"
+                        ") AND program_id != %s",
+                        (program_id, edition, program_id)
                     )
                     if (res := await cur.fetchone()) is None:
                         raise ValueError(f"Program {program_id} not found")
-                    return res['count'] - 1
+                    return res['count']
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
