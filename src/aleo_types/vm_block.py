@@ -952,6 +952,9 @@ class Constructor(Serializable, JSONSerialize):
         commands = Vec[Command, u16].load(data)
         return cls(commands=commands)
 
+    def json(self, compatible: bool = False) -> JSONType:
+        return {"commands": self.commands.json(compatible)}
+
 
 class ViewOutput(Serializable, JSONSerialize):
 
