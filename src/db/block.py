@@ -586,8 +586,15 @@ class DatabaseBlock(DatabaseBase):
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
+                    # Confirmed IDs preserve block and transaction insertion order, so page before joining details.
                     await cur.execute(
                         """
+                        WITH page AS MATERIALIZED (
+                            SELECT id, block_id, index, type
+                            FROM confirmed_transaction
+                            ORDER BY id DESC
+                            LIMIT %s OFFSET %s
+                        )
                         SELECT
                             tx.transaction_id,
                             b.timestamp,
@@ -632,11 +639,10 @@ class DatabaseBlock(DatabaseBase):
                                   AND ts.program_id = 'credits.aleo'
                                   AND ts.function_name = 'split'
                             ) ELSE 0 END AS split_count
-                        FROM transaction tx
-                        JOIN confirmed_transaction ct ON ct.id = tx.confirmed_transaction_id
+                        FROM page ct
+                        JOIN transaction tx ON ct.id = tx.confirmed_transaction_id
                         JOIN block b ON b.id = ct.block_id
                         ORDER BY b.height DESC, ct.index DESC
-                        LIMIT %s OFFSET %s
                         """,
                         (limit, offset),
                     )

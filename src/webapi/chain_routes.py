@@ -526,7 +526,7 @@ async def transactions_route(request: Request):
         total_transactions = await db.get_confirmed_transaction_count()
     else:
         total_transactions = await db.get_unconfirmed_transaction_count()
-    total_pages = max(math.ceil(total_transactions / 20), 1)
+    total_pages = min(max(math.ceil(total_transactions / 20), 1), 500)
     if page < 1 or page > total_pages:
         return CJSONResponse({"error": "Invalid page"}, status_code=400)
 
