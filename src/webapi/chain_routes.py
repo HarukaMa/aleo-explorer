@@ -514,22 +514,34 @@ async def transition_route(request: Request):
 @public_cache_seconds(5)
 async def transactions_route(request: Request):
     db: Database = request.app.state.db
+    scope = request.query_params.get("scope", "confirmed")
+    if scope not in ("confirmed", "pending"):
+        return CJSONResponse({"error": "Invalid scope"}, status_code=400)
     try:
-        page = request.query_params.get("p")
-        if page is None:
-            page = 1
-        else:
-            page = int(page)
-    except:
+        page = int(request.query_params.get("p", "1"))
+    except ValueError:
         return CJSONResponse({"error": "Invalid page"}, status_code=400)
-    total_transactions = await db.get_transaction_count()
-    total_pages = math.ceil(total_transactions / 20)
+
+    if scope == "confirmed":
+        total_transactions = await db.get_confirmed_transaction_count()
+    else:
+        total_transactions = await db.get_unconfirmed_transaction_count()
+    total_pages = max(math.ceil(total_transactions / 20), 1)
     if page < 1 or page > total_pages:
         return CJSONResponse({"error": "Invalid page"}, status_code=400)
-    start = total_transactions - 20 * (page - 1)
-    transactions = await db.get_transactions_range_fast(start, start - 20)
 
-    return CJSONResponse({"transactions": transactions, "total_transactions": total_transactions, "total_pages": total_pages})
+    offset = 20 * (page - 1)
+    if scope == "confirmed":
+        transactions = await db.get_confirmed_transactions_range(offset, 20)
+    else:
+        transactions = await db.get_unconfirmed_transactions_range_fast(offset, 20)
+
+    return CJSONResponse({
+        "scope": scope,
+        "transactions": transactions,
+        "total_transactions": total_transactions,
+        "total_pages": total_pages,
+    })
 
 @public_cache_seconds(5)
 async def search_route(request: Request):

@@ -290,7 +290,7 @@ class DatabaseBlock(DatabaseBase):
                         transaction_id = await cur.fetchone()
                     if transaction_id is None:
                         return None
-                    return await self.get_block_from_transaction_id(transaction_id['transaction_id'])
+                    return await self.get_block_from_transaction_id(transaction_id["transaction_id"])
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
@@ -551,6 +551,152 @@ class DatabaseBlock(DatabaseBase):
                     if res is None:
                         return None
                     return res["first_seen"]
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    @staticmethod
+    def _transaction_list_fee(fee_inputs: Optional[list[bytes]]) -> int:
+        if fee_inputs is None:
+            return 0
+        if len(fee_inputs) != 2:
+            raise RuntimeError("malformed fee transition")
+        fee = 0
+        for fee_input in fee_inputs:
+            plaintext = Plaintext.load(BytesIO(fee_input))
+            if not isinstance(plaintext, LiteralPlaintext) or not isinstance(plaintext.literal.primitive, int):
+                raise RuntimeError("malformed fee transition")
+            fee += int(plaintext.literal.primitive)
+        return fee
+
+    async def get_confirmed_transaction_count(self) -> int:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute("SELECT COUNT(*) FROM confirmed_transaction")
+                    res = await cur.fetchone()
+                    if res is None:
+                        raise RuntimeError("database inconsistent")
+                    return res["count"]
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def get_confirmed_transactions_range(self, offset: int, limit: int) -> list[dict[str, Any]]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        """
+                        SELECT
+                            tx.transaction_id,
+                            b.timestamp,
+                            b.height,
+                            (
+                                SELECT COUNT(*)
+                                FROM transaction_execute te
+                                JOIN transition ts ON ts.transaction_execute_id = te.id
+                                WHERE te.transaction_id = tx.id
+                            ) + (
+                                SELECT COUNT(*)
+                                FROM fee f
+                                JOIN transition ts ON ts.fee_id = f.id
+                                WHERE f.transaction_id = tx.id
+                            ) AS transitions,
+                            (
+                                SELECT array_agg(tip.plaintext ORDER BY ti.index)
+                                FROM fee f
+                                JOIN transition fee_transition ON fee_transition.fee_id = f.id
+                                JOIN transition_input ti ON ti.transition_id = fee_transition.id
+                                JOIN transition_input_public tip ON tip.transition_input_id = ti.id
+                                WHERE f.transaction_id = tx.id
+                                  AND tip.plaintext IS NOT NULL
+                                  AND (
+                                      (fee_transition.function_name = 'fee_public' AND ti.index IN (0, 1))
+                                      OR (fee_transition.function_name = 'fee_private' AND ti.index IN (1, 2))
+                                  )
+                            ) AS fee_inputs,
+                            CASE
+                                WHEN ct.type IN ('AcceptedDeploy', 'RejectedDeploy') THEN 'Deploy'
+                                ELSE 'Execute'
+                            END AS type,
+                            CASE
+                                WHEN ct.type IN ('AcceptedDeploy', 'AcceptedExecute') THEN 'Accepted'
+                                ELSE 'Rejected'
+                            END AS status,
+                            CASE WHEN ct.type = 'AcceptedExecute' THEN (
+                                SELECT COUNT(*)
+                                FROM transaction_execute te
+                                JOIN transition ts ON ts.transaction_execute_id = te.id
+                                WHERE te.transaction_id = tx.id
+                                  AND ts.program_id = 'credits.aleo'
+                                  AND ts.function_name = 'split'
+                            ) ELSE 0 END AS split_count
+                        FROM transaction tx
+                        JOIN confirmed_transaction ct ON ct.id = tx.confirmed_transaction_id
+                        JOIN block b ON b.id = ct.block_id
+                        ORDER BY b.height DESC, ct.index DESC
+                        LIMIT %s OFFSET %s
+                        """,
+                        (limit, offset),
+                    )
+                    transactions = await cur.fetchall()
+                    for transaction in transactions:
+                        fee_inputs = transaction.pop("fee_inputs")
+                        split_count = transaction.pop("split_count")
+                        transaction["fee"] = self._transaction_list_fee(fee_inputs) + split_count * 10_000
+                    return transactions
+                except Exception as e:
+                    await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
+                    raise
+
+    async def get_unconfirmed_transactions_range_fast(self, offset: int, limit: int) -> list[dict[str, Any]]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(
+                        """
+                        SELECT
+                            tx.transaction_id,
+                            tx.first_seen AS timestamp,
+                            NULL::bigint AS height,
+                            (
+                                SELECT COUNT(*)
+                                FROM transaction_execute te
+                                JOIN transition ts ON ts.transaction_execute_id = te.id
+                                WHERE te.transaction_id = tx.id
+                            ) + (
+                                SELECT COUNT(*)
+                                FROM fee f
+                                JOIN transition ts ON ts.fee_id = f.id
+                                WHERE f.transaction_id = tx.id
+                            ) AS transitions,
+                            (
+                                SELECT array_agg(tip.plaintext ORDER BY ti.index)
+                                FROM fee f
+                                JOIN transition fee_transition ON fee_transition.fee_id = f.id
+                                JOIN transition_input ti ON ti.transition_id = fee_transition.id
+                                JOIN transition_input_public tip ON tip.transition_input_id = ti.id
+                                WHERE f.transaction_id = tx.id
+                                  AND tip.plaintext IS NOT NULL
+                                  AND (
+                                      (fee_transition.function_name = 'fee_public' AND ti.index IN (0, 1))
+                                      OR (fee_transition.function_name = 'fee_private' AND ti.index IN (1, 2))
+                                  )
+                            ) AS fee_inputs,
+                            tx.type::text AS type,
+                            'Unconfirmed' AS status
+                        FROM transaction tx
+                        WHERE tx.confirmed_transaction_id IS NULL AND tx.aborted = FALSE
+                        ORDER BY tx.first_seen DESC, tx.id DESC
+                        LIMIT %s OFFSET %s
+                        """,
+                        (limit, offset),
+                    )
+                    transactions = await cur.fetchall()
+                    for transaction in transactions:
+                        transaction["fee"] = self._transaction_list_fee(transaction.pop("fee_inputs"))
+                    return transactions
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
@@ -1066,8 +1212,8 @@ class DatabaseBlock(DatabaseBase):
             aborted_transaction_ids = [TransactionID.loads(x["transaction_id"]) for x in aborted_transaction_ids]
 
             return Block(
-                block_hash=BlockHash.loads(block['block_hash']),
-                previous_hash=BlockHash.loads(block['previous_hash']),
+                block_hash=BlockHash.loads(block["block_hash"]),
+                previous_hash=BlockHash.loads(block["previous_hash"]),
                 header=DatabaseBlock._get_block_header(block),
                 authority=auth,
                 transactions=Transactions(
@@ -1133,7 +1279,7 @@ class DatabaseBlock(DatabaseBase):
                     result = await cur.fetchone()
                     if result is None:
                         return None
-                    return result['height']
+                    return result["height"]
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
@@ -1146,7 +1292,7 @@ class DatabaseBlock(DatabaseBase):
                     result = await cur.fetchone()
                     if result is None:
                         raise RuntimeError("no blocks in database")
-                    return result['timestamp']
+                    return result["timestamp"]
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
@@ -1173,7 +1319,7 @@ class DatabaseBlock(DatabaseBase):
                     result = await cur.fetchone()
                     if result is None:
                         raise RuntimeError("no blocks in database")
-                    return result['coinbase_target']
+                    return result["coinbase_target"]
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
@@ -1186,7 +1332,7 @@ class DatabaseBlock(DatabaseBase):
                     result = await cur.fetchone()
                     if result is None:
                         raise RuntimeError("no blocks in database")
-                    return result['cumulative_proof_target']
+                    return result["cumulative_proof_target"]
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise
@@ -1212,7 +1358,7 @@ class DatabaseBlock(DatabaseBase):
                     block = await cur.fetchone()
                     if block is None:
                         return None
-                    return BlockHash.loads(block['block_hash'])
+                    return BlockHash.loads(block["block_hash"])
                 except Exception as e:
                     await self.message_callback(ExplorerMessage(ExplorerMessage.Type.DatabaseError, e))
                     raise

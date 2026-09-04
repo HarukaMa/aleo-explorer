@@ -19,7 +19,7 @@ from node.light_node import LightNodeState
 from util.set_proc_title import set_thread_title
 from .address_routes import address_route, ans_route
 from .chain_routes import blocks_route, get_summary, recent_blocks_route, index_update_route, block_route, search_route, \
-    transaction_route, \
+    transaction_route, transactions_route, \
     validators_route, transition_route, solution_route, nodes_route, calc_route
 from .error_routes import bad_request, not_found, internal_error
 from .program_routes import programs_route, program_route, similar_programs_route
@@ -66,6 +66,7 @@ routes = [
     Route("/blocks", blocks_route),
     Route("/block/{height}", block_route),
     Route("/validators", validators_route),
+    Route("/transactions", transactions_route),
     Route("/transaction/{id}", transaction_route),
     Route("/transition/{id}", transition_route),
     Route("/solution/{id}", solution_route),
