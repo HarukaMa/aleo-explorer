@@ -13,7 +13,7 @@ from aleo_types import u64, DeployTransaction, ExecuteTransaction, FeeTransactio
     FinalizeOperation, UpdateKeyValue, RemoveKeyValue, Value, Plaintext, Address, NodeType, Transaction, \
     ConfirmedTransaction
 from aleo_types.cached import cached_get_mapping_id, cached_get_key_id
-from aleo_types.vm_block import AcceptedDeploy, AcceptedExecute
+from aleo_types.vm_block import AcceptedDeploy, AcceptedExecute, Deployment, RejectedDeployment
 from db import Database
 from node.light_node import LightNodeState
 from util import arc0137
@@ -94,6 +94,42 @@ async def _fee_breakdown(
         "split_fee": u64(split_fee),
     }
 
+def _compact_deployment(deployment: Deployment) -> dict[str, Any]:
+    return {
+        **vars(deployment),
+        "program": {"id": deployment.program.id},
+    }
+
+
+def _compact_deploy_transaction(transaction: DeployTransaction) -> dict[str, Any]:
+    return {
+        **vars(transaction),
+        "deployment": _compact_deployment(transaction.deployment),
+        "type": "deploy",
+    }
+
+def _compact_confirmed_transaction(
+    confirmed_transaction: ConfirmedTransaction,
+) -> ConfirmedTransaction | dict[str, Any]:
+    if isinstance(confirmed_transaction, AcceptedDeploy):
+        return {
+            **vars(confirmed_transaction),
+            "transaction": _compact_deploy_transaction(cast(DeployTransaction, confirmed_transaction.transaction)),
+            "type": "accepted_deploy",
+        }
+    if isinstance(confirmed_transaction, RejectedDeploy):
+        rejected = cast(RejectedDeployment, confirmed_transaction.rejected)
+        return {
+            **vars(confirmed_transaction),
+            "rejected": {
+                "program_owner": rejected.program_owner,
+                "deployment": _compact_deployment(rejected.deploy),
+                "type": "deployment",
+            },
+            "type": "rejected_deploy",
+        }
+    return confirmed_transaction
+
 
 @public_cache_seconds(5)
 async def recent_blocks_route(request: Request):
@@ -162,7 +198,10 @@ async def block_route(request: Request):
         for transaction in block.transactions
     }
     result: dict[str, Any] = {
-        "block": block,
+        "block": {
+            **vars(block),
+            "transactions": [_compact_confirmed_transaction(transaction) for transaction in block.transactions],
+        },
         "coinbase_reward": coinbase_reward,
         "validators": validators,
         "all_validators": all_validators,
@@ -352,7 +391,9 @@ async def transaction_route(request: Request):
         "aborted": aborted,
     }
     if confirmed_transaction is not None:
-        result["confirmed_transaction"] = confirmed_transaction
+        result["confirmed_transaction"] = _compact_confirmed_transaction(confirmed_transaction)
+    elif isinstance(transaction, DeployTransaction):
+        result["transaction"] = _compact_deploy_transaction(transaction)
     else:
         result["transaction"] = transaction
 
