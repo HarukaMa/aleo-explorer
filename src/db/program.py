@@ -310,11 +310,11 @@ class DatabaseProgram(DatabaseBase):
                         if bounds is None:
                             return []
                         lower, upper = bounds
-                        edition_filter = "AND (b.height, ct.index) > (%s, %s) "
-                        params.extend(lower)
+                        edition_filter = "AND b.height >= %s AND (b.height, ct.index) > (%s, %s) "
+                        params.extend([lower[0], *lower])
                         if upper is not None:
-                            edition_filter += "AND (b.height, ct.index) < (%s, %s) "
-                            params.extend(upper)
+                            edition_filter += "AND b.height <= %s AND (b.height, ct.index) < (%s, %s) "
+                            params.extend([upper[0], *upper])
                     params.extend([end - start, start])
                     await cur.execute(
                         "SELECT b.height, b.timestamp, ts.transition_id, ts.function_name, ct.type "
