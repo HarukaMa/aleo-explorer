@@ -333,11 +333,19 @@ class DatabaseInsert(DatabaseBase):
                     )
 
     @staticmethod
-    async def _increment_call_count(cur: psycopg.AsyncCursor[DictRow], transition: Transition):
-        await cur.execute(
-            "SELECT id FROM program WHERE program_id = %s ORDER BY edition DESC",
-            (str(transition.program_id),)
-        )
+    async def _increment_call_count(cur: psycopg.AsyncCursor[DictRow], transition: Transition, height: int):
+        program_id = str(transition.program_id)
+        if program_id == "credits.aleo":
+            from node import Network
+            await cur.execute(
+                "SELECT id FROM program WHERE program_id = %s AND edition = %s",
+                (program_id, int(height >= Network.consensus_v8_height))
+            )
+        else:
+            await cur.execute(
+                "SELECT id FROM program WHERE program_id = %s ORDER BY edition DESC LIMIT 1",
+                (program_id,)
+            )
         if (res := await cur.fetchone()) is not None:
             await cur.execute(
                 "UPDATE program_function SET called = called + 1 WHERE program_id = %s AND name = %s",
@@ -348,7 +356,7 @@ class DatabaseInsert(DatabaseBase):
     async def _insert_transition(cur: psycopg.AsyncCursor[DictRow],
                                  exe_tx_db_id: Optional[int], fee_db_id: Optional[int],
                                  transition: Transition, ts_index: int, is_rejected: bool = False,
-                                 should_exist: bool = False, is_unconfirmed: bool = False):
+                                 should_exist: bool = False):
         GlobalBlockTimer.start_section(f"      insert transition {transition.id}")
         await cur.execute(
             "SELECT id FROM transition WHERE transition_id = %s", (str(transition.id),)
@@ -357,8 +365,6 @@ class DatabaseInsert(DatabaseBase):
             if not is_rejected or not should_exist:
                 raise RuntimeError("transition already exists in database")
             else:
-                # confirming transition, should add to called count
-                await DatabaseInsert._increment_call_count(cur, transition)
                 return
         await cur.execute(
             "INSERT INTO transition (transition_id, transaction_execute_id, fee_id, program_id, "
@@ -522,8 +528,6 @@ class DatabaseInsert(DatabaseBase):
                 raise NotImplementedError
             GlobalBlockTimer.end_section(f"        insert transition output {transition.id} {output_index}")
 
-        if not is_unconfirmed:
-            await DatabaseInsert._increment_call_count(cur, transition)
         GlobalBlockTimer.end_section(f"      insert transition {transition.id}")
 
 
@@ -544,7 +548,6 @@ class DatabaseInsert(DatabaseBase):
             if not fee_should_exist:
                 raise RuntimeError("transaction deploy already exists in database")
             else:
-                await DatabaseInsert._increment_call_count(cur, fee.transition)
                 return
         await cur.execute(
             "INSERT INTO transaction_deploy (transaction_id, edition, verifying_keys, program_id, owner) "
@@ -563,13 +566,12 @@ class DatabaseInsert(DatabaseBase):
             raise RuntimeError("failed to insert row into database")
         fee_db_id = res["id"]
 
-        await DatabaseInsert._insert_transition(cur, None, fee_db_id, fee.transition, 0, is_rejected, fee_should_exist, is_unconfirmed)
+        await DatabaseInsert._insert_transition(cur, None, fee_db_id, fee.transition, 0, is_rejected, fee_should_exist)
 
     @staticmethod
     async def _insert_execute_transaction(cur: psycopg.AsyncCursor[DictRow],
                                           execution: Execution, fee: Optional[Fee], transaction_db_id: int,
-                                          is_rejected: bool = False, ts_should_exist: bool = False,
-                                          is_unconfirmed: bool = False):
+                                          is_rejected: bool = False, ts_should_exist: bool = False):
         GlobalBlockTimer.start_section(f"    insert execute transaction {transaction_db_id}")
         await cur.execute(
             "SELECT id FROM transaction_execute WHERE transaction_id = %s", (transaction_db_id,)
@@ -578,12 +580,6 @@ class DatabaseInsert(DatabaseBase):
             if not ts_should_exist:
                 raise RuntimeError("transaction execute already exists in database")
             else:
-                # transaction_execute exists from unconfirmed phase, but call counts
-                # were not incremented then — increment them now
-                for transition in execution.transitions:
-                    await DatabaseInsert._increment_call_count(cur, transition)
-                if fee:
-                    await DatabaseInsert._increment_call_count(cur, fee.transition)
                 return
         await cur.execute(
             "INSERT INTO transaction_execute (transaction_id, global_state_root, proof) "
@@ -596,7 +592,7 @@ class DatabaseInsert(DatabaseBase):
         execute_transaction_db_id = res["id"]
 
         for ts_index, transition in enumerate(execution.transitions):
-            await DatabaseInsert._insert_transition(cur, execute_transaction_db_id, None, transition, ts_index, is_rejected, ts_should_exist, is_unconfirmed)
+            await DatabaseInsert._insert_transition(cur, execute_transaction_db_id, None, transition, ts_index, is_rejected, ts_should_exist)
 
         if fee:
             await cur.execute(
@@ -607,7 +603,7 @@ class DatabaseInsert(DatabaseBase):
             if (res := await cur.fetchone()) is None:
                 raise RuntimeError("failed to insert row into database")
             fee_db_id = res["id"]
-            await DatabaseInsert._insert_transition(cur, None, fee_db_id, fee.transition, 0, is_rejected, ts_should_exist, is_unconfirmed)
+            await DatabaseInsert._insert_transition(cur, None, fee_db_id, fee.transition, 0, is_rejected, ts_should_exist)
         GlobalBlockTimer.end_section(f"    insert execute transaction {transaction_db_id}")
 
     async def _insert_transaction(self, cur: psycopg.AsyncCursor[DictRow], height: Optional[int], transaction: Transaction,
@@ -751,7 +747,7 @@ class DatabaseInsert(DatabaseBase):
             elif isinstance(transaction, ExecuteTransaction): # accepted execute / unconfirmed
                 await DatabaseInsert._insert_execute_transaction(cur, transaction.execution,
                                                                  cast(Option[Fee], transaction.fee).value,
-                                                                 transaction_db_id, is_unconfirmed=(confirmed_transaction is None))
+                                                                 transaction_db_id)
 
             elif isinstance(transaction, FeeTransaction) and not prior_tx: # first seen rejected tx
                 if isinstance(confirmed_transaction, RejectedDeploy):
@@ -795,26 +791,29 @@ class DatabaseInsert(DatabaseBase):
                     await DatabaseInsert._save_program(cur, deployment.program, deploy_transaction_db_id, transaction, None, bytes(deployment.program_checksum))
                 else:
                     raise NotImplementedError
-                if was_unconfirmed:
-                    fee = cast(Fee, transaction.fee)
-                    await DatabaseInsert._increment_call_count(cur, fee.transition)
 
             elif isinstance(confirmed_transaction, AcceptedExecute):
                 if reject_reasons[ct_index] is not None:
                     raise RuntimeError("expected no rejected reason for accepted execute transaction")
-                if was_unconfirmed:
-                    transaction = cast(ExecuteTransaction, transaction)
-                    for transition in transaction.execution.transitions:
-                        await DatabaseInsert._increment_call_count(cur, transition)
-                    fee_opt = cast(Option[Fee], transaction.fee)
-                    if (fee := fee_opt.value) is not None:
-                        await DatabaseInsert._increment_call_count(cur, fee.transition)
 
             elif isinstance(confirmed_transaction, (RejectedDeploy, RejectedExecute)):
                 if reject_reasons[ct_index] is None:
                     raise RuntimeError("expected a rejected reason for rejected transaction")
                 await cur.execute("UPDATE confirmed_transaction SET reject_reason = %s WHERE id = %s",
                                   (reject_reasons[ct_index], confirmed_transaction_db_id))
+            transitions: list[Transition] = []
+            if isinstance(transaction, ExecuteTransaction):
+                transitions.extend(transaction.execution.transitions)
+                fee = cast(Option[Fee], transaction.fee).value
+            else:
+                fee = cast(Fee, transaction.fee)
+                if isinstance(confirmed_transaction, RejectedExecute):
+                    rejected = cast(RejectedExecution, confirmed_transaction.rejected)
+                    transitions.extend(rejected.execution.transitions)
+            if fee is not None:
+                transitions.append(fee.transition)
+            for transition in transitions:
+                await DatabaseInsert._increment_call_count(cur, transition, height)
             await self._update_address_stats(cur, height, transaction)
         else:
             # check if tx is already aborted

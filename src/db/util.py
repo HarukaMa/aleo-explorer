@@ -160,7 +160,7 @@ class DatabaseUtil(DatabaseBase):
                         blocks_to_revert = await DatabaseBlock.get_full_block_range(current_height, max(current_height - 1000, height), conn)
                         for block in blocks_to_revert:
                             print("reverting block", block.height)
-                            for ct in block.transactions:
+                            for ct in reversed(block.transactions.transactions):
                                 t = ct.transaction
                                 # revert to unconfirmed transactions
                                 if isinstance(ct, (RejectedDeploy, RejectedExecute)):
@@ -233,15 +233,19 @@ class DatabaseUtil(DatabaseBase):
                                 else:
                                     raise NotImplementedError
                                 for ts in transitions:
-                                    await cur.execute(
-                                        "SELECT MAX(edition) as edition FROM program WHERE program_id = %s",
-                                        (str(ts.program_id),)
-                                    )
-                                    if (res := await cur.fetchone()) is None:
-                                        raise RuntimeError(f"missing program: {ts.program_id}")
-                                    edition = res["edition"]
-                                    if edition is None:
-                                        raise RuntimeError(f"missing program: {ts.program_id}")
+                                    if ts.program_id == "credits.aleo":
+                                        from node import Network
+                                        edition = int(block.height >= Network.consensus_v8_height)
+                                    else:
+                                        await cur.execute(
+                                            "SELECT MAX(edition) as edition FROM program WHERE program_id = %s",
+                                            (str(ts.program_id),)
+                                        )
+                                        if (res := await cur.fetchone()) is None:
+                                            raise RuntimeError(f"missing program: {ts.program_id}")
+                                        edition = res["edition"]
+                                        if edition is None:
+                                            raise RuntimeError(f"missing program: {ts.program_id}")
                                     await cur.execute(
                                         "UPDATE program_function pf SET called = called - 1 "
                                         "FROM program p "

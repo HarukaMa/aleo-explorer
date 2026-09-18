@@ -281,35 +281,16 @@ class DatabaseProgram(DatabaseBase):
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 try:
-                    if edition is not None:
-                        bounds = await self._get_program_call_bounds(cur, program_id, edition)
-                        if bounds is None:
-                            return 0
-                        lower, upper = bounds
-                        query = (
-                            "SELECT COUNT(*) FROM transition ts "
-                            "LEFT JOIN transaction_execute te ON ts.transaction_execute_id = te.id "
-                            "LEFT JOIN fee f ON ts.fee_id = f.id "
-                            "JOIN transaction t ON t.id = COALESCE(te.transaction_id, f.transaction_id) "
-                            "JOIN confirmed_transaction ct ON t.confirmed_transaction_id = ct.id "
-                            "JOIN block b ON ct.block_id = b.id "
-                            "WHERE ts.program_id = %s "
-                            "AND (b.height, ct.index) > (%s, %s) "
-                        )
-                        params: list[Any] = [program_id, lower[0], lower[1]]
-                        if upper is not None:
-                            query += "AND (b.height, ct.index) < (%s, %s) "
-                            params.extend(upper)
-                        await cur.execute(query, params)
-                        if (res := await cur.fetchone()) is None:
-                            return 0
-                        return res["count"] or 0
-                    await cur.execute(
+                    query = (
                         "SELECT sum(called) FROM program_function "
                         "JOIN program ON program.id = program_function.program_id "
-                        "WHERE program.program_id = %s",
-                        (program_id,)
+                        "WHERE program.program_id = %s"
                     )
+                    params: list[Any] = [program_id]
+                    if edition is not None:
+                        query += " AND program.edition = %s"
+                        params.append(edition)
+                    await cur.execute(query, params)
                     if (res := await cur.fetchone()) is None:
                         return 0
                     return res['sum'] or 0

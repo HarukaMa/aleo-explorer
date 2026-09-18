@@ -29,6 +29,7 @@ class DatabaseMigrate(DatabaseBase):
             (11, self.migration_11_add_dynamic_transition_types),
             (12, self.migration_12_add_solution_puzzle_solution_id_index),
             (13, self.migration_13_add_chm_address_committee_id_index),
+            (14, self.migration_14_recalculate_function_call_count_by_edition),
         ]
 
         async with self.pool.connection() as conn:
@@ -176,3 +177,45 @@ class DatabaseMigrate(DatabaseBase):
             "CREATE INDEX IF NOT EXISTS block_validator_validator_block_id_index "
             "ON explorer.block_validator (validator, block_id)"
         )
+
+    @staticmethod
+    async def migration_14_recalculate_function_call_count_by_edition(conn: psycopg.AsyncConnection[DictRow]):
+        from node import Network
+
+        await conn.execute("""
+            WITH starts AS (
+                SELECT p.id, p.program_id, p.edition,
+                       CASE WHEN p.program_id = 'credits.aleo'
+                            THEN CASE WHEN p.edition = 0 THEN 0 ELSE %s END
+                            ELSE b.height END AS height,
+                       CASE WHEN p.program_id = 'credits.aleo' THEN -1 ELSE ct.index END AS tx_index
+                FROM program p
+                LEFT JOIN transaction_deploy td ON td.id = p.transaction_deploy_id
+                LEFT JOIN transaction t ON t.id = td.transaction_id
+                LEFT JOIN confirmed_transaction ct ON ct.id = t.confirmed_transaction_id
+                LEFT JOIN block b ON b.id = ct.block_id
+                WHERE p.program_id = 'credits.aleo' OR ct.id IS NOT NULL
+            ), bounds AS (
+                SELECT *,
+                       LEAD(height) OVER editions AS end_height,
+                       LEAD(tx_index) OVER editions AS end_index
+                FROM starts
+                WINDOW editions AS (PARTITION BY program_id ORDER BY edition)
+            ), counts AS (
+                SELECT p.id AS program_id, ts.function_name, COUNT(*) AS called
+                FROM transition ts
+                LEFT JOIN transaction_execute te ON te.id = ts.transaction_execute_id
+                LEFT JOIN fee f ON f.id = ts.fee_id
+                JOIN transaction t ON t.id = COALESCE(te.transaction_id, f.transaction_id)
+                JOIN confirmed_transaction ct ON ct.id = t.confirmed_transaction_id
+                JOIN block b ON b.id = ct.block_id
+                JOIN bounds p ON p.program_id = ts.program_id
+                    AND (b.height, ct.index) > (p.height, p.tx_index)
+                    AND (p.end_height IS NULL OR (b.height, ct.index) < (p.end_height, p.end_index))
+                GROUP BY p.id, ts.function_name
+            )
+            UPDATE program_function pf SET called = COALESCE(c.called, 0)
+            FROM program_function target
+            LEFT JOIN counts c ON c.program_id = target.program_id AND c.function_name = target.name
+            WHERE pf.id = target.id
+        """, (Network.consensus_v8_height,))
