@@ -41,7 +41,7 @@ docs = [
 
 [tool.uv.sources]
 aleo-explorer-rust = [
-  { git = "https://github.com/HarukaMa/aleo-explorer-rust.git" },
+  { git = "https://github.com/HarukaMa/aleo-explorer-rust.git", rev = "8589676cd42cd9a356b412cb190e428e1d36fdd0" },
 ]
 
 [tool.hatch.build.targets.sdist]

@@ -4,6 +4,7 @@ from aleo_types import *
 from db import Database
 from interpreter.environment import Registers
 from interpreter.utils import load_plaintext_from_operand, store_plaintext_to_register, FinalizeState
+from node import Network
 from util.global_cache import get_program
 
 IT = Instruction.Type
@@ -341,6 +342,8 @@ async def snark_verify_ops(operands: Vec[Operand, FixedSize[4]], destination: Re
             PlaintextValue(plaintext=op2).dump(),
             PlaintextValue(plaintext=op3).dump(),
             PlaintextValue(plaintext=op4).dump(),
+            Network.network_id,
+            finalize_state.block_height,
         )
     except ValueError as e:
         raise RustExecuteError(e)
