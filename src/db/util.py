@@ -88,41 +88,37 @@ class DatabaseUtil(DatabaseBase):
                             (address, stake_reward)
                         )
 
-                    print("fetching old mapping values from mapping history")
-                    await cur.execute(
-                        "select distinct on (mapping_id, key_id) id, mapping_id, key_id, key, value from mapping_history "
-                        "where height <= %s "
-                        "order by mapping_id, key_id, id desc",
-                        (height,)
-                    )
-                    mapping_snapshot = await cur.fetchall()
-                    print("truncating mapping values")
-                    await cur.execute(
-                        "TRUNCATE TABLE mapping_value RESTART IDENTITY"
-                    )
-                    await cur.execute(
-                        "TRUNCATE TABLE mapping_history_last_id"
-                    )
-                    mapping_value_copy_data: list[tuple[str, str, str, bytes, bytes]] = []
-                    mapping_history_last_id_copy_data: list[tuple[str, int]] = []
-                    print("processing old mapping values")
-                    for item in mapping_snapshot:
-                        id_ = item["id"]
-                        mapping_id = item["mapping_id"]
-                        key_id = item["key_id"]
-                        key = item["key"]
-                        value = item["value"]
-                        if value is not None:
-                            mapping_value_copy_data.append((mapping_id, key_id, key, value))
-                        mapping_history_last_id_copy_data.append((key_id, id_))
-                    print("saving mapping values")
-                    if mapping_value_copy_data:
-                        async with cur.copy("COPY mapping_value (mapping_id, key_id, key, value) FROM STDIN") as copy:
-                            for item in mapping_value_copy_data:
-                                await copy.write_row(item)
-                        async with cur.copy("COPY mapping_history_last_id (key_id, last_history_id) FROM STDIN") as copy:
-                            for item in mapping_history_last_id_copy_data:
-                                await copy.write_row(item)
+                    print("reverting affected mapping values")
+                    # The first reverted delta points to the state at the target height.
+                    await cur.execute("""
+                        WITH first_reverted AS (
+                            SELECT DISTINCT ON (mapping_id, key_id) mapping_id, key_id, previous_id
+                            FROM mapping_history
+                            WHERE height > %s
+                            ORDER BY mapping_id, key_id, id
+                        ), restored AS (
+                            SELECT r.mapping_id, r.key_id, p.id AS history_id, p.key, p.value
+                            FROM first_reverted r
+                            LEFT JOIN mapping_history p ON p.id = r.previous_id
+                        ), deleted_values AS (
+                            DELETE FROM mapping_value mv USING restored r
+                            WHERE mv.mapping_id = r.mapping_id AND mv.key_id = r.key_id
+                                AND r.value IS NULL
+                        ), restored_values AS (
+                            INSERT INTO mapping_value (mapping_id, key_id, key, value)
+                            SELECT mapping_id, key_id, key, value FROM restored
+                            WHERE value IS NOT NULL
+                            ON CONFLICT (mapping_id, key_id) DO UPDATE
+                            SET key = EXCLUDED.key, value = EXCLUDED.value
+                        ), deleted_heads AS (
+                            DELETE FROM mapping_history_last_id mh USING restored r
+                            WHERE mh.key_id = r.key_id AND r.history_id IS NULL
+                        )
+                        INSERT INTO mapping_history_last_id (key_id, last_history_id)
+                        SELECT key_id, history_id FROM restored WHERE history_id IS NOT NULL
+                        ON CONFLICT (key_id) DO UPDATE
+                        SET last_history_id = EXCLUDED.last_history_id
+                    """, (height,))
                     await cur.execute(
                         "DELETE FROM mapping_history WHERE height > %s",
                         (height,)
