@@ -160,7 +160,7 @@ class DatabaseUtil(DatabaseBase):
                         blocks_to_revert = await DatabaseBlock.get_full_block_range(current_height, max(current_height - 1000, height), conn)
                         for block in blocks_to_revert:
                             print("reverting block", block.height)
-                            for ct in reversed(block.transactions.transactions):
+                            for ct in sorted(block.transactions.transactions, key=lambda ct: ct.index, reverse=True):
                                 t = ct.transaction
                                 # revert to unconfirmed transactions
                                 if isinstance(ct, (RejectedDeploy, RejectedExecute)):
@@ -206,18 +206,12 @@ class DatabaseUtil(DatabaseBase):
                                             "DELETE FROM program WHERE program_id = %s AND edition = %s",
                                             (str(program.id), int(t.deployment.edition))
                                         )
-                                        # Only delete mappings if no editions of this program remain.
-                                        # CASCADE on mapping deletes mapping_value and mapping_history;
-                                        # doing this while other editions exist destroys restored state.
-                                        await cur.execute(
-                                            "SELECT 1 FROM program WHERE program_id = %s LIMIT 1",
-                                            (str(program.id),)
-                                        )
-                                        if await cur.fetchone() is None:
-                                            await cur.execute(
-                                                "DELETE FROM mapping WHERE program_id = %s",
-                                                (str(program.id),)
-                                            )
+                                        for operation in ct.finalize:
+                                            if isinstance(operation, InitializeMapping):
+                                                await cur.execute(
+                                                    "DELETE FROM mapping WHERE mapping_id = %s",
+                                                    (str(operation.mapping_id),)
+                                                )
                                 elif isinstance(t, FeeTransaction):
                                     fee = cast(Fee, t.fee)
                                     if isinstance(ct, RejectedDeploy):
